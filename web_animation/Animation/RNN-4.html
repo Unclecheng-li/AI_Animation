@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RNN 标准化工作流程</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+            background: 
+                radial-gradient(circle at 20% 80%, #0d2818 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, #1a3d25 0%, transparent 40%),
+                #0a0f0d;
+            min-height: 100vh;
+            overflow: hidden;
+            color: #fff;
+            position: relative;
+        }
+
+        /* 噪点效果 */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            opacity: 0.08;
+            mix-blend-mode: overlay;
+            animation: noiseMove 20s linear infinite;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        @keyframes noiseMove {
+            0% { transform: translate(0, 0) scale(1.1); }
+            25% { transform: translate(-2%, -2%) scale(1.05); }
+            50% { transform: translate(0, 0) scale(1.1); }
+            75% { transform: translate(2%, 2%) scale(1.05); }
+            100% { transform: translate(0, 0) scale(1.1); }
+        }
+
+        /* 粒子画布 */
+        #particlesCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        .container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 40px 60px;
+            position: relative;
+            z-index: 10;
+        }
+
+        /* 页面标题 */
+        .page-header {
+            text-align: center;
+            margin-bottom: 40px;
+            opacity: 0;
+            animation: fadeInDown 0.8s ease forwards;
+            animation-delay: 0s;
+        }
+
+        .page-title {
+            font-size: 42px;
+            font-weight: 700;
+            color: #feca57;
+            margin-bottom: 8px;
+            text-shadow: 0 0 20px rgba(254, 202, 87, 0.4);
+        }
+
+        .page-subtitle {
+            font-size: 18px;
+            color: #6b8a6b;
+            font-weight: 400;
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeInScale {
+            from {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes slideInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.1);
+            }
+            50% {
+                transform: scale(1.05);
+                box-shadow: 0 0 20px 5px rgba(255, 255, 255, 0.2);
+            }
+        }
+
+        @keyframes glow {
+            0%, 100% {
+                filter: drop-shadow(0 0 5px currentColor);
+            }
+            50% {
+                filter: drop-shadow(0 0 15px currentColor);
+            }
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+
+        @keyframes drawLine {
+            from {
+                width: 0;
+            }
+            to {
+                width: 80px;
+            }
+        }
+
+        @keyframes bounceIn {
+            0% {
+                opacity: 0;
+                transform: scale(0.3);
+            }
+            50% {
+                transform: scale(1.05);
+            }
+            70% {
+                transform: scale(0.9);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes typewriter {
+            from {
+                width: 0;
+            }
+            to {
+                width: 100%;
+            }
+        }
+
+        @keyframes blink {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        @keyframes shimmer {
+            0% {
+                background-position: -200% 0;
+            }
+            100% {
+                background-position: 200% 0;
+            }
+        }
+
+        /* 通用动画元素 */
+        .animate-item {
+            opacity: 0;
+            animation: fadeInUp 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+
+        /* ========== 主架构图容器 ========== */
+        .architecture-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 30px;
+            width: 100%;
+            max-width: 1400px;
+            position: relative;
+            opacity: 0;
+            animation: fadeIn 1s ease forwards;
+            animation-delay: 0.5s;
+        }
+
+        /* ========== 工作流程步骤卡片 ========== */
+        .workflow-step-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1.5px solid rgba(107, 138, 107, 0.3);
+            border-radius: 16px;
+            padding: 35px 30px;
+            min-width: 220px;
+            text-align: center;
+            transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+            opacity: 0;
+            animation: fadeInScale 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+
+        .workflow-step-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            border-color: rgba(107, 138, 107, 0.8);
+            background: rgba(255, 255, 255, 0.08);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .workflow-step-card.step1 {
+            border-color: rgba(96, 165, 250, 0.4);
+            background: rgba(96, 165, 250, 0.08);
+            animation-delay: 0.8s;
+        }
+
+        .workflow-step-card.step1:hover {
+            border-color: rgba(96, 165, 250, 0.8);
+            box-shadow: 0 20px 40px rgba(96, 165, 250, 0.15);
+        }
+
+        .workflow-step-card.step2 {
+            border-color: rgba(52, 211, 153, 0.4);
+            background: rgba(52, 211, 153, 0.08);
+            animation-delay: 1.6s;
+        }
+
+        .workflow-step-card.step2:hover {
+            border-color: rgba(52, 211, 153, 0.8);
+            box-shadow: 0 20px 40px rgba(52, 211, 153, 0.15);
+        }
+
+        .workflow-step-card.step3 {
+            border-color: rgba(254, 202, 87, 0.4);
+            background: rgba(254, 202, 87, 0.08);
+            animation-delay: 2.4s;
+        }
+
+        .workflow-step-card.step3:hover {
+            border-color: rgba(254, 202, 87, 0.8);
+            box-shadow: 0 20px 40px rgba(254, 202, 87, 0.15);
+        }
+
+        .step-number {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: 700;
+            margin: 0 auto 15px;
+            opacity: 0;
+            animation: bounceIn 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+            transition: all 0.3s ease;
+        }
+
+        .workflow-step-card:hover .step-number {
+            transform: scale(1.1);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .step1 .step-number {
+            background: rgba(96, 165, 250, 0.2);
+            color: #60a5fa;
+            border: 2px solid rgba(96, 165, 250, 0.4);
+            animation-delay: 1.0s;
+        }
+
+        .step2 .step-number {
+            background: rgba(52, 211, 153, 0.2);
+            color: #34d399;
+            border: 2px solid rgba(52, 211, 153, 0.4);
+            animation-delay: 1.8s;
+        }
+
+        .step3 .step-number {
+            background: rgba(254, 202, 87, 0.2);
+            color: #feca57;
+            border: 2px solid rgba(254, 202, 87, 0.4);
+            animation-delay: 2.6s;
+        }
+
+        .step-icon {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 15px;
+            opacity: 0;
+            animation: fadeInScale 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+            transition: all 0.3s ease;
+        }
+
+        .workflow-step-card:hover .step-icon {
+            transform: scale(1.15) rotate(5deg);
+            animation: glow 2s ease-in-out infinite;
+        }
+
+        .step-icon svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .step1 .step-icon {
+            color: #60a5fa;
+            animation-delay: 1.1s;
+        }
+
+        .step2 .step-icon {
+            color: #34d399;
+            animation-delay: 1.9s;
+        }
+
+        .step3 .step-icon {
+            color: #feca57;
+            animation-delay: 2.7s;
+        }
+
+        .step-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            opacity: 0;
+            animation: slideInLeft 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+
+        .step1 .step-title {
+            color: #60a5fa;
+            animation-delay: 1.2s;
+        }
+
+        .step2 .step-title {
+            color: #34d399;
+            animation-delay: 2.0s;
+        }
+
+        .step3 .step-title {
+            color: #feca57;
+            animation-delay: 2.8s;
+        }
+
+        .step-desc {
+            font-size: 13px;
+            color: #aaa;
+            line-height: 1.6;
+            margin-bottom: 15px;
+            opacity: 0;
+            animation: fadeInUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+
+        .step1 .step-desc {
+            animation-delay: 1.3s;
+        }
+
+        .step2 .step-desc {
+            animation-delay: 2.1s;
+        }
+
+        .step3 .step-desc {
+            animation-delay: 2.9s;
+        }
+
+        .step-detail {
+            font-size: 12px;
+            padding: 10px 15px;
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.2);
+            text-align: left;
+            line-height: 1.5;
+            opacity: 0;
+            animation: fadeInUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+            transition: all 0.3s ease;
+        }
+
+        .workflow-step-card:hover .step-detail {
+            background: rgba(0, 0, 0, 0.3);
+            transform: translateX(5px);
+        }
+
+        .step1 .step-detail {
+            color: #60a5fa;
+            border-left: 3px solid rgba(96, 165, 250, 0.4);
+            animation-delay: 1.4s;
+        }
+
+        .step2 .step-detail {
+            color: #34d399;
+            border-left: 3px solid rgba(52, 211, 153, 0.4);
+            animation-delay: 2.2s;
+        }
+
+        .step3 .step-detail {
+            color: #feca57;
+            border-left: 3px solid rgba(254, 202, 87, 0.4);
+            animation-delay: 3.0s;
+        }
+
+        /* ========== 连接线样式 ========== */
+        .connector {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            opacity: 0;
+            animation: fadeIn 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+
+        .connector:nth-of-type(2) { animation-delay: 1.4s; }
+        .connector:nth-of-type(4) { animation-delay: 2.2s; }
+
+        .connector-line {
+            width: 0;
+            height: 2px;
+            background: repeating-linear-gradient(
+                90deg,
+                rgba(107, 138, 107, 0.6) 0px,
+                rgba(107, 138, 107, 0.6) 6px,
+                transparent 6px,
+                transparent 10px
+            );
+            position: relative;
+            animation: drawLine 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards, dashFlow 1s linear infinite;
+        }
+
+        .connector:nth-of-type(2) .connector-line {
+            animation-delay: 1.4s, 2.2s;
+        }
+        .connector:nth-of-type(4) .connector-line {
+            animation-delay: 2.2s, 3.0s;
+        }
+
+        @keyframes dashFlow {
+            0% {
+                background-position: 0 0;
+            }
+            100% {
+                background-position: 20px 0;
+            }
+        }
+
+        .connector-line::after {
+            content: '';
+            position: absolute;
+            right: -6px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border-left: 8px solid rgba(107, 138, 107, 0.6);
+            border-top: 5px solid transparent;
+            border-bottom: 5px solid transparent;
+            opacity: 0;
+            animation: fadeIn 0.3s ease forwards;
+        }
+
+        .connector:nth-of-type(2) .connector-line::after { animation-delay: 2.0s; }
+        .connector:nth-of-type(4) .connector-line::after { animation-delay: 2.8s; }
+
+        /* ========== 核心处理流程展示 ========== */
+        .core-flow-section {
+            margin-top: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 40px;
+            opacity: 0;
+            animation: fadeInUp 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+            animation-delay: 3.4s;
+        }
+
+        .flow-node {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            opacity: 0;
+            animation: fadeInScale 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+
+        .flow-node:nth-child(1) { animation-delay: 3.5s; }
+        .flow-node:nth-child(3) { animation-delay: 3.7s; }
+        .flow-node:nth-child(5) { animation-delay: 3.9s; }
+
+        .flow-node-box {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: 700;
+            position: relative;
+            transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .flow-node:hover .flow-node-box {
+            transform: scale(1.1);
+            animation: float 3s ease-in-out infinite;
+        }
+
+        .flow-node-box.input {
+            border: 2px solid rgba(96, 165, 250, 0.5);
+            background: rgba(96, 165, 250, 0.1);
+            color: #60a5fa;
+            box-shadow: 0 0 30px rgba(96, 165, 250, 0.3);
+        }
+
+        .flow-node:hover .flow-node-box.input {
+            box-shadow: 0 0 50px rgba(96, 165, 250, 0.5);
+        }
+
+        .flow-node-box.process {
+            border: 2px solid rgba(52, 211, 153, 0.5);
+            background: rgba(52, 211, 153, 0.1);
+            color: #34d399;
+            box-shadow: 0 0 30px rgba(52, 211, 153, 0.3);
+        }
+
+        .flow-node:hover .flow-node-box.process {
+            box-shadow: 0 0 50px rgba(52, 211, 153, 0.5);
+        }
+
+        .flow-node-box.output {
+            border: 2px solid rgba(254, 202, 87, 0.5);
+            background: rgba(254, 202, 87, 0.1);
+            color: #feca57;
+            box-shadow: 0 0 30px rgba(254, 202, 87, 0.3);
+        }
+
+        .flow-node:hover .flow-node-box.output {
+            box-shadow: 0 0 50px rgba(254, 202, 87, 0.5);
+        }
+
+        .flow-node-label {
+            font-size: 14px;
+            color: #6b8a6b;
+            font-weight: 500;
+            opacity: 0;
+            animation: fadeInUp 0.4s ease forwards;
+        }
+
+        .flow-node:nth-child(1) .flow-node-label { animation-delay: 3.8s; }
+        .flow-node:nth-child(3) .flow-node-label { animation-delay: 4.0s; }
+        .flow-node:nth-child(5) .flow-node-label { animation-delay: 4.2s; }
+
+        .flow-arrow {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            opacity: 0;
+            animation: fadeIn 0.5s ease forwards;
+        }
+
+        .flow-arrow:nth-child(2) { animation-delay: 3.6s; }
+        .flow-arrow:nth-child(4) { animation-delay: 3.8s; }
+
+        .flow-arrow svg {
+            width: 40px;
+            height: 20px;
+            color: #6b8a6b;
+            transition: all 0.3s ease;
+            opacity: 0;
+            animation: arrowAppearThenPulse 0.5s ease forwards, arrowPulseLoop 2s ease-in-out infinite;
+        }
+
+        .flow-arrow:nth-child(2) svg {
+            animation-delay: 3.6s, 4.1s;
+        }
+        .flow-arrow:nth-child(4) svg {
+            animation-delay: 3.8s, 4.3s;
+        }
+
+        @keyframes arrowAppearThenPulse {
+            0% {
+                opacity: 0;
+                transform: translateX(-10px);
+            }
+            100% {
+                opacity: 0.6;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes arrowPulseLoop {
+            0%, 100% {
+                transform: translateX(0);
+                opacity: 0.6;
+            }
+            50% {
+                transform: translateX(8px);
+                opacity: 1;
+            }
+        }
+
+        .flow-arrow:hover svg {
+            transform: translateX(5px);
+            color: #34d399;
+            animation-play-state: paused;
+        }
+
+        .flow-arrow-label {
+            font-size: 11px;
+            color: #6b8a6b;
+            transition: all 0.3s ease;
+            opacity: 0;
+            animation: labelAppearThenFade 0.5s ease forwards, labelFadeLoop 2s ease-in-out infinite;
+        }
+
+        .flow-arrow:nth-child(2) .flow-arrow-label {
+            animation-delay: 3.6s, 4.1s;
+        }
+        .flow-arrow:nth-child(4) .flow-arrow-label {
+            animation-delay: 3.8s, 4.3s;
+        }
+
+        @keyframes labelAppearThenFade {
+            0% {
+                opacity: 0;
+            }
+            100% {
+                opacity: 0.5;
+            }
+        }
+
+        @keyframes labelFadeLoop {
+            0%, 100% {
+                opacity: 0.5;
+            }
+            50% {
+                opacity: 1;
+            }
+        }
+
+        .flow-arrow:hover .flow-arrow-label {
+            color: #34d399;
+            animation-play-state: paused;
+        }
+
+        /* ========== 总结区域 ========== */
+        .summary-section {
+            margin-top: 50px;
+            text-align: center;
+            opacity: 0;
+            animation: fadeInScale 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+            animation-delay: 4.4s;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, rgba(52, 211, 153, 0.1), rgba(52, 211, 153, 0.05));
+            border: 1.5px solid rgba(52, 211, 153, 0.3);
+            border-radius: 16px;
+            padding: 30px 50px;
+            display: inline-block;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+            box-shadow: 0 0 40px rgba(52, 211, 153, 0.2);
+        }
+
+        .summary-box::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+            animation: shimmer 3s ease-in-out infinite;
+        }
+
+        .summary-box:hover {
+            transform: scale(1.02);
+            border-color: rgba(52, 211, 153, 0.6);
+            box-shadow: 0 0 60px rgba(52, 211, 153, 0.4);
+        }
+
+        .summary-text {
+            font-size: 20px;
+            color: #ddd;
+            line-height: 1.8;
+        }
+
+        .summary-highlight {
+            color: #feca57;
+            font-weight: 700;
+            background: rgba(254, 202, 87, 0.15);
+            padding: 3px 10px;
+            border-radius: 4px;
+            display: inline-block;
+            opacity: 0;
+            animation: fadeInUp 0.5s ease forwards;
+            animation-delay: 4.8s;
+        }
+
+        .summary-cyan {
+            color: #00d2d3;
+            font-weight: 700;
+            opacity: 0;
+            animation: fadeInUp 0.5s ease forwards;
+            animation-delay: 4.9s;
+        }
+
+        .summary-green {
+            color: #34d399;
+            font-weight: 700;
+            opacity: 0;
+            animation: fadeInUp 0.5s ease forwards;
+            animation-delay: 5.0s;
+        }
+
+        .summary-white {
+            color: #fff;
+            font-weight: 800;
+            opacity: 0;
+            animation: fadeInUp 0.5s ease forwards;
+            animation-delay: 4.85s;
+        }
+
+        /* ========== 最终强调 ========== */
+        .final-highlight {
+            margin-top: 40px;
+            font-size: 36px;
+            font-weight: 800;
+            color: #34d399;
+            text-shadow: 0 0 30px rgba(52, 211, 153, 0.5);
+            opacity: 0;
+            animation: fadeInScale 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+            animation-delay: 5.3s;
+            transition: all 0.4s ease;
+        }
+
+        .final-highlight:hover {
+            transform: scale(1.05);
+            text-shadow: 0 0 50px rgba(52, 211, 153, 0.8);
+        }
+
+        /* ========== 循环标识 ========== */
+        .loop-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 30px;
+            gap: 15px;
+            opacity: 0;
+            animation: fadeInUp 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+            animation-delay: 5.8s;
+        }
+
+        .loop-text {
+            font-size: 14px;
+            color: #6b8a6b;
+            font-weight: 500;
+            opacity: 0;
+            animation: fadeIn 0.5s ease forwards;
+            transition: all 0.3s ease;
+        }
+
+        .loop-indicator:hover .loop-text {
+            color: #34d399;
+        }
+
+        .loop-text:first-child {
+            animation-delay: 6.0s;
+        }
+
+        .loop-text:last-child {
+            animation-delay: 6.2s;
+        }
+
+        .loop-icon {
+            width: 36px;
+            height: 36px;
+            color: #34d399;
+            opacity: 0;
+            animation: bounceIn 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+            animation-delay: 6.1s;
+            transition: all 0.3s ease;
+        }
+
+        .loop-indicator:hover .loop-icon {
+            transform: scale(1.2);
+        }
+
+        .loop-icon svg {
+            width: 100%;
+            height: 100%;
+            animation: rotate 4s linear infinite;
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* ========== 响应式设计 ========== */
+        @media (max-width: 1400px) {
+            .container {
+                padding: 30px 40px;
+                overflow-y: auto;
+            }
+
+            .architecture-diagram {
+                flex-wrap: wrap;
+                gap: 20px;
+                justify-content: center;
+            }
+
+            .connector {
+                transform: rotate(90deg);
+                margin: 5px 0;
+            }
+
+            .core-flow-section {
+                flex-wrap: wrap;
+                gap: 20px;
+            }
+
+            .flow-arrow {
+                transform: rotate(90deg);
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .page-title {
+                font-size: 32px;
+            }
+
+            .workflow-step-card {
+                min-width: 200px;
+                padding: 25px 20px;
+            }
+
+            .summary-box {
+                padding: 25px 35px;
+            }
+
+            .summary-text {
+                font-size: 18px;
+            }
+
+            .final-highlight {
+                font-size: 28px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+
+            .page-title {
+                font-size: 26px;
+            }
+
+            .page-subtitle {
+                font-size: 14px;
+            }
+
+            .architecture-diagram {
+                flex-direction: column;
+            }
+
+            .connector {
+                transform: rotate(90deg);
+            }
+
+            .core-flow-section {
+                flex-direction: column;
+            }
+
+            .flow-arrow {
+                transform: rotate(90deg);
+            }
+
+            .final-highlight {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="particlesCanvas"></canvas>
+
+    <div class="container">
+        <!-- 页面标题 -->
+        <div class="page-header">
+            <h1 class="page-title">RNN 标准化工作流程</h1>
+            <p class="page-subtitle">输入 → 循环 → 输出 的完整工作链条</p>
+        </div>
+
+        <!-- 主架构图 - 三个步骤 -->
+        <div class="architecture-diagram">
+            <!-- 步骤1：输入向量化 -->
+            <div class="workflow-step-card step1">
+                <div class="step-number">1</div>
+                <div class="step-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
+                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
+                    </svg>
+                </div>
+                <div class="step-title">输入向量化</div>
+                <div class="step-desc">将句子转换为数字向量</div>
+                <div class="step-detail">
+                    通过<span style="color: #34d399; font-weight: 600;">词向量技术</span>，将每个汉字转换成<span style="color: #feca57; font-weight: 600;">高质量的数字向量</span>（词嵌入），按文字出现顺序排列。
+                </div>
+            </div>
+
+            <!-- 连接线1 -->
+            <div class="connector">
+                <div class="connector-line"></div>
+            </div>
+
+            <!-- 步骤2：循环迭代处理 -->
+            <div class="workflow-step-card step2">
+                <div class="step-number">2</div>
+                <div class="step-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                </div>
+                <div class="step-title">循环迭代处理</div>
+                <div class="step-desc">按时间顺序逐个处理</div>
+                <div class="step-detail">
+                    词向量按<span style="color: #feca57; font-weight: 600;">时间顺序</span>逐个进入 RNN。每进入一个词，就<span style="color: #00d2d3; font-weight: 600;">结合前一时刻的隐藏状态</span>进行计算，刷新隐藏状态值。
+                </div>
+            </div>
+
+            <!-- 连接线2 -->
+            <div class="connector">
+                <div class="connector-line"></div>
+            </div>
+
+            <!-- 步骤3：结果输出 -->
+            <div class="workflow-step-card step3">
+                <div class="step-number">3</div>
+                <div class="step-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 6v6l4 2"/>
+                    </svg>
+                </div>
+                <div class="step-title">结果输出</div>
+                <div class="step-desc">完成最终任务</div>
+                <div class="step-detail">
+                    拿着<span style="color: #fff; font-weight: 600;">最后一步生成的隐藏状态</span>，去完成翻译、情感分析或生成下一句对话等任务。
+                </div>
+            </div>
+        </div>
+
+        <!-- 核心流程展示 -->
+        <div class="core-flow-section">
+            <div class="flow-node">
+                <div class="flow-node-box input">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 40px; height: 40px;">
+                        <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
+                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
+                    </svg>
+                </div>
+                <span class="flow-node-label">Input</span>
+            </div>
+
+            <div class="flow-arrow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                </svg>
+                <span class="flow-arrow-label">process</span>
+            </div>
+
+            <div class="flow-node">
+                <div class="flow-node-box process">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 40px; height: 40px;">
+                        <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                </div>
+                <span class="flow-node-label">Loop</span>
+            </div>
+
+            <div class="flow-arrow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                </svg>
+                <span class="flow-arrow-label">result</span>
+            </div>
+
+            <div class="flow-node">
+                <div class="flow-node-box output">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 40px; height: 40px;">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 6v6l4 2"/>
+                    </svg>
+                </div>
+                <span class="flow-node-label">Output</span>
+            </div>
+        </div>
+
+        <!-- 总结区域 -->
+        <div class="summary-section">
+            <div class="summary-box">
+                <p class="summary-text">
+                    通过<span class="summary-highlight">隐藏状态</span>的<span class="summary-white">传递与更新</span>，<br>
+                    RNN 实现了对<span class="summary-cyan">时序序列</span>的<span class="summary-green">深度理解</span>。
+                </p>
+            </div>
+        </div>
+
+        <!-- 最终强调 -->
+        <div class="final-highlight">
+            让 AI 真正"读懂"语言
+        </div>
+
+        <!-- 循环标识 -->
+        <div class="loop-indicator">
+            <span class="loop-text">RNN Workflow</span>
+            <div class="loop-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+            </div>
+            <span class="loop-text">Complete Cycle</span>
+        </div>
+    </div>
+
+    <script>
+        // 粒子效果
+        const canvas = document.getElementById('particlesCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        const particles = [];
+        const particleCount = 80;
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 1.5 + 0.5;
+                this.speedX = (Math.random() - 0.5) * 0.3;
+                this.speedY = (Math.random() - 0.5) * 0.3;
+                this.opacity = Math.random() * 0.4 + 0.1;
+                this.color = `rgba(52, 211, 153, ${this.opacity})`;
+            }
+
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
+                    this.reset();
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        for (let i = 0; i < particleCount; i++) {
+            particles.push(new Particle());
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(particle => {
+                particle.update();
+                particle.draw();
+            });
+            requestAnimationFrame(animateParticles);
+        }
+
+        animateParticles();
+    </script>
+</body>
+</html>

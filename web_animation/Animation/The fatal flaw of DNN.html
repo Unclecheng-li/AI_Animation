@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DNN 的致命缺陷</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+            background: 
+                radial-gradient(circle at bottom left, #001f54 0%, transparent 50%),
+                radial-gradient(circle at top right, #001f54 0%, transparent 30%),
+                #000000;
+            min-height: 100vh;
+            overflow: hidden;
+            color: #fff;
+            position: relative;
+        }
+
+        /* 噪点效果 */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            opacity: 0.15;
+            mix-blend-mode: overlay;
+            animation: noiseMove 20s linear infinite;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        @keyframes noiseMove {
+            0% { transform: translate(0, 0) scale(1.1); }
+            25% { transform: translate(-2%, -2%) scale(1.05); }
+            50% { transform: translate(0, 0) scale(1.1); }
+            75% { transform: translate(2%, 2%) scale(1.05); }
+            100% { transform: translate(0, 0) scale(1.1); }
+        }
+
+        /* 粒子画布 */
+        #particlesCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        /* 右上角Logo */
+        .logo {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            color: #fff;
+            font-family: sans-serif;
+            text-align: right;
+            z-index: 100;
+        }
+        .logo svg {
+            width: 32px;
+            height: 32px;
+            margin-bottom: 4px;
+        }
+        .logo-text {
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(96, 165, 250, 0.5);
+        }
+
+        .container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 60px 80px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .section-title {
+            font-size: 56px;
+            font-weight: 800;
+            margin-bottom: 20px;
+            margin-top: -120px;
+            text-align: center;
+            color: #e94560;
+            text-shadow: 0 0 20px rgba(233, 69, 96, 0.5);
+            opacity: 0;
+            transform: translateY(30px);
+            animation: fadeInUp 0.8s ease forwards;
+            animation-delay: 0.2s;
+        }
+
+        .section-subtitle {
+            text-align: center;
+            font-size: 24px;
+            color: #aaa;
+            margin-bottom: 30px;
+            opacity: 0;
+            transform: translateY(30px);
+            animation: fadeInUp 0.8s ease forwards;
+            animation-delay: 0.6s;
+        }
+
+        /* 缓入动画 */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* ========== 系统架构图样式 ========== */
+        .arch-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 30px;
+            padding: 40px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            max-width: 1800px;
+            transform: scale(1.35);
+            opacity: 0;
+            margin-top: 120px;
+            animation: archFadeIn 1s ease forwards;
+            animation-delay: 1s;
+        }
+
+        @keyframes archFadeIn {
+            from {
+                opacity: 0;
+                transform: scale(1.35) translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1.35) translateY(0);
+            }
+        }
+
+        .arch-layer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeInUp 0.6s ease forwards;
+        }
+
+        .arch-layer:nth-child(1) { animation-delay: 1.2s; }
+        .arch-layer:nth-child(2) { animation-delay: 1.6s; }
+        .arch-layer:nth-child(3) { animation-delay: 2s; }
+
+        .layer-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .layer-label.error-label {
+            color: #ef4444;
+            font-size: 13px;
+        }
+
+        .layer-box {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            border-radius: 16px;
+            padding: 24px;
+            min-width: 200px;
+            backdrop-filter: blur(10px);
+            animation: box-glow 2s ease-in-out infinite;
+        }
+
+        @keyframes box-glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(233, 69, 96, 0.1); }
+            50% { box-shadow: 0 0 40px rgba(233, 69, 96, 0.2); }
+        }
+
+        /* 输入层样式 */
+        .input-layer .layer-box {
+            border-color: rgba(96, 165, 250, 0.4);
+            background: linear-gradient(135deg, rgba(96, 165, 250, 0.1), rgba(59, 130, 246, 0.05));
+        }
+
+        .data-flow {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .data-item {
+            padding: 10px 16px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: 'Courier New', monospace;
+            border: 1px solid rgba(96, 165, 250, 0.3);
+            color: #60a5fa;
+        }
+
+        .flow-label {
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+            margin-top: 8px;
+            font-style: italic;
+        }
+
+        /* 连接线样式 */
+        .arch-connector {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            min-width: 80px;
+            opacity: 0;
+            animation: fadeIn 0.5s ease forwards;
+        }
+
+        .arch-connector:nth-of-type(1) { animation-delay: 1.4s; }
+        .arch-connector:nth-of-type(2) { animation-delay: 1.8s; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .arch-connector.vertical {
+            min-height: 40px;
+        }
+
+        .connector-line {
+            width: 80px;
+            height: 20px;
+        }
+
+        .arch-connector.vertical .connector-line {
+            width: 20px;
+            height: 40px;
+        }
+
+        .connector-label {
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+        }
+
+        /* DNN处理层样式 */
+        .dnn-layer .layer-box {
+            border-color: rgba(233, 69, 96, 0.5);
+            background: linear-gradient(135deg, rgba(233, 69, 96, 0.15), rgba(220, 38, 38, 0.1));
+            text-align: center;
+            min-width: 180px;
+        }
+
+        .dnn-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 12px;
+            color: #e94560;
+        }
+
+        .dnn-icon svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .dnn-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #e94560;
+            margin-bottom: 16px;
+        }
+
+        .dnn-problems {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .problem-tag {
+            padding: 6px 12px;
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            border-radius: 20px;
+            font-size: 12px;
+            color: #fca5a5;
+        }
+
+        /* 问题输出组 */
+        .arch-output-group {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .arch-output-group .arch-layer:nth-child(1) { animation-delay: 2.4s; }
+        .arch-output-group .arch-layer:nth-child(3) { animation-delay: 2.8s; }
+
+        .problem-layer .layer-box {
+            border-color: rgba(239, 68, 68, 0.4);
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.05));
+            min-width: 280px;
+            padding: 20px;
+        }
+
+        .problem-visual {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .truncated-data, .padded-data {
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            font-size: 13px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .kept {
+            color: #34d399;
+        }
+
+        .lost {
+            color: #ef4444;
+            text-decoration: line-through;
+        }
+
+        .pad {
+            color: #666;
+            font-style: italic;
+        }
+
+        .problem-desc {
+            font-size: 12px;
+            color: #888;
+            text-align: center;
+            font-style: italic;
+        }
+
+        /* 序列可视化 */
+        .sequence-visual {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .seq-item {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .seq-arrow {
+            font-size: 20px;
+            color: #666;
+            padding: 0 8px;
+        }
+
+        /* 底部总结 */
+        .arch-summary {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 30px;
+            padding: 20px 40px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 50px;
+            margin-top: 120px;
+            opacity: 0;
+            transform: translateY(30px);
+            animation: fadeInUp 0.8s ease forwards;
+            animation-delay: 3.5s;
+        }
+
+        .summary-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            opacity: 0;
+            transform: translateX(-20px);
+            animation: fadeInLeft 0.5s ease forwards;
+        }
+
+        .summary-item:nth-child(1) { animation-delay: 3.8s; }
+        .summary-item:nth-child(3) { animation-delay: 4.2s; }
+        .summary-item:nth-child(5) { animation-delay: 4.6s; }
+
+        @keyframes fadeInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .summary-icon {
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .summary-icon svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .summary-text {
+            font-size: 16px;
+            color: #ddd;
+            font-weight: 500;
+        }
+
+        .summary-divider {
+            color: #444;
+            font-size: 20px;
+            opacity: 0;
+            animation: fadeIn 0.3s ease forwards;
+        }
+
+        .summary-divider:nth-of-type(2) { animation-delay: 4s; }
+        .summary-divider:nth-of-type(4) { animation-delay: 4.4s; }
+
+        /* 响应式调整 */
+        @media (max-width: 1800px) {
+            .arch-diagram {
+                transform: scale(1.2);
+                gap: 25px;
+                padding: 30px;
+            }
+        }
+
+        @media (max-width: 1600px) {
+            .arch-diagram {
+                transform: scale(1.1);
+                gap: 25px;
+                padding: 30px;
+            }
+        }
+
+        @media (max-width: 1400px) {
+            .arch-diagram {
+                flex-wrap: wrap;
+                gap: 25px;
+                transform: scale(1);
+            }
+            
+            .arch-output-group {
+                flex-direction: row;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+            
+            .arch-connector.vertical {
+                display: none;
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .container {
+                padding: 40px;
+            }
+            
+            .section-title {
+                font-size: 40px;
+            }
+            
+            .arch-diagram {
+                flex-direction: column;
+                transform: scale(0.85);
+            }
+            
+            .arch-output-group {
+                flex-direction: column;
+            }
+            
+            .arch-summary {
+                flex-direction: column;
+                gap: 15px;
+                border-radius: 20px;
+            }
+            
+            .summary-divider {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 右上角logo -->
+    <div class="logo">
+        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="30" r="12" fill="#60a5fa"/>
+            <path d="M35 45 Q50 70 65 45" stroke="#60a5fa" stroke-width="4" fill="none"/>
+            <path d="M30 60 Q50 90 70 60" stroke="#60a5fa" stroke-width="4" fill="none"/>
+        </svg>
+        <div class="logo-text">NetworkNoob</div>
+    </div>
+
+    <!-- Canvas粒子效果 -->
+    <canvas id="particlesCanvas"></canvas>
+
+    <div class="container">
+        <h1 class="section-title">DNN 的致命缺陷</h1>
+        <p class="section-subtitle">全连接神经网络在处理语言序列时的两大障碍</p>
+        
+        <div class="arch-diagram">
+            <!-- 左侧：输入层 -->
+            <div class="arch-layer input-layer">
+                <div class="layer-label">Input Layer</div>
+                <div class="layer-box">
+                    <div class="data-flow">
+                        <div class="data-item">"我今天吃了一个苹果"</div>
+                        <div class="data-item">"你好"</div>
+                        <div class="data-item">"这是一个非常长的句子..."</div>
+                    </div>
+                    <div class="flow-label">变长序列</div>
+                </div>
+            </div>
+
+            <!-- 连接线1 -->
+            <div class="arch-connector">
+                <svg class="connector-line" viewBox="0 0 100 20">
+                    <line x1="0" y1="10" x2="100" y2="10" stroke="rgba(233, 69, 96, 0.5)" stroke-width="2" stroke-dasharray="5,5"/>
+                    <polygon points="95,5 100,10 95,15" fill="rgba(233, 69, 96, 0.5)"/>
+                </svg>
+                <span class="connector-label">输入</span>
+            </div>
+
+            <!-- 中间：DNN处理层 -->
+            <div class="arch-layer dnn-layer">
+                <div class="layer-label">DNN Processing</div>
+                <div class="layer-box">
+                    <div class="dnn-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <rect x="3" y="3" width="7" height="7" rx="1"/>
+                            <rect x="14" y="3" width="7" height="7" rx="1"/>
+                            <rect x="14" y="14" width="7" height="7" rx="1"/>
+                            <rect x="3" y="14" width="7" height="7" rx="1"/>
+                            <path d="M10 6.5h4M6.5 10v4M17.5 10v4M10 17.5h4"/>
+                        </svg>
+                    </div>
+                    <div class="dnn-title">全连接神经网络</div>
+                    <div class="dnn-problems">
+                        <div class="problem-tag">固定输入长度</div>
+                        <div class="problem-tag">并行计算</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧：问题输出 -->
+            <div class="arch-output-group">
+                <!-- 问题1：长度受限 -->
+                <div class="arch-layer problem-layer">
+                    <div class="layer-label error-label">❌ 缺陷一：输入长度受限</div>
+                    <div class="layer-box">
+                        <div class="problem-visual">
+                            <div class="truncated-data">
+                                <span class="kept">"我今天吃了"</span>
+                                <span class="lost">"一个苹果" → ❌</span>
+                            </div>
+                            <div class="padded-data">
+                                <span class="kept">"你好"</span>
+                                <span class="pad">+ [0,0,0,0,0...]</span>
+                            </div>
+                        </div>
+                        <div class="problem-desc">必须截断或填充到固定长度</div>
+                    </div>
+                </div>
+
+                <!-- 连接线2 -->
+                <div class="arch-connector vertical">
+                    <svg class="connector-line" viewBox="0 0 20 60">
+                        <line x1="10" y1="0" x2="10" y2="55" stroke="rgba(233, 69, 96, 0.5)" stroke-width="2" stroke-dasharray="5,5"/>
+                        <polygon points="5,50 10,55 15,50" fill="rgba(233, 69, 96, 0.5)"/>
+                    </svg>
+                </div>
+
+                <!-- 问题2：时序丢失 -->
+                <div class="arch-layer problem-layer">
+                    <div class="layer-label error-label">❌ 缺陷二：时序信息丢失</div>
+                    <div class="layer-box">
+                        <div class="sequence-visual">
+                            <div class="seq-item">我</div>
+                            <div class="seq-item">吃</div>
+                            <div class="seq-item">苹果</div>
+                            <div class="seq-arrow">↔</div>
+                            <div class="seq-item">苹果</div>
+                            <div class="seq-item">吃</div>
+                            <div class="seq-item">我</div>
+                        </div>
+                        <div class="problem-desc">DNN视角：顺序无关紧要</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 底部总结 -->
+        <div class="arch-summary">
+            <div class="summary-item">
+                <span class="summary-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M4 6h16M4 12h16M4 18h7"/>
+                    </svg>
+                </span>
+                <span class="summary-text">无法处理变长输入</span>
+            </div>
+            <div class="summary-divider">|</div>
+            <div class="summary-item">
+                <span class="summary-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                </span>
+                <span class="summary-text">无法理解词序关系</span>
+            </div>
+            <div class="summary-divider">|</div>
+            <div class="summary-item">
+                <span class="summary-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M15 9l-6 6M9 9l6 6"/>
+                    </svg>
+                </span>
+                <span class="summary-text">无法读懂语义</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 粒子效果
+        const canvas = document.getElementById('particlesCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        const particles = [];
+        const particleCount = 100;
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 2 + 0.5;
+                this.speedX = (Math.random() - 0.5) * 0.5;
+                this.speedY = (Math.random() - 0.5) * 0.5;
+                this.opacity = Math.random() * 0.5 + 0.1;
+                this.color = `rgba(96, 165, 250, ${this.opacity})`;
+            }
+
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
+                    this.reset();
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        for (let i = 0; i < particleCount; i++) {
+            particles.push(new Particle());
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(particle => {
+                particle.update();
+                particle.draw();
+            });
+            requestAnimationFrame(animateParticles);
+        }
+
+        animateParticles();
+    </script>
+</body>
+</html>

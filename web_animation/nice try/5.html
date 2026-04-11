@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPsec Pro Presentation | Final</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@700&family=Noto+Sans+SC:wght@400;700;900&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'Noto Sans SC', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    },
+                    colors: {
+                        primary: '#0A84FF',
+                        accent: '#30D158',
+                        warning: '#FFD60A',
+                        purple: '#BF5AF2',
+                        card: '#1c1c1e'
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        body {
+            background-color: #000;
+            color: #fff;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+        }
+
+        /* --- 1. 侧边栏 (加大版) --- */
+        .sidebar-container {
+            width: 360px; /* 稍微加宽 */
+            flex-shrink: 0;
+            background: linear-gradient(to right, rgba(0,0,0,0.9), transparent);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 4rem 2.5rem; /* 增加内边距 */
+            z-index: 20;
+            pointer-events: none;
+        }
+        .sidebar-content { pointer-events: auto; }
+
+        /* --- 2. 卡片基础样式 --- */
+        .swiper-slide {
+            width: 400px;
+            height: 580px;
+            background: rgba(30, 30, 35, 0.6);
+            backdrop-filter: blur(30px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 32px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
+            /* 默认状态：内容居中布局 */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* --- 3. 选中状态 (Focus Mode) --- */
+        .swiper-slide-active {
+            background: rgba(45, 45, 50, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            box-shadow: 0 25px 60px rgba(0,0,0,0.6), 0 0 40px rgba(255,255,255,0.05);
+            /* 选中时：改为顶部对齐，为详细内容腾出空间 */
+            justify-content: flex-start;
+        }
+
+        /* --- 标题动画逻辑 --- */
+        .card-header {
+            text-align: center;
+            transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
+            margin-bottom: 0;
+            transform: translateY(0);
+        }
+        
+        /* 激活时：标题上移，缩小一点点间距 */
+        .swiper-slide-active .card-header {
+            transform: translateY(40px); /* 稍微往下一点，或者根据布局调整 */
+            margin-bottom: 2rem;
+        }
+
+        /* --- 详细内容 (默认隐藏) --- */
+        .card-details {
+            opacity: 0;
+            transform: translateY(20px);
+            height: 0;
+            overflow: hidden;
+            width: 100%;
+            padding: 0 2.5rem;
+            transition: opacity 0.4s ease 0.1s, transform 0.4s ease 0.1s; /* 稍微延迟，等卡片变大后再显示 */
+        }
+
+        /* 激活时：显示详细内容 */
+        .swiper-slide-active .card-details {
+            opacity: 1;
+            transform: translateY(60px); /* 配合标题的移动 */
+            height: auto;
+            overflow: visible;
+        }
+
+        /* --- 荧光笔动画 (The Highlighter) --- */
+        .highlight-bg {
+            background-image: linear-gradient(120deg, transparent 0%, var(--hl-color) 0%, var(--hl-color) 100%);
+            background-repeat: no-repeat;
+            background-size: 0% 100%; /* 默认宽度为0 */
+            background-position: 0 0;
+            padding: 4px 8px;
+            color: #ccc;
+            font-family: 'JetBrains Mono', monospace;
+            transition: background-size 0.5s ease 0.3s, color 0.3s ease 0.3s; /* 延迟播放 */
+        }
+
+        .swiper-slide-active .highlight-bg {
+            background-size: 100% 100%; /* 激活时拉满 */
+            color: #000; /* 高亮背景下文字变黑，增加可读性 */
+            font-weight: 800;
+        }
+
+        /* --- 水印图标 --- */
+        .watermark {
+            position: absolute;
+            font-size: 16rem;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-10deg);
+            opacity: 0.05;
+            transition: all 0.5s;
+            pointer-events: none;
+        }
+        .swiper-slide-active .watermark {
+            opacity: 0.1;
+            top: 10%;
+            left: 80%;
+            transform: translate(-50%, 0) rotate(10deg) scale(0.8); /* 移开一点，别挡字 */
+        }
+
+        /* --- 总结卡片特殊样式 --- */
+        .summary-list li {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1rem;
+            opacity: 0;
+            transform: translateX(-10px);
+        }
+        .swiper-slide-active .summary-list li {
+            opacity: 1;
+            transform: translateX(0);
+            transition: all 0.4s ease;
+        }
+        /* 依次出现 */
+        .swiper-slide-active .summary-list li:nth-child(1) { transition-delay: 0.1s; }
+        .swiper-slide-active .summary-list li:nth-child(2) { transition-delay: 0.2s; }
+        .swiper-slide-active .summary-list li:nth-child(3) { transition-delay: 0.3s; }
+        .swiper-slide-active .summary-list li:nth-child(4) { transition-delay: 0.4s; }
+
+    </style>
+</head>
+<body>
+
+    <aside class="sidebar-container">
+        <div class="sidebar-content">
+            <h5 class="text-sm font-bold text-gray-500 tracking-[6px] uppercase mb-6">Presentation</h5>
+            <h1 class="text-6xl font-black text-white leading-tight">
+                IPsec<br>
+                <span class="text-accent">Flow</span>
+            </h1>
+            <div class="mt-8 flex items-center gap-4 text-gray-400">
+                <span class="bg-white/10 px-3 py-1 rounded-lg text-lg font-mono border border-white/10">←</span>
+                <span class="bg-white/10 px-3 py-1 rounded-lg text-lg font-mono border border-white/10">→</span>
+                <span class="text-base">Navigate</span>
+            </div>
+        </div>
+
+        <div class="sidebar-content">
+            <button id="mode-toggle" class="w-full py-5 bg-white/5 hover:bg-white/15 border border-white/10 hover:border-accent/50 rounded-2xl text-base font-bold transition-all flex items-center justify-center gap-3 group">
+                <div class="w-3 h-3 rounded-full bg-gray-600 group-hover:bg-accent transition-colors" id="mode-dot"></div>
+                <span id="mode-text" class="tracking-wider">ENABLE TUNNEL MODE</span>
+            </button>
+        </div>
+    </aside>
+
+    <main class="flex-1 h-full relative flex items-center justify-center bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-gray-900 via-black to-black">
+        
+        <div class="swiper mySwiper w-full h-full py-10">
+            <div class="swiper-wrapper">
+                
+                <div class="swiper-slide" style="--hl-color: #FFD60A;">
+                    <i class="fa-solid fa-file-code watermark text-warning"></i>
+                    
+                    <div class="card-header">
+                        <h2 class="text-5xl font-black text-white mb-2 tracking-tight">应用数据</h2>
+                        <p class="text-xl text-warning font-mono font-bold">Payload</p>
+                    </div>
+
+                    <div class="card-details">
+                        <p class="text-2xl text-gray-300 font-light leading-normal mb-12">
+                            这是最原始的用户数据。<br>
+                            在进入网络协议栈之前，它是<strong class="text-white">完全透明</strong>的。
+                        </p>
+                        <div>
+                            <div class="text-sm text-gray-500 uppercase tracking-widest mb-2 font-bold">Status</div>
+                            <span class="highlight-bg text-3xl">CLEAR TEXT / HTTP</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="swiper-slide" style="--hl-color: #BF5AF2;">
+                    <i class="fa-solid fa-layer-group watermark text-purple"></i>
+                    
+                    <div class="card-header">
+                        <h2 class="text-5xl font-black text-white mb-2 tracking-tight">传输封装</h2>
+                        <p class="text-xl text-purple font-mono font-bold">Layer 4</p>
+                    </div>
+
+                    <div class="card-details">
+                        <p class="text-2xl text-gray-300 font-light leading-normal mb-12">
+                            添加 TCP 头部。<br>
+                            系统通过<strong class="text-white">端口号</strong>来识别通信的应用程序。
+                        </p>
+                        <div>
+                            <div class="text-sm text-gray-500 uppercase tracking-widest mb-2 font-bold">Port Mapping</div>
+                            <span class="highlight-bg text-3xl">443 &rarr; 51820</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="swiper-slide" style="--hl-color: #0A84FF;">
+                    <i class="fa-solid fa-network-wired watermark text-primary"></i>
+                    
+                    <div class="card-header">
+                        <h2 class="text-5xl font-black text-white mb-2 tracking-tight">IP 寻址</h2>
+                        <p class="text-xl text-primary font-mono font-bold">Layer 3</p>
+                    </div>
+
+                    <div class="card-details">
+                        <p class="text-2xl text-gray-300 font-light leading-normal mb-12">
+                            添加原始 IP 头。<br>
+                            这暴露了你的<strong class="text-white">真实物理位置</strong>和身份信息。
+                        </p>
+                        <div>
+                            <div class="text-sm text-gray-500 uppercase tracking-widest mb-2 font-bold">Original Source</div>
+                            <span class="highlight-bg text-3xl">192.168.1.10</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="swiper-slide" style="--hl-color: #30D158;">
+                    <i class="fa-solid fa-shield-halved watermark text-accent"></i>
+                    
+                    <div class="card-header">
+                        <h2 class="text-5xl font-black text-white mb-2 tracking-tight">安全拦截</h2>
+                        <p class="text-xl text-accent font-mono font-bold">IPsec / ESP</p>
+                    </div>
+
+                    <div class="card-details">
+                        <p class="text-2xl text-gray-300 font-light leading-normal mb-12">
+                            IPsec 引擎介入。<br>
+                            对载荷进行<strong class="text-white">高强度加密</strong>。内容变成乱码，无法被窃听。
+                        </p>
+                        <div>
+                            <div class="text-sm text-gray-500 uppercase tracking-widest mb-2 font-bold">Security</div>
+                            <span class="highlight-bg text-3xl">AES-256-GCM</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="swiper-slide tunnel-slide hidden" style="--hl-color: #ffffff;">
+                    <i class="fa-solid fa-globe watermark text-white"></i>
+                    
+                    <div class="card-header">
+                        <h2 class="text-5xl font-black text-white mb-2 tracking-tight">隧道伪装</h2>
+                        <p class="text-xl text-white font-mono font-bold">New Header</p>
+                    </div>
+
+                    <div class="card-details">
+                        <p class="text-2xl text-gray-300 font-light leading-normal mb-12">
+                            生成全新的外层 IP。<br>
+                            外界只能看到<strong class="text-white">网关在通信</strong>，内部拓扑完全隐形。
+                        </p>
+                        <div>
+                            <div class="text-sm text-gray-500 uppercase tracking-widest mb-2 font-bold">New Identity</div>
+                            <span class="highlight-bg text-3xl">203.0.113.1</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="swiper-slide" style="--hl-color: #64748b;">
+                    <i class="fa-solid fa-flag-checkered watermark text-gray-600"></i>
+                    
+                    <div class="card-header">
+                        <h2 class="text-5xl font-black text-white mb-2 tracking-tight">封装完成</h2>
+                        <p class="text-xl text-gray-400 font-mono font-bold">Ready to Send</p>
+                    </div>
+
+                    <div class="card-details">
+                        <ul class="summary-list space-y-4 mt-4">
+                            <li class="flex items-center gap-4">
+                                <div class="w-8 h-8 rounded-full bg-green-500/20 text-green-500 flex items-center justify-center border border-green-500/50"><i class="fa-solid fa-check"></i></div>
+                                <span class="text-xl text-gray-300">Payload Generated</span>
+                            </li>
+                            <li class="flex items-center gap-4">
+                                <div class="w-8 h-8 rounded-full bg-green-500/20 text-green-500 flex items-center justify-center border border-green-500/50"><i class="fa-solid fa-check"></i></div>
+                                <span class="text-xl text-gray-300">Layer 4 Ports Assigned</span>
+                            </li>
+                            <li class="flex items-center gap-4">
+                                <div class="w-8 h-8 rounded-full bg-green-500/20 text-green-500 flex items-center justify-center border border-green-500/50"><i class="fa-solid fa-check"></i></div>
+                                <span class="text-xl text-gray-300">IP Header Attached</span>
+                            </li>
+                            <li class="flex items-center gap-4">
+                                <div class="w-8 h-8 rounded-full bg-accent text-black flex items-center justify-center shadow-[0_0_15px_rgba(48,209,88,0.5)]"><i class="fa-solid fa-lock"></i></div>
+                                <span class="text-xl text-white font-bold">IPsec Encrypted</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
+    <script>
+        // 初始化 Swiper
+        const swiper = new Swiper(".mySwiper", {
+            effect: "coverflow",
+            grabCursor: true,
+            centeredSlides: true,
+            slidesPerView: "auto",
+            spaceBetween: 80, // 卡片间距适中
+            coverflowEffect: {
+                rotate: 0,
+                stretch: 0,
+                depth: 200, // 深度加大，未选中的卡片会变小、变远
+                modifier: 1,
+                slideShadows: false, // 关闭阴影，保持干净
+            },
+            keyboard: { enabled: true },
+            mousewheel: { thresholdDelta: 50 },
+            speed: 600, // 切换速度稍慢，更有质感
+        });
+
+        // 隧道模式逻辑
+        let isTunnelMode = false;
+        const btn = document.getElementById('mode-toggle');
+        const btnText = document.getElementById('mode-text');
+        const btnDot = document.getElementById('mode-dot');
+        const tunnelSlide = document.querySelector('.tunnel-slide');
+
+        btn.addEventListener('click', () => {
+            isTunnelMode = !isTunnelMode;
+            
+            if (isTunnelMode) {
+                // 开启隧道
+                btnText.innerText = "SWITCH TO TRANSPORT";
+                btnDot.classList.remove('bg-gray-600');
+                btnDot.classList.add('bg-accent', 'animate-pulse');
+                btn.classList.add('border-accent');
+                
+                // 显示卡片 (移除 hidden class)
+                tunnelSlide.classList.remove('hidden');
+                swiper.update(); // 刷新 Swiper
+                swiper.slideTo(4); // 跳转到新卡片
+            } else {
+                // 关闭隧道
+                btnText.innerText = "ENABLE TUNNEL MODE";
+                btnDot.classList.remove('bg-accent', 'animate-pulse');
+                btnDot.classList.add('bg-gray-600');
+                btn.classList.remove('border-accent');
+
+                // 如果当前在隧道卡片，先滑走
+                if (swiper.activeIndex === 4) {
+                    swiper.slideTo(3);
+                    setTimeout(() => {
+                        tunnelSlide.classList.add('hidden');
+                        swiper.update();
+                    }, 600);
+                } else {
+                    tunnelSlide.classList.add('hidden');
+                    swiper.update();
+                }
+            }
+        });
+    </script>
+</body>
+</html>

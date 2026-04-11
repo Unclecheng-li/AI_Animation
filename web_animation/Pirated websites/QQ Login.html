@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QQ登录</title>
+  <!-- 引入外部资源 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  
+  <!-- Tailwind 配置 -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#2D8CF0',      // QQ蓝
+            secondary: '#52C41A',    // QQ绿
+            danger: '#F5222D',       // 错误红
+            neutral: '#8C8C8C',      // 中性灰
+            'qq-light': '#E8F3FF',   // 浅蓝背景
+          },
+          fontFamily: {
+            inter: ['Inter', 'sans-serif'],
+          },
+        },
+      }
+    }
+  </script>
+  
+  <!-- 自定义工具类 -->
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .content-auto {
+        content-visibility: auto;
+      }
+      .text-shadow {
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+      }
+      .bg-gradient-qq {
+        background: linear-gradient(135deg, #2D8CF0 0%, #1E6FE9 100%);
+      }
+      .transition-all-300 {
+        transition: all 0.3s ease;
+      }
+    }
+  </style>
+  
+  <!-- 基础样式 -->
+  <style>
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background-color: #f5f6f7;
+    }
+    
+    /* 背景装饰 */
+    .bg-decoration {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      z-index: -1;
+    }
+    
+    .bg-decoration .circle {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(45, 140, 240, 0.05);
+      animation: float 20s infinite ease-in-out;
+    }
+    
+    .bg-decoration .circle:nth-child(1) {
+      width: 400px;
+      height: 400px;
+      top: -100px;
+      left: -100px;
+      animation-delay: 0s;
+    }
+    
+    .bg-decoration .circle:nth-child(2) {
+      width: 300px;
+      height: 300px;
+      bottom: -50px;
+      right: -50px;
+      animation-delay: 5s;
+    }
+    
+    .bg-decoration .circle:nth-child(3) {
+      width: 200px;
+      height: 200px;
+      top: 50%;
+      right: 10%;
+      animation-delay: 10s;
+    }
+    
+    @keyframes float {
+      0%, 100% {
+        transform: translateY(0) translateX(0);
+      }
+      50% {
+        transform: translateY(-30px) translateX(30px);
+      }
+    }
+    
+    /* 输入框动画 */
+    .input-focus {
+      transition: all 0.3s ease;
+    }
+    
+    .input-focus:focus {
+      box-shadow: 0 0 0 2px rgba(45, 140, 240, 0.2);
+    }
+    
+    /* 按钮动画 */
+    .btn-hover {
+      transition: all 0.3s ease;
+    }
+    
+    .btn-hover:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(45, 140, 240, 0.2);
+    }
+    
+    /* 加载动画 */
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .loading-spinner {
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-top: 3px solid white;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      animation: spin 1s linear infinite;
+    }
+    
+    /* 登录成功动画 */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .fade-in-up {
+      animation: fadeInUp 0.5s ease forwards;
+    }
+    
+    .step-1 { animation-delay: 0.1s; }
+    .step-2 { animation-delay: 0.2s; }
+    .step-3 { animation-delay: 0.3s; }
+  </style>
+</head>
+
+<body class="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+  <!-- 背景装饰 -->
+  <div class="bg-decoration">
+    <div class="circle"></div>
+    <div class="circle"></div>
+    <div class="circle"></div>
+  </div>
+  
+  <div class="w-full max-w-md">
+    <!-- 登录容器 -->
+    <div id="login-container" class="bg-white rounded-2xl shadow-lg overflow-hidden transition-all duration-500 transform">
+      <!-- 登录头部 -->
+      <div class="bg-gradient-qq p-6 text-white">
+        <div class="flex items-center justify-between">
+          <h2 class="text-[clamp(1.5rem,3vw,1.75rem)] font-bold text-shadow">QQ登录</h2>
+          <div class="flex space-x-2">
+            <button id="close-btn" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/20 transition-all-300">
+              <i class="fa fa-times"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 登录主体 -->
+      <div class="p-6">
+        <!-- QQ头像选择 -->
+        <div class="flex justify-center mb-6">
+          <div class="relative">
+            <img id="avatar" src="PNG/xny.jpg" alt="QQ头像" class="w-24 h-24 rounded-full border-4 border-white shadow-lg object-cover cursor-pointer transition-all-300 hover:scale-105">
+            <div class="absolute -bottom-2 -right-2 w-8 h-8 bg-primary rounded-full flex items-center justify-center text-white shadow-md cursor-pointer transition-all-300 hover:bg-primary/90">
+              <i class="fa fa-camera"></i>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 账号输入 -->
+        <div class="mb-4">
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <i class="fa fa-user text-neutral"></i>
+            </div>
+            <input type="text" id="username" placeholder="QQ号码/手机/邮箱" class="input-focus block w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary">
+          </div>
+        </div>
+        
+        <!-- 密码输入 -->
+        <div class="mb-6">
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <i class="fa fa-lock text-neutral"></i>
+            </div>
+            <input type="password" id="password" placeholder="密码" class="input-focus block w-full pl-10 pr-10 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary">
+            <div class="absolute inset-y-0 right-0 pr-3 flex items-center">
+              <button id="toggle-password" class="text-neutral hover:text-primary transition-all-300">
+                <i class="fa fa-eye-slash"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 选项 -->
+        <div class="flex items-center justify-between mb-6">
+          <div class="flex items-center">
+            <input id="remember" type="checkbox" class="w-4 h-4 text-primary focus:ring-primary/50 border-gray-300 rounded">
+            <label for="remember" class="ml-2 text-sm text-gray-600">记住密码</label>
+          </div>
+          <a href="#" class="text-sm text-primary hover:text-primary/80 transition-all-300">忘记密码?</a>
+        </div>
+        
+        <!-- 登录按钮 -->
+        <button id="login-btn" class="btn-hover w-full bg-primary text-white py-3 px-4 rounded-lg font-medium flex items-center justify-center">
+          <span>登录</span>
+        </button>
+        
+        <!-- 其他登录方式 -->
+        <div class="mt-8">
+          <div class="relative flex items-center justify-center">
+            <hr class="w-full border-gray-200">
+            <span class="absolute bg-white px-2 text-sm text-gray-500">其他登录方式</span>
+          </div>
+          
+          <div class="flex justify-center space-x-6 mt-4">
+            <a href="#" class="w-12 h-12 rounded-full bg-[#07C160] flex items-center justify-center text-white shadow-md transition-all-300 hover:scale-110">
+              <i class="fa fa-weixin text-xl"></i>
+            </a>
+            <a href="#" class="w-12 h-12 rounded-full bg-[#1DA1F2] flex items-center justify-center text-white shadow-md transition-all-300 hover:scale-110">
+              <i class="fa fa-qq text-xl"></i>
+            </a>
+            <a href="#" class="w-12 h-12 rounded-full bg-[#E4405F] flex items-center justify-center text-white shadow-md transition-all-300 hover:scale-110">
+              <i class="fa fa-weibo text-xl"></i>
+            </a>
+          </div>
+        </div>
+        
+        <!-- 底部链接 -->
+        <div class="mt-8 text-center text-sm">
+          <a href="#" class="text-primary hover:text-primary/80 transition-all-300">注册账号</a>
+          <span class="mx-2 text-gray-400">|</span>
+          <a href="#" class="text-primary hover:text-primary/80 transition-all-300">扫码登录</a>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 登录成功容器 (初始隐藏) -->
+    <div id="success-container" class="hidden bg-white rounded-2xl shadow-lg overflow-hidden text-center p-8">
+      <div class="fade-in-up step-1">
+        <div class="w-20 h-20 mx-auto bg-secondary/20 rounded-full flex items-center justify-center mb-6">
+          <i class="fa fa-check text-3xl text-secondary"></i>
+        </div>
+        <h2 class="text-2xl font-bold text-gray-800 mb-2">登录成功</h2>
+        <p class="text-gray-600 mb-8">欢迎回来，<span id="welcome-name" class="font-medium text-primary">QQ用户</span></p>
+      </div>
+      
+      <div class="fade-in-up step-2">
+        <div class="flex justify-center mb-8">
+          <img id="success-avatar" src="PNG/xny.jpg" alt="用户头像" class="w-24 h-24 rounded-full border-4 border-qq-light shadow-lg object-cover">
+        </div>
+      </div>
+      
+      <div class="fade-in-up step-3">
+        <div class="flex space-x-3 justify-center">
+          <a href="QQ.html"><button id="enter-qq" class="btn-hover bg-primary text-white py-3 px-8 rounded-lg font-medium">进入QQ</button></a>
+          <button id="switch-account" class="btn-hover border border-gray-300 text-gray-700 py-3 px-8 rounded-lg font-medium hover:bg-gray-50">切换账号</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // 获取DOM元素
+      const loginContainer = document.getElementById('login-container');
+      const successContainer = document.getElementById('success-container');
+      const loginBtn = document.getElementById('login-btn');
+      const usernameInput = document.getElementById('username');
+      const passwordInput = document.getElementById('password');
+      const rememberCheckbox = document.getElementById('remember');
+      const togglePasswordBtn = document.getElementById('toggle-password');
+      const welcomeName = document.getElementById('welcome-name');
+      const successAvatar = document.getElementById('success-avatar');
+      const avatarImg = document.getElementById('avatar');
+      const enterQQBtn = document.getElementById('enter-qq');
+      const switchAccountBtn = document.getElementById('switch-account');
+      const closeBtn = document.getElementById('close-btn');
+      
+      // 密码显示/隐藏切换
+      togglePasswordBtn.addEventListener('click', function() {
+        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+        passwordInput.setAttribute('type', type);
+        
+        // 切换图标
+        this.innerHTML = type === 'password' ? '<i class="fa fa-eye-slash"></i>' : '<i class="fa fa-eye"></i>';
+      });
+      
+      // 登录按钮点击事件
+      loginBtn.addEventListener('click', function() {
+        const username = usernameInput.value.trim();
+        const password = passwordInput.value.trim();
+        
+        // 简单验证
+        if (!username) {
+          shakeInput(usernameInput, '请输入QQ号码');
+          return;
+        }
+        
+        if (!password) {
+          shakeInput(passwordInput, '请输入密码');
+          return;
+        }
+        
+        // 显示加载状态
+        this.disabled = true;
+        this.innerHTML = '<div class="loading-spinner mr-2"></div><span>登录中...</span>';
+        
+        // 模拟登录过程 (2秒后成功)
+        setTimeout(function() {
+          // 保存记住密码状态 (实际应用中可使用localStorage)
+          if (rememberCheckbox.checked) {
+            console.log('记住密码功能已开启');
+            // 实际应用中可在此保存用户名密码
+          }
+          
+          // 更新成功页面信息
+          welcomeName.textContent = username;
+          successAvatar.src = avatarImg.src;
+          
+          // 切换到成功页面
+          loginContainer.classList.add('opacity-0', 'scale-95');
+          setTimeout(function() {
+            loginContainer.classList.add('hidden');
+            successContainer.classList.remove('hidden');
+            
+            // 添加动画类
+            const fadeElements = successContainer.querySelectorAll('.fade-in-up');
+            fadeElements.forEach(el => {
+              el.style.opacity = '0';
+              setTimeout(() => {
+                el.style.opacity = '1';
+              }, 50);
+            });
+          }, 300);
+        }, 2000);
+      });
+      
+      // 切换账号按钮
+      switchAccountBtn.addEventListener('click', function() {
+        // 重置登录表单
+        usernameInput.value = '';
+        passwordInput.value = '';
+        rememberCheckbox.checked = false;
+        loginBtn.disabled = false;
+        loginBtn.innerHTML = '<span>登录</span>';
+        
+        // 切换回登录页面
+        successContainer.classList.add('hidden');
+        loginContainer.classList.remove('hidden', 'opacity-0', 'scale-95');
+      });
+      
+      // 关闭按钮
+      closeBtn.addEventListener('click', function() {
+        if (confirm('确定要关闭登录窗口吗？')) {
+          // 实际应用中可在此关闭窗口或跳转到其他页面
+          alert('登录窗口已关闭');
+        }
+      });
+      
+      // 输入框抖动动画
+      function shakeInput(input, message) {
+        input.classList.add('border-danger');
+        input.classList.add('animate-shake');
+        
+        // 显示错误提示
+        const parent = input.parentElement;
+        if (!parent.querySelector('.error-message')) {
+          const errorMsg = document.createElement('div');
+          errorMsg.className = 'error-message text-danger text-xs mt-1';
+          errorMsg.textContent = message;
+          parent.appendChild(errorMsg);
+        }
+        
+        // 移除动画类
+        setTimeout(function() {
+          input.classList.remove('animate-shake');
+        }, 600);
+        
+        // 聚焦输入框
+        input.focus();
+      }
+      
+      // 添加输入框聚焦事件移除错误状态
+      const inputs = [usernameInput, passwordInput];
+      inputs.forEach(input => {
+        input.addEventListener('focus', function() {
+          this.classList.remove('border-danger');
+          const parent = this.parentElement;
+          const errorMsg = parent.querySelector('.error-message');
+          if (errorMsg) {
+            parent.removeChild(errorMsg);
+          }
+        });
+      });
+      
+      // 添加键盘事件
+      document.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter' && !loginContainer.classList.contains('hidden')) {
+          loginBtn.click();
+        }
+      });
+      
+      // 头像点击事件
+      avatarImg.addEventListener('click', function() {
+        alert('更换头像功能（模拟）');
+        // 实际应用中可在此打开头像选择对话框
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>浏览器多位置弹窗广告模拟</title>
+  <!-- 引入外部资源 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  
+  <!-- Tailwind 配置 -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#EA4335',      // 错误红色
+            secondary: '#4285F4',    // 浏览器蓝色
+            accent: '#FF9800',       // 广告黄色
+            neutral: '#5F6368',      // 中性灰
+            'browser-bg': '#F8F9FA', // 浏览器背景色
+          },
+          fontFamily: {
+            inter: ['Inter', 'system-ui', 'sans-serif'],
+          },
+        },
+      }
+    }
+  </script>
+  
+  <!-- 自定义工具类 -->
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .content-auto {
+        content-visibility: auto;
+      }
+      .text-shadow {
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+      }
+      .transition-all-300 {
+        transition: all 0.3s ease;
+      }
+      .ad-shake {
+        animation: shake 0.5s ease-in-out infinite alternate;
+      }
+      .ad-pulse {
+        animation: pulse 2s infinite;
+      }
+      .ad-float {
+        animation: float 3s ease-in-out infinite;
+      }
+    }
+  </style>
+  
+  <!-- 基础样式 -->
+  <style>
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background-color: #F8F9FA;
+    }
+    
+    /* 浏览器UI样式 */
+    .browser-toolbar {
+      background-color: #F1F3F4;
+      border-bottom: 1px solid #DADCE0;
+    }
+    
+    .browser-address-bar {
+      background-color: #FFFFFF;
+      border: 1px solid #DADCE0;
+      border-radius: 24px;
+      transition: all 0.2s ease;
+    }
+    
+    .browser-address-bar:focus-within {
+      border-color: #4285F4;
+      box-shadow: 0 1px 2px rgba(66, 133, 244, 0.3);
+    }
+    
+    /* 广告弹窗样式 - 多位置支持 */
+    .ad-popup {
+      position: fixed;
+      width: 300px;
+      background-color: white;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      overflow: hidden;
+      opacity: 0;
+      transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55), opacity 0.3s ease;
+      z-index: 9999;
+    }
+    
+    /* 右下角广告 */
+    .ad-popup.bottom-right {
+      bottom: 20px;
+      right: 20px;
+      transform: translateY(400px);
+    }
+    
+    /* 左下角广告 */
+    .ad-popup.bottom-left {
+      bottom: 20px;
+      left: 20px;
+      transform: translateY(400px);
+    }
+    
+    /* 右上角广告 */
+    .ad-popup.top-right {
+      top: 20px;
+      right: 20px;
+      transform: translateY(-400px);
+    }
+    
+    /* 左上角广告 */
+    .ad-popup.top-left {
+      top: 20px;
+      left: 20px;
+      transform: translateY(-400px);
+    }
+    
+    /* 中间广告 */
+    .ad-popup.center {
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.8);
+      width: 400px;
+    }
+    
+    /* 全屏广告 */
+    .ad-popup.fullscreen {
+      width: 100%;
+      height: 100%;
+      bottom: 0;
+      right: 0;
+      border-radius: 0;
+      transform: translateY(0);
+    }
+    
+    /* 显示状态 */
+    .ad-popup.show {
+      opacity: 1;
+    }
+    
+    .ad-popup.bottom-right.show,
+    .ad-popup.bottom-left.show {
+      transform: translateY(0);
+    }
+    
+    .ad-popup.top-right.show,
+    .ad-popup.top-left.show {
+      transform: translateY(0);
+    }
+    
+    .ad-popup.center.show {
+      transform: translate(-50%, -50%) scale(1);
+    }
+    
+    /* 广告动画 */
+    @keyframes shake {
+      0% { transform: translate(0, 0); }
+      25% { transform: translate(-5px, -5px); }
+      50% { transform: translate(5px, 5px); }
+      75% { transform: translate(-5px, 5px); }
+      100% { transform: translate(5px, -5px); }
+    }
+    
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+    
+    @keyframes float {
+      0% { transform: translateY(0px); }
+      50% { transform: translateY(-10px); }
+      100% { transform: translateY(0px); }
+    }
+    
+    /* 进度条 */
+    .progress-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 3px;
+      background-color: #4285F4;
+      width: 0%;
+      z-index: 10000;
+      transition: width 0.2s ease;
+    }
+    
+    /* 广告关闭按钮 */
+    .ad-close {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background-color: rgba(0, 0, 0, 0.3);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .ad-close:hover {
+      background-color: rgba(0, 0, 0, 0.5);
+      transform: scale(1.1);
+    }
+    
+    /* 广告标题 */
+    .ad-title {
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+    
+    /* 广告内容 */
+    .ad-content {
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    
+    /* 广告按钮 */
+    .ad-button {
+      display: inline-block;
+      background-color: #FF9800;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-weight: bold;
+      margin-top: 10px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .ad-button:hover {
+      background-color: #F57C00;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+  </style>
+</head>
+
+<body class="min-h-screen flex flex-col overflow-hidden">
+  <!-- 进度条 -->
+  <div class="progress-bar" id="progress-bar"></div>
+  
+  <!-- 浏览器工具栏 -->
+  <div class="browser-toolbar px-4 py-2 flex items-center">
+    <div class="flex space-x-1 mr-4">
+      <div class="w-3 h-3 rounded-full bg-red-500"></div>
+      <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+      <div class="w-3 h-3 rounded-full bg-green-500"></div>
+    </div>
+    
+    <div class="flex space-x-2 mr-2">
+      <button id="back-btn" class="text-neutral hover:text-secondary transition-all-300 opacity-50 cursor-not-allowed">
+        <i class="fa fa-arrow-left"></i>
+      </button>
+      <button id="forward-btn" class="text-neutral hover:text-secondary transition-all-300 opacity-50 cursor-not-allowed">
+        <i class="fa fa-arrow-right"></i>
+      </button>
+      <button id="reload-btn" class="text-neutral hover:text-secondary transition-all-300">
+        <i class="fa fa-refresh"></i>
+      </button>
+    </div>
+    
+    <div class="browser-address-bar flex-1 max-w-xl mx-4 px-4 py-1.5 flex items-center">
+      <i class="fa fa-lock text-neutral mr-2 text-xs"></i>
+      <input type="text" id="address-bar" value="https://www.example.com" class="flex-1 bg-transparent border-none outline-none text-sm text-neutral">
+      <div class="flex space-x-2">
+        <button id="home-btn" class="text-neutral hover:text-secondary transition-all-300">
+          <i class="fa fa-home"></i>
+        </button>
+      </div>
+    </div>
+    
+    <div class="flex items-center space-x-3">
+      <button class="text-neutral hover:text-secondary transition-all-300">
+        <i class="fa fa-star-o"></i>
+      </button>
+      <button class="text-neutral hover:text-secondary transition-all-300">
+        <i class="fa fa-ellipsis-v"></i>
+      </button>
+    </div>
+  </div>
+  
+  <!-- 页面内容区域 -->
+  <div class="flex-1 overflow-hidden relative">
+    <!-- 网站内容 -->
+    <div id="site-content" class="absolute inset-0 bg-white overflow-y-auto">
+      <div class="p-8">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">Example.com - 示例网站</h1>
+        <p class="text-gray-700 mb-6">这是一个正常的网站内容区域，但您会在浏览时不断收到各个位置的广告弹窗。</p>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div class="bg-gray-100 p-6 rounded-lg">
+            <h3 class="font-semibold text-lg mb-2">网站功能</h3>
+            <p class="text-gray-600">这是一个展示网站功能的区域，包含了各种示例内容和交互元素。</p>
+          </div>
+          <div class="bg-gray-100 p-6 rounded-lg">
+            <h3 class="font-semibold text-lg mb-2">产品展示</h3>
+            <p class="text-gray-600">这里展示了网站的主要产品和服务，包括详细描述和价格信息。</p>
+          </div>
+          <div class="bg-gray-100 p-6 rounded-lg">
+            <h3 class="font-semibold text-lg mb-2">联系我们</h3>
+            <p class="text-gray-600">提供了网站的联系方式，包括电子邮件、电话和地址信息。</p>
+          </div>
+        </div>
+        
+        <!-- 长文本内容，模拟用户正在浏览 -->
+        <div class="mt-8 text-gray-700">
+          <p class="mb-4">欢迎访问我们的网站。我们提供各种高质量的产品和服务，满足您的各种需求。</p>
+          <p class="mb-4">我们的团队由行业专家组成，致力于为客户提供最优质的体验。无论您是需要产品咨询、技术支持还是其他服务，我们都随时准备为您提供帮助。</p>
+          <p class="mb-4">浏览我们的网站，了解更多关于我们的产品和服务。如果您有任何问题或建议，请随时联系我们。</p>
+          <p class="mb-4">感谢您的访问，祝您有愉快的一天！</p>
+          <p class="mb-4">欢迎访问我们的网站。我们提供各种高质量的产品和服务，满足您的各种需求。</p>
+          <p class="mb-4">我们的团队由行业专家组成，致力于为客户提供最优质的体验。无论您是需要产品咨询、技术支持还是其他服务，我们都随时准备为您提供帮助。</p>
+          <p class="mb-4">浏览我们的网站，了解更多关于我们的产品和服务。如果您有任何问题或建议，请随时联系我们。</p>
+          <p class="mb-4">感谢您的访问，祝您有愉快的一天！</p>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 广告弹窗模板 (初始隐藏) -->
+    <!-- 广告1: 促销广告 - 右下角 -->
+    <div class="ad-popup bottom-right" id="ad-1">
+      <div class="ad-close" data-ad="1">&times;</div>
+      <div class="p-5">
+        <div class="ad-title text-accent">限时特惠！</div>
+        <div class="ad-content">
+          <p>恭喜您获得价值999元的豪华礼包，现在只需9.9元即可领取！</p>
+          <div class="ad-button">立即领取</div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 广告2: 虚假系统提示 - 左下角 -->
+    <div class="ad-popup bottom-left" id="ad-2">
+      <div class="ad-close" data-ad="2">&times;</div>
+      <div class="p-5">
+        <div class="ad-title text-primary">系统警告</div>
+        <div class="ad-content">
+          <p>您的电脑已感染病毒，立即点击下方按钮进行扫描清理！</p>
+          <div class="ad-button bg-primary">立即扫描</div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 广告3: 游戏广告 - 右上角 -->
+    <div class="ad-popup top-right" id="ad-3">
+      <div class="ad-close" data-ad="3">&times;</div>
+      <div class="p-0">
+        <img src="https://picsum.photos/id/237/300/200" alt="游戏广告" class="w-full h-40 object-cover">
+        <div class="p-4">
+          <div class="ad-title">全新角色扮演游戏</div>
+          <div class="ad-content">
+            <p>万人同服，全新体验，现在注册即送VIP！</p>
+            <div class="ad-button">立即下载</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 广告4: 全屏广告 -->
+    <div class="ad-popup fullscreen" id="ad-4">
+      <div class="ad-close" data-ad="4">&times;</div>
+      <div class="h-full flex flex-col items-center justify-center p-8 text-center">
+        <img src="https://picsum.photos/id/26/800/500" alt="全屏广告" class="max-w-full h-auto max-h-[60vh] object-contain mb-6">
+        <div class="ad-title text-2xl">限时大促</div>
+        <div class="ad-content text-lg mb-6">
+          <p>全场商品5折起，错过今天再等一年！</p>
+        </div>
+        <div class="ad-button text-lg px-10 py-4">立即抢购</div>
+      </div>
+    </div>
+    
+    <!-- 广告5: 仿系统通知 - 左上角 -->
+    <div class="ad-popup top-left" id="ad-5">
+      <div class="ad-close" data-ad="5">&times;</div>
+      <div class="p-5">
+        <div class="flex items-start">
+          <div class="bg-secondary/20 p-2 rounded-full mr-3">
+            <i class="fa fa-info-circle text-secondary"></i>
+          </div>
+          <div>
+            <div class="ad-title">系统通知</div>
+            <div class="ad-content">
+              <p>您有3条未读消息，点击查看详情。</p>
+              <div class="ad-button">查看消息</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 新增广告: 考研班广告 - 中间 -->
+    <div class="ad-popup center" id="ad-6">
+      <div class="ad-close" data-ad="6">&times;</div>
+      <div class="p-6">
+        <div class="ad-title text-[#8B5CF6]">考研冲刺班</div>
+        <div class="flex items-start">
+          <img src="https://picsum.photos/id/20/100/100" alt="考研班" class="w-20 h-20 rounded-lg object-cover mr-4">
+          <div class="ad-content">
+            <p>名师授课，直击考点，助你轻松上岸！</p>
+            <div class="ad-button bg-[#8B5CF6]">立即报名</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 新增广告: 游戏装备广告 - 右下角 -->
+    <div class="ad-popup bottom-right" id="ad-7">
+      <div class="ad-close" data-ad="7">&times;</div>
+      <div class="p-5">
+        <div class="ad-title text-[#10B981]">游戏装备限时特惠</div>
+        <div class="ad-content">
+          <p>顶级装备低至3折，战力飙升！</p>
+          <div class="ad-button bg-[#10B981]">立即购买</div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 新增广告: 在线教育 - 左下角 -->
+    <div class="ad-popup bottom-left" id="ad-8">
+      <div class="ad-close" data-ad="8">&times;</div>
+      <div class="p-5">
+        <div class="ad-title text-[#F59E0B]">编程零基础入门</div>
+        <div class="ad-content">
+          <p>4周掌握Web开发，月薪过万不是梦！</p>
+          <div class="ad-button bg-[#F59E0B]">免费试听</div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 新增广告: 招聘信息 - 右上角 -->
+    <div class="ad-popup top-right" id="ad-9">
+      <div class="ad-close" data-ad="9">&times;</div>
+      <div class="p-5">
+        <div class="ad-title text-[#EF4444]">高薪招聘</div>
+        <div class="ad-content">
+          <p>急聘前端开发，年薪20-35万，福利好！</p>
+          <div class="ad-button bg-[#EF4444]">立即应聘</div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 新增广告: 旅游优惠 - 左上角 -->
+    <div class="ad-popup top-left" id="ad-10">
+      <div class="ad-close" data-ad="10">&times;</div>
+      <div class="p-5">
+        <div class="ad-title text-[#3B82F6]">暑期旅游特惠</div>
+        <div class="ad-content">
+          <p>热门景点5折起，机不可失！</p>
+          <div class="ad-button bg-[#3B82F6]">查看详情</div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 加载动画屏幕 -->
+    <div class="loading-screen hidden" id="loading-screen">
+      <div class="loading-logo">
+        <i class="fa fa-globe"></i>
+      </div>
+      <div class="loading-text">正在连接到 <span id="loading-url">www.example.com</span></div>
+      <div class="loading-dots mt-2">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 页脚 -->
+  <footer class="bg-white border-t border-gray-200 py-4 px-6">
+    <div class="flex flex-col md:flex-row justify-between items-center">
+      <div class="text-sm text-neutral/70 mb-3 md:mb-0">
+        <span>Chrome 版本 112.0.5615.138</span>
+      </div>
+      
+      <div class="flex space-x-6">
+        <a href="#" class="text-sm text-neutral hover:text-secondary transition-all-300">帮助</a>
+        <a href="#" class="text-sm text-neutral hover:text-secondary transition-all-300">发送反馈</a>
+        <a href="#" class="text-sm text-neutral hover:text-secondary transition-all-300">隐私政策</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- JavaScript -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // 获取DOM元素
+      const addressBar = document.getElementById('address-bar');
+      const progressBar = document.getElementById('progress-bar');
+      const siteContent = document.getElementById('site-content');
+      const reloadBtn = document.getElementById('reload-btn');
+      const backBtn = document.getElementById('back-btn');
+      const forwardBtn = document.getElementById('forward-btn');
+      const homeBtn = document.getElementById('home-btn');
+      
+      // 广告相关元素
+      const adPopups = document.querySelectorAll('.ad-popup');
+      const adCloseButtons = document.querySelectorAll('.ad-close');
+      
+      // 广告配置
+      const adConfig = {
+        minDelay: 3000,    // 最小广告间隔时间 (ms)
+        maxDelay: 8000,    // 最大广告间隔时间 (ms)
+        maxAdsAtOnce: 3,   // 同时显示的最大广告数量
+        showFullscreenAd: true, // 是否显示全屏广告
+        fullscreenAdChance: 0.1, // 全屏广告出现概率
+        adLifetime: 8000,  // 广告自动关闭时间 (ms)
+      };
+      
+      // 模拟广告追踪状态
+      let adTracker = {
+        lastAdTime: 0,
+        activeAds: 0,
+        adHistory: [],
+        fullscreenAdShown: false
+      };
+      
+      // 检查是否应该显示广告
+      function shouldShowAd() {
+        const now = Date.now();
+        const timeSinceLastAd = now - adTracker.lastAdTime;
+        
+        // 检查是否达到广告间隔时间
+        if (timeSinceLastAd < adConfig.minDelay) {
+          return false;
+        }
+        
+        // 检查当前显示的广告数量是否已达上限
+        if (adTracker.activeAds >= adConfig.maxAdsAtOnce) {
+          return false;
+        }
+        
+        return true;
+      }
+      
+      // 随机选择一个广告
+      function selectRandomAd() {
+        const availableAds = Array.from(adPopups).filter(ad => !ad.classList.contains('show'));
+        
+        if (availableAds.length === 0) {
+          return null;
+        }
+        
+        // 决定是否显示全屏广告
+        if (adConfig.showFullscreenAd && !adTracker.fullscreenAdShown && 
+            Math.random() < adConfig.fullscreenAdChance) {
+          const fullscreenAd = document.getElementById('ad-4');
+          if (fullscreenAd && !fullscreenAd.classList.contains('show')) {
+            adTracker.fullscreenAdShown = true;
+            return fullscreenAd;
+          }
+        }
+        
+        // 随机选择一个非全屏广告
+        const randomIndex = Math.floor(Math.random() * availableAds.length);
+        return availableAds[randomIndex];
+      }
+      
+      // 显示广告
+      function showAd() {
+        if (!shouldShowAd()) {
+          scheduleNextAd();
+          return;
+        }
+        
+        const ad = selectRandomAd();
+        if (!ad) {
+          scheduleNextAd();
+          return;
+        }
+        
+        // 记录广告显示时间
+        adTracker.lastAdTime = Date.now();
+        adTracker.activeAds++;
+        adTracker.adHistory.push({
+          id: ad.id,
+          time: new Date().toISOString()
+        });
+        
+        // 显示广告
+        ad.classList.add('show');
+        
+        // 添加随机动画效果
+        const animations = ['ad-shake', 'ad-pulse', 'ad-float'];
+        const randomAnimation = animations[Math.floor(Math.random() * animations.length)];
+        ad.classList.add(randomAnimation);
+        
+        // 设置广告自动关闭
+        const adId = ad.id;
+        const autoCloseTimer = setTimeout(() => {
+          hideAd(adId);
+        }, adConfig.adLifetime);
+        
+        // 存储自动关闭计时器
+        ad.dataset.timer = autoCloseTimer;
+        
+        // 安排下一个广告
+        scheduleNextAd();
+      }
+      
+      // 隐藏广告
+      function hideAd(adId) {
+        const ad = document.getElementById(adId);
+        if (!ad || !ad.classList.contains('show')) {
+          return;
+        }
+        
+        // 清除自动关闭计时器
+        const timer = ad.dataset.timer;
+        if (timer) {
+          clearTimeout(timer);
+        }
+        
+        // 隐藏广告
+        ad.classList.remove('show');
+        
+        // 移除动画效果
+        const animations = ['ad-shake', 'ad-pulse', 'ad-float'];
+        animations.forEach(animation => {
+          ad.classList.remove(animation);
+        });
+        
+        // 更新广告追踪状态
+        adTracker.activeAds--;
+        
+        // 安排下一个广告
+        scheduleNextAd();
+      }
+      
+      // 安排下一个广告
+      function scheduleNextAd() {
+        const delay = adConfig.minDelay + Math.random() * (adConfig.maxDelay - adConfig.minDelay);
+        setTimeout(showAd, delay);
+      }
+      
+      // 更新进度条
+      function updateProgress(percent) {
+        progressBar.style.width = percent + '%';
+      }
+      
+      // 模拟页面加载
+      function simulateLoading() {
+        // 重置进度条
+        updateProgress(0);
+        
+        // 模拟进度增加
+        let progress = 0;
+        const interval = setInterval(() => {
+          progress += Math.random() * 15;
+          if (progress > 100) {
+            progress = 100;
+            clearInterval(interval);
+            
+            // 显示页面内容
+            setTimeout(() => {
+              siteContent.classList.remove('hidden');
+              
+              // 开始广告循环
+              scheduleNextAd();
+            }, 500);
+          }
+          updateProgress(progress);
+        }, 100);
+      }
+      
+      // 地址栏交互
+      addressBar.addEventListener('focus', function() {
+        this.select();
+      });
+      
+      addressBar.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+          this.blur();
+          const url = this.value.trim();
+          
+          // 检查URL格式
+          let fullUrl = url;
+          if (!url.startsWith('http://') && !url.startsWith('https://')) {
+            fullUrl = 'https://' + url;
+          }
+          
+          // 更新地址栏显示
+          addressBar.value = fullUrl;
+          
+          // 模拟加载新页面
+          simulateLoading();
+        }
+      });
+      
+      // 重新加载按钮点击事件
+      reloadBtn.addEventListener('click', function() {
+        // 重新加载页面内容
+        simulateLoading();
+        
+        // 即使刷新，广告也会继续显示
+        setTimeout(() => {
+          // 清除所有现有广告
+          adPopups.forEach(ad => {
+            if (ad.classList.contains('show')) {
+              hideAd(ad.id);
+            }
+          });
+          
+          // 立即显示一个广告
+          showAd();
+        }, 1000);
+      });
+      
+      // 后退按钮点击事件
+      backBtn.addEventListener('click', function() {
+        alert('后退按钮点击 - 广告依然会继续弹出');
+        // 在实际浏览器中，后退按钮不会阻止广告
+      });
+      
+      // 前进按钮点击事件
+      forwardBtn.addEventListener('click', function() {
+        alert('前进按钮点击 - 广告依然会继续弹出');
+        // 在实际浏览器中，前进按钮不会阻止广告
+      });
+      
+      // 主页按钮点击事件
+      homeBtn.addEventListener('click', function() {
+        simulateLoading();
+        
+        // 即使回到主页，广告也会继续显示
+        setTimeout(() => {
+          showAd();
+        }, 1000);
+      });
+      
+      // 广告关闭按钮点击事件
+      adCloseButtons.forEach(button => {
+        button.addEventListener('click', function() {
+          const adId = this.getAttribute('data-ad');
+          hideAd('ad-' + adId);
+        });
+      });
+      
+      // 广告按钮点击事件
+      const adButtons = document.querySelectorAll('.ad-button');
+      adButtons.forEach(button => {
+        button.addEventListener('click', function(e) {
+          e.preventDefault();
+          const adContent = this.closest('.ad-content');
+          const adTitle = adContent ? adContent.querySelector('.ad-title')?.textContent : '广告';
+          alert(`您点击了"${adTitle}"广告的按钮。在真实环境中，这可能会跳转到广告页面或下载恶意软件。`);
+        });
+      });
+      
+      // 初始加载页面
+      simulateLoading();
+    });
+  </script>
+</body>
+</html>

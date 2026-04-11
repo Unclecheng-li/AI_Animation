@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenClaw 安全漏洞警示</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", sans-serif;
+            min-height: 100vh;
+            overflow: hidden;
+            color: #fff;
+            position: relative;
+        }
+
+        /* 动态背景层 */
+        .bg-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -2;
+            background: linear-gradient(-45deg, #1a1a2e, #16213e, #0f3460, #1a1a3e, #16213e);
+            background-size: 400% 400%;
+            animation: gradientFlow 15s ease infinite;
+        }
+
+        @keyframes gradientFlow {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* 浮动粒子容器 */
+        .particles-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            border-radius: 50%;
+            opacity: 0.3;
+            animation: floatUp linear infinite;
+        }
+
+        .particle:nth-child(1) { width: 4px; height: 4px; left: 10%; background: #ff4757; animation-duration: 20s; animation-delay: 0s; }
+        .particle:nth-child(2) { width: 6px; height: 6px; left: 20%; background: #ffa502; animation-duration: 25s; animation-delay: 2s; }
+        .particle:nth-child(3) { width: 3px; height: 3px; left: 30%; background: #ff4757; animation-duration: 18s; animation-delay: 4s; }
+        .particle:nth-child(4) { width: 5px; height: 5px; left: 40%; background: #ffa502; animation-duration: 22s; animation-delay: 1s; }
+        .particle:nth-child(5) { width: 4px; height: 4px; left: 50%; background: #ff4757; animation-duration: 28s; animation-delay: 3s; }
+        .particle:nth-child(6) { width: 7px; height: 7px; left: 60%; background: #ffa502; animation-duration: 24s; animation-delay: 5s; }
+        .particle:nth-child(7) { width: 3px; height: 3px; left: 70%; background: #ff4757; animation-duration: 19s; animation-delay: 2s; }
+        .particle:nth-child(8) { width: 5px; height: 5px; left: 80%; background: #ffa502; animation-duration: 26s; animation-delay: 4s; }
+        .particle:nth-child(9) { width: 4px; height: 4px; left: 90%; background: #ff4757; animation-duration: 21s; animation-delay: 1s; }
+        .particle:nth-child(10) { width: 6px; height: 6px; left: 15%; background: #ffa502; animation-duration: 23s; animation-delay: 6s; }
+        .particle:nth-child(11) { width: 3px; height: 3px; left: 25%; background: #ff4757; animation-duration: 17s; animation-delay: 3s; }
+        .particle:nth-child(12) { width: 5px; height: 5px; left: 35%; background: #ffa502; animation-duration: 29s; animation-delay: 5s; }
+        .particle:nth-child(13) { width: 4px; height: 4px; left: 45%; background: #ff4757; animation-duration: 20s; animation-delay: 2s; }
+        .particle:nth-child(14) { width: 6px; height: 6px; left: 55%; background: #ffa502; animation-duration: 24s; animation-delay: 4s; }
+        .particle:nth-child(15) { width: 3px; height: 3px; left: 65%; background: #ff4757; animation-duration: 18s; animation-delay: 1s; }
+        .particle:nth-child(16) { width: 5px; height: 5px; left: 75%; background: #ffa502; animation-duration: 27s; animation-delay: 3s; }
+        .particle:nth-child(17) { width: 4px; height: 4px; left: 85%; background: #ff4757; animation-duration: 22s; animation-delay: 5s; }
+        .particle:nth-child(18) { width: 6px; height: 6px; left: 5%; background: #ffa502; animation-duration: 25s; animation-delay: 2s; }
+        .particle:nth-child(19) { width: 3px; height: 3px; left: 95%; background: #ff4757; animation-duration: 19s; animation-delay: 4s; }
+        .particle:nth-child(20) { width: 5px; height: 5px; left: 50%; background: #ffa502; animation-duration: 21s; animation-delay: 0s; }
+
+        @keyframes floatUp {
+            0% {
+                transform: translateY(100vh) scale(0);
+                opacity: 0;
+            }
+            10% {
+                opacity: 0.3;
+            }
+            90% {
+                opacity: 0.3;
+            }
+            100% {
+                transform: translateY(-100vh) scale(1);
+                opacity: 0;
+            }
+        }
+
+        /* 网格背景 */
+        .grid-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background-image: 
+                linear-gradient(rgba(255, 71, 87, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 71, 87, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            animation: gridMove 20s linear infinite;
+            pointer-events: none;
+        }
+
+        @keyframes gridMove {
+            0% { transform: perspective(500px) rotateX(60deg) translateY(0); }
+            100% { transform: perspective(500px) rotateX(60deg) translateY(50px); }
+        }
+
+        /* 光晕效果 */
+        .glow-effect {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 800px;
+            height: 800px;
+            background: radial-gradient(circle, rgba(255, 71, 87, 0.1) 0%, transparent 70%);
+            z-index: -1;
+            animation: pulse 4s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
+            50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.8; }
+        }
+
+        .container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* 幻灯片区域 */
+        .slide-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            padding: 60px;
+            perspective: 1200px;
+        }
+
+        .slide {
+            position: absolute;
+            width: 100%;
+            max-width: 1400px;
+            text-align: center;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateX(100px) rotateY(-10deg) scale(0.9);
+            transition: all 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: none;
+        }
+
+        .slide.active {
+            opacity: 1;
+            visibility: visible;
+            transform: translateX(0) rotateY(0) scale(1);
+            pointer-events: auto;
+            z-index: 10;
+        }
+
+        .slide.prev {
+            opacity: 0;
+            visibility: hidden;
+            transform: translateX(-100px) rotateY(10deg) scale(0.9);
+        }
+
+        /* 动画元素基础样式 */
+        .anim-item {
+            opacity: 0;
+            transform: translateY(40px);
+            transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .slide.active .anim-item {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* 依次延迟动画 */
+        .slide.active .anim-item:nth-child(1) { transition-delay: 0.15s; }
+        .slide.active .anim-item:nth-child(2) { transition-delay: 0.3s; }
+        .slide.active .anim-item:nth-child(3) { transition-delay: 0.45s; }
+        .slide.active .anim-item:nth-child(4) { transition-delay: 0.6s; }
+        .slide.active .anim-item:nth-child(5) { transition-delay: 0.75s; }
+        .slide.active .anim-item:nth-child(6) { transition-delay: 0.9s; }
+        .slide.active .anim-item:nth-child(7) { transition-delay: 1.05s; }
+        .slide.active .anim-item:nth-child(8) { transition-delay: 1.2s; }
+
+        /* 文字强调样式 */
+        .text-danger { color: #ff4757; font-weight: 900; }
+        .text-warning { color: #ffa502; font-weight: 900; }
+        .text-highlight {
+            background: linear-gradient(120deg, #ff6b6b 0%, #ffa502 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-weight: 900;
+        }
+        .text-bg-danger { background: #ff4757; padding: 5px 15px; border-radius: 8px; font-weight: 900; }
+        .text-bg-warning { background: #ffa502; color: #1a1a2e; padding: 5px 15px; border-radius: 8px; font-weight: 900; }
+        .underline-danger { border-bottom: 5px solid #ff4757; padding-bottom: 5px; }
+        .underline-warning { border-bottom: 5px solid #ffa502; padding-bottom: 5px; }
+        .text-italic { font-style: italic; }
+        .text-bold { font-weight: 900; }
+
+        /* 页面1 - 标题页 */
+        .slide-title .main-title { font-size: 5rem; font-weight: 900; margin-bottom: 40px; line-height: 1.3; }
+        .slide-title .subtitle { font-size: 3rem; margin-bottom: 30px; line-height: 1.5; }
+        .slide-title .warning-box { font-size: 2.5rem; background: rgba(255, 71, 87, 0.2); border: 3px solid #ff4757; border-radius: 15px; padding: 30px 50px; display: inline-block; margin-top: 40px; }
+
+        /* 页面2 - 漏洞数据 */
+        .slide-data .section-title { font-size: 3.5rem; margin-bottom: 60px; }
+        .data-grid { display: flex; justify-content: center; gap: 80px; margin-bottom: 50px; }
+        .data-item { text-align: center; }
+        .data-number { font-size: 8rem; font-weight: 900; line-height: 1; margin-bottom: 20px; }
+        .data-label { font-size: 2rem; color: #a4b0be; }
+        .data-desc { font-size: 2.2rem; margin-top: 40px; line-height: 1.8; }
+
+        /* 页面3 - 超危漏洞 */
+        .slide-critical .section-title { font-size: 4rem; margin-bottom: 50px; }
+        .critical-box { background: linear-gradient(135deg, rgba(255, 71, 87, 0.3) 0%, rgba(255, 71, 87, 0.1) 100%); border: 4px solid #ff4757; border-radius: 20px; padding: 50px 80px; margin-bottom: 40px; }
+        .critical-number { font-size: 10rem; font-weight: 900; color: #ff4757; line-height: 1; }
+        .critical-label { font-size: 2.5rem; margin-top: 20px; }
+        .critical-desc { font-size: 2rem; line-height: 1.8; margin-top: 30px; }
+
+        /* 页面4 - 官方政策 */
+        .slide-policy .section-title { font-size: 3.5rem; margin-bottom: 50px; }
+        .policy-content { font-size: 2.5rem; line-height: 2; }
+        .city-tag { display: inline-block; background: #2ed573; color: #1a1a2e; padding: 10px 25px; border-radius: 10px; font-weight: 900; margin: 0 10px; }
+        .policy-highlight { font-size: 2.8rem; margin: 40px 0; padding: 30px; background: rgba(46, 213, 115, 0.15); border-radius: 15px; border-left: 6px solid #2ed573; }
+
+        /* 页面5 - CNNVD */
+        .slide-cnnvd .section-title { font-size: 3.5rem; margin-bottom: 50px; }
+        .cnnvd-box { background: rgba(255, 71, 87, 0.15); border: 3px solid #ff4757; border-radius: 20px; padding: 40px 60px; margin-bottom: 40px; }
+        .cnnvd-name { font-size: 3rem; font-weight: 900; color: #ff4757; margin-bottom: 20px; }
+        .cnnvd-content { font-size: 2.2rem; line-height: 1.8; }
+        .alert-box { font-size: 2rem; background: rgba(255, 165, 2, 0.2); border: 2px solid #ffa502; border-radius: 15px; padding: 25px 40px; margin-top: 30px; }
+
+        /* 页面6 - 矛盾对比 */
+        .slide-contrast .section-title { font-size: 3.5rem; margin-bottom: 60px; }
+        .contrast-container { display: flex; justify-content: center; gap: 60px; margin-bottom: 50px; }
+        .contrast-item { flex: 1; max-width: 500px; padding: 40px; border-radius: 20px; }
+        .contrast-left { background: rgba(46, 213, 115, 0.15); border: 3px solid #2ed573; }
+        .contrast-right { background: rgba(255, 71, 87, 0.15); border: 3px solid #ff4757; }
+        .contrast-title { font-size: 2.5rem; font-weight: 900; margin-bottom: 25px; }
+        .contrast-left .contrast-title { color: #2ed573; }
+        .contrast-right .contrast-title { color: #ff4757; }
+        .contrast-content { font-size: 1.8rem; line-height: 1.8; }
+        .vs-divider { font-size: 3rem; font-weight: 900; color: #ffa502; display: flex; align-items: center; }
+
+        /* 页面7 - 核心问题 */
+        .slide-question .section-title { font-size: 4rem; margin-bottom: 60px; }
+        .question-box { font-size: 3rem; background: linear-gradient(135deg, rgba(255, 165, 2, 0.2) 0%, rgba(255, 71, 87, 0.2) 100%); border: 3px solid #ffa502; border-radius: 20px; padding: 50px 80px; margin-bottom: 40px; }
+        .question-text { font-weight: 900; line-height: 1.6; }
+        .question-sub { font-size: 2.2rem; color: #a4b0be; margin-top: 30px; }
+
+        /* 页面8 - 结论 */
+        .slide-conclusion .final-warning { font-size: 3.5rem; line-height: 1.8; margin-bottom: 50px; }
+        .conclusion-box { background: linear-gradient(135deg, #ff4757 0%, #ff6348 100%); border-radius: 25px; padding: 60px 80px; box-shadow: 0 20px 60px rgba(255, 71, 87, 0.4); }
+        .conclusion-title { font-size: 4rem; font-weight: 900; margin-bottom: 30px; }
+        .conclusion-text { font-size: 3rem; font-weight: 900; line-height: 1.6; }
+        .conclusion-sub { font-size: 2rem; margin-top: 30px; opacity: 0.9; }
+
+        /* 水印 */
+        .watermark { position: fixed; top: 30px; right: 40px; font-size: 1.5rem; font-weight: 700; color: rgba(255, 255, 255, 0.25); letter-spacing: 2px; z-index: 1000; pointer-events: none; text-transform: uppercase; font-family: "Consolas", "Monaco", monospace; }
+
+        /* 进度条 */
+        .progress-bar { position: fixed; bottom: 0; left: 0; height: 4px; background: linear-gradient(90deg, #ff4757, #ffa502); transition: width 0.5s ease; z-index: 100; }
+
+        /* 装饰元素 */
+        .decoration { position: fixed; pointer-events: none; opacity: 0.08; }
+        .decoration-1 { top: 10%; right: 5%; font-size: 15rem; color: #ff4757; }
+        .decoration-2 { bottom: 15%; left: 5%; font-size: 12rem; color: #ffa502; }
+
+        /* 响应式 */
+        @media (max-width: 1200px) {
+            .slide-title .main-title { font-size: 3.5rem; }
+            .slide-title .subtitle { font-size: 2rem; }
+            .data-number { font-size: 5rem; }
+            .critical-number { font-size: 6rem; }
+            .contrast-container { flex-direction: column; }
+            .vs-divider { transform: rotate(90deg); margin: 20px 0; }
+            .watermark { font-size: 1.2rem; top: 20px; right: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <!-- 动态背景层 -->
+    <div class="bg-animation"></div>
+    
+    <!-- 浮动粒子 -->
+    <div class="particles-container">
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+    </div>
+    
+    <!-- 网格背景 -->
+    <div class="grid-overlay"></div>
+    
+    <!-- 光晕效果 -->
+    <div class="glow-effect"></div>
+
+    <div class="container">
+        <!-- 水印 -->
+        <div class="watermark">NetworkNoob</div>
+
+        <!-- 装饰元素 -->
+        <div class="decoration decoration-1">⚠</div>
+        <div class="decoration decoration-2">🔒</div>
+
+        <!-- 幻灯片容器 -->
+        <div class="slide-container">
+            <!-- 页面1: 标题页 -->
+            <div class="slide slide-title active" data-index="0">
+                <div class="anim-item main-title">
+                    <span class="text-highlight">OpenClaw</span> 安全警示
+                </div>
+                <div class="anim-item subtitle">
+                    <span class="text-danger">82个安全漏洞</span> · <span class="text-warning">12个超危级别</span>
+                </div>
+                <div class="anim-item warning-box">
+                    <span class="text-bg-danger">普通人，绝对、绝对不推荐安装！</span>
+                </div>
+            </div>
+
+            <!-- 页面2: 漏洞数据 -->
+            <div class="slide slide-data" data-index="1">
+                <div class="anim-item section-title">
+                    <span class="underline-danger">触目惊心的安全漏洞数据</span>
+                </div>
+                <div class="anim-item data-grid">
+                    <div class="data-item">
+                        <div class="data-number text-danger">82</div>
+                        <div class="data-label">个安全漏洞</div>
+                    </div>
+                    <div class="data-item">
+                        <div class="data-number text-warning">12</div>
+                        <div class="data-label">个超危级别</div>
+                    </div>
+                </div>
+                <div class="anim-item data-desc">
+                    这意味着每一个漏洞都可能成为<span class="text-bg-danger">黑客入侵</span>的入口<br>
+                    你的<span class="text-bold">隐私数据</span>、<span class="text-bold">账号密码</span>、<span class="text-bold">敏感信息</span>全部暴露在风险之中
+                </div>
+            </div>
+
+            <!-- 页面3: 超危漏洞 -->
+            <div class="slide slide-critical" data-index="2">
+                <div class="anim-item section-title">
+                    <span class="text-danger">超危级别漏洞</span>意味着什么？
+                </div>
+                <div class="anim-item critical-box">
+                    <div class="critical-number">12</div>
+                    <div class="critical-label text-bg-danger">个超危漏洞 (Critical)</div>
+                </div>
+                <div class="anim-item critical-desc">
+                    超危漏洞是<span class="underline-danger">最高风险等级</span><br>
+                    攻击者可以<span class="text-warning">远程执行代码</span>、<span class="text-warning">获取系统权限</span>、<span class="text-warning">完全控制设备</span><br>
+                    <span class="text-italic">一旦被利用，后果不堪设想！</span>
+                </div>
+            </div>
+
+            <!-- 页面4: 官方政策 -->
+            <div class="slide slide-policy" data-index="3">
+                <div class="anim-item section-title">
+                    地方政府的<span class="text-bg-warning">扶持政策</span>
+                </div>
+                <div class="anim-item policy-content">
+                    <span class="city-tag">深圳</span>和<span class="city-tag">无锡</span>官方出台政策
+                </div>
+                <div class="anim-item policy-highlight">
+                    <span class="text-bold">砸钱扶持 OpenClaw 发展</span><br>
+                    提供资金支持、政策优惠、产业扶持
+                </div>
+                <div class="anim-item policy-content">
+                    一边是<span class="text-bg-warning">政策红利</span>，一边是<span class="text-bg-danger">安全危机</span><br>
+                    这种矛盾让人不得不深思...
+                </div>
+            </div>
+
+            <!-- 页面5: CNNVD预警 -->
+            <div class="slide slide-cnnvd" data-index="4">
+                <div class="anim-item section-title">
+                    国家权威机构的<span class="text-danger">风险预警</span>
+                </div>
+                <div class="anim-item cnnvd-box">
+                    <div class="cnnvd-name">国家信息安全漏洞库 CNNVD</div>
+                    <div class="cnnvd-content">
+                        连续发布漏洞报告和风险预警<br>
+                        这是<span class="underline-warning">国家级</span>的安全警告！
+                    </div>
+                </div>
+                <div class="anim-item alert-box">
+                    <span class="text-bold">CNNVD 是什么？</span><br>
+                    中国信息安全测评中心负责运维的国家级漏洞库<br>
+                    是<span class="text-warning">最权威</span>的漏洞信息发布平台之一
+                </div>
+            </div>
+
+            <!-- 页面6: 矛盾对比 -->
+            <div class="slide slide-contrast" data-index="5">
+                <div class="anim-item section-title">
+                    冰火两重天：<span class="text-italic">政策扶持 vs 安全危机</span>
+                </div>
+                <div class="anim-item contrast-container">
+                    <div class="contrast-item contrast-left">
+                        <div class="contrast-title">🔥 政策热度</div>
+                        <div class="contrast-content">
+                            • 深圳出台扶持政策<br>
+                            • 无锡提供资金支持<br>
+                            • 全网爆火讨论<br>
+                            • 资本纷纷入场
+                        </div>
+                    </div>
+                    <div class="vs-divider">VS</div>
+                    <div class="contrast-item contrast-right">
+                        <div class="contrast-title">⚠️ 安全危机</div>
+                        <div class="contrast-content">
+                            • 82个安全漏洞<br>
+                            • 12个超危级别<br>
+                            • CNNVD连续预警<br>
+                            • 用户风险极高
+                        </div>
+                    </div>
+                </div>
+                <div class="anim-item" style="font-size: 2rem; color: #a4b0be;">
+                    一边是鲜花掌声，一边是暗流涌动
+                </div>
+            </div>
+
+            <!-- 页面7: 核心问题 -->
+            <div class="slide slide-question" data-index="6">
+                <div class="anim-item section-title">
+                    直击灵魂的问题
+                </div>
+                <div class="anim-item question-box">
+                    <div class="question-text">
+                        全网爆火的 <span class="text-highlight">OpenClaw</span><br>
+                        <span class="underline-danger">普通人到底能不能装？</span>
+                    </div>
+                </div>
+                <div class="anim-item question-sub">
+                    面对 82 个漏洞、12 个超危级别、国家漏洞库预警...<br>
+                    你真的准备好了吗？
+                </div>
+            </div>
+
+            <!-- 页面8: 结论 -->
+            <div class="slide slide-conclusion" data-index="7">
+                <div class="anim-item final-warning">
+                    今天我把话放这：
+                </div>
+                <div class="anim-item conclusion-box">
+                    <div class="conclusion-title">⚠️ 重要警告</div>
+                    <div class="conclusion-text">
+                        <span class="text-bg-warning">普通人</span>，我<span class="underline-warning">绝对、绝对</span><br>
+                        <span style="font-size: 5rem;">不推荐你现在安装 OpenClaw！</span>
+                    </div>
+                    <div class="conclusion-sub">
+                        等待官方修复漏洞 · 关注安全更新 · 保护个人信息
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 进度条 -->
+        <div class="progress-bar" id="progress"></div>
+    </div>
+
+    <script>
+        let currentSlide = 0;
+        const slides = document.querySelectorAll('.slide');
+        const totalSlides = slides.length;
+
+        function updateSlide() {
+            slides.forEach((slide, index) => {
+                slide.classList.remove('active', 'prev');
+                if (index === currentSlide) {
+                    slide.classList.add('active');
+                } else if (index < currentSlide) {
+                    slide.classList.add('prev');
+                }
+            });
+            
+            document.getElementById('progress').style.width = ((currentSlide + 1) / totalSlides * 100) + '%';
+        }
+
+        function nextSlide() {
+            if (currentSlide < totalSlides - 1) {
+                currentSlide++;
+                updateSlide();
+            }
+        }
+
+        function prevSlide() {
+            if (currentSlide > 0) {
+                currentSlide--;
+                updateSlide();
+            }
+        }
+
+        // 键盘控制
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === ' ') {
+                e.preventDefault();
+                nextSlide();
+            } else if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                prevSlide();
+            }
+        });
+
+        // 触摸滑动支持
+        let touchStartX = 0;
+        let touchEndX = 0;
+
+        document.addEventListener('touchstart', (e) => {
+            touchStartX = e.changedTouches[0].screenX;
+        });
+
+        document.addEventListener('touchend', (e) => {
+            touchEndX = e.changedTouches[0].screenX;
+            handleSwipe();
+        });
+
+        function handleSwipe() {
+            const swipeThreshold = 50;
+            const diff = touchStartX - touchEndX;
+            
+            if (Math.abs(diff) > swipeThreshold) {
+                if (diff > 0) {
+                    nextSlide();
+                } else {
+                    prevSlide();
+                }
+            }
+        }
+
+        // 初始化
+        updateSlide();
+    </script>
+</body>
+</html>

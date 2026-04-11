@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>One-hot 编码的致命缺陷</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+            background: 
+                radial-gradient(circle at bottom left, #001f54 0%, transparent 50%),
+                radial-gradient(circle at top right, #001f54 0%, transparent 30%),
+                #000000;
+            min-height: 100vh;
+            overflow: hidden;
+            color: #fff;
+            position: relative;
+        }
+
+        /* 噪点效果 */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            opacity: 0.15;
+            mix-blend-mode: overlay;
+            animation: noiseMove 20s linear infinite;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        @keyframes noiseMove {
+            0% { transform: translate(0, 0) scale(1.1); }
+            25% { transform: translate(-2%, -2%) scale(1.05); }
+            50% { transform: translate(0, 0) scale(1.1); }
+            75% { transform: translate(2%, 2%) scale(1.05); }
+            100% { transform: translate(0, 0) scale(1.1); }
+        }
+
+        /* 粒子画布 */
+        #particlesCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        /* 右上角Logo */
+        .logo {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            color: #fff;
+            font-family: sans-serif;
+            text-align: right;
+            z-index: 100;
+        }
+        .logo svg {
+            width: 32px;
+            height: 32px;
+            margin-bottom: 4px;
+        }
+        .logo-text {
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(96, 165, 250, 0.5);
+        }
+
+        .container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 60px 80px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .section-title {
+            font-size: 56px;
+            font-weight: 800;
+            margin-bottom: 20px;
+            text-align: center;
+            color: #e94560;
+            text-shadow: 0 0 20px rgba(233, 69, 96, 0.5);
+            opacity: 0;
+            transform: translateY(30px);
+            animation: fadeInUp 0.8s ease forwards;
+            animation-delay: 0.2s;
+        }
+
+        /* 缓入动画 */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* ========== 缺陷架构图样式 ========== */
+        .drawback-arch-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 30px;
+            padding: 40px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            max-width: 1600px;
+            transform: scale(1.1);
+            opacity: 0;
+            animation: archFadeIn 1s ease forwards;
+            animation-delay: 1s;
+            margin-top: 30px;
+        }
+
+        @keyframes archFadeIn {
+            from {
+                opacity: 0;
+                transform: scale(1.1) translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1.1) translateY(0);
+            }
+        }
+
+        .drawback-arch-layer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeInUp 0.6s ease forwards;
+        }
+
+        /* 输入层 - 第1个 */
+        .drawback-arch-diagram > .input-layer { animation-delay: 1.2s; }
+        /* 缺陷分支1 - 第3个 */
+        .drawback-arch-diagram > .problem1-layer { animation-delay: 2.2s; }
+        /* 缺陷分支2 - 第5个 */
+        .drawback-arch-diagram > .problem2-layer { animation-delay: 3.2s; }
+        /* 后果层 - 第7个 */
+        .drawback-arch-diagram > .consequence-layer { animation-delay: 4.2s; }
+
+        .drawback-layer-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .drawback-layer-box {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            border-radius: 16px;
+            padding: 24px;
+            min-width: 200px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        .drawback-layer-box:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        /* 详细内容项 */
+        .drawback-detail-item {
+            opacity: 0;
+            transform: translateY(15px);
+            animation: fadeInUp 0.5s ease forwards;
+        }
+
+        /* 输入层内部详细内容 */
+        .input-layer .drawback-detail-item:nth-child(1) { animation-delay: 1.4s; }
+        .input-layer .drawback-detail-item:nth-child(2) { animation-delay: 1.6s; }
+        .input-layer .drawback-detail-item:nth-child(3) { animation-delay: 1.8s; }
+        .input-layer .drawback-detail-item:nth-child(4) { animation-delay: 2.0s; }
+
+        /* 缺陷1层内部详细内容 */
+        .problem1-layer .drawback-detail-item:nth-child(1) { animation-delay: 2.4s; }
+        .problem1-layer .drawback-detail-item:nth-child(2) { animation-delay: 2.6s; }
+        .problem1-layer .drawback-detail-item:nth-child(3) { animation-delay: 2.8s; }
+        .problem1-layer .drawback-detail-item:nth-child(4) { animation-delay: 3.0s; }
+
+        /* 缺陷2层内部详细内容 */
+        .problem2-layer .drawback-detail-item:nth-child(1) { animation-delay: 3.4s; }
+        .problem2-layer .drawback-detail-item:nth-child(2) { animation-delay: 3.6s; }
+        .problem2-layer .drawback-detail-item:nth-child(3) { animation-delay: 3.8s; }
+        .problem2-layer .drawback-detail-item:nth-child(4) { animation-delay: 4.0s; }
+
+        /* 后果层内部详细内容 */
+        .consequence-layer .drawback-detail-item:nth-child(1) { animation-delay: 4.4s; }
+        .consequence-layer .drawback-detail-item:nth-child(2) { animation-delay: 4.6s; }
+        .consequence-layer .drawback-detail-item:nth-child(3) { animation-delay: 4.8s; }
+
+        /* 输入层样式 */
+        .input-box {
+            border-color: rgba(96, 165, 250, 0.4);
+            background: linear-gradient(135deg, rgba(96, 165, 250, 0.1), rgba(59, 130, 246, 0.05));
+        }
+
+        .input-box .drawback-icon {
+            color: #60a5fa;
+        }
+
+        /* 缺陷1层样式 - 体积爆炸 */
+        .problem1-box {
+            border-color: rgba(239, 68, 68, 0.5);
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(220, 38, 38, 0.1));
+        }
+
+        .problem1-box .drawback-icon {
+            color: #ef4444;
+        }
+
+        .problem1-box .drawback-title {
+            color: #ef4444;
+        }
+
+        /* 缺陷2层样式 - 语义缺失 */
+        .problem2-box {
+            border-color: rgba(245, 158, 11, 0.5);
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(217, 119, 6, 0.1));
+        }
+
+        .problem2-box .drawback-icon {
+            color: #f59e0b;
+        }
+
+        .problem2-box .drawback-title {
+            color: #f59e0b;
+        }
+
+        /* 后果层样式 */
+        .consequence-box {
+            border-color: rgba(139, 92, 246, 0.5);
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(124, 58, 237, 0.1));
+        }
+
+        .consequence-box .drawback-icon {
+            color: #8b5cf6;
+        }
+
+        .consequence-box .drawback-title {
+            color: #8b5cf6;
+        }
+
+        .drawback-icon {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 12px;
+        }
+
+        .drawback-icon svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .drawback-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .drawback-desc {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .drawback-badge {
+            margin-top: 12px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+        }
+
+        .problem1-box .drawback-badge {
+            background: rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+        }
+
+        .problem2-box .drawback-badge {
+            background: rgba(245, 158, 11, 0.2);
+            color: #fcd34d;
+        }
+
+        /* 维度展示 */
+        .dimension-display {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 12px;
+            align-items: center;
+        }
+
+        .dimension-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+        }
+
+        .dimension-label {
+            color: #aaa;
+            min-width: 60px;
+        }
+
+        .dimension-value {
+            color: #ef4444;
+            font-weight: 700;
+        }
+
+        /* 语义距离可视化 */
+        .semantic-viz {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 12px;
+            align-items: center;
+        }
+
+        .semantic-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 12px;
+        }
+
+        .word-badge {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+
+        .word-badge.apple {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .word-badge.banana {
+            background: rgba(245, 158, 11, 0.2);
+            color: #f59e0b;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .word-badge.car {
+            background: rgba(96, 165, 250, 0.2);
+            color: #60a5fa;
+            border: 1px solid rgba(96, 165, 250, 0.3);
+        }
+
+        .distance-indicator {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .distance-line {
+            height: 3px;
+            background: linear-gradient(90deg, transparent, currentColor, transparent);
+        }
+
+        .distance-line.short {
+            width: 30px;
+        }
+
+        .distance-line.long {
+            width: 60px;
+        }
+
+        .distance-value {
+            font-size: 11px;
+            color: #666;
+        }
+
+        /* 连接线样式 */
+        .drawback-arch-connector {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            min-width: 60px;
+            opacity: 0;
+            animation: fadeIn 0.5s ease forwards;
+        }
+
+        /* 分支箭头 - 第2个元素 */
+        .drawback-arch-diagram > .drawback-arch-connector:nth-child(2) { animation-delay: 2.0s; }
+        /* 到缺陷2的箭头 - 第4个元素 */
+        .drawback-arch-diagram > .drawback-arch-connector:nth-child(4) { animation-delay: 3.0s; }
+        /* 到后果的箭头 - 第6个元素 */
+        .drawback-arch-diagram > .drawback-arch-connector:nth-child(6) { animation-delay: 4.0s; }
+
+        .drawback-connector-svg {
+            width: 60px;
+            height: 20px;
+        }
+
+        .drawback-connector-label {
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* 响应式调整 */
+        @media (max-width: 1600px) {
+            .drawback-arch-diagram {
+                transform: scale(1.0);
+            }
+        }
+
+        @media (max-width: 1400px) {
+            .drawback-arch-diagram {
+                flex-wrap: wrap;
+                gap: 20px;
+                max-width: 900px;
+            }
+            
+            .drawback-arch-connector {
+                transform: rotate(90deg);
+                margin: 5px 0;
+            }
+            
+            .drawback-connector-label {
+                transform: rotate(-90deg);
+            }
+
+        }
+
+        @media (max-width: 1024px) {
+            .container {
+                padding: 40px;
+            }
+            
+            .section-title {
+                font-size: 40px;
+            }
+            
+            .drawback-arch-diagram {
+                flex-direction: column;
+                transform: scale(0.9);
+            }
+            
+            .drawback-arch-connector {
+                transform: rotate(90deg);
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 右上角logo -->
+    <div class="logo">
+        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="30" r="12" fill="#60a5fa"/>
+            <path d="M35 45 Q50 70 65 45" stroke="#60a5fa" stroke-width="4" fill="none"/>
+            <path d="M30 60 Q50 90 70 60" stroke="#60a5fa" stroke-width="4" fill="none"/>
+        </svg>
+        <div class="logo-text">NetworkNoob</div>
+    </div>
+
+    <!-- Canvas粒子效果 -->
+    <canvas id="particlesCanvas"></canvas>
+
+    <div class="container">
+        <h1 class="section-title">One-hot 编码的致命缺陷</h1>
+        
+        <div class="drawback-arch-diagram">
+            <!-- 左侧：One-hot编码输入 -->
+            <div class="drawback-arch-layer input-layer">
+                <div class="drawback-layer-label">Input</div>
+                <div class="drawback-layer-box input-box">
+                    <div class="drawback-detail-item">
+                        <div class="drawback-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <rect x="3" y="3" width="7" height="7" rx="1"/>
+                                <rect x="14" y="3" width="7" height="7" rx="1"/>
+                                <rect x="14" y="14" width="7" height="7" rx="1"/>
+                                <rect x="3" y="14" width="7" height="7" rx="1"/>
+                                <path d="M10 6.5h4M6.5 10v4M17.5 10v4M10 17.5h4"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="drawback-detail-item">
+                        <div class="drawback-title">One-hot 编码</div>
+                    </div>
+                    <div class="drawback-detail-item">
+                        <div class="drawback-desc">10万词字典</div>
+                    </div>
+                    <div class="drawback-detail-item">
+                        <div class="dimension-display">
+                            <div class="dimension-item">
+                                <span class="dimension-label">每个词</span>
+                                <span class="dimension-value">10万维</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 连接线1：分支 -->
+            <div class="drawback-arch-connector">
+                <svg class="drawback-connector-svg" viewBox="0 0 60 20">
+                    <line x1="0" y1="10" x2="55" y2="10" stroke="rgba(239, 68, 68, 0.5)" stroke-width="2"/>
+                    <polygon points="50,6 60,10 50,14" fill="rgba(239, 68, 68, 0.5)"/>
+                </svg>
+                <span class="drawback-connector-label">导致</span>
+            </div>
+
+            <!-- 缺陷1：体积爆炸 -->
+            <div class="drawback-arch-layer problem1-layer">
+                <div class="drawback-layer-label">Problem 1</div>
+                <div class="drawback-layer-box problem1-box">
+                    <div class="drawback-detail-item">
+                        <div class="drawback-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                <path d="M2 17l10 5 10-5"/>
+                                <path d="M2 12l10 5 10-5"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="drawback-detail-item">
+                        <div class="drawback-title">体积爆炸</div>
+                    </div>
+                    <div class="drawback-detail-item">
+                        <div class="drawback-desc">稀疏数据结构</div>
+                    </div>
+                    <div class="drawback-detail-item">
+                        <div class="drawback-badge">
+                            极度浪费存储
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 连接线2：到缺陷2 -->
+            <div class="drawback-arch-connector">
+                <svg class="drawback-connector-svg" viewBox="0 0 60 20">
+                    <line x1="0" y1="10" x2="55" y2="10" stroke="rgba(245, 158, 11, 0.5)" stroke-width="2"/>
+                    <polygon points="50,6 60,10 50,14" fill="rgba(245, 158, 11, 0.5)"/>
+                </svg>
+                <span class="drawback-connector-label">同时</span>
+            </div>
+
+            <!-- 缺陷2：语义缺失 -->
+            <div class="drawback-arch-layer problem2-layer">
+                <div class="drawback-layer-label">Problem 2</div>
+                <div class="drawback-layer-box problem2-box">
+                    <div class="drawback-detail-item">
+                        <div class="drawback-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M12 8v4M12 16h.01"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="drawback-detail-item">
+                        <div class="drawback-title">语义缺失</div>
+                    </div>
+                    <div class="drawback-detail-item">
+                        <div class="drawback-desc">词语相互独立</div>
+                    </div>
+                    <div class="drawback-detail-item">
+                        <div class="semantic-viz">
+                            <div class="semantic-row">
+                                <span class="word-badge apple">苹果</span>
+                                <div class="distance-indicator" style="color: #666;">
+                                    <div class="distance-line short"></div>
+                                    <span class="distance-value">距离=1</span>
+                                </div>
+                                <span class="word-badge banana">香蕉</span>
+                            </div>
+                            <div class="semantic-row">
+                                <span class="word-badge apple">苹果</span>
+                                <div class="distance-indicator" style="color: #666;">
+                                    <div class="distance-line short"></div>
+                                    <span class="distance-value">距离=1</span>
+                                </div>
+                                <span class="word-badge car">汽车</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 连接线3：到后果 -->
+            <div class="drawback-arch-connector">
+                <svg class="drawback-connector-svg" viewBox="0 0 60 20">
+                    <line x1="0" y1="10" x2="55" y2="10" stroke="rgba(139, 92, 246, 0.5)" stroke-width="2"/>
+                    <polygon points="50,6 60,10 50,14" fill="rgba(139, 92, 246, 0.5)"/>
+                </svg>
+                <span class="drawback-connector-label">结果</span>
+            </div>
+
+            <!-- 右侧：后果 -->
+            <div class="drawback-arch-layer consequence-layer">
+                <div class="drawback-layer-label">Consequence</div>
+                <div class="drawback-layer-box consequence-box">
+                    <div class="drawback-detail-item">
+                        <div class="drawback-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M12 6v6l4 2"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="drawback-detail-item">
+                        <div class="drawback-title">系统瘫痪</div>
+                    </div>
+                    <div class="drawback-detail-item">
+                        <div class="drawback-desc">AI无法理解语义</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // 粒子效果
+        const canvas = document.getElementById('particlesCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        const particles = [];
+        const particleCount = 100;
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 2 + 0.5;
+                this.speedX = (Math.random() - 0.5) * 0.5;
+                this.speedY = (Math.random() - 0.5) * 0.5;
+                this.opacity = Math.random() * 0.5 + 0.1;
+                this.color = `rgba(96, 165, 250, ${this.opacity})`;
+            }
+
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
+                    this.reset();
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        for (let i = 0; i < particleCount; i++) {
+            particles.push(new Particle());
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(particle => {
+                particle.update();
+                particle.draw();
+            });
+            requestAnimationFrame(animateParticles);
+        }
+
+        animateParticles();
+    </script>
+</body>
+</html>

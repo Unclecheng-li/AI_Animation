@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QQ聊天演示 - 钓鱼网站场景</title>
+    <style>
+        /* 全局样式重置 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Microsoft Yahei", "微软雅黑", sans-serif;
+        }
+
+        body {
+            background-color: #f5f5f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        /* QQ聊天窗口主体 */
+        .qq-chat-window {
+            width: 900px;
+            height: 600px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+            display: flex;
+            overflow: hidden;
+            border: 1px solid #e5e5e5;
+        }
+
+        /* 左侧好友列表区域 */
+        .friends-list {
+            width: 220px;
+            background-color: #f5f5f5;
+            border-right: 1px solid #e5e5e5;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 好友列表头部 */
+        .friends-list-header {
+            height: 40px;
+            background-color: #2c7be5;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        /* 好友列表搜索 */
+        .friends-list-search {
+            padding: 10px;
+            border-bottom: 1px solid #e5e5e5;
+        }
+
+        .search-input {
+            width: 100%;
+            height: 28px;
+            border: 1px solid #d9d9d9;
+            border-radius: 14px;
+            padding: 0 12px;
+            font-size: 12px;
+            outline: none;
+        }
+
+        .search-input:focus {
+            border-color: #2c7be5;
+        }
+
+        /* 好友分组 */
+        .friends-group {
+            border-bottom: 1px solid #e5e5e5;
+        }
+
+        .group-header {
+            height: 32px;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            font-size: 12px;
+            color: #666;
+            cursor: pointer;
+            background-color: #f0f0f0;
+        }
+
+        .group-header:hover {
+            background-color: #e8e8e8;
+        }
+
+        .group-name {
+            flex: 1;
+        }
+
+        .group-count {
+            font-size: 10px;
+            color: #999;
+        }
+
+        /* 好友项 */
+        .friend-item {
+            height: 48px;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .friend-item:hover {
+            background-color: #e6f7ff;
+        }
+
+        .friend-item.active {
+            background-color: #e6f7ff;
+            border-left: 3px solid #2c7be5;
+        }
+
+        .friend-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background-size: cover;
+            background-position: center;
+            margin-right: 10px;
+        }
+
+        .friend-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .friend-name {
+            font-size: 14px;
+            color: #333;
+            margin-bottom: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .friend-status {
+            font-size: 11px;
+            color: #999;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .friend-online {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #52c41a;
+            margin-left: 8px;
+        }
+
+        /* 右侧聊天区域 */
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 顶部标题栏（QQ经典蓝色） */
+        .chat-header {
+            height: 40px;
+            background-color: #2c7be5; /* QQ蓝 */
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 10px;
+            font-size: 14px;
+            font-weight: 500;
+            border-bottom: 1px solid #1e67d2;
+        }
+
+        .chat-header-left {
+            display: flex;
+            align-items: center;
+        }
+
+        .chat-header .avatar {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background-color: #fff;
+            margin-right: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 14px;
+            color: #2c7be5;
+            font-weight: bold;
+        }
+
+        .chat-header-right {
+            display: flex;
+            align-items: center;
+        }
+
+        .window-control {
+            width: 30px;
+            height: 30px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            margin-left: 2px;
+        }
+
+        .window-control:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .window-control.close:hover {
+            background-color: #ff4d4f;
+        }
+
+        /* 聊天内容区域 */
+        .chat-content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background-color: #f9f9f9;
+        }
+
+        /* 自定义滚动条 */
+        .chat-content::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .chat-content::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        .chat-content::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 3px;
+        }
+
+        .chat-content::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+
+        /* 时间分割线 */
+        .chat-time-divider {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 15px 0;
+        }
+
+        .chat-time-divider span {
+            font-size: 12px;
+            color: #999;
+            background-color: #f9f9f9;
+            padding: 2px 12px;
+            border-radius: 10px;
+        }
+
+        /* 聊天消息通用样式 */
+        .chat-message {
+            display: flex;
+            margin-bottom: 15px;
+            align-items: flex-start;
+        }
+
+        /* 对方消息（左侧） */
+        .left-chat {
+            justify-content: flex-start;
+        }
+
+        /* 自己消息（右侧） */
+        .right-chat {
+            justify-content: flex-end;
+        }
+
+        /* 消息内容容器 */
+        .chat-content-wrap {
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 右侧消息内容容器 */
+        .right-chat .chat-content-wrap {
+            align-items: flex-end;
+            margin-right: 8px;
+        }
+
+        /* 左侧消息内容容器 */
+        .left-chat .chat-content-wrap {
+            align-items: flex-start;
+            margin-left: 8px;
+        }
+
+        /* 头像样式 */
+        .chat-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        /* 对方头像（赤川鹤鸣） */
+        .left-chat .chat-avatar {
+            background-image: url('PNG/xc.png');
+        }
+
+        /* 自己头像（网络小白） */
+        .right-chat .chat-avatar {
+            background-image: url('PNG/xb.png');
+        }
+
+        /* 消息气泡 */
+        .chat-bubble {
+            max-width: 60%;
+            padding: 10px 15px;
+            border-radius: 18px;
+            line-height: 1.4;
+            font-size: 14px;
+            position: relative;
+            word-wrap: break-word;
+        }
+
+
+
+        /* 对方气泡样式 */
+        .left-chat .chat-bubble {
+            background-color: #fff;
+            border: 1px solid #e5e5e5;
+            border-bottom-left-radius: 4px;
+        }
+
+        /* 自己气泡样式 */
+        .right-chat .chat-bubble {
+            background-color: #07c160;
+            color: #fff;
+            border-bottom-right-radius: 4px;
+        }
+
+        /* 昵称样式 */
+        .chat-nickname {
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 5px;
+        }
+
+        /* 链接样式（蓝色交互） */
+        .chat-link {
+            color: #2c7be5;
+            text-decoration: underline;
+            cursor: pointer;
+            display: inline-block;
+            margin: 5px 0;
+            word-break: break-all;
+        }
+
+        .chat-link:hover {
+            color: #1e67d2;
+            text-decoration: none;
+        }
+
+        /* 底部输入区 */
+        .chat-footer {
+            padding: 8px 12px;
+            border-top: 1px solid #e5e5e5;
+            display: flex;
+            flex-direction: column;
+            background-color: #f9f9f9;
+        }
+
+        .chat-footer-toolbar {
+            height: 30px;
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .toolbar-btn {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            margin-right: 8px;
+            color: #666;
+        }
+
+        .toolbar-btn:hover {
+            color: #2c7be5;
+        }
+
+        .chat-footer-input {
+            display: flex;
+            align-items: flex-end;
+        }
+
+        .input-area {
+            flex: 1;
+            min-height: 36px;
+            max-height: 120px;
+            border: 1px solid #d9d9d9;
+            border-radius: 18px;
+            padding: 8px 15px;
+            resize: none;
+            outline: none;
+            font-size: 14px;
+            background-color: #fff;
+            margin-right: 10px;
+        }
+
+        .input-area:focus {
+            border-color: #2c7be5;
+        }
+
+        .send-btn {
+            width: 60px;
+            height: 36px;
+            background-color: #2c7be5; /* QQ蓝按钮 */
+            color: #fff;
+            border: none;
+            border-radius: 18px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .send-btn:hover {
+            background-color: #1e67d2;
+        }
+
+        .send-btn:disabled {
+            background-color: #d9d9d9;
+            cursor: not-allowed;
+        }
+
+        /* 提示框样式 */
+        .tip-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.8);
+            width: 350px;
+            padding: 25px;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            display: none;
+            border-top: 5px solid #ff4d4f;
+            z-index: 1000;
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+
+        .tip-modal.show {
+            display: block;
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 1;
+        }
+
+        .tip-modal h3 {
+            color: #ff4d4f;
+            margin-bottom: 15px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .tip-modal p {
+            color: #666;
+            line-height: 1.5;
+            margin-bottom: 20px;
+        }
+
+        .tip-modal .danger-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+
+        .tip-modal button {
+            margin-top: 10px;
+            padding: 10px 25px;
+            background-color: #ff4d4f;
+            color: #fff;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .tip-modal button:hover {
+            background-color: #ff7875;
+            transform: translateY(-1px);
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: none;
+            z-index: 999;
+        }
+
+        .modal-overlay.show {
+            display: block;
+        }
+
+        /* 响应式布局 */
+        @media (max-width: 850px) {
+            .qq-chat-window {
+                width: 95vw;
+                height: 90vh;
+                border-radius: 0;
+            }
+
+            .chat-bubble {
+                max-width: 70%;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .chat-header {
+                padding: 0 8px;
+            }
+
+            .chat-header .avatar {
+                width: 24px;
+                height: 24px;
+                font-size: 12px;
+            }
+
+            .title-text {
+                font-size: 12px;
+            }
+
+            .window-control {
+                width: 24px;
+                height: 24px;
+                font-size: 12px;
+            }
+
+            .chat-content {
+                padding: 12px;
+            }
+
+            .chat-avatar {
+                width: 32px;
+                height: 32px;
+                font-size: 12px;
+            }
+
+            .chat-bubble {
+                max-width: 75%;
+                padding: 8px 12px;
+                font-size: 13px;
+            }
+
+            .chat-footer {
+                padding: 6px 10px;
+            }
+
+            .toolbar-btn {
+                width: 20px;
+                height: 20px;
+                font-size: 12px;
+            }
+
+            .input-area {
+                min-height: 32px;
+                padding: 6px 12px;
+                font-size: 13px;
+            }
+
+            .send-btn {
+                width: 50px;
+                height: 32px;
+                font-size: 12px;
+            }
+
+            .tip-modal {
+                width: 90vw;
+                max-width: 350px;
+                padding: 20px;
+            }
+        }
+
+        @media (max-width: 400px) {
+            .chat-bubble {
+                max-width: 80%;
+            }
+
+            .chat-nickname {
+                font-size: 10px;
+            }
+
+
+        }
+    </style>
+</head>
+<body>
+    <!-- QQ聊天窗口 -->
+    <div class="qq-chat-window">
+        <!-- 左侧好友列表 -->
+        <div class="friends-list">
+            <!-- 好友列表头部 -->
+            <div class="friends-list-header">
+                <span>好友列表</span>
+            </div>
+            
+            <!-- 搜索框 -->
+            <div class="friends-list-search">
+                <input type="text" class="search-input" placeholder="搜索好友...">
+            </div>
+            
+            <!-- 好友分组：我的好友 -->
+            <div class="friends-group">
+                <div class="group-header">
+                    <div class="group-name">我的好友</div>
+                    <div class="group-count">5</div>
+                </div>
+                
+                <!-- 好友项 -->
+                <div class="friend-item active">
+                    <div class="friend-avatar" style="background-image: url('PNG/xc.png');"></div>
+                    <div class="friend-info">
+                        <div class="friend-name">赤川鹤鸣_Channel</div>
+                        <div class="friend-status">在线</div>
+                    </div>
+                    <div class="friend-online"></div>
+                </div>
+                
+                <div class="friend-item">
+                    <div class="friend-avatar" style="background-image: url('PNG/xb.png');"></div>
+                    <div class="friend-info">
+                        <div class="friend-name">网络小白_Uncle城</div>
+                        <div class="friend-status">在线</div>
+                    </div>
+                    <div class="friend-online"></div>
+                </div>
+                
+                <div class="friend-item">
+                    <div class="friend-avatar" style="background-image: url('PNG/he.png');"></div>
+                    <div class="friend-info">
+                        <div class="friend-name">老师好我叫何同学</div>
+                        <div class="friend-status">离线</div>
+                    </div>
+                </div>
+                
+                <div class="friend-item">
+                    <div class="friend-avatar" style="background-image: url('PNG/xz.png');"></div>
+                    <div class="friend-info">
+                        <div class="friend-name">客服祥子</div>
+                        <div class="friend-status">离线</div>
+                    </div>
+                </div>
+                
+                <div class="friend-item">
+                    <div class="friend-avatar" style="background-image: url('PNG/xl.png');"></div>
+                    <div class="friend-info">
+                        <div class="friend-name">橘雪莉</div>
+                        <div class="friend-status">已处刑</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 好友分组：群聊 -->
+            <div class="friends-group">
+                <div class="group-header">
+                    <div class="group-name">群聊</div>
+                    <div class="group-count">2</div>
+                </div>
+                
+                <!-- 群聊项 -->
+                <div class="friend-item">
+                    <div class="friend-avatar" style="background-image: url('PNG/whj.png');"></div>
+                    <div class="friend-info">
+                        <div class="friend-name">游戏交流群</div>
+                        <div class="friend-status">32人在线</div>
+                    </div>
+                </div>
+                
+                <div class="friend-item">
+                    <div class="friend-avatar" style="background-image: url('PNG/JM.png');"></div>
+                    <div class="friend-info">
+                        <div class="friend-name">学习讨论组</div>
+                        <div class="friend-status">8人在线</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 右侧聊天区域 -->
+        <div class="chat-area">
+            <!-- 顶部标题栏 -->
+            <div class="chat-header">
+                <div class="chat-header-left">
+                    <div class="avatar">QQ</div>
+                    <div class="title-text">赤川鹤鸣_Channel</div>
+                </div>
+                <div class="chat-header-right">
+                    <div class="window-control">📎</div>
+                    <div class="window-control">🔽</div>
+                    <div class="window-control">🗗</div>
+                    <div class="window-control close">✕</div>
+                </div>
+            </div>
+
+            <!-- 聊天内容区 -->
+            <div class="chat-content">
+                <!-- 时间分割线 -->
+                <div class="chat-time-divider">
+                    <span>今天 14:30</span>
+                </div>
+
+                <!-- 对方消息：开场 -->
+                <div class="chat-message left-chat">
+                    <div class="chat-avatar"></div>
+                    <div class="chat-content-wrap">
+                        <div class="chat-nickname">赤川鹤鸣_Channel</div>
+                        <div class="chat-bubble">
+                            嘿，在吗？最近怎么样？
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 自己消息：回应 -->
+                <div class="chat-message right-chat">
+                    <div class="chat-content-wrap">
+                        <div class="chat-nickname">网络小白_Uncle城</div>
+                        <div class="chat-bubble">
+                            在呢，最近挺无聊的，有什么好玩的吗？
+                        </div>
+                    </div>
+                    <div class="chat-avatar"></div>
+                </div>
+
+                <!-- 对方消息：引入链接 -->
+                <div class="chat-message left-chat">
+                    <div class="chat-avatar"></div>
+                    <div class="chat-content-wrap">
+                        <div class="chat-nickname">赤川鹤鸣_Channel</div>
+                        <div class="chat-bubble">
+                            我刚发现一个超有趣的网站，里面有很多精彩内容，你一定要看看！
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 对方消息：链接 + 文字 -->
+                <div class="chat-message left-chat">
+                    <div class="chat-avatar"></div>
+                    <div class="chat-content-wrap">
+                        <div class="chat-nickname">赤川鹤鸣_Channel</div>
+                        <div class="chat-bubble">
+                            <div class="chat-link" id="phishing-link">https://example-fake.com/haokangde</div>
+                            哇偶，是好康的
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 自己消息：点击链接后的反应 -->
+                <div class="chat-message right-chat">
+                    <div class="chat-content-wrap">
+                        <div class="chat-nickname">网络小白_Uncle城</div>
+                        <div class="chat-bubble">
+                            我点了！这居然是钓鱼网站😭
+                        </div>
+                    </div>
+                    <div class="chat-avatar"></div>
+                </div>
+
+                <!-- 自己消息：后续反应 -->
+                <div class="chat-message right-chat">
+                    <div class="chat-content-wrap">
+                        <div class="chat-nickname">网络小白_Uncle城</div>
+                        <div class="chat-bubble">
+                            它让我输入QQ账号密码，我差点就输了！
+                        </div>
+                    </div>
+                    <div class="chat-avatar"></div>
+                </div>
+
+                <!-- 对方消息：假装关心 -->
+                <div class="chat-message left-chat">
+                    <div class="chat-avatar"></div>
+                    <div class="chat-content-wrap">
+                        <div class="chat-nickname">赤川鹤鸣_Channel</div>
+                        <div class="chat-bubble">
+                            啊？不会吧，我之前点进去的时候还好好的啊，可能是你网络问题吧？
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 自己消息：警惕 -->
+                <div class="chat-message right-chat">
+                    <div class="chat-content-wrap">
+                        <div class="chat-nickname">网络小白_Uncle城</div>
+                        <div class="chat-bubble">
+                            不对，那个网站的URL明显有问题，是fake域名，而且页面做的很粗糙，肯定是钓鱼网站！
+                        </div>
+                    </div>
+                    <div class="chat-avatar"></div>
+                </div>
+
+                <!-- 对方消息：转移话题 -->
+                <div class="chat-message left-chat">
+                    <div class="chat-avatar"></div>
+                    <div class="chat-content-wrap">
+                        <div class="chat-nickname">赤川鹤鸣_Channel</div>
+                        <div class="chat-bubble">
+                            可能吧，那算了，我们聊点别的...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 底部输入区 -->
+            <div class="chat-footer">
+                <div class="chat-footer-toolbar">
+                    <div class="toolbar-btn">😊</div>
+                    <div class="toolbar-btn">📷</div>
+                    <div class="toolbar-btn">🎵</div>
+                    <div class="toolbar-btn">📎</div>
+                    <div class="toolbar-btn">✂️</div>
+                    <div class="toolbar-btn">🌙</div>
+                </div>
+                <div class="chat-footer-input">
+                    <textarea class="input-area" placeholder="请输入消息..."></textarea>
+                    <button class="send-btn">发送</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 模态框覆盖层 -->
+    <div class="modal-overlay" id="modalOverlay"></div>
+
+    <!-- 钓鱼网站提示框 -->
+    <div class="tip-modal" id="tipModal">
+        <div class="danger-icon">⚠️</div>
+        <h3>危险！钓鱼网站警告</h3>
+        <p>您点击的链接疑似钓鱼网站，请勿输入任何账号密码信息！</p>
+        <p>钓鱼网站特征：</p>
+        <p>• 域名与官方网站相似但有细微差别</p>
+        <p>• 要求输入敏感信息</p>
+        <p>• 页面设计粗糙或与官方不一致</p>
+        <button onclick="closeTip()">我知道了，谢谢提醒</button>
+    </div>
+
+    <script>
+        // 点击链接弹出提示框
+        document.getElementById('phishing-link').addEventListener('click', function(e) {
+            e.preventDefault();
+            const tipModal = document.getElementById('tipModal');
+            const modalOverlay = document.getElementById('modalOverlay');
+            
+            // 添加显示类
+            tipModal.classList.add('show');
+            modalOverlay.classList.add('show');
+            
+            // 禁止背景滚动
+            document.body.style.overflow = 'hidden';
+        });
+
+        // 关闭提示框
+        function closeTip() {
+            const tipModal = document.getElementById('tipModal');
+            const modalOverlay = document.getElementById('modalOverlay');
+            
+            // 移除显示类
+            tipModal.classList.remove('show');
+            modalOverlay.classList.remove('show');
+            
+            // 恢复背景滚动
+            document.body.style.overflow = 'auto';
+        }
+
+        // 点击覆盖层关闭提示框
+        document.getElementById('modalOverlay').addEventListener('click', closeTip);
+
+        // 模拟发送按钮点击（演示用，无实际发送功能）
+        document.querySelector('.send-btn').addEventListener('click', function() {
+            const inputArea = document.querySelector('.input-area');
+            if (inputArea.value.trim() === '') {
+                return;
+            }
+            
+            // 简单的发送动画效果
+            this.textContent = '发送中...';
+            this.disabled = true;
+            
+            setTimeout(() => {
+                this.textContent = '发送';
+                this.disabled = false;
+                inputArea.value = '';
+                
+                // 显示发送成功提示
+                const successTip = document.createElement('div');
+                successTip.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    background-color: #52c41a;
+                    color: #fff;
+                    padding: 10px 20px;
+                    border-radius: 4px;
+                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+                    z-index: 1000;
+                    opacity: 0;
+                    transform: translateY(-20px);
+                    transition: all 0.3s ease;
+                `;
+                successTip.textContent = '消息发送成功！';
+                document.body.appendChild(successTip);
+                
+                // 显示提示
+                setTimeout(() => {
+                    successTip.style.opacity = '1';
+                    successTip.style.transform = 'translateY(0)';
+                }, 100);
+                
+                // 隐藏提示
+                setTimeout(() => {
+                    successTip.style.opacity = '0';
+                    successTip.style.transform = 'translateY(-20px)';
+                    setTimeout(() => {
+                        document.body.removeChild(successTip);
+                    }, 300);
+                }, 2000);
+            }, 500);
+        });
+
+        // 输入框自动调整高度
+        const inputArea = document.querySelector('.input-area');
+        inputArea.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
+
+        // 窗口控制按钮功能
+        const windowControls = document.querySelectorAll('.window-control');
+        windowControls.forEach(control => {
+            control.addEventListener('click', function() {
+                if (this.textContent === '✕') {
+                    alert('关闭窗口功能仅作展示～');
+                } else if (this.textContent === '🗗') {
+                    alert('最大化窗口功能仅作展示～');
+                } else if (this.textContent === '🔽') {
+                    alert('最小化窗口功能仅作展示～');
+                } else if (this.textContent === '📎') {
+                    alert('附件功能仅作展示～');
+                }
+            });
+        });
+
+        // 工具栏按钮功能
+        const toolbarBtns = document.querySelectorAll('.toolbar-btn');
+        toolbarBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                if (this.textContent === '😊') {
+                    alert('表情功能仅作展示～');
+                } else if (this.textContent === '📷') {
+                    alert('图片功能仅作展示～');
+                } else if (this.textContent === '🎵') {
+                    alert('音乐功能仅作展示～');
+                } else if (this.textContent === '📎') {
+                    alert('附件功能仅作展示～');
+                } else if (this.textContent === '✂️') {
+                    alert('截图功能仅作展示～');
+                } else if (this.textContent === '🌙') {
+                    alert('夜间模式功能仅作展示～');
+                }
+            });
+        });
+
+        // 好友列表交互
+        const friendItems = document.querySelectorAll('.friend-item');
+        friendItems.forEach(item => {
+            item.addEventListener('click', function() {
+                // 移除所有好友项的活跃状态
+                friendItems.forEach(i => i.classList.remove('active'));
+                // 添加当前好友项的活跃状态
+                this.classList.add('active');
+                
+                // 获取好友名称
+                const friendName = this.querySelector('.friend-name').textContent;
+                // 更新聊天窗口标题
+                document.querySelector('.title-text').textContent = friendName;
+                
+                // 这里可以添加切换聊天内容的逻辑
+                // 由于是演示，这里只做简单提示
+                if (friendName !== '赤川鹤鸣_Channel') {
+                    alert('切换到与 ' + friendName + ' 的聊天（演示模式）');
+                }
+            });
+        });
+
+        // 好友分组展开/收起功能
+        const groupHeaders = document.querySelectorAll('.group-header');
+        groupHeaders.forEach(header => {
+            header.addEventListener('click', function() {
+                const group = this.parentElement;
+                const friendItems = group.querySelectorAll('.friend-item');
+                
+                // 简单的展开/收起逻辑（演示用）
+                friendItems.forEach(item => {
+                    if (item.style.display === 'none') {
+                        item.style.display = 'flex';
+                    } else {
+                        item.style.display = 'none';
+                    }
+                });
+            });
+        });
+
+        // 搜索功能
+        const searchInput = document.querySelector('.search-input');
+        searchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            const friendItems = document.querySelectorAll('.friend-item');
+            
+            friendItems.forEach(item => {
+                const friendName = item.querySelector('.friend-name').textContent.toLowerCase();
+                if (friendName.includes(searchTerm)) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

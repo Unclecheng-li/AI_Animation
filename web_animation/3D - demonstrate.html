@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPsec：网络层拦截处理 | 数据流转全流程可视化</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#050810',      // 极致深黑背景
+                        darker: '#020617',    // 卡片/结构背景（与background.html一致）
+                        net: '#165DFF',       // 网络层蓝（IP协议）
+                        ipsec: '#00E096',     // IPsec专属绿
+                        transport: '#6366F1', // 传输层紫（TCP/UDP）
+                        app: '#F59E0B',       // 应用层橙
+                        text: '#E5E7EB',      // 主文本
+                        textLight: '#9CA3AF', // 浅文本
+                    },
+                    fontFamily: {
+                        mono: ['Consolas', 'Monaco', 'JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            /* 科技网格背景（与background.html一致） */
+            .bg-tech-grid {
+                background-size: 40px 40px;
+                background-image: 
+                  linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+                  linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+            }
+            /* 层级hover高亮 */
+            .layer-card {
+                transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+            }
+            .layer-card:hover {
+                transform: scale(1.05);
+                box-shadow: 0 0 15px rgba(var(--layer-color), 0.4);
+            }
+            /* 数据流动画 */
+            .data-flow {
+                position: absolute;
+                height: 4px;
+                background: linear-gradient(90deg, rgba(0,224,150,0) 0%, rgba(0,224,150,1) 50%, rgba(0,224,150,0) 100%);
+                border-radius: 2px;
+                animation: dataFlow 8s linear infinite;
+            }
+            @keyframes dataFlow {
+                0% { left: 0%; opacity: 0; }
+                5% { opacity: 1; }
+                95% { opacity: 1; }
+                100% { left: calc(100% - 40px); opacity: 0; }
+            }
+            /* IPsec拦截脉冲 */
+            .ipsec-intercept {
+                animation: ipsecPulse 2s ease-in-out infinite alternate;
+            }
+            @keyframes ipsecPulse {
+                from { box-shadow: 0 0 10px rgba(0, 224, 150, 0.5); }
+                to { box-shadow: 0 0 25px rgba(0, 224, 150, 0.9); }
+            }
+            /* 滚动渐入 */
+            .fade-up {
+                opacity: 0;
+                transform: translateY(30px);
+                transition: all 1.5s cubic-bezier(0.22, 1, 0.36, 1);
+            }
+            .fade-up.active {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            
+            /* 内部元素初始隐藏和动画 */
+            .layer-card,
+            .flow-step,
+            .bg-dark.rounded-xl {
+                opacity: 0;
+                transform: translateY(20px);
+                transition: all 1.5s cubic-bezier(0.22, 1, 0.36, 1);
+            }
+            
+            .layer-card.active,
+            .flow-step.active,
+            .bg-dark.rounded-xl.active {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            /* 步骤高亮动画 */
+            .step-highlight {
+                animation: stepHighlight 1.5s ease-in-out infinite alternate;
+            }
+            @keyframes stepHighlight {
+                from { border-color: rgba(0,224,150,0.5); }
+                to { border-color: rgba(0,224,150,1); }
+            }
+            /* 隧道模式外层IP添加动画 */
+            .tunnel-add {
+                animation: tunnelAdd 1s ease-out forwards;
+            }
+            @keyframes tunnelAdd {
+                0% { transform: translateX(-50px); opacity: 0; }
+                100% { transform: translateX(0); opacity: 1; }
+            }
+            /* 3D变换样式 */
+            .perspective-container {
+                perspective: 1200px;
+                perspective-origin: center center;
+            }
+            .flow-container-3d {
+                transform-style: preserve-3d;
+                transition: transform 1s ease;
+            }
+            .flow-step {
+                transform-style: preserve-3d;
+                backface-visibility: visible;
+                transition: transform 0.5s ease;
+            }
+            .flow-step:hover {
+                transform: rotateY(15deg) rotateX(10deg) translateZ(20px) scale(1.1);
+            }
+            /* 3D旋转按钮样式 */
+            .rotate-controls {
+                display: flex;
+                justify-content: center;
+                gap: 10px;
+                margin-top: 20px;
+            }
+            .rotate-btn {
+                background: rgba(0, 224, 150, 0.2);
+                color: #00E096;
+                border: 1px solid rgba(0, 224, 150, 0.4);
+                padding: 8px 16px;
+                border-radius: 20px;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                font-size: 14px;
+            }
+            .rotate-btn:hover {
+                background: rgba(0, 224, 150, 0.3);
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(0, 224, 150, 0.3);
+            }
+            .rotate-btn.active {
+                background: rgba(0, 224, 150, 0.4);
+                box-shadow: 0 0 10px rgba(0, 224, 150, 0.5);
+            }
+        }
+    </style>
+</head>
+<body class="bg-darker text-text min-h-screen bg-tech-grid overflow-x-hidden">
+    <main class="container mx-auto px-4 py-6">
+
+        <!-- 第二步：数据流转全流程动态演示 -->
+        <section class="mb-20 fade-up">
+            <h2 class="text-2xl font-bold mb-10 text-center">
+                IPsec <span class="text-ipsec">数据流转全流程</span>（动态演示）
+            </h2>
+
+            <div class="max-w-6xl mx-auto bg-darker rounded-2xl p-8 border border-ipsec/20 shadow-lg relative overflow-hidden">
+                <!-- 流程控制按钮 -->
+                <div class="flex justify-center gap-4 mb-10">
+                    <button id="toggleTunnel" class="bg-net/20 hover:bg-net/30 text-net px-6 py-2 rounded-full border border-net/40 transition-all">
+                        <i class="fa fa-exchange mr-2"></i>切换 传输/隧道模式
+                    </button>
+                </div>
+
+                <!-- 流程容器（横向排列） -->
+                <div class="perspective-container">
+                <div class="flex flex-col md:flex-row md:items-center gap-4 md:gap-2 relative flow-container-3d" id="flowContainer">
+                    <!-- 步骤1：应用数据 -->
+                    <div class="flow-step w-full md:w-1/7 bg-app/10 border-2 border-app rounded-lg p-4 text-center" id="step1">
+                        <div class="font-bold text-app mb-2">步骤1</div>
+                        <div class="text-sm font-mono">应用数据</div>
+                        <div class="text-xs text-textLight mt-1">HTTP/数据库指令</div>
+                    </div>
+
+                    <!-- 箭头 -->
+                    <div class="hidden md:block text-textLight text-xl">→</div>
+                    <div class="block md:hidden text-textLight text-xl text-center">↓</div>
+
+                    <!-- 步骤2：TCP/UDP封装 -->
+                    <div class="flow-step w-full md:w-1/7 bg-transport/10 border-2 border-transport rounded-lg p-4 text-center" id="step2">
+                        <div class="font-bold text-transport mb-2">步骤2</div>
+                        <div class="text-sm font-mono">TCP/UDP报文</div>
+                        <div class="text-xs text-textLight mt-1">源目端口/序列号</div>
+                    </div>
+
+                    <!-- 箭头 -->
+                    <div class="hidden md:block text-textLight text-xl">→</div>
+                    <div class="block md:hidden text-textLight text-xl text-center">↓</div>
+
+                    <!-- 步骤3：IP头封装 -->
+                    <div class="flow-step w-full md:w-1/7 bg-net/10 border-2 border-net rounded-lg p-4 text-center" id="step3">
+                        <div class="font-bold text-net mb-2">步骤3</div>
+                        <div class="text-sm font-mono">IP头封装</div>
+                        <div class="text-xs text-textLight mt-1">源目IP/协议类型</div>
+                    </div>
+
+                    <!-- 箭头 -->
+                    <div class="hidden md:block text-textLight text-xl">→</div>
+                    <div class="block md:hidden text-textLight text-xl text-center">↓</div>
+
+                    <!-- 步骤4：IPsec处理 -->
+                    <div class="flow-step w-full md:w-1/7 bg-ipsec/20 border-2 border-ipsec rounded-lg p-4 text-center ipsec-intercept" id="step4">
+                        <div class="font-bold text-ipsec mb-2">步骤4</div>
+                        <div class="text-sm font-mono">IPsec处理</div>
+                        <div class="text-xs text-textLight mt-1">加密/认证/校验</div>
+                    </div>
+
+                    <!-- 箭头 -->
+                    <div class="hidden md:block text-textLight text-xl">→</div>
+                    <div class="block md:hidden text-textLight text-xl text-center">↓</div>
+
+                    <!-- 步骤5：隧道模式外层IP（默认隐藏） -->
+                    <div class="flow-step w-full md:w-1/7 bg-net/10 border-2 border-net rounded-lg p-4 text-center hidden tunnel-add" id="step5">
+                        <div class="font-bold text-net mb-2">步骤5</div>
+                        <div class="text-sm font-mono">外层IP头</div>
+                        <div class="text-xs text-textLight mt-1">隧道端点IP</div>
+                    </div>
+
+                    <!-- 箭头（隧道模式显示） -->
+                    <div class="hidden md:block text-textLight text-xl" id="arrow5">→</div>
+                    <div class="block md:hidden text-textLight text-xl text-center hidden" id="arrow5-mobile">↓</div>
+
+                    <!-- 步骤6：发送 -->
+                    <div class="flow-step w-full md:w-1/7 bg-neutral/10 border-2 border-neutral rounded-lg p-4 text-center" id="step6">
+                        <div class="font-bold text-neutral mb-2">步骤6</div>
+                        <div class="text-sm font-mono">发送数据包</div>
+                        <div class="text-xs text-textLight mt-1">路由转发</div>
+                    </div>
+                </div>
+
+                </div>
+                
+                <!-- 3D旋转控制按钮 -->
+                <div class="rotate-controls">
+                    <button class="rotate-btn" id="rotateReset">重置视角</button>
+                    <button class="rotate-btn" id="rotateYLeft">Y轴向左</button>
+                    <button class="rotate-btn" id="rotateYRight">Y轴向右</button>
+                    <button class="rotate-btn" id="rotateXUp">X轴向上</button>
+                    <button class="rotate-btn" id="rotateXDown">X轴向下</button>
+                    <button class="rotate-btn" id="toggleAutoRotate">自动旋转</button>
+                </div>
+                
+                <!-- 流程说明 -->
+                <div class="bg-dark rounded-xl p-5 border-l-4 border-ipsec mt-10">
+                    <h3 class="font-bold text-ipsec mb-3">流程核心说明</h3>
+                    <ul class="text-textLight text-sm space-y-2 list-disc list-inside">
+                        <li>应用层无需感知IPsec存在，数据按原有流程封装为TCP/UDP报文；</li>
+                        <li>IP层封装完成后，IPsec自动拦截数据包，根据策略做加密/认证（传输模式）；</li>
+                        <li>隧道模式下，IPsec会为数据包新增<strong class="text-net">公网IP头</strong>（隧道端点地址），隐藏原始通信IP；</li>
+                        <li>处理完成后的数据包交由网络层转发，中间节点仅能看到加密后的密文（隧道模式仅能看到外层IP）。</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+
+    </main>
+
+
+
+    <!-- 交互脚本：动态流程 + 层级高亮 + 滚动渐入 + 3D旋转 -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // 1. 页面加载时依次缓入效果
+            const fadeElements = document.querySelectorAll('.fade-up');
+            
+            // 获取所有需要动画的元素（包括section和内部元素）
+            const allAnimateElements = [...document.querySelectorAll('.fade-up')];
+            
+            // 按顺序处理元素，为每个元素设置不同的延迟（减慢速度）
+            allAnimateElements.forEach((el, index) => {
+                // 初始延迟200ms，每个元素间隔400ms
+                const delay = 200 + index * 400;
+                
+                setTimeout(() => {
+                    el.classList.add('active');
+                    
+                    // 如果是section元素，处理其内部的子元素
+                    if (el.tagName === 'SECTION') {
+                        const innerElements = [
+                            ...el.querySelectorAll('.layer-card'),
+                            ...el.querySelectorAll('.flow-step'),
+                            ...el.querySelectorAll('.bg-dark.rounded-xl')
+                        ];
+                        
+                        // 为内部元素设置额外的延迟（减慢速度）
+                        innerElements.forEach((innerEl, innerIndex) => {
+                            const innerDelay = delay + 600 + innerIndex * 300;
+                            setTimeout(() => {
+                                innerEl.classList.add('active');
+                            }, innerDelay);
+                        });
+                    }
+                }, delay);
+            });
+
+            // 2. 传输/隧道模式切换控制
+            const arrow5 = document.getElementById('arrow5');
+            const arrow5Mobile = document.getElementById('arrow5-mobile');
+            let isTunnelMode = false;
+
+            // 切换传输/隧道模式
+            document.getElementById('toggleTunnel').addEventListener('click', () => {
+                isTunnelMode = !isTunnelMode;
+                const step5 = document.getElementById('step5');
+                if (isTunnelMode) {
+                    // 隧道模式：显示step5
+                    step5.classList.remove('hidden');
+                    arrow5.classList.remove('hidden');
+                    arrow5Mobile.classList.remove('hidden');
+                    document.getElementById('toggleTunnel').innerHTML = '<i class="fa fa-exchange mr-2"></i>切换 隧道/传输模式';
+                } else {
+                    // 传输模式：隐藏step5
+                    step5.classList.add('hidden');
+                    arrow5.classList.add('hidden');
+                    arrow5Mobile.classList.add('hidden');
+                    document.getElementById('toggleTunnel').innerHTML = '<i class="fa fa-exchange mr-2"></i>切换 传输/隧道模式';
+                }
+            });
+
+            // 3. 层级卡片hover交互
+            const layerCards = document.querySelectorAll('.layer-card');
+            layerCards.forEach(card => {
+                card.addEventListener('mouseenter', () => {
+                    card.classList.add('ring-2');
+                    const layerColor = getComputedStyle(card).getPropertyValue('--layer-color');
+                    card.style.ringColor = `rgb(${layerColor})`;
+                });
+                card.addEventListener('mouseleave', () => {
+                    card.classList.remove('ring-2');
+                });
+            });
+
+            // 4. 数据流背景动画加速（hover交互）
+            const dataFlow = document.querySelector('.data-flow');
+            if (dataFlow) {
+                document.querySelector('#flowContainer').addEventListener('mouseenter', () => {
+                    dataFlow.style.animationDuration = '4s';
+                });
+                document.querySelector('#flowContainer').addEventListener('mouseleave', () => {
+                    dataFlow.style.animationDuration = '8s';
+                });
+            }
+
+            // 5. 网格背景动画效果（与background.html一致）
+            const container = document.querySelector('.bg-tech-grid');
+            let gridOffset = 0;
+            
+            function animateGrid() {
+                gridOffset = (gridOffset + 0.2) % 40;
+                container.style.backgroundPosition = `${gridOffset}px ${gridOffset}px`;
+                requestAnimationFrame(animateGrid);
+            }
+            
+            animateGrid();
+
+            // 6. 3D旋转功能
+            const flowContainer = document.getElementById('flowContainer');
+            let rotateX = 0;
+            let rotateY = 0;
+            let isAutoRotating = false;
+            let autoRotateInterval = null;
+
+            // 应用旋转
+            function applyRotation() {
+                flowContainer.style.transform = `rotateX(${rotateX}deg) rotateY(${rotateY}deg) rotateZ(0deg)`;
+            }
+
+            // 重置旋转
+            function resetRotation() {
+                rotateX = 0;
+                rotateY = 0;
+                applyRotation();
+            }
+
+            // 自动旋转
+            function startAutoRotate() {
+                if (!isAutoRotating) {
+                    isAutoRotating = true;
+                    autoRotateInterval = setInterval(() => {
+                        rotateY += 1;
+                        if (rotateY >= 360) rotateY = 0;
+                        applyRotation();
+                    }, 50);
+                }
+            }
+
+            function stopAutoRotate() {
+                if (isAutoRotating) {
+                    isAutoRotating = false;
+                    clearInterval(autoRotateInterval);
+                }
+            }
+
+            // 切换自动旋转
+            function toggleAutoRotate() {
+                if (isAutoRotating) {
+                    stopAutoRotate();
+                    document.getElementById('toggleAutoRotate').classList.remove('active');
+                } else {
+                    startAutoRotate();
+                    document.getElementById('toggleAutoRotate').classList.add('active');
+                }
+            }
+
+            // 按钮事件监听
+            document.getElementById('rotateReset').addEventListener('click', resetRotation);
+            document.getElementById('rotateYLeft').addEventListener('click', () => {
+                rotateY -= 15;
+                applyRotation();
+            });
+            document.getElementById('rotateYRight').addEventListener('click', () => {
+                rotateY += 15;
+                applyRotation();
+            });
+            document.getElementById('rotateXUp').addEventListener('click', () => {
+                rotateX += 15;
+                applyRotation();
+            });
+            document.getElementById('rotateXDown').addEventListener('click', () => {
+                rotateX -= 15;
+                applyRotation();
+            });
+            document.getElementById('toggleAutoRotate').addEventListener('click', toggleAutoRotate);
+
+            // 鼠标拖动旋转功能
+            let isDragging = false;
+            let startX, startY;
+            let initialRotateX, initialRotateY;
+
+            flowContainer.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                initialRotateX = rotateX;
+                initialRotateY = rotateY;
+                flowContainer.style.cursor = 'grabbing';
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                
+                const deltaX = e.clientX - startX;
+                const deltaY = e.clientY - startY;
+                
+                rotateY = initialRotateY + deltaX * 0.5;
+                rotateX = initialRotateX - deltaY * 0.5;
+                
+                applyRotation();
+            });
+
+            document.addEventListener('mouseup', () => {
+                isDragging = false;
+                flowContainer.style.cursor = 'grab';
+            });
+
+            flowContainer.addEventListener('mouseleave', () => {
+                isDragging = false;
+                flowContainer.style.cursor = 'grab';
+            });
+
+            // 触摸屏幕旋转功能
+            let isTouching = false;
+            let touchStartX, touchStartY;
+            let touchInitialRotateX, touchInitialRotateY;
+
+            flowContainer.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 1) {
+                    isTouching = true;
+                    touchStartX = e.touches[0].clientX;
+                    touchStartY = e.touches[0].clientY;
+                    touchInitialRotateX = rotateX;
+                    touchInitialRotateY = rotateY;
+                }
+            });
+
+            document.addEventListener('touchmove', (e) => {
+                if (!isTouching || e.touches.length !== 1) return;
+                
+                const deltaX = e.touches[0].clientX - touchStartX;
+                const deltaY = e.touches[0].clientY - touchStartY;
+                
+                rotateY = touchInitialRotateY + deltaX * 0.5;
+                rotateX = touchInitialRotateX - deltaY * 0.5;
+                
+                applyRotation();
+            });
+
+            document.addEventListener('touchend', () => {
+                isTouching = false;
+            });
+
+            // 初始设置鼠标样式
+            flowContainer.style.cursor = 'grab';
+        });
+    </script>
+</body>
+</html>

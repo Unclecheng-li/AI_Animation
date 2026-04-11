@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>多模态融合缺失问题 - 系统架构图</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; 
+            color: #fff; 
+            overflow: hidden; 
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            /* 深蓝渐变背景 - 左下角和右上角为蓝色 */
+            background: 
+                radial-gradient(circle at bottom left, #001f54 0%, transparent 50%),
+                radial-gradient(circle at top right, #001f54 0%, transparent 30%),
+                #000000;
+            animation: gradientShift 15s ease infinite;
+        }
+        
+        /* 背景渐变动画 */
+        @keyframes gradientShift {
+            0% { background-size: 100% 100%; }
+            50% { background-size: 110% 110%; }
+            100% { background-size: 100% 100%; }
+        }
+        
+        /* 噪点纹理层 */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            opacity: 0.15;
+            mix-blend-mode: overlay;
+            animation: noiseMove 20s linear infinite;
+            pointer-events: none;
+        }
+        
+        /* 噪点纹理动画 */
+        @keyframes noiseMove {
+            0% { transform: translate(0, 0) scale(1.1); }
+            25% { transform: translate(-2%, -2%) scale(1.05); }
+            50% { transform: translate(0, 0) scale(1.1); }
+            75% { transform: translate(2%, 2%) scale(1.05); }
+            100% { transform: translate(0, 0) scale(1.1); }
+        }
+        
+        /* ==================== 缓入动画效果 ==================== */
+        
+        /* 基础缓入动画 - 从下方淡入 */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* 从左侧淡入 */
+        @keyframes fadeInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        /* 从右侧淡入 */
+        @keyframes fadeInRight {
+            from {
+                opacity: 0;
+                transform: translateX(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        /* 缩放淡入 */
+        @keyframes fadeInScale {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        
+        /* 动画基础类 */
+        .animate-in {
+            opacity: 0;
+            animation-fill-mode: forwards;
+        }
+        
+        .animate-fade-up {
+            animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+        
+        .animate-fade-left {
+            animation: fadeInLeft 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+        
+        .animate-fade-right {
+            animation: fadeInRight 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+        
+        .animate-fade-scale {
+            animation: fadeInScale 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+        
+        /* 延迟类 - 用于依次出现 */
+        .delay-1 { animation-delay: 0.1s; }
+        .delay-2 { animation-delay: 0.2s; }
+        .delay-3 { animation-delay: 0.3s; }
+        .delay-4 { animation-delay: 0.4s; }
+        .delay-5 { animation-delay: 0.5s; }
+        .delay-6 { animation-delay: 0.6s; }
+        .delay-7 { animation-delay: 0.7s; }
+        .delay-8 { animation-delay: 0.8s; }
+        .delay-9 { animation-delay: 0.9s; }
+        .delay-10 { animation-delay: 1.0s; }
+        
+        /* 列表项依次出现动画 */
+        .stagger-item {
+            opacity: 0;
+            animation: fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+        
+        /* 连接线绘制动画 */
+        @keyframes drawLine {
+            from {
+                stroke-dashoffset: 1000;
+            }
+            to {
+                stroke-dashoffset: 0;
+            }
+        }
+        
+        .connection-line {
+            stroke-dasharray: 1000;
+            stroke-dashoffset: 1000;
+            animation: drawLine 1.5s ease-out forwards;
+        }
+        
+        .connection-line.delay-1 { animation-delay: 1.4s; }
+        .connection-line.delay-2 { animation-delay: 1.6s; }
+        .connection-line.delay-3 { animation-delay: 1.8s; }
+        .connection-line.delay-4 { animation-delay: 2.0s; }
+        
+        /* 连接标签动画 */
+        .connection-label {
+            opacity: 0;
+            animation: fadeInScale 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+        
+        .connection-label.delay-1 { animation-delay: 2.2s; }
+        .connection-label.delay-2 { animation-delay: 2.4s; }
+        .connection-label.delay-3 { animation-delay: 2.6s; }
+        
+        /* 页面标题动画 */
+        .page-header {
+            opacity: 0;
+            animation: fadeInDown 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+        
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* Logo动画 */
+        .logo {
+            opacity: 0;
+            animation: fadeInLeft 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.2s forwards;
+        }
+        
+        /* Canvas粒子效果样式 */
+        #particlesCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none;
+        }
+        
+        /* 右上角logo */
+        .logo {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            color: #fff;
+            font-family: sans-serif;
+            text-align: right;
+            z-index: 100;
+        }
+        .logo svg {
+            width: 32px;
+            height: 32px;
+            margin-bottom: 4px;
+        }
+        .logo-text {
+            font-size: 12px;
+            letter-spacing: 1px;
+        }
+        
+        .container { 
+            width: 100vw; 
+            height: 100vh; 
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+        }
+        
+        /* 架构图主容器 */
+        .architecture-container {
+            position: relative;
+            width: 100%;
+            max-width: 1400px;
+            height: 90vh;
+            display: grid;
+            grid-template-columns: 1fr 1.2fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 60px 80px;
+            padding: 20px;
+            z-index: 10;
+        }
+        
+        /* 模块卡片基础样式 */
+        .module-card {
+            background: linear-gradient(145deg, rgba(20,20,30,0.9) 0%, rgba(15,15,25,0.95) 100%);
+            border: 1px solid rgba(102,126,234,0.3);
+            border-radius: 16px;
+            padding: 24px;
+            position: relative;
+            box-shadow: 
+                0 8px 32px rgba(0,0,0,0.4),
+                inset 0 1px 0 rgba(255,255,255,0.05);
+            transition: all 0.3s ease;
+        }
+        
+        .module-card:hover {
+            border-color: rgba(102,126,234,0.5);
+            box-shadow: 
+                0 12px 40px rgba(102,126,234,0.15),
+                inset 0 1px 0 rgba(255,255,255,0.1);
+        }
+        
+        /* 模块头部 */
+        .module-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid rgba(102,126,234,0.2);
+        }
+        
+        .module-icon {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        
+        .module-title {
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+        }
+        
+        /* 各模块特定颜色 */
+        .video-module .module-icon { background: rgba(249,115,22,0.2); color: #f97316; }
+        .video-module .module-title { color: #f97316; }
+        .video-module { border-color: rgba(249,115,22,0.3); }
+        .video-module:hover { border-color: rgba(249,115,22,0.5); }
+        
+        .audio-module .module-icon { background: rgba(234,179,8,0.2); color: #eab308; }
+        .audio-module .module-title { color: #eab308; }
+        .audio-module { border-color: rgba(234,179,8,0.3); }
+        .audio-module:hover { border-color: rgba(234,179,8,0.5); }
+        
+        .latent-module .module-icon { background: rgba(168,85,247,0.2); color: #a855f7; }
+        .latent-module .module-title { color: #a855f7; }
+        .latent-module { border-color: rgba(168,85,247,0.3); }
+        .latent-module:hover { border-color: rgba(168,85,247,0.5); }
+        
+        .sync-module .module-icon { background: rgba(239,68,68,0.2); color: #ef4444; }
+        .sync-module .module-title { color: #ef4444; }
+        .sync-module { border-color: rgba(239,68,68,0.3); }
+        .sync-module:hover { border-color: rgba(239,68,68,0.5); }
+        
+        /* 功能列表 */
+        .feature-list {
+            list-style: none;
+        }
+        
+        .feature-list li {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 10px 0;
+            font-size: 13px;
+            color: #a0a0b0;
+            line-height: 1.5;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+        }
+        
+        .feature-list li:last-child {
+            border-bottom: none;
+        }
+        
+        .feature-list li::before {
+            content: '•';
+            color: currentColor;
+            font-size: 20px;
+            line-height: 1;
+            margin-top: -2px;
+        }
+        
+        /* API端点样式 */
+        .api-list {
+            list-style: none;
+        }
+        
+        .api-list li {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(234,179,8,0.2);
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 8px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            color: #eab308;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .api-list li::before {
+            content: '→';
+            color: rgba(234,179,8,0.5);
+        }
+        
+        /* 数据集合样式 */
+        .collection-list {
+            list-style: none;
+        }
+        
+        .collection-item {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(168,85,247,0.2);
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 12px;
+        }
+        
+        .collection-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        
+        .collection-icon {
+            width: 16px;
+            height: 16px;
+            background: rgba(168,85,247,0.3);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+        }
+        
+        .collection-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: #a855f7;
+        }
+        
+        .collection-desc {
+            font-size: 11px;
+            color: #808090;
+            line-height: 1.4;
+        }
+        
+        .collection-code {
+            background: rgba(168,85,247,0.1);
+            border-radius: 6px;
+            padding: 8px 12px;
+            margin-top: 8px;
+            font-family: 'Consolas', monospace;
+            font-size: 10px;
+            color: #c084fc;
+        }
+        
+        /* 问题卡片样式 */
+        .problem-list {
+            list-style: none;
+        }
+        
+        .problem-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(239,68,68,0.1);
+        }
+        
+        .problem-item:last-child {
+            border-bottom: none;
+        }
+        
+        .problem-icon {
+            font-size: 20px;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(239,68,68,0.1);
+            border-radius: 8px;
+        }
+        
+        .problem-text {
+            flex: 1;
+        }
+        
+        .problem-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #ef4444;
+            margin-bottom: 2px;
+        }
+        
+        .problem-desc {
+            font-size: 11px;
+            color: #808090;
+        }
+        
+        /* 连接线容器 */
+        .connections-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        /* SVG连接线 */
+        .connection-line {
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+        }
+        
+        .connection-line.video-audio {
+            stroke: url(#gradientVideoAudio);
+        }
+        
+        .connection-line.audio-latent {
+            stroke: url(#gradientAudioLatent);
+        }
+        
+        .connection-line.latent-sync {
+            stroke: url(#gradientLatentSync);
+        }
+        
+        /* 流动动画 */
+        .flow-particle {
+            fill: #fff;
+            filter: drop-shadow(0 0 6px currentColor);
+        }
+        
+        /* 连接标签 */
+        .connection-label {
+            position: absolute;
+            background: rgba(20,20,30,0.9);
+            border: 1px solid rgba(102,126,234,0.3);
+            border-radius: 20px;
+            padding: 6px 14px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #a0a0ff;
+            z-index: 10;
+        }
+        
+        /* 标题区域 */
+        .page-header {
+            position: absolute;
+            top: 30px;
+            left: 45%;
+            transform: translateX(-50%);
+            text-align: center;
+            z-index: 100;
+        }
+        
+        .page-title {
+            font-size: 28px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 8px;
+        }
+        
+        .page-subtitle {
+            font-size: 14px;
+            color: #808090;
+            letter-spacing: 2px;
+        }
+        
+        /* 模块定位 */
+        .video-module {
+            grid-column: 1;
+            grid-row: 1;
+        }
+        
+        .audio-module {
+            grid-column: 2;
+            grid-row: 1 / 3;
+            align-self: center;
+        }
+        
+        .latent-module {
+            grid-column: 3;
+            grid-row: 1;
+        }
+        
+        .sync-module {
+            grid-column: 3;
+            grid-row: 2;
+        }
+        
+        /* 响应式 */
+        @media (max-width: 1200px) {
+            .architecture-container {
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: auto;
+                gap: 30px;
+                height: auto;
+                overflow-y: auto;
+            }
+            
+            .video-module { grid-column: 1; grid-row: 1; }
+            .audio-module { grid-column: 2; grid-row: 1; }
+            .latent-module { grid-column: 1; grid-row: 2; }
+            .sync-module { grid-column: 2; grid-row: 2; align-self: start; }
+            
+            .connections-layer { display: none; }
+        }
+        
+        @media (max-width: 768px) {
+            .architecture-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .video-module,
+            .audio-module,
+            .latent-module,
+            .sync-module {
+                grid-column: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-header">
+        <h1 class="page-title">⚠️ 多模态融合缺失</h1>
+        <p class="page-subtitle">传统 Diffusion 模型的串行架构问题</p>
+    </div>
+    
+    <!-- 右上角logo -->
+    <div class="logo">
+        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="30" r="12" fill="#60a5fa"/>
+            <path d="M35 45 Q50 70 65 45" stroke="#60a5fa" stroke-width="4" fill="none"/>
+            <path d="M30 60 Q50 90 70 60" stroke="#60a5fa" stroke-width="4" fill="none"/>
+        </svg>
+        <div class="logo-text">NetworkNoob</div>
+    </div>
+    
+    <!-- Canvas粒子效果 -->
+    <canvas id="particlesCanvas"></canvas>
+    
+    <div class="container">
+        <div class="architecture-container">
+            <!-- SVG连接线层 -->
+            <svg class="connections-layer" viewBox="0 0 1400 800" preserveAspectRatio="xMidYMid meet">
+                <defs>
+                    <linearGradient id="gradientVideoAudio" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" style="stop-color:#f97316;stop-opacity:0.8" />
+                        <stop offset="100%" style="stop-color:#eab308;stop-opacity:0.8" />
+                    </linearGradient>
+                    <linearGradient id="gradientAudioLatent" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" style="stop-color:#eab308;stop-opacity:0.8" />
+                        <stop offset="100%" style="stop-color:#a855f7;stop-opacity:0.8" />
+                    </linearGradient>
+                    <linearGradient id="gradientLatentSync" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" style="stop-color:#a855f7;stop-opacity:0.8" />
+                        <stop offset="100%" style="stop-color:#ef4444;stop-opacity:0.8" />
+                    </linearGradient>
+                    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                        <polygon points="0 0, 10 3.5, 0 7" fill="rgba(102,126,234,0.6)" />
+                    </marker>
+                </defs>
+                
+                <!-- Video → Audio -->
+                <path class="connection-line video-audio" 
+                      d="M 400 000 Q 520 00 600 175" 
+                      marker-end="url(#arrowhead)"/>
+                
+                <!-- Audio → Latent -->
+                <path class="connection-line audio-latent" 
+                      d="M 840 175 Q 880 100 1000 100" 
+                      marker-end="url(#arrowhead)"/>
+                
+                <!-- Audio → Sync -->
+                <path class="connection-line" 
+                      stroke="rgba(239,68,68,0.4)"
+                      d="M 840 625 Q 850 800 1000 800" 
+                      marker-end="url(#arrowhead)"/>
+                
+                <!-- Latent → Sync (虚线表示问题) -->
+                <path class="connection-line" 
+                      stroke="rgba(239,68,68,0.3)"
+                      stroke-dasharray="8,4"
+                      d="M 1200 410 L 1200 465" 
+                      marker-end="url(#arrowhead)"/>
+                
+                <!-- 流动粒子 -->
+                <circle class="flow-particle" r="4" fill="#f97316">
+                    <animateMotion dur="2s" repeatCount="indefinite" path="M 400 000 Q 520 00 600 175"/>
+                </circle>
+                <circle class="flow-particle" r="4" fill="#eab308">
+                    <animateMotion dur="2s" repeatCount="indefinite" path="M 840 175 Q 880 100 1000 100"/>
+                </circle>
+                <circle class="flow-particle" r="4" fill="#ef4444">
+                    <animateMotion dur="1.5s" repeatCount="indefinite" path="M 840 625 Q 850 800 1000 800"/>
+                </circle>
+            </svg>
+            
+            <!-- 连接标签 -->
+            <div class="connection-label delay-1" style="top: 13%; left: 38%;">串行生成</div>
+            <div class="connection-label delay-2" style="top: 18%; left: 62%;">独立空间</div>
+            <div class="connection-label delay-3" style="top: 80%; left: 63%; color: #ef4444; border-color: rgba(239,68,68,0.3);">对齐失败</div>
+            
+            <!-- Video Module -->
+            <div class="module-card video-module animate-in animate-fade-left delay-2">
+                <div class="module-header">
+                    <div class="module-icon">📺</div>
+                    <div class="module-title">Video Generator</div>
+                </div>
+                <ul class="feature-list">
+                    <li>纯图像生成算法</li>
+                    <li>逐帧独立渲染</li>
+                    <li>不考虑音频信息</li>
+                    <li>像素振动问题</li>
+                    <li>物体瞬移现象</li>
+                </ul>
+            </div>
+            
+            <!-- Audio Module (Center) -->
+            <div class="module-card audio-module animate-in animate-fade-scale delay-3">
+                <div class="module-header">
+                    <div class="module-icon">🔊</div>
+                    <div class="module-title">Audio Generator</div>
+                </div>
+                <ul class="api-list">
+                    <li>/generate/video/frame</li>
+                    <li>/generate/audio/waveform</li>
+                    <li>/process/sequence/render</li>
+                    <li>/sync/attempt/post-process</li>
+                    <li>/export/final/output</li>
+                </ul>
+                <div style="margin-top: 20px; padding: 16px; background: rgba(234,179,8,0.05); border-radius: 10px; border: 1px solid rgba(234,179,8,0.2);">
+                    <div style="font-size: 12px; color: #eab308; font-weight: 600; margin-bottom: 8px;">⚡ 核心问题</div>
+                    <div style="font-size: 12px; color: #a0a0b0; line-height: 1.6;">
+                        音频完全独立于视频生成，后期对齐根本不可能实现微秒级精度
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Latent Space Module -->
+            <div class="module-card latent-module animate-in animate-fade-right delay-4">
+                <div class="module-header">
+                    <div class="module-icon">🌌</div>
+                    <div class="module-title">Latent Spaces</div>
+                </div>
+                <ul class="collection-list">
+                    <li class="collection-item">
+                        <div class="collection-header">
+                            <div class="collection-icon">◆</div>
+                            <div class="collection-name">Visual Latent</div>
+                        </div>
+                        <div class="collection-desc">图像特征向量空间</div>
+                        <div class="collection-code">dimensions: 512<br>type: "visual"</div>
+                    </li>
+                    <li class="collection-item">
+                        <div class="collection-header">
+                            <div class="collection-icon">◇</div>
+                            <div class="collection-name">Audio Latent</div>
+                        </div>
+                        <div class="collection-desc">声波频谱向量空间</div>
+                        <div class="collection-code">dimensions: 256<br>type: "audio"</div>
+                    </li>
+                    <li class="collection-item">
+                        <div class="collection-header">
+                            <div class="collection-icon">✕</div>
+                            <div class="collection-name">Alignment Gap</div>
+                        </div>
+                        <div class="collection-desc">参数交换存在根本障碍</div>
+                        <div class="collection-code">status: "mismatch"<br>error: "space_disjoint"</div>
+                    </li>
+                </ul>
+            </div>
+            
+            <!-- Sync Problem Module -->
+            <div class="module-card sync-module animate-in animate-fade-up delay-5">
+                <div class="module-header">
+                    <div class="module-icon">⚠️</div>
+                    <div class="module-title">Sync Problems</div>
+                </div>
+                <ul class="problem-list">
+                    <li class="problem-item">
+                        <div class="problem-icon">👄</div>
+                        <div class="problem-text">
+                            <div class="problem-title">口型对不上</div>
+                            <div class="problem-desc">发音与嘴型完全脱节</div>
+                        </div>
+                    </li>
+                    <li class="problem-item">
+                        <div class="problem-icon">📳</div>
+                        <div class="problem-text">
+                            <div class="problem-title">像素振动</div>
+                            <div class="problem-desc">画面不稳定抖动</div>
+                        </div>
+                    </li>
+                    <li class="problem-item">
+                        <div class="problem-icon">🎭</div>
+                        <div class="problem-text">
+                            <div class="problem-title">逻辑割裂</div>
+                            <div class="problem-desc">音画像是强行拼接</div>
+                        </div>
+                    </li>
+                    <li class="problem-item">
+                        <div class="problem-icon">⏱️</div>
+                        <div class="problem-text">
+                            <div class="problem-title">微秒级失败</div>
+                            <div class="problem-desc">无法达到同步精度</div>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 粒子效果实现
+        const canvas = document.getElementById('particlesCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 设置canvas尺寸
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        
+        // 创建粒子数组
+        const particles = [];
+        const particleCount = 100;
+        
+        // 粒子类
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+            
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 2 + 0.5;
+                this.speedX = (Math.random() - 0.5) * 0.5;
+                this.speedY = (Math.random() - 0.5) * 0.5;
+                this.opacity = Math.random() * 0.5 + 0.1;
+                this.color = `rgba(96, 165, 250, ${this.opacity})`;
+            }
+            
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                
+                // 边界检测
+                if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
+                    this.reset();
+                }
+            }
+            
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+        
+        // 初始化粒子
+        for (let i = 0; i < particleCount; i++) {
+            particles.push(new Particle());
+        }
+        
+        // 动画循环
+        function animateParticles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            particles.forEach(particle => {
+                particle.update();
+                particle.draw();
+            });
+            
+            requestAnimationFrame(animateParticles);
+        }
+        
+        // 启动粒子动画
+        animateParticles();
+        
+        // 列表项依次出现动画
+        function animateListItems() {
+            // Video模块列表项 (在模块出现后)
+            const videoItems = document.querySelectorAll('.video-module .feature-list li');
+            videoItems.forEach((item, index) => {
+                item.classList.add('stagger-item');
+                item.style.animationDelay = `${0.3 + index * 0.08}s`;
+            });
+            
+            // Audio模块列表项
+            const audioItems = document.querySelectorAll('.audio-module .api-list li');
+            audioItems.forEach((item, index) => {
+                item.classList.add('stagger-item');
+                item.style.animationDelay = `${0.4 + index * 0.06}s`;
+            });
+            
+            // Latent模块列表项
+            const latentItems = document.querySelectorAll('.latent-module .collection-item');
+            latentItems.forEach((item, index) => {
+                item.classList.add('stagger-item');
+                item.style.animationDelay = `${0.5 + index * 0.1}s`;
+            });
+            
+            // Sync模块列表项
+            const syncItems = document.querySelectorAll('.sync-module .problem-item');
+            syncItems.forEach((item, index) => {
+                item.classList.add('stagger-item');
+                item.style.animationDelay = `${0.6 + index * 0.08}s`;
+            });
+        }
+        
+        // 页面加载完成后执行列表动画
+        window.addEventListener('load', animateListItems);
+        
+        // 添加鼠标悬停效果
+        document.querySelectorAll('.module-card').forEach(card => {
+            card.addEventListener('mouseenter', function() {
+                this.style.transform = 'translateY(-4px)';
+            });
+            card.addEventListener('mouseleave', function() {
+                this.style.transform = 'translateY(0)';
+            });
+        });
+        
+        // 添加列表项悬停效果
+        document.querySelectorAll('.feature-list li, .api-list li, .collection-item, .problem-item').forEach(item => {
+            item.addEventListener('mouseenter', function() {
+                this.style.backgroundColor = 'rgba(102,126,234,0.05)';
+            });
+            item.addEventListener('mouseleave', function() {
+                this.style.backgroundColor = '';
+            });
+        });
+    </script>
+</body>
+</html>

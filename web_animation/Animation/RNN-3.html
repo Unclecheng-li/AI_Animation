@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RNN 隐藏状态与循环机制</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+            background: 
+                radial-gradient(circle at 20% 80%, #0d2818 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, #1a3d25 0%, transparent 40%),
+                #0a0f0d;
+            min-height: 100vh;
+            overflow: hidden;
+            color: #fff;
+            position: relative;
+        }
+
+        /* 噪点效果 */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            opacity: 0.08;
+            mix-blend-mode: overlay;
+            animation: noiseMove 20s linear infinite;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        @keyframes noiseMove {
+            0% { transform: translate(0, 0) scale(1.1); }
+            25% { transform: translate(-2%, -2%) scale(1.05); }
+            50% { transform: translate(0, 0) scale(1.1); }
+            75% { transform: translate(2%, 2%) scale(1.05); }
+            100% { transform: translate(0, 0) scale(1.1); }
+        }
+
+        /* 粒子画布 */
+        #particlesCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        .container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 40px 60px;
+            position: relative;
+            z-index: 10;
+        }
+
+        /* 页面标题 */
+        .page-header {
+            text-align: center;
+            margin-bottom: 30px;
+            opacity: 0;
+            animation: fadeInDown 0.8s ease forwards;
+            animation-delay: 0s;
+        }
+
+        .page-title {
+            font-size: 42px;
+            font-weight: 700;
+            color: #8b5cf6;
+            margin-bottom: 8px;
+            text-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+        }
+
+        .page-subtitle {
+            font-size: 18px;
+            color: #6b8a6b;
+            font-weight: 400;
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* 通用动画元素 */
+        .animate-item {
+            opacity: 0;
+            animation: fadeInUp 0.5s ease forwards;
+        }
+
+        /* ========== 主架构图容器 ========== */
+        .architecture-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 25px;
+            width: 100%;
+            max-width: 1600px;
+            position: relative;
+            opacity: 0;
+            animation: fadeIn 1s ease forwards;
+            animation-delay: 0.5s;
+        }
+
+        /* ========== 输入模块 ========== */
+        .input-module {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            opacity: 0;
+            animation: fadeInUp 0.6s ease forwards;
+            animation-delay: 1.0s;
+        }
+
+        .input-icon {
+            width: 56px;
+            height: 56px;
+            border: 2px solid rgba(96, 165, 250, 0.5);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(96, 165, 250, 0.1);
+        }
+
+        .input-icon svg {
+            width: 28px;
+            height: 28px;
+            color: #60a5fa;
+        }
+
+        .input-label {
+            font-size: 13px;
+            color: #60a5fa;
+            text-align: center;
+            line-height: 1.4;
+        }
+
+        /* 输入词展示 */
+        .input-words {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .input-word {
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .input-word.word1 {
+            background: rgba(96, 165, 250, 0.2);
+            color: #60a5fa;
+            border: 1px solid rgba(96, 165, 250, 0.3);
+        }
+
+        .input-word.word2 {
+            background: rgba(52, 211, 153, 0.2);
+            color: #34d399;
+            border: 1px solid rgba(52, 211, 153, 0.3);
+        }
+
+        .input-word.word3 {
+            background: rgba(254, 202, 87, 0.2);
+            color: #feca57;
+            border: 1px solid rgba(254, 202, 87, 0.3);
+        }
+
+        /* ========== 连接线样式 ========== */
+        .connector {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            opacity: 0;
+            animation: fadeIn 0.5s ease forwards;
+        }
+
+        .connector:nth-of-type(2) { animation-delay: 1.5s; }
+        .connector:nth-of-type(4) { animation-delay: 3.0s; }
+
+        .connector-line {
+            width: 100px;
+            height: 2px;
+            background: repeating-linear-gradient(
+                90deg,
+                rgba(107, 138, 107, 0.6) 0px,
+                rgba(107, 138, 107, 0.6) 6px,
+                transparent 6px,
+                transparent 10px
+            );
+            position: relative;
+        }
+
+        .connector-line::after {
+            content: '';
+            position: absolute;
+            right: -6px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border-left: 8px solid rgba(107, 138, 107, 0.6);
+            border-top: 5px solid transparent;
+            border-bottom: 5px solid transparent;
+        }
+
+        .connector-label {
+            font-size: 11px;
+            color: #6b8a6b;
+            margin-top: 8px;
+            white-space: nowrap;
+        }
+
+        /* ========== 核心处理模块 ========== */
+        .core-module {
+            width: 150px;
+            height: 150px;
+            border: 2px solid rgba(139, 92, 246, 0.5);
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(139, 92, 246, 0.08);
+            position: relative;
+            opacity: 0;
+            animation: fadeInUp 0.6s ease forwards;
+            animation-delay: 2.0s;
+        }
+
+        .core-module::before {
+            content: '';
+            position: absolute;
+            inset: 8px;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 50%;
+        }
+
+        .core-icon {
+            width: 44px;
+            height: 44px;
+            margin-bottom: 8px;
+        }
+
+        .core-icon svg {
+            width: 100%;
+            height: 100%;
+            color: #8b5cf6;
+        }
+
+        .core-label {
+            font-size: 12px;
+            color: #8b5cf6;
+            font-weight: 600;
+            text-align: center;
+            line-height: 1.3;
+        }
+
+        /* ========== 分组容器样式 ========== */
+        .layer-group {
+            border: 1.5px dashed rgba(107, 138, 107, 0.4);
+            border-radius: 16px;
+            padding: 50px 35px 35px;
+            position: relative;
+            margin: 0 20px;
+            opacity: 0;
+            animation: fadeIn 0.8s ease forwards;
+        }
+
+        .layer-group.hidden-state-layer {
+            animation-delay: 3.5s;
+        }
+
+        .layer-header {
+            position: absolute;
+            top: -12px;
+            left: 20px;
+            background: #0a0f0d;
+            padding: 0 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .layer-icon {
+            width: 18px;
+            height: 18px;
+            color: #8b5cf6;
+        }
+
+        .layer-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #8b5cf6;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .layer-content {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* ========== 隐藏状态卡片 ========== */
+        .state-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1.5px solid rgba(139, 92, 246, 0.3);
+            border-radius: 12px;
+            padding: 20px 24px;
+            min-width: 180px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .state-card:hover {
+            border-color: rgba(139, 92, 246, 0.6);
+            background: rgba(139, 92, 246, 0.08);
+        }
+
+        .state-card-icon {
+            width: 32px;
+            height: 32px;
+            margin: 0 auto 10px;
+            color: #8b5cf6;
+        }
+
+        .state-card-icon svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .state-card-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #8b5cf6;
+            margin-bottom: 6px;
+        }
+
+        .state-card-desc {
+            font-size: 12px;
+            color: #aaa;
+            margin-bottom: 10px;
+        }
+
+        .state-memory {
+            font-size: 13px;
+            color: #feca57;
+            font-weight: 600;
+            padding: 6px 12px;
+            background: rgba(254, 202, 87, 0.1);
+            border-radius: 6px;
+            border: 1px solid rgba(254, 202, 87, 0.2);
+        }
+
+        /* ========== 处理流程可视化 ========== */
+        .process-flow-viz {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(139, 92, 246, 0.2);
+        }
+
+        .process-flow-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 12px;
+        }
+
+        .flow-icon {
+            width: 20px;
+            height: 20px;
+            color: #34d399;
+            flex-shrink: 0;
+        }
+
+        .flow-icon svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .flow-text {
+            color: #ddd;
+            line-height: 1.4;
+        }
+
+        .flow-highlight {
+            color: #00d2d3;
+            font-weight: 600;
+        }
+
+        /* ========== 循环机制说明 ========== */
+        .loop-section {
+            margin-top: 40px;
+            display: flex;
+            gap: 30px;
+            max-width: 1200px;
+            width: 100%;
+            justify-content: center;
+        }
+
+        .loop-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(107, 138, 107, 0.2);
+            border-radius: 12px;
+            padding: 28px 35px;
+            flex: 1;
+            max-width: 400px;
+            opacity: 0;
+            animation: fadeInUp 0.6s ease forwards;
+        }
+
+        .loop-card:nth-child(1) { animation-delay: 5.5s; }
+        .loop-card:nth-child(2) { animation-delay: 6.0s; }
+
+        .loop-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .loop-icon-box {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .loop-icon-box svg {
+            width: 22px;
+            height: 22px;
+            color: #8b5cf6;
+        }
+
+        .loop-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #8b5cf6;
+        }
+
+        .loop-content {
+            font-size: 15px;
+            color: #aaa;
+            line-height: 1.8;
+        }
+
+        .loop-highlight {
+            color: #feca57;
+            font-weight: 600;
+            background: rgba(254, 202, 87, 0.1);
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        .loop-cyan {
+            color: #00d2d3;
+            font-weight: 600;
+        }
+
+        .loop-green {
+            color: #34d399;
+            font-weight: 600;
+        }
+
+        /* ========== 循环箭头标识 ========== */
+        .loop-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 30px;
+            gap: 15px;
+            opacity: 0;
+            animation: fadeIn 0.6s ease forwards;
+            animation-delay: 6.5s;
+        }
+
+        .loop-text {
+            font-size: 16px;
+            color: #6b8a6b;
+            font-weight: 500;
+        }
+
+        .loop-arrow-icon {
+            width: 44px;
+            height: 44px;
+            color: #8b5cf6;
+        }
+
+        .loop-arrow-icon svg {
+            width: 100%;
+            height: 100%;
+            animation: rotate 4s linear infinite;
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* ========== 对比标签 ========== */
+        .mechanism-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+
+        .mechanism-badge.input {
+            background: rgba(96, 165, 250, 0.15);
+            color: #60a5fa;
+            border: 1px solid rgba(96, 165, 250, 0.3);
+        }
+
+        .mechanism-badge.fusion {
+            background: rgba(139, 92, 246, 0.15);
+            color: #8b5cf6;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+        }
+
+        .mechanism-badge.update {
+            background: rgba(52, 211, 153, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(52, 211, 153, 0.3);
+        }
+
+        /* ========== 响应式设计 ========== */
+        @media (max-width: 1400px) {
+            .container {
+                padding: 30px 40px;
+                overflow-y: auto;
+            }
+
+            .architecture-diagram {
+                flex-wrap: wrap;
+                gap: 20px;
+                justify-content: center;
+            }
+
+            .layer-group {
+                margin: 10px;
+            }
+
+            .connector {
+                transform: rotate(90deg);
+                margin: 10px 0;
+            }
+
+            .connector-label {
+                transform: rotate(-90deg);
+                margin-top: 0;
+                margin-left: 8px;
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .page-title {
+                font-size: 32px;
+            }
+
+            .loop-section {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .loop-card {
+                max-width: 100%;
+                width: 100%;
+            }
+
+            .layer-group {
+                padding: 45px 25px 25px;
+            }
+
+            .state-card {
+                min-width: 160px;
+                padding: 16px 20px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+
+            .page-title {
+                font-size: 26px;
+            }
+
+            .page-subtitle {
+                font-size: 14px;
+            }
+
+            .core-module {
+                width: 130px;
+                height: 130px;
+            }
+
+            .layer-content {
+                gap: 15px;
+            }
+
+            .architecture-diagram {
+                flex-direction: column;
+            }
+
+            .connector {
+                transform: rotate(90deg);
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="particlesCanvas"></canvas>
+
+    <div class="container">
+        <!-- 页面标题 -->
+        <div class="page-header">
+            <h1 class="page-title">隐藏状态（Hidden State）</h1>
+            <p class="page-subtitle">RNN 的记忆核心与循环机制</p>
+        </div>
+
+        <!-- 主架构图 -->
+        <div class="architecture-diagram">
+            <!-- 输入模块 -->
+            <div class="input-module">
+                <div class="input-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
+                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
+                    </svg>
+                </div>
+                <div class="input-label">Input<br>Sequence</div>
+                <div class="input-words">
+                    <div class="input-word word1 animate-item" style="animation-delay: 1.3s;">"我"</div>
+                    <div class="input-word word2 animate-item" style="animation-delay: 1.5s;">"吃"</div>
+                    <div class="input-word word3 animate-item" style="animation-delay: 1.7s;">"苹果"</div>
+                </div>
+            </div>
+
+            <!-- 连接线1 -->
+            <div class="connector">
+                <div class="connector-line"></div>
+                <span class="connector-label">时序输入</span>
+            </div>
+
+            <!-- 核心处理模块 -->
+            <div class="core-module">
+                <div class="core-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                    </svg>
+                </div>
+                <div class="core-label">Hidden State<br>Memory<br>Core</div>
+            </div>
+
+            <!-- 连接线2 -->
+            <div class="connector">
+                <div class="connector-line"></div>
+                <span class="connector-label">状态传递</span>
+            </div>
+
+            <!-- 隐藏状态层 -->
+            <div class="layer-group hidden-state-layer">
+                <div class="layer-header">
+                    <svg class="layer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                        <path d="M2 17l10 5 10-5"/>
+                        <path d="M2 12l10 5 10-5"/>
+                    </svg>
+                    <span class="layer-title">Hidden State Layer</span>
+                </div>
+                <div class="layer-content">
+                    <div class="state-card">
+                        <div class="state-card-icon animate-item" style="animation-delay: 3.8s;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M12 6v6l4 2"/>
+                            </svg>
+                        </div>
+                        <div class="state-card-title animate-item" style="animation-delay: 4.0s;">h₁ 第一步</div>
+                        <div class="state-card-desc animate-item" style="animation-delay: 4.2s;">接收 "我"</div>
+                        <div class="state-memory animate-item" style="animation-delay: 4.4s;">记忆: "我"</div>
+                        <span class="mechanism-badge input animate-item" style="animation-delay: 4.6s;">信息输入</span>
+                    </div>
+
+                    <div class="state-card">
+                        <div class="state-card-icon animate-item" style="animation-delay: 4.8s;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M12 4v16m-8-8h16"/>
+                            </svg>
+                        </div>
+                        <div class="state-card-title animate-item" style="animation-delay: 5.0s;">h₂ 第二步</div>
+                        <div class="state-card-desc animate-item" style="animation-delay: 5.2s;">接收 "吃"</div>
+                        <div class="state-memory animate-item" style="animation-delay: 5.4s;">记忆: "我吃"</div>
+                        <span class="mechanism-badge fusion animate-item" style="animation-delay: 5.6s;">融合更新</span>
+                    </div>
+
+                    <div class="state-card">
+                        <div class="state-card-icon animate-item" style="animation-delay: 5.8s;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                            </svg>
+                        </div>
+                        <div class="state-card-title animate-item" style="animation-delay: 6.0s;">h₃ 第三步</div>
+                        <div class="state-card-desc animate-item" style="animation-delay: 6.2s;">接收 "苹果"</div>
+                        <div class="state-memory animate-item" style="animation-delay: 6.4s;">记忆: "我吃苹果"</div>
+                        <span class="mechanism-badge update animate-item" style="animation-delay: 6.6s;">持续传递</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 循环标识 -->
+        <div class="loop-indicator">
+            <span class="loop-text">Hidden State Chain</span>
+            <div class="loop-arrow-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+            </div>
+            <span class="loop-text">Memory Flow</span>
+        </div>
+    </div>
+
+    <script>
+        // 粒子效果
+        const canvas = document.getElementById('particlesCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        const particles = [];
+        const particleCount = 80;
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 1.5 + 0.5;
+                this.speedX = (Math.random() - 0.5) * 0.3;
+                this.speedY = (Math.random() - 0.5) * 0.3;
+                this.opacity = Math.random() * 0.4 + 0.1;
+                this.color = `rgba(139, 92, 246, ${this.opacity})`;
+            }
+
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
+                    this.reset();
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        for (let i = 0; i < particleCount; i++) {
+            particles.push(new Particle());
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(particle => {
+                particle.update();
+                particle.draw();
+            });
+            requestAnimationFrame(animateParticles);
+        }
+
+        animateParticles();
+    </script>
+</body>
+</html>

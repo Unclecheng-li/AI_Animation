@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Windows 安全补丁推送演示</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0078d4 0%, #00a4ef 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        .windows-background {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+            opacity: 0.3;
+        }
+
+        .notification-container {
+            position: relative;
+            z-index: 10;
+        }
+
+        .notification-toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 8px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 16px;
+            max-width: 400px;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .notification-toast:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .notification-toast .icon {
+            background: #0078d4;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            color: white;
+            font-size: 20px;
+        }
+
+        .notification-toast .content h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .notification-toast .content p {
+            font-size: 12px;
+            color: #666;
+            line-height: 1.4;
+        }
+
+        .notification-toast .time {
+            font-size: 10px;
+            color: #999;
+            margin-top: 2px;
+        }
+
+        .update-dialog {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            width: 95%;
+            min-height: 600px;
+            overflow: hidden;
+            display: none;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .update-dialog.active {
+            display: block;
+        }
+
+        .dialog-header {
+            background: #0078d4;
+            color: white;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .dialog-header h3 {
+            font-size: 18px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .dialog-header .close-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .dialog-header .close-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .dialog-content {
+            padding: 24px;
+        }
+
+        .update-info {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .update-info .shield-icon {
+            font-size: 48px;
+            color: #0078d4;
+            margin-bottom: 16px;
+            animation: pulse 2s infinite;
+        }
+
+        .update-info h2 {
+            font-size: 24px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .update-info p {
+            color: #666;
+            line-height: 1.5;
+        }
+
+        .update-info .log4j-banner {
+            background: #ff4757;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 12px;
+            display: inline-block;
+            animation: pulse 1.5s infinite;
+        }
+
+        .update-progress {
+            margin: 24px 0;
+        }
+
+        .progress-bar {
+            background: #e0e0e0;
+            border-radius: 20px;
+            height: 8px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+
+        .progress-fill {
+            background: linear-gradient(90deg, #0078d4, #00a4ef);
+            height: 100%;
+            width: 0%;
+            border-radius: 20px;
+            transition: width 0.3s ease;
+            position: relative;
+        }
+
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            animation: shimmer 1.5s infinite;
+        }
+
+        .progress-text {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .update-details {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 24px 0;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .update-item {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .update-item:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .update-item .severity {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 12px;
+            margin-right: 12px;
+            white-space: nowrap;
+            margin-top: 2px;
+        }
+
+        .severity.critical {
+            background: #ff4757;
+            color: white;
+        }
+
+        .severity.important {
+            background: #ffa502;
+            color: white;
+        }
+
+        .severity.modified {
+            background: #2ed573;
+            color: white;
+        }
+
+        .update-item .details h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .update-item .details p {
+            font-size: 12px;
+            color: #666;
+            line-height: 1.4;
+        }
+
+        .dialog-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #0078d4;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #005a9e;
+        }
+
+        .btn-secondary {
+            background: #e0e0e0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #d0d0d0;
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .restart-notice {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 6px;
+            padding: 16px;
+            margin-top: 16px;
+            display: none;
+        }
+
+        .restart-notice.active {
+            display: block;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        .restart-notice h4 {
+            color: #856404;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .restart-notice p {
+            color: #856404;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .system-tray {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 5;
+        }
+
+        .tray-icon {
+            width: 48px;
+            height: 48px;
+            background: #0078d4;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .tray-icon:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+            background: #005a9e;
+        }
+
+        .tray-icon:active {
+            transform: scale(0.95);
+        }
+
+        .tray-icon .tooltip {
+            position: absolute;
+            bottom: 120%;
+            right: 0;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s;
+            z-index: 100;
+        }
+
+        .tray-icon:hover .tooltip {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(-4px);
+        }
+
+        .tray-icon .tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            right: 16px;
+            border-width: 6px;
+            border-style: solid;
+            border-color: rgba(0, 0, 0, 0.8) transparent transparent transparent;
+        }
+
+        .tray-icon .badge {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            background: #ff4757;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+        }
+
+        .stage-indicator {
+            text-align: center;
+            margin-top: 16px;
+        }
+
+        .stage-dots {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .stage-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #e0e0e0;
+            transition: all 0.3s;
+        }
+
+        .stage-dot.active {
+            background: #0078d4;
+            transform: scale(1.2);
+        }
+
+        .stage-dot.completed {
+            background: #2ed573;
+        }
+
+        .stage-text {
+            font-size: 14px;
+            color: #666;
+            font-weight: 500;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        /* 桌面图标样式 */
+        .desktop-icons {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1;
+        }
+
+        .desktop-icon {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 30px;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            max-width: 100px;
+        }
+
+        .desktop-icon:hover {
+            transform: translateY(-2px);
+        }
+
+        .desktop-icon .icon-wrapper {
+            width: 64px;
+            height: 64px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            color: #0078d4;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            margin-bottom: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .desktop-icon:hover .icon-wrapper {
+            background: rgba(255, 255, 255, 1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .desktop-icon .icon-label {
+            font-size: 12px;
+            color: white;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 2px 8px;
+            border-radius: 4px;
+            backdrop-filter: blur(5px);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+        }
+
+        /* 特殊图标颜色 */
+        .desktop-icon:nth-child(2) .icon-wrapper,
+        .desktop-icon:nth-child(3) .icon-wrapper,
+        .desktop-icon:nth-child(4) .icon-wrapper {
+            color: #2ed573;
+        }
+
+        .desktop-icon:nth-child(5) .icon-wrapper {
+            color: #ff6b6b;
+        }
+
+        .desktop-icon:nth-child(6) .icon-wrapper {
+            color: #ff9ff3;
+        }
+
+        .desktop-icon:nth-child(7) .icon-wrapper {
+            color: #54a0ff;
+        }
+
+        @media (max-width: 768px) {
+            .update-dialog {
+                width: 95%;
+                margin: 0 10px;
+            }
+            
+            .dialog-actions {
+                flex-direction: column;
+            }
+            
+            .dialog-actions .btn {
+                width: 100%;
+            }
+            
+            .desktop-icons {
+                left: 10px;
+            }
+            
+            .desktop-icon .icon-wrapper {
+                width: 56px;
+                height: 56px;
+                font-size: 28px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="windows-background"></div>
+    
+    <!-- Windows 桌面图标 -->
+    <div class="desktop-icons">
+        <div class="desktop-icon">
+            <div class="icon-wrapper">
+                <i class="fas fa-desktop"></i>
+            </div>
+            <div class="icon-label">此电脑</div>
+        </div>
+        <div class="desktop-icon">
+            <div class="icon-wrapper">
+                <i class="fas fa-folder"></i>
+            </div>
+            <div class="icon-label">文档</div>
+        </div>
+        <div class="desktop-icon">
+            <div class="icon-wrapper">
+                <i class="fas fa-folder"></i>
+            </div>
+            <div class="icon-label">下载</div>
+        </div>
+        <div class="desktop-icon">
+            <div class="icon-wrapper">
+                <i class="fas fa-folder"></i>
+            </div>
+            <div class="icon-label">图片</div>
+        </div>
+        <div class="desktop-icon">
+            <div class="icon-wrapper">
+                <i class="fa fa-envelope-open"></i>
+            </div>
+            <div class="icon-label">BaiMail</div>
+        </div>
+        <div class="desktop-icon">
+            <div class="icon-wrapper">
+                <i class="fas fa-file-alt"></i>
+            </div>
+            <div class="icon-label">Log4j2漏洞分析.docx</div>
+        </div>
+        <div class="desktop-icon">
+            <div class="icon-wrapper">
+                <i class="fas fa-file-code"></i>
+            </div>
+            <div class="icon-label">安全补丁.java</div>
+        </div>
+    </div>
+    
+    <div class="notification-container">
+        <!-- 通知弹窗 -->
+        <div class="notification-toast" id="notificationToast">
+            <div class="icon">
+                <i class="fas fa-shield-alt"></i>
+            </div>
+            <div class="content">
+                <h4>重要安全更新可用</h4>
+                <p>发现 7 个安全补丁，建议立即安装以保护您的设备</p>
+                <div class="time" id="notificationTime"></div>
+            </div>
+        </div>
+
+        <!-- 更新对话框 -->
+        <div class="update-dialog" id="updateDialog">
+            <div class="dialog-header">
+                <h3>
+                    <i class="fas fa-windows"></i>
+                    Windows 安全中心
+                </h3>
+                <button class="close-btn" id="closeBtn">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="dialog-content">
+                <div class="update-info">
+                    <div class="shield-icon">
+                        <i class="fas fa-shield-alt"></i>
+                    </div>
+                    <h2>安全更新已准备就绪</h2>
+                    <p>我们发现了重要的安全更新，这些更新可以帮助保护您的设备免受最新威胁。</p>
+                    <div class="log4j-banner">
+                        <i class="fas fa-exclamation-triangle"></i> Log4j2 紧急安全补丁
+                    </div>
+                </div>
+
+                <div class="stage-indicator">
+                    <div class="stage-dots">
+                        <div class="stage-dot active" data-stage="1"></div>
+                        <div class="stage-dot" data-stage="2"></div>
+                        <div class="stage-dot" data-stage="3"></div>
+                        <div class="stage-dot" data-stage="4"></div>
+                    </div>
+                    <div class="stage-text" id="stageText">准备更新...</div>
+                </div>
+
+                <div class="update-progress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="progress-text">
+                        <span id="progressStatus">准备下载更新</span>
+                        <span id="progressPercentage">0%</span>
+                    </div>
+                </div>
+
+                <div class="update-details">
+                    <div class="update-item">
+                        <span class="severity critical">严重</span>
+                        <div class="details">
+                            <h4>Apache Log4j2 远程代码执行漏洞 (CVE-2021-44228)</h4>
+                            <p>修复Apache Log4j2中的远程代码执行漏洞，该漏洞允许攻击者通过构造特殊的JNDI请求在目标服务器上执行任意代码。这是一个被广泛利用的严重安全漏洞，影响众多Java应用。</p>
+                        </div>
+                    </div>
+                    <div class="update-item">
+                        <span class="severity critical">严重</span>
+                        <div class="details">
+                            <h4>Apache Log4j2 拒绝服务漏洞 (CVE-2021-45046)</h4>
+                            <p>解决Apache Log4j2中的拒绝服务漏洞，该漏洞可能导致服务器资源耗尽，影响系统可用性。</p>
+                        </div>
+                    </div>
+                    <div class="update-item">
+                        <span class="severity critical">严重</span>
+                        <div class="details">
+                            <h4>Apache Log4j2 信息泄露漏洞 (CVE-2021-45105)</h4>
+                            <p>修复Apache Log4j2中的信息泄露漏洞，防止攻击者获取敏感系统信息。</p>
+                        </div>
+                    </div>
+                    <div class="update-item">
+                        <span class="severity important">重要</span>
+                        <div class="details">
+                            <h4>Windows 内核远程代码执行漏洞 (CVE-2025-3245)</h4>
+                            <p>修复Windows内核中的关键漏洞，该漏洞可能允许攻击者在未经授权的情况下远程执行代码。</p>
+                        </div>
+                    </div>
+                    <div class="update-item">
+                        <span class="severity important">重要</span>
+                        <div class="details">
+                            <h4>Microsoft Edge 浏览器堆缓冲区溢出 (CVE-2025-3128)</h4>
+                            <p>解决Microsoft Edge浏览器中的堆缓冲区溢出漏洞，防止潜在的代码执行攻击。</p>
+                        </div>
+                    </div>
+                    <div class="update-item">
+                        <span class="severity modified">一般</span>
+                        <div class="details">
+                            <h4>Windows 蓝牙服务信息泄露漏洞 (CVE-2025-2765)</h4>
+                            <p>解决Windows蓝牙服务中的信息泄露问题，保护用户隐私数据。</p>
+                        </div>
+                    </div>
+                    <div class="update-item">
+                        <span class="severity modified">一般</span>
+                        <div class="details">
+                            <h4>Windows 存储服务拒绝服务漏洞 (CVE-2025-2642)</h4>
+                            <p>修复Windows存储服务中的拒绝服务漏洞，提高系统稳定性。</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="restart-notice" id="restartNotice">
+                    <h4>
+                        <i class="fas fa-info-circle"></i>
+                        需要重启
+                    </h4>
+                    <p>安装完成后，您的设备需要重启才能应用这些更新。您可以选择立即重启或稍后重启。</p>
+                </div>
+
+                <div class="dialog-actions">
+                    <button class="btn btn-secondary" id="scheduleBtn">下次一定</button>
+                    <button class="btn btn-primary" id="installBtn">立即安装</button>
+                    <button class="btn btn-primary" id="restartBtn" style="display: none;">立即重启</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 系统托盘 -->
+    <div class="system-tray">
+        <div class="tray-icon" id="trayIcon">
+            <i class="fas fa-shield-alt"></i>
+            <div class="badge">7</div>
+            <div class="tooltip">Windows 安全中心 - 7 个待安装更新</div>
+        </div>
+    </div>
+
+    <script>
+        class WindowsUpdateDemo {
+            constructor() {
+                this.currentStage = 0;
+                this.isInstalling = false;
+                this.isComplete = false;
+                this.progressInterval = null;
+                
+                this.stages = [
+                    { name: '准备更新', duration: 2000 },
+                    { name: '下载更新', duration: 8000 },
+                    { name: '安装更新', duration: 10000 },
+                    { name: '完成', duration: 3000 }
+                ];
+
+                this.init();
+            }
+
+            getCurrentTime() {
+                const now = new Date();
+                return now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+            }
+
+            init() {
+                this.bindEvents();
+                this.showNotification();
+            }
+
+            bindEvents() {
+                // 通知点击事件
+                document.getElementById('notificationToast').addEventListener('click', () => {
+                    this.showUpdateDialog();
+                });
+
+                // 关闭按钮事件
+                document.getElementById('closeBtn').addEventListener('click', () => {
+                    this.hideUpdateDialog();
+                });
+
+                // 稍后提醒按钮事件
+                document.getElementById('scheduleBtn').addEventListener('click', () => {
+                    this.scheduleLater();
+                });
+
+                // 立即安装按钮事件
+                document.getElementById('installBtn').addEventListener('click', () => {
+                    this.startInstallation();
+                });
+
+                // 立即重启按钮事件
+                document.getElementById('restartBtn').addEventListener('click', () => {
+                    this.restartSystem();
+                });
+
+                // 系统托盘点击事件
+                document.getElementById('trayIcon').addEventListener('click', () => {
+                    this.showUpdateDialog();
+                });
+            }
+
+            showNotification() {
+                // 延迟显示通知，模拟系统行为
+                setTimeout(() => {
+                    const toast = document.getElementById('notificationToast');
+                    const timeElement = document.getElementById('notificationTime');
+                    timeElement.textContent = this.getCurrentTime();
+                    toast.style.display = 'flex';
+                    
+                    // 3秒后自动隐藏通知
+                    setTimeout(() => {
+                        if (!this.isComplete) {
+                            toast.style.animation = 'slideIn 0.5s ease-out reverse';
+                            setTimeout(() => {
+                                toast.style.display = 'none';
+                                toast.style.animation = '';
+                            }, 500);
+                        }
+                    }, 5000);
+                }, 1000);
+            }
+
+            showUpdateDialog() {
+                document.getElementById('updateDialog').classList.add('active');
+                document.getElementById('notificationToast').style.display = 'none';
+            }
+
+            hideUpdateDialog() {
+                document.getElementById('updateDialog').classList.remove('active');
+            }
+
+            scheduleLater() {
+                const dialog = document.getElementById('updateDialog');
+                const toast = document.getElementById('notificationToast');
+                
+                dialog.style.animation = 'fadeIn 0.3s ease-out reverse';
+                setTimeout(() => {
+                    dialog.classList.remove('active');
+                    dialog.style.animation = '';
+                    
+                    // 重新显示通知
+                    if (!this.isComplete) {
+                        toast.style.display = 'flex';
+                        toast.style.animation = 'slideIn 0.5s ease-out';
+                    }
+                }, 300);
+
+                // 模拟稍后提醒
+                setTimeout(() => {
+                    if (!this.isComplete) {
+                        this.showNotification();
+                    }
+                }, 30000); // 30秒后再次提醒
+            }
+
+            startInstallation() {
+                if (this.isInstalling) return;
+                
+                this.isInstalling = true;
+                const installBtn = document.getElementById('installBtn');
+                const scheduleBtn = document.getElementById('scheduleBtn');
+                
+                installBtn.disabled = true;
+                installBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 安装中...';
+                scheduleBtn.disabled = true;
+                
+                this.processNextStage();
+            }
+
+            processNextStage() {
+                if (this.currentStage >= this.stages.length) {
+                    this.completeInstallation();
+                    return;
+                }
+
+                const stage = this.stages[this.currentStage];
+                this.updateStageIndicator(this.currentStage + 1);
+                this.updateProgress(0, stage.name);
+
+                let progress = 0;
+                const increment = 100 / (stage.duration / 100);
+                
+                // 添加阶段特定的详细信息
+                const stageDetails = [
+                    '正在检查系统兼容性...',
+                    '正在下载Log4j2补丁文件...',
+                    '正在安装安全更新...',
+                    '正在验证更新安装...'
+                ];
+                
+                let detailIndex = 0;
+                const detailInterval = setInterval(() => {
+                    if (this.currentStage < stageDetails.length) {
+                        this.updateProgress(progress, stageDetails[detailIndex]);
+                        detailIndex = (detailIndex + 1) % stageDetails.length;
+                    }
+                }, 2000);
+                
+                this.progressInterval = setInterval(() => {
+                    progress += increment;
+                    if (progress >= 100) {
+                        progress = 100;
+                        clearInterval(this.progressInterval);
+                        clearInterval(detailInterval);
+                        this.currentStage++;
+                        
+                        // 标记当前阶段为完成
+                        this.markStageComplete(this.currentStage);
+                        
+                        // 短暂延迟后进入下一阶段
+                        setTimeout(() => {
+                            this.processNextStage();
+                        }, 1000);
+                    }
+                    
+                    this.updateProgress(progress, stage.name);
+                }, 100);
+            }
+
+            updateStageIndicator(currentStage) {
+                const dots = document.querySelectorAll('.stage-dot');
+                const stageText = document.getElementById('stageText');
+                
+                dots.forEach((dot, index) => {
+                    dot.classList.remove('active', 'completed');
+                    if (index < currentStage - 1) {
+                        dot.classList.add('completed');
+                    } else if (index === currentStage - 1) {
+                        dot.classList.add('active');
+                    }
+                });
+                
+                stageText.textContent = this.stages[currentStage - 1].name;
+            }
+
+            markStageComplete(stageIndex) {
+                const dot = document.querySelector(`[data-stage="${stageIndex}"]`);
+                if (dot) {
+                    dot.classList.remove('active');
+                    dot.classList.add('completed');
+                }
+            }
+
+            updateProgress(percentage, status) {
+                const progressFill = document.getElementById('progressFill');
+                const progressPercentage = document.getElementById('progressPercentage');
+                const progressStatus = document.getElementById('progressStatus');
+                
+                progressFill.style.width = `${percentage}%`;
+                progressPercentage.textContent = `${Math.round(percentage)}%`;
+                progressStatus.textContent = status;
+            }
+
+            completeInstallation() {
+                this.isComplete = true;
+                this.isInstalling = false;
+                
+                const installBtn = document.getElementById('installBtn');
+                const restartBtn = document.getElementById('restartBtn');
+                const scheduleBtn = document.getElementById('scheduleBtn');
+                const restartNotice = document.getElementById('restartNotice');
+                
+                installBtn.style.display = 'none';
+                restartBtn.style.display = 'inline-block';
+                scheduleBtn.textContent = '稍后重启';
+                scheduleBtn.disabled = false;
+                
+                restartNotice.classList.add('active');
+                
+                // 更新系统托盘图标
+                const trayIcon = document.getElementById('trayIcon');
+                trayIcon.classList.add('pulse');
+                trayIcon.innerHTML = '<i class="fas fa-check"></i><div class="tooltip">Windows 安全中心 - 更新已完成，需要重启</div>';
+                
+                // 显示完成消息
+                this.updateProgress(100, '更新已完成，需要重启');
+                document.getElementById('stageText').textContent = '更新完成';
+                
+                // 添加完成动画效果
+                const dialogContent = document.querySelector('.dialog-content');
+                dialogContent.style.animation = 'fadeIn 0.5s ease-out';
+            }
+
+            restartSystem() {
+                // 模拟系统重启
+                const dialog = document.getElementById('updateDialog');
+                dialog.innerHTML = `
+                    <div class="dialog-header" style="background: #2ed573;">
+                        <h3>
+                            <i class="fas fa-check-circle"></i>
+                            正在重启系统
+                        </h3>
+                    </div>
+                    <div class="dialog-content" style="text-align: center; padding: 40px 24px;">
+                        <div style="font-size: 64px; color: #2ed573; margin-bottom: 20px;">
+                            <i class="fas fa-power-off"></i>
+                        </div>
+                        <h2 style="color: #333; margin-bottom: 12px;">系统正在重启</h2>
+                        <p style="color: #666; margin-bottom: 24px;">正在应用安全更新，请稍候...</p>
+                        <div class="progress-bar" style="max-width: 300px; margin: 0 auto;">
+                            <div class="progress-fill" style="width: 100%; background: linear-gradient(90deg, #2ed573, #54a0ff);"></div>
+                        </div>
+                    </div>
+                `;
+
+                // 3秒后关闭演示
+                setTimeout(() => {
+                    alert('演示完成！在实际系统中，Windows会自动重启并应用所有安全补丁。');
+                    window.location.reload();
+                }, 3000);
+            }
+        }
+
+        // 初始化演示
+        document.addEventListener('DOMContentLoaded', () => {
+            new WindowsUpdateDemo();
+        });
+    </script>
+</body>
+</html>

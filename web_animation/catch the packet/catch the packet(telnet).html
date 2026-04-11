@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telnet明文抓包演示 - 抓包工具模拟</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'terminal-black': '#0a0a0a',
+                        'terminal-green': '#00ff00',
+                        'terminal-blue': '#0088ff',
+                        'terminal-red': '#ff4444',
+                        'wireshark-gray': '#1e1e2e',
+                        'wireshark-blue': '#31789b',
+                        'wireshark-yellow': '#e6c000',
+                        'packet-normal': '#4CAF50',
+                        'packet-telnet': '#FF9800',
+                        'packet-sensitive': '#F44336',
+                    },
+                    animation: {
+                        'packet-fly': 'packetFly 3s linear infinite',
+                        'blink': 'blink 1s step-start infinite',
+                        'highlight': 'highlight 0.5s ease-in-out infinite alternate',
+                        'fade-in': 'fadeIn 0.3s ease-in-out forwards',
+                    },
+                    keyframes: {
+                        packetFly: {
+                            '0%': { transform: 'translateX(0)' },
+                            '100%': { transform: 'translateX(calc(100% - 20px))' },
+                        },
+                        blink: {
+                            '0%, 100%': { opacity: 1 },
+                            '50%': { opacity: 0 },
+                        },
+                        highlight: {
+                            '0%': { backgroundColor: 'rgba(255, 152, 0, 0.2)' },
+                            '100%': { backgroundColor: 'rgba(255, 152, 0, 0.4)' },
+                        },
+                        fadeIn: {
+                            '0%': { opacity: 0; transform: 'translateY(5px)' },
+                            '100%': { opacity: 1; transform: 'translateY(0)' },
+                        }
+                    },
+                    fontFamily: {
+                        'mono': ['Consolas', 'Monaco', 'Courier New', 'monospace'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .text-shadow-green {
+                text-shadow: 0 0 5px #00ff00, 0 0 10px #00ff00;
+            }
+            .text-shadow-red {
+                text-shadow: 0 0 5px #ff4444, 0 0 10px #ff4444;
+            }
+            .terminal-border {
+                border: 2px solid #333;
+                box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            }
+            .packet {
+                width: 20px;
+                height: 20px;
+                border-radius: 50%;
+                position: absolute;
+                top: 50%;
+                transform: translateY(-50%);
+                z-index: 10;
+            }
+            .content-auto {
+                content-visibility: auto;
+            }
+            .scrollbar-thin::-webkit-scrollbar {
+                width: 6px;
+                height: 6px;
+            }
+            .scrollbar-thin::-webkit-scrollbar-thumb {
+                background-color: #555;
+                border-radius: 3px;
+            }
+            .scrollbar-thin::-webkit-scrollbar-track {
+                background-color: #222;
+            }
+        }
+
+        /* 基础样式 */
+        body {
+            background-color: #121212;
+            background-image: radial-gradient(#222 1px, transparent 1px);
+            background-size: 20px 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        /* Telnet终端样式 */
+        .telnet-terminal {
+            background-color: #000;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            line-height: 1.4;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        /* 抓包工具表格样式 */
+        .packet-list tr:hover {
+            background-color: rgba(49, 120, 155, 0.2);
+        }
+        .packet-list tr.selected {
+            background-color: rgba(49, 120, 155, 0.4);
+        }
+    </style>
+</head>
+<body class="text-gray-200 min-h-screen">
+    <!-- 顶部标题栏 -->
+    <header class="bg-wireshark-gray border-b border-wireshark-blue py-4 px-6">
+        <div class="container mx-auto flex flex-col md:flex-row justify-between items-center">
+            <div class="flex items-center gap-3 mb-3 md:mb-0">
+                <i class="fa fa-network-wired text-3xl text-wireshark-blue"></i>
+                <div>
+                    <h1 class="text-xl md:text-2xl font-bold text-white">Telnet明文抓包演示</h1>
+                    <p class="text-sm text-gray-400">演示Telnet协议明文传输的安全风险 - 抓包工具实时抓取命令</p>
+                </div>
+            </div>
+            <div class="flex gap-3">
+                <button id="startCapture" class="px-4 py-2 bg-wireshark-blue hover:bg-blue-700 rounded-lg transition-all flex items-center gap-2">
+                    <i class="fa fa-play"></i>开始抓包
+                </button>
+                <button id="stopCapture" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                    <i class="fa fa-stop"></i>停止抓包
+                </button>
+                <button id="clearLogs" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-all flex items-center gap-2">
+                    <i class="fa fa-trash"></i>清空日志
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="container mx-auto px-4 py-8">
+        <!-- 传输链路模拟 -->
+        <div class="relative h-16 mb-8 bg-wireshark-gray/50 rounded-lg border border-wireshark-blue/30 overflow-hidden">
+            <div class="absolute left-4 top-1/2 -translate-y-1/2 text-white font-bold flex items-center gap-2">
+                <i class="fa fa-desktop"></i> Telnet客户端
+            </div>
+            <div class="absolute right-4 top-1/2 -translate-y-1/2 text-white font-bold flex items-center gap-2">
+                <i class="fa fa-server"></i> Telnet服务端
+            </div>
+            <div class="absolute left-40 right-40 top-1/2 -translate-y-1/2 h-1 bg-gray-600">
+                <div class="absolute inset-0 bg-gradient-to-r from-wireshark-blue to-terminal-green opacity-50"></div>
+                <!-- 数据包动画 -->
+                <div id="packetAnimation" class="packet bg-terminal-green opacity-0 animate-packet-fly"></div>
+            </div>
+            <div class="absolute left-1/2 top-2 -translate-x-1/2 text-xs text-yellow-400 animate-blink">
+                <i class="fa fa-exclamation-triangle"></i> 明文传输 - 无加密保护
+            </div>
+        </div>
+
+        <!-- 核心演示区域 -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Telnet客户端 -->
+            <div class="lg:col-span-1">
+                <div class="bg-wireshark-gray rounded-lg terminal-border overflow-hidden">
+                    <div class="bg-wireshark-blue px-3 py-2 flex justify-between items-center">
+                        <div class="flex items-center gap-2">
+                            <i class="fa fa-terminal text-white"></i>
+                            <span class="text-white font-medium">Telnet 客户端</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <div class="w-4 h-4 rounded-full bg-red-500"></div>
+                            <div class="w-4 h-4 rounded-full bg-yellow-500"></div>
+                            <div class="w-4 h-4 rounded-full bg-green-500"></div>
+                        </div>
+                    </div>
+                    <div id="clientTerminal" class="telnet-terminal h-80 p-3 text-terminal-green scrollbar-thin overflow-y-auto">
+                        Trying 192.168.1.100...
+                        Connected to 192.168.1.100.
+                        Escape character is '^]'.
+                        
+                        Welcome to Telnet Server (Ubuntu 22.04)
+                        login: 
+                    </div>
+                    <div class="bg-gray-800 p-2 border-t border-gray-700">
+                        <div class="flex">
+                            <input type="text" id="clientInput" class="flex-1 bg-terminal-black text-terminal-green px-2 py-1 border border-gray-700 rounded-l-lg focus:outline-none focus:border-terminal-green font-mono" placeholder="输入Telnet命令 (login/password/ls/cd等)" autocomplete="off">
+                            <button id="sendCommand" class="bg-wireshark-blue hover:bg-blue-700 px-4 py-1 rounded-r-lg transition-all">
+                                <i class="fa fa-paper-plane"></i>
+                            </button>
+                        </div>
+                        <div class="mt-2 text-xs text-gray-400">
+                            示例命令: admin (用户名) | password123 (密码) | ls (列出文件) | cd /etc (切换目录) | exit (退出)
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Telnet服务端 -->
+            <div class="lg:col-span-1">
+                <div class="bg-wireshark-gray rounded-lg terminal-border overflow-hidden">
+                    <div class="bg-wireshark-blue px-3 py-2 flex justify-between items-center">
+                        <div class="flex items-center gap-2">
+                            <i class="fa fa-server text-white"></i>
+                            <span class="text-white font-medium">Telnet 服务端</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <div class="w-4 h-4 rounded-full bg-red-500"></div>
+                            <div class="w-4 h-4 rounded-full bg-yellow-500"></div>
+                            <div class="w-4 h-4 rounded-full bg-green-500"></div>
+                        </div>
+                    </div>
+                    <div id="serverTerminal" class="telnet-terminal h-80 p-3 text-terminal-green scrollbar-thin overflow-y-auto">
+                        Telnet server listening on port 23...
+                        New connection from 192.168.1.50:54321
+                        Sending login prompt...
+                    </div>
+                    <div class="bg-gray-800 p-2 border-t border-gray-700 text-xs text-gray-400">
+                        <i class="fa fa-info-circle text-terminal-blue"></i> 服务端响应自动生成
+                    </div>
+                </div>
+            </div>
+
+            <!-- 抓包工具 -->
+            <div class="lg:col-span-1">
+                <div class="bg-wireshark-gray rounded-lg terminal-border overflow-hidden">
+                    <div class="bg-wireshark-blue px-3 py-2 flex justify-between items-center">
+                        <div class="flex items-center gap-2">
+                            <i class="fa fa-wrench text-white"></i>
+                            <span class="text-white font-medium">抓包工具 (Wireshark模拟)</span>
+                        </div>
+                        <div class="text-xs text-white bg-red-500 px-2 py-1 rounded animate-blink" id="captureStatus">
+                            未抓包
+                        </div>
+                    </div>
+                    
+                    <!-- 抓包列表 -->
+                    <div class="h-40 overflow-y-auto scrollbar-thin bg-terminal-black">
+                        <table class="w-full text-sm packet-list" id="packetList">
+                            <thead class="bg-gray-800 text-gray-300 sticky top-0">
+                                <tr>
+                                    <th class="px-2 py-1 text-left w-12">编号</th>
+                                    <th class="px-2 py-1 text-left w-24">时间</th>
+                                    <th class="px-2 py-1 text-left w-20">协议</th>
+                                    <th class="px-2 py-1 text-left">信息</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- 抓包数据会动态添加到这里 -->
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- 数据包详情 -->
+                    <div class="border-t border-gray-700 bg-terminal-black p-3 h-36 overflow-y-auto scrollbar-thin">
+                        <div class="text-xs text-gray-400 mb-2">
+                            <strong>数据包详情 (明文)：</strong>
+                        </div>
+                        <div id="packetDetails" class="text-terminal-green font-mono text-xs space-y-1">
+                            选择列表中的数据包查看详情...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 安全说明区域 -->
+        <div class="mt-8 bg-wireshark-gray/50 rounded-lg border border-terminal-red/30 p-6">
+            <h3 class="text-xl font-bold text-terminal-red flex items-center gap-2 mb-4">
+                <i class="fa fa-warning"></i> 安全风险说明
+            </h3>
+            <div class="space-y-3 text-gray-300">
+                <p>Telnet协议设计时未考虑安全因素，所有数据（包括用户名、密码、命令）均以<strong class="text-terminal-red">明文形式</strong>在网络中传输：</p>
+                <ul class="list-disc list-inside space-y-2 pl-4">
+                    <li>攻击者可通过抓包工具（如Wireshark）轻松获取Telnet传输的所有内容</li>
+                    <li>敏感信息（用户名、密码）无任何保护，可被直接读取</li>
+                    <li>攻击者可篡改传输的命令，执行未授权操作</li>
+                    <li>Telnet无身份验证机制，易遭受中间人攻击</li>
+                </ul>
+                <p class="mt-3">
+                    <strong class="text-terminal-green">安全替代方案：</strong> 使用SSH（Secure Shell）协议替代Telnet，SSH提供数据加密、身份验证和完整性保护。
+                </p>
+            </div>
+        </div>
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="bg-wireshark-gray border-t border-wireshark-blue py-4 mt-8">
+        <div class="container mx-auto px-4 text-center text-gray-400 text-sm">
+            <p>Telnet明文抓包演示 | 网络安全教育用途 | 请勿用于非法用途</p>
+        </div>
+    </footer>
+
+    <script>
+        // 全局变量
+        let isCapturing = false;
+        let packetId = 0;
+        let captureInterval;
+        const sensitiveCommands = ['password', 'pass', 'pwd', 'login', 'admin', 'root'];
+
+        // DOM元素
+        const startCaptureBtn = document.getElementById('startCapture');
+        const stopCaptureBtn = document.getElementById('stopCapture');
+        const clearLogsBtn = document.getElementById('clearLogs');
+        const sendCommandBtn = document.getElementById('sendCommand');
+        const clientInput = document.getElementById('clientInput');
+        const clientTerminal = document.getElementById('clientTerminal');
+        const serverTerminal = document.getElementById('serverTerminal');
+        const packetList = document.getElementById('packetList').querySelector('tbody');
+        const packetDetails = document.getElementById('packetDetails');
+        const captureStatus = document.getElementById('captureStatus');
+        const packetAnimation = document.getElementById('packetAnimation');
+
+        // 获取当前时间（格式化）
+        function getFormattedTime() {
+            const now = new Date();
+            return `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}.${now.getMilliseconds().toString().padStart(3, '0')}`;
+        }
+
+        // 添加数据包到抓包列表
+        function addPacketToCapture(command, isSensitive = false) {
+            if (!isCapturing) return;
+            
+            packetId++;
+            const time = getFormattedTime();
+            const protocol = 'Telnet';
+            let info = command;
+            let packetClass = 'text-packet-telnet';
+            
+            if (isSensitive) {
+                info = `<span class="text-packet-sensitive font-bold">${command}</span>`;
+                packetClass = 'text-packet-sensitive';
+            }
+
+            // 创建数据包行
+            const row = document.createElement('tr');
+            row.className = 'animate-fade-in';
+            row.setAttribute('data-command', command);
+            row.innerHTML = `
+                <td class="px-2 py-1 ${packetClass}">${packetId}</td>
+                <td class="px-2 py-1 text-gray-300">${time}</td>
+                <td class="px-2 py-1 text-packet-telnet">${protocol}</td>
+                <td class="px-2 py-1 ${packetClass}">${info}</td>
+            `;
+
+            // 点击行显示详情
+            row.addEventListener('click', () => {
+                // 移除其他行的选中状态
+                document.querySelectorAll('.packet-list tr').forEach(tr => tr.classList.remove('selected'));
+                // 添加选中状态
+                row.classList.add('selected');
+                // 显示详情
+                showPacketDetails(command);
+            });
+
+            // 添加到列表顶部
+            packetList.insertBefore(row, packetList.firstChild);
+            
+            // 播放数据包动画
+            playPacketAnimation();
+            
+            // 自动选中最新数据包
+            setTimeout(() => {
+                row.click();
+            }, 100);
+        }
+
+        // 显示数据包详情
+        function showPacketDetails(command) {
+            let details = '';
+            const isSensitive = sensitiveCommands.some(word => command.toLowerCase().includes(word));
+            
+            // 模拟数据包的十六进制和ASCII内容
+            const hexContent = Array.from(command).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join(' ');
+            const asciiContent = command.replace(/\s/g, '.');
+
+            details += `Frame ${packetId}: ${command.length + 20} bytes on wire (${command.length + 20} bytes captured)\n`;
+            details += `Ethernet II, Src: 00:11:22:33:44:55, Dst: 66:77:88:99:AA:BB\n`;
+            details += `Internet Protocol Version 4, Src: 192.168.1.50, Dst: 192.168.1.100\n`;
+            details += `Transmission Control Protocol, Src Port: 54321, Dst Port: 23, Seq: 1, Ack: 1, Len: ${command.length}\n`;
+            details += `Telnet Protocol\n`;
+            details += `    Data: ${command}\n`;
+            details += `    Hex dump: ${hexContent}\n`;
+            details += `    ASCII: ${asciiContent}\n`;
+            
+            if (isSensitive) {
+                details += `\n⚠️  WARNING: This packet contains sensitive information (plaintext)!`;
+            }
+
+            // 显示详情（保留换行）
+            packetDetails.innerHTML = details.replace(/\n/g, '<br>');
+            
+            // 高亮敏感信息
+            if (isSensitive) {
+                packetDetails.innerHTML = packetDetails.innerHTML.replace(
+                    command, 
+                    `<span class="text-terminal-red font-bold animate-highlight">${command}</span>`
+                );
+            }
+        }
+
+        // 播放数据包动画
+        function playPacketAnimation() {
+            packetAnimation.style.opacity = '1';
+            packetAnimation.style.animation = 'none';
+            setTimeout(() => {
+                packetAnimation.style.animation = 'packetFly 1.5s linear forwards';
+            }, 10);
+            
+            // 动画结束后隐藏
+            setTimeout(() => {
+                packetAnimation.style.opacity = '0';
+            }, 1500);
+        }
+
+        // 发送Telnet命令
+        function sendTelnetCommand() {
+            const command = clientInput.value.trim();
+            if (!command || !isCapturing) return;
+
+            // 清空输入框
+            clientInput.value = '';
+
+            // 添加到客户端终端
+            clientTerminal.textContent += `${command}\n`;
+            
+            // 判断是否为敏感命令
+            const isSensitive = sensitiveCommands.some(word => command.toLowerCase().includes(word));
+            
+            // 添加到抓包工具
+            addPacketToCapture(command, isSensitive);
+
+            // 服务端响应
+            let serverResponse = '';
+            setTimeout(() => {
+                if (command.toLowerCase() === 'exit') {
+                    serverResponse = 'Connection closed by foreign host.\n';
+                    clientTerminal.textContent += serverResponse;
+                    serverTerminal.textContent += `Client ${command} - Connection closed\n`;
+                } else if (command.toLowerCase() === 'admin' || command.toLowerCase() === 'root') {
+                    serverResponse = 'Password: \n';
+                    clientTerminal.textContent += serverResponse;
+                    serverTerminal.textContent += `Received username: ${command} - Sending password prompt\n`;
+                } else if (sensitiveCommands.some(word => command.toLowerCase().includes(word) && command.length > 5)) {
+                    serverResponse = 'Last login: Mon Jan 01 12:00:00 CST 2026 from 192.168.1.50 on pts/0\nWelcome to Ubuntu 22.04 LTS (GNU/Linux 5.15.0-78-generic x86_64)\n\n$ ';
+                    clientTerminal.textContent += serverResponse;
+                    serverTerminal.textContent += `Authentication successful for user - Shell started\n`;
+                } else if (command.toLowerCase() === 'ls') {
+                    serverResponse = 'bin  boot  dev  etc  home  lib  lib64  media  mnt  opt  proc  root  run  sbin  srv  sys  tmp  usr  var\n$ ';
+                    clientTerminal.textContent += serverResponse;
+                    serverTerminal.textContent += `Executed command: ${command} - Sent directory listing\n`;
+                } else if (command.toLowerCase().startsWith('cd')) {
+                    serverResponse = `$ `;
+                    clientTerminal.textContent += serverResponse;
+                    serverTerminal.textContent += `Executed command: ${command} - Changed directory\n`;
+                } else {
+                    serverResponse = `Command not found: ${command}\n$ `;
+                    clientTerminal.textContent += serverResponse;
+                    serverTerminal.textContent += `Unknown command: ${command} - Sent error response\n`;
+                }
+
+                // 滚动到底部
+                clientTerminal.scrollTop = clientTerminal.scrollHeight;
+                serverTerminal.scrollTop = serverTerminal.scrollHeight;
+                
+                // 记录服务端响应到抓包工具
+                addPacketToCapture(serverResponse.trim(), false);
+            }, 500);
+
+            // 滚动到底部
+            clientTerminal.scrollTop = clientTerminal.scrollHeight;
+            serverTerminal.scrollTop = serverTerminal.scrollHeight;
+        }
+
+        // 开始抓包
+        function startCapture() {
+            isCapturing = true;
+            startCaptureBtn.disabled = true;
+            stopCaptureBtn.disabled = false;
+            captureStatus.textContent = '正在抓包...';
+            captureStatus.className = 'text-xs text-white bg-green-500 px-2 py-1 rounded animate-blink';
+            
+            // 模拟抓取初始数据包
+            addPacketToCapture('Telnet negotiation: DO ECHO, WILL SUPPRESS GO AHEAD', false);
+            
+            // 定期抓取心跳包
+            captureInterval = setInterval(() => {
+                addPacketToCapture('Telnet keep-alive packet', false);
+            }, 10000);
+        }
+
+        // 停止抓包
+        function stopCapture() {
+            isCapturing = false;
+            startCaptureBtn.disabled = false;
+            stopCaptureBtn.disabled = true;
+            captureStatus.textContent = '已停止抓包';
+            captureStatus.className = 'text-xs text-white bg-gray-500 px-2 py-1 rounded';
+            
+            clearInterval(captureInterval);
+            packetAnimation.style.opacity = '0';
+        }
+
+        // 清空日志
+        function clearLogs() {
+            clientTerminal.innerHTML = `Trying 192.168.1.100...
+Connected to 192.168.1.100.
+Escape character is '^]'.
+
+Welcome to Telnet Server (Ubuntu 22.04)
+login: 
+`;
+            serverTerminal.innerHTML = `Telnet server listening on port 23...
+New connection from 192.168.1.50:54321
+Sending login prompt...
+`;
+            packetList.innerHTML = '';
+            packetDetails.textContent = '选择列表中的数据包查看详情...';
+            packetId = 0;
+        }
+
+        // 事件监听
+        startCaptureBtn.addEventListener('click', startCapture);
+        stopCaptureBtn.addEventListener('click', stopCapture);
+        clearLogsBtn.addEventListener('click', clearLogs);
+        sendCommandBtn.addEventListener('click', sendTelnetCommand);
+        clientInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendTelnetCommand();
+        });
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            // 初始状态
+            clearLogs();
+        });
+    </script>
+</body>
+</html>

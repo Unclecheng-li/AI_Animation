@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PPP Frame Visualization</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#121212',
+                        darker: '#0a0a0a',
+                        primary: '#1e1e2e',
+                        secondary: '#2d2d44',
+                        accent: '#ff2e93',
+                        highlight: '#ff7eb3',
+                        neutral: '#8a8aa0',
+                    },
+                    fontFamily: {
+                        mono: ['Fira Code', 'Consolas', 'monospace'],
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'glow': 'glow 2s ease-in-out infinite alternate',
+                        'flow': 'flow 10s linear infinite',
+                        'flicker': 'flicker 4s infinite alternate',
+                        'fade-in': 'fadeIn 0.6s ease-out forwards',
+                    },
+                    keyframes: {
+                        glow: {
+                            '0%': { boxShadow: '0 0 5px rgba(255, 46, 147, 0.5)' },
+                            '100%': { boxShadow: '0 0 20px rgba(255, 46, 147, 0.8)' },
+                        },
+                        flow: {
+                            '0%': { backgroundPosition: '0% 0%' },
+                            '100%': { backgroundPosition: '100% 0%' },
+                        },
+                        flicker: {
+                            '0%, 19.999%, 22%, 62.999%, 64%, 64.999%, 70%, 100%': { opacity: 0.99 },
+                            '20%, 21.999%, 63%, 63.999%, 65%, 69.999%': { opacity: 0.4 }
+                        },
+                        fadeIn: {
+                            '0%': { opacity: '0', transform: 'translateY(10px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .text-shadow {
+                text-shadow: 0 0 8px rgba(255, 46, 147, 0.6);
+            }
+            .ppp-field {
+                @apply border border-neutral/30 transition-all duration-300 hover:border-accent hover:bg-secondary/50 relative overflow-hidden flex items-center justify-center opacity-0;
+            }
+            .ppp-field::before {
+                content: '';
+                @apply absolute top-0 left-0 w-full h-full bg-accent/5 opacity-0 transition-opacity duration-300;
+            }
+            .ppp-field:hover::before {
+                @apply opacity-100;
+            }
+            .tooltip {
+                @apply invisible absolute bg-darker text-white text-xs rounded py-1 px-2 z-10 w-64 -mt-24 ml-8 transform -translate-x-1/2 opacity-0 transition-all duration-300 pointer-events-none;
+            }
+            .ppp-field:hover .tooltip {
+                @apply visible opacity-100;
+            }
+            .tooltip::after {
+                content: '';
+                @apply absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-darker;
+            }
+            .flag-pattern {
+                background: linear-gradient(90deg, 
+                    rgba(255,46,147,0.3) 0%, 
+                    rgba(255,46,147,0.3) 50%, 
+                    transparent 50%, 
+                    transparent 100%);
+                background-size: 12px 100%;
+                animation: shift 0.5s linear infinite;
+            }
+            @keyframes shift {
+                0% { background-position: 0 0; }
+                100% { background-position: 12px 0; }
+            }
+        }
+    </style>
+</head>
+<body class="bg-dark text-gray-200 min-h-screen font-mono">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <header class="mb-12 text-center">
+            <h1 class="text-[clamp(1.8rem,5vw,3rem)] font-bold mb-2 text-white text-shadow">
+                PPP <span class="text-accent">Frame</span> Format
+            </h1>
+            <p class="text-neutral max-w-2xl mx-auto">Point-to-Point Protocol frame structure visualization with 8-bit field organization</p>
+        </header>
+
+        <div class="relative">
+            <!-- PPP Frame Visualization -->
+            <div class="bg-primary rounded-lg p-6 border border-secondary animate-glow">
+                <!-- Byte length indicator -->
+                <div class="flex justify-between mb-4 text-xs text-neutral opacity-0" id="byte-indicators">
+                    <span>0 bytes</span>
+                    <span>5 bytes</span>
+                    <span>10 bytes</span>
+                    <span>Variable</span>
+                </div>
+                
+                <!-- Flag sequence explanation -->
+                <div class="mb-4 p-3 bg-secondary/30 rounded text-sm opacity-0" id="flag-explanation">
+                    <span class="text-accent font-semibold">FLAG Fields:</span> PPP frames use 0x7E (126 in decimal) as delimiters to mark frame boundaries, with bit stuffing used to prevent this pattern appearing in data.
+                </div>
+                
+                <div class="flex h-16 mb-2">
+                    <!-- Flag (1 byte) - Start of Frame -->
+                    <div class="ppp-field w-[6.25%] border-accent flag-pattern" style="min-width: 30px;" data-index="1">
+                        <span>Flag<br/>(1 byte)</span>
+                        <div class="tooltip">Start of Frame delimiter (0x7E) - marks beginning of frame</div>
+                    </div>
+                    
+                    <!-- Address (1 byte) -->
+                    <div class="ppp-field w-[6.25%]" style="min-width: 30px;" data-index="2">
+                        <span>Address<br/>(1 byte)</span>
+                        <div class="tooltip">Usually 0xFF (broadcast address) in PPP</div>
+                    </div>
+                    
+                    <!-- Control (1 byte) -->
+                    <div class="ppp-field w-[6.25%]" style="min-width: 30px;" data-index="3">
+                        <span>Control<br/>(1 byte)</span>
+                        <div class="tooltip">Usually 0x03 (unnumbered data frame)</div>
+                    </div>
+                    
+                    <!-- Protocol (2 bytes) -->
+                    <div class="ppp-field w-[12.5%] border-accent" style="min-width: 60px;" data-index="4">
+                        <span>Protocol<br/>(2 bytes)</span>
+                        <div class="tooltip">Identifies the protocol encapsulated in the information field (e.g., IPv4=0x0021)</div>
+                    </div>
+                    
+                    <!-- Information (variable) -->
+                    <div class="ppp-field w-[50%] relative" style="min-width: 240px;" data-index="5">
+                        <span>Information<br/>(0-1500 bytes)</span>
+                        <div class="absolute inset-0 overflow-hidden">
+                            <div class="absolute top-0 left-0 h-full w-1/4 bg-accent/5 animate-flow" style="background: linear-gradient(90deg, transparent, rgba(255, 46, 147, 0.1), transparent); background-size: 200% 100%;"></div>
+                        </div>
+                        <div class="tooltip">Encapsulated data from the upper layer protocol</div>
+                    </div>
+                    
+                    <!-- FCS (2 bytes) -->
+                    <div class="ppp-field w-[12.5%] bg-secondary/20" style="min-width: 60px;" data-index="6">
+                        <span>FCS<br/>(2 bytes)</span>
+                        <div class="tooltip">Frame Check Sequence - 16-bit CRC for error detection (optional 32-bit)</div>
+                    </div>
+                    
+                    <!-- Flag (1 byte) - End of Frame -->
+                    <div class="ppp-field w-[6.25%] border-accent flag-pattern" style="min-width: 30px;" data-index="7">
+                        <span>Flag<br/>(1 byte)</span>
+                        <div class="tooltip">End of Frame delimiter (0x7E) - marks completion of frame</div>
+                    </div>
+                </div>
+                
+                <!-- Additional PPP frame types for illustration -->
+                <div class="mt-6 pt-6 border-t border-neutral/20">
+                    <h3 class="text-accent mb-4 text-center opacity-0" id="control-frames-title">PPP Control Frames</h3>
+                    <div class="flex h-12 gap-2">
+                        <div class="ppp-field w-1/3 border-accent/70" style="min-width: 120px;" data-index="8">
+                            <span>LCP Frames</span>
+                            <div class="tooltip">Link Control Protocol - Establishes and configures the link</div>
+                        </div>
+                        <div class="ppp-field w-1/3 border-accent/70" style="min-width: 120px;" data-index="9">
+                            <span>NCP Frames</span>
+                            <div class="tooltip">Network Control Protocols - Configure network layer protocols</div>
+                        </div>
+                        <div class="ppp-field w-1/3 border-accent/70" style="min-width: 120px;" data-index="10">
+                            <span>Authentication</span>
+                            <div class="tooltip">PAP/CHAP - Authentication protocols for link security</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Decorative elements -->
+            <div class="absolute -top-8 -left-8 w-16 h-16 bg-accent/20 rounded-full blur-md"></div>
+            <div class="absolute -bottom-10 -right-10 w-20 h-20 bg-accent/30 rounded-full blur-lg"></div>
+            <div class="absolute top-1/4 right-0 w-40 h-40 bg-accent/5 rounded-full blur-3xl -z-10"></div>
+        </div>
+        
+        <!-- Legend -->
+        <div class="mt-10 bg-primary/50 rounded-lg p-4 border border-secondary/50 opacity-0" id="legend">
+            <h3 class="text-accent text-lg mb-3 font-semibold">Field Legend</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                <div class="flex items-center"><span class="w-3 h-3 bg-accent rounded-sm mr-2"></span> Frame delimiters and protocol identifiers</div>
+                <div class="flex items-center"><span class="w-3 h-3 bg-secondary/20 rounded-sm mr-2"></span> Error checking fields</div>
+                <div class="flex items-center"><span class="w-3 h-3 border border-accent/50 bg-transparent rounded-sm mr-2"></span> Address, control and data fields</div>
+                <div class="flex items-center"><span class="w-3 h-3 border border-accent/70 bg-transparent rounded-sm mr-2"></span> Control and authentication frames</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Animate fields sequentially
+            const animateFields = () => {
+                const byteIndicators = document.getElementById('byte-indicators');
+                const flagExplanation = document.getElementById('flag-explanation');
+                const controlFramesTitle = document.getElementById('control-frames-title');
+                const fields = document.querySelectorAll('.ppp-field');
+                const legend = document.getElementById('legend');
+                
+                // First show the byte indicators
+                setTimeout(() => {
+                    byteIndicators.classList.add('animate-fade-in');
+                }, 300);
+                
+                // Then show flag explanation
+                setTimeout(() => {
+                    flagExplanation.classList.add('animate-fade-in');
+                }, 600);
+                
+                // Then show each field in order with a small delay between them
+                fields.forEach((field, index) => {
+                    setTimeout(() => {
+                        field.classList.add('animate-fade-in');
+                    }, 900 + (index * 200));
+                });
+                
+                // Show control frames title after main fields but before control frames
+                setTimeout(() => {
+                    controlFramesTitle.classList.add('animate-fade-in');
+                }, 900 + (7 * 200));
+                
+                // Finally show the legend
+                setTimeout(() => {
+                    legend.classList.add('animate-fade-in');
+                }, 900 + (fields.length * 200) + 300);
+            };
+            
+            // Start the animation sequence
+            animateFields();
+            
+            // Add floating particles with varying sizes
+            const container = document.querySelector('.container');
+            
+            for (let i = 0; i < 15; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'fixed rounded-full bg-accent/10 pointer-events-none';
+                particle.style.width = `${Math.random() * 8 + 1}px`;
+                particle.style.height = particle.style.width;
+                particle.style.left = `${Math.random() * 100}vw`;
+                particle.style.top = `${Math.random() * 100}vh`;
+                particle.style.animation = `float ${Math.random() * 30 + 20}s linear infinite`;
+                particle.style.animationDelay = `${Math.random() * 15}s`;
+                container.appendChild(particle);
+            }
+            
+            // Add floating animation
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes float {
+                    0% {
+                        transform: translateY(0) translateX(0);
+                        opacity: 0.2;
+                    }
+                    25% {
+                        transform: translateY(-40px) translateX(20px);
+                        opacity: 0.4;
+                    }
+                    50% {
+                        transform: translateY(-80px) translateX(0);
+                        opacity: 0.2;
+                    }
+                    75% {
+                        transform: translateY(-40px) translateX(-20px);
+                        opacity: 0.4;
+                    }
+                    100% {
+                        transform: translateY(0) translateX(0);
+                        opacity: 0.2;
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+            
+            // Add hover effects
+            const fields = document.querySelectorAll('.ppp-field');
+            fields.forEach(field => {
+                field.addEventListener('mouseenter', () => {
+                    field.style.transform = 'scale(1.02)';
+                    field.style.zIndex = '10';
+                });
+                
+                field.addEventListener('mouseleave', () => {
+                    field.style.transform = 'scale(1)';
+                    field.style.zIndex = '1';
+                });
+            });
+        });
+    </script>
+</body>
+</html>

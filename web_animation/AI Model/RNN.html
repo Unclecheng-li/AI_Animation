@@ -1,0 +1,1566 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RNN 循环神经网络可视化演示</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+            /* 设置左下角和右上角为蓝色，其他部分为黑色，增大左下角蓝色块的大小 */
+            background: 
+                radial-gradient(circle at bottom left, #001f54 0%, transparent 50%),
+                radial-gradient(circle at top right, #001f54 0%, transparent 30%),
+                #000000;
+            animation: gradientShift 15s ease infinite;
+            color: #e94560;
+        }
+        
+        /* 背景渐变动画 */
+        @keyframes gradientShift {
+            0% {
+                background-size: 100% 100%;
+            }
+            50% {
+                background-size: 110% 110%;
+            }
+            100% {
+                background-size: 100% 100%;
+            }
+        }
+        
+        /* 噪点纹理层 - 略微提高透明度适配深色背景 */
+        body::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            opacity: 0.15;
+            mix-blend-mode: overlay;
+            animation: noiseMove 20s linear infinite;
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        /* 噪点纹理动画 */
+        @keyframes noiseMove {
+            0% {
+                transform: translate(0, 0) scale(1.1);
+            }
+            25% {
+                transform: translate(-2%, -2%) scale(1.05);
+            }
+            50% {
+                transform: translate(0, 0) scale(1.1);
+            }
+            75% {
+                transform: translate(2%, 2%) scale(1.05);
+            }
+            100% {
+                transform: translate(0, 0) scale(1.1);
+            }
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 20px 40px;
+            position: relative;
+            z-index: 1;
+            height: 100vh;
+            overflow-y: auto;
+        }
+        
+        /* Canvas粒子效果样式 */
+        #particlesCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        /* 页面元素缓入动画 */
+        .fade-in-element {
+            opacity: 0;
+            transform: translateY(30px);
+            animation: fadeInUp 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* 延迟动画类 */
+        .delay-1 { animation-delay: 0.1s; }
+        .delay-2 { animation-delay: 0.2s; }
+        .delay-3 { animation-delay: 0.3s; }
+        .delay-4 { animation-delay: 0.4s; }
+        .delay-5 { animation-delay: 0.5s; }
+        .delay-6 { animation-delay: 0.6s; }
+        .delay-7 { animation-delay: 0.7s; }
+        .delay-8 { animation-delay: 0.8s; }
+
+        /* 面板悬停效果 */
+        .panel {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .panel:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 40px rgba(233, 69, 96, 0.2);
+        }
+
+        /* 按钮点击动画 */
+        .btn:active, .timestep-btn:active, .preset-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* 输入框焦点动画 */
+        input[type="text"]:focus, textarea:focus {
+            animation: inputGlow 0.3s ease forwards;
+        }
+
+        @keyframes inputGlow {
+            to {
+                box-shadow: 0 0 20px rgba(233, 69, 96, 0.4);
+            }
+        }
+
+        /* 滑块滑块动画 */
+        input[type="range"]::-webkit-slider-thumb {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            box-shadow: 0 0 15px rgba(233, 69, 96, 0.8);
+        }
+
+        /* 状态节点动画 */
+        .state-node {
+            animation: nodePulse 2s ease-in-out infinite;
+        }
+
+        @keyframes nodePulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        /* 概率条填充动画 */
+        .probability-fill {
+            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* 标题发光动画 */
+        h1 {
+            animation: titleGlow 3s ease-in-out infinite;
+        }
+
+        @keyframes titleGlow {
+            0%, 100% { text-shadow: 0 0 20px rgba(233, 69, 96, 0.5); }
+            50% { text-shadow: 0 0 40px rgba(233, 69, 96, 0.8), 0 0 60px rgba(233, 69, 96, 0.4); }
+        }
+
+        /* 高亮动画 */
+        .highlight-animation {
+            animation: highlightPulse 1s ease-in-out;
+        }
+
+        @keyframes highlightPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); color: #ff6b6b; }
+        }
+
+        /* 类别条动画 */
+        .category-bar {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .category-bar::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 0;
+            background: linear-gradient(90deg, rgba(233, 69, 96, 0.3), transparent);
+            animation: barGrow 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            animation-delay: inherit;
+        }
+
+        @keyframes barGrow {
+            to { width: var(--bar-width, 0); }
+        }
+
+        header {
+            text-align: center;
+            padding: 30px 0;
+            border-bottom: 2px solid rgba(233, 69, 96, 0.3);
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            color: #e94560;
+            text-shadow: 0 0 20px rgba(233, 69, 96, 0.5);
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #a0a0a0;
+            font-size: 1.1rem;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 280px 1fr 280px;
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 1400px) {
+            .main-grid {
+                grid-template-columns: 260px 1fr 260px;
+            }
+        }
+
+        @media (max-width: 1200px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .panel {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 25px;
+            border: 1px solid rgba(233, 69, 96, 0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        .panel-title {
+            font-size: 1.3rem;
+            color: #e94560;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .panel-title::before {
+            content: '';
+            width: 4px;
+            height: 24px;
+            background: #e94560;
+            border-radius: 2px;
+        }
+
+        /* 参数控制面板 */
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+        .control-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            color: #c0c0c0;
+            font-size: 0.95rem;
+        }
+
+        .control-value {
+            color: #e94560;
+            font-weight: bold;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 8px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #e94560;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(233, 69, 96, 0.5);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #e94560 0%, #c73e54 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(233, 69, 96, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            margin-top: 10px;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* 输入区域 */
+        .input-section {
+            margin-bottom: 20px;
+        }
+
+        .input-label {
+            color: #c0c0c0;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        textarea, input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid rgba(233, 69, 96, 0.3);
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            color: #fff;
+            font-size: 1rem;
+            resize: vertical;
+        }
+
+        textarea:focus, input[type="text"]:focus {
+            outline: none;
+            border-color: #e94560;
+            box-shadow: 0 0 10px rgba(233, 69, 96, 0.3);
+        }
+
+        .preset-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        .preset-btn {
+            background: rgba(233, 69, 96, 0.2);
+            border: 1px solid rgba(233, 69, 96, 0.4);
+            color: #e94560;
+            padding: 6px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.3s ease;
+        }
+
+        .preset-btn:hover {
+            background: rgba(233, 69, 96, 0.4);
+        }
+
+        /* 可视化区域 */
+        .visualization-container {
+            position: relative;
+            min-height: 500px;
+        }
+
+        #rnnCanvas {
+            width: 100%;
+            height: 500px;
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        /* 输出区域 */
+        .output-display {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 15px;
+            min-height: 150px;
+        }
+
+        .output-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .output-item:last-child {
+            border-bottom: none;
+        }
+
+        .output-label {
+            color: #a0a0a0;
+        }
+
+        .output-value {
+            color: #e94560;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        .probability-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            margin-top: 5px;
+            overflow: hidden;
+        }
+
+        .probability-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #e94560 0%, #ff6b6b 100%);
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+
+        /* 状态指示器 */
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 15px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #28a745;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .status-text {
+            color: #c0c0c0;
+            font-size: 0.9rem;
+        }
+
+        /* 时间步控制 */
+        .timestep-control {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+        }
+
+        .timestep-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .timestep-btn {
+            flex: 1;
+            padding: 8px;
+            background: rgba(233, 69, 96, 0.2);
+            border: 1px solid rgba(233, 69, 96, 0.4);
+            color: #e94560;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .timestep-btn:hover, .timestep-btn.active {
+            background: rgba(233, 69, 96, 0.5);
+            color: white;
+        }
+
+        /* 信息面板 */
+        .info-section {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 15px;
+            padding: 25px;
+            margin-top: 20px;
+        }
+
+        .info-title {
+            color: #e94560;
+            font-size: 1.2rem;
+            margin-bottom: 15px;
+        }
+
+        .info-content {
+            color: #a0a0a0;
+            line-height: 1.8;
+        }
+
+        .formula {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            color: #e94560;
+            text-align: center;
+            font-size: 1.1rem;
+        }
+
+        /* 隐藏状态可视化 */
+        .hidden-state-viz {
+            margin-top: 20px;
+        }
+
+        .state-vector {
+            display: flex;
+            gap: 5px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
+        .state-node {
+            width: 30px;
+            height: 30px;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            color: white;
+            transition: all 0.3s ease;
+        }
+
+        /* 动画效果 */
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.8rem;
+            }
+
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .panel {
+                padding: 15px;
+            }
+        }
+
+        /* 加载动画 */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(233, 69, 96, 0.3);
+            border-radius: 50%;
+            border-top-color: #e94560;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* 工具提示 */
+        .tooltip {
+            position: relative;
+            cursor: help;
+        }
+
+        .tooltip::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 12px;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            border-radius: 5px;
+            font-size: 0.85rem;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .tooltip:hover::after {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* 右上角logo水印 */
+        .logo {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            color: #fff;
+            font-family: sans-serif;
+            text-align: right;
+            z-index: 100;
+            opacity: 0.8;
+            transition: opacity 0.3s ease;
+        }
+
+        .logo:hover {
+            opacity: 1;
+        }
+
+        .logo svg {
+            width: 32px;
+            height: 32px;
+            margin-bottom: 4px;
+        }
+
+        .logo-text {
+            font-size: 12px;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 右上角logo水印 -->
+    <div class="logo">
+        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="30" r="12" fill="#60a5fa"/>
+            <path d="M35 45 Q50 70 65 45" stroke="#60a5fa" stroke-width="4" fill="none"/>
+            <path d="M30 60 Q50 90 70 60" stroke="#60a5fa" stroke-width="4" fill="none"/>
+        </svg>
+        <div class="logo-text">NetworkNoob</div>
+    </div>
+    <div class="container">
+        <header class="fade-in-element delay-1">
+            <h1>RNN 循环神经网络可视化演示</h1>
+            <p class="subtitle">直观理解序列数据的处理过程与隐藏状态传递机制</p>
+        </header>
+
+        <div class="main-grid">
+            <!-- 左侧面板：参数控制 -->
+            <div class="panel fade-in-element delay-2">
+                <h2 class="panel-title">网络参数设置</h2>
+                
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>隐藏层维度</span>
+                        <span class="control-value" id="hiddenSizeValue">8</span>
+                    </div>
+                    <input type="range" id="hiddenSize" min="4" max="16" value="8" step="2">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>学习率</span>
+                        <span class="control-value" id="learningRateValue">0.1</span>
+                    </div>
+                    <input type="range" id="learningRate" min="0.01" max="1" value="0.1" step="0.01">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>时间步长度</span>
+                        <span class="control-value" id="seqLengthValue">5</span>
+                    </div>
+                    <input type="range" id="seqLength" min="3" max="10" value="5" step="1">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>动画速度</span>
+                        <span class="control-value" id="animSpeedValue">1x</span>
+                    </div>
+                    <input type="range" id="animSpeed" min="0.5" max="3" value="1" step="0.5">
+                </div>
+
+                <button class="btn" id="resetBtn">重置网络参数</button>
+                <button class="btn btn-secondary" id="randomizeBtn">随机初始化权重</button>
+
+                <div class="status-indicator">
+                    <div class="status-dot"></div>
+                    <span class="status-text">网络状态: 就绪</span>
+                </div>
+            </div>
+
+            <!-- 中间面板：可视化 -->
+            <div class="panel fade-in-element delay-3">
+                <h2 class="panel-title">网络结构可视化</h2>
+                <div class="visualization-container">
+                    <canvas id="rnnCanvas"></canvas>
+                </div>
+                
+                <div class="timestep-control">
+                    <div class="control-label">
+                        <span>时间步控制</span>
+                        <span class="control-value" id="currentTimestep">Step 0 / 5</span>
+                    </div>
+                    <div class="timestep-buttons">
+                        <button class="timestep-btn" id="prevStep">◀ 上一步</button>
+                        <button class="timestep-btn active" id="playBtn">▶ 播放</button>
+                        <button class="timestep-btn" id="nextStep">下一步 ▶</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧面板：输入输出 -->
+            <div class="panel fade-in-element delay-4">
+                <h2 class="panel-title">输入与输出</h2>
+                
+                <div class="input-section">
+                    <label class="input-label">输入序列 (用空格分隔)</label>
+                    <input type="text" id="inputSequence" placeholder="例如: 我 喜欢 深度 学习" value="我 喜欢 深度 学习">
+                    <div class="preset-buttons">
+                        <button class="preset-btn" data-text="我 喜欢 深度 学习">示例1</button>
+                        <button class="preset-btn" data-text="今天 天气 真 好">示例2</button>
+                        <button class="preset-btn" data-text="机器 学习 很 有趣">示例3</button>
+                        <button class="preset-btn" data-text="人工 智能 改变 世界">示例4</button>
+                    </div>
+                </div>
+
+                <button class="btn" id="runBtn">▶ 运行前向传播</button>
+
+                <div class="hidden-state-viz">
+                    <h3 style="color: #c0c0c0; font-size: 1rem; margin-bottom: 10px;">隐藏状态可视化</h3>
+                    <div class="state-vector" id="hiddenStateViz"></div>
+                </div>
+
+                <div class="output-display">
+                    <h3 style="color: #c0c0c0; font-size: 1rem; margin-bottom: 15px;">输出结果</h3>
+                    <div id="outputResults">
+                        <div class="output-item">
+                            <span class="output-label">预测结果</span>
+                            <span class="output-value">-</span>
+                        </div>
+                        <div class="output-item">
+                            <span class="output-label">置信度</span>
+                            <span class="output-value">-</span>
+                        </div>
+                        <div class="probability-bar">
+                            <div class="probability-fill" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+    </div>
+
+    <!-- Canvas粒子效果 -->
+    <canvas id="particlesCanvas"></canvas>
+
+    <script>
+        // RNN 可视化演示脚本
+        class RNNVisualizer {
+            constructor() {
+                this.canvas = document.getElementById('rnnCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.hiddenSize = 8;
+                this.inputSize = 4;
+                this.outputSize = 4;
+                this.learningRate = 0.1;
+                this.seqLength = 5;
+                this.animationSpeed = 1;
+                this.currentStep = 0;
+                this.isPlaying = false;
+                this.animationId = null;
+                
+                // 网络权重
+                this.Wxh = []; // 输入到隐藏
+                this.Whh = []; // 隐藏到隐藏
+                this.Why = []; // 隐藏到输出
+                this.bh = [];  // 隐藏层偏置
+                this.by = [];  // 输出层偏置
+                
+                // 状态
+                this.h = [];   // 隐藏状态
+                this.inputs = [];
+                this.outputs = [];
+                
+                this.init();
+            }
+            
+            init() {
+                this.resizeCanvas();
+                this.initializeWeights();
+                this.bindEvents();
+                this.draw();
+                this.updateHiddenStateViz();
+            }
+            
+            resizeCanvas() {
+                const rect = this.canvas.parentElement.getBoundingClientRect();
+                this.canvas.width = rect.width;
+                this.canvas.height = 500;
+            }
+            
+            initializeWeights() {
+                // Xavier初始化
+                const initWeight = (rows, cols) => {
+                    const scale = Math.sqrt(2.0 / (rows + cols));
+                    return Array(rows).fill(null).map(() => 
+                        Array(cols).fill(null).map(() => 
+                            (Math.random() - 0.5) * 2 * scale
+                        )
+                    );
+                };
+                
+                this.Wxh = initWeight(this.hiddenSize, this.inputSize);
+                this.Whh = initWeight(this.hiddenSize, this.hiddenSize);
+                this.Why = initWeight(this.outputSize, this.hiddenSize);
+                this.bh = Array(this.hiddenSize).fill(0).map(() => (Math.random() - 0.5) * 0.1);
+                this.by = Array(this.outputSize).fill(0).map(() => (Math.random() - 0.5) * 0.1);
+                
+                // 初始化隐藏状态
+                this.h = Array(this.hiddenSize).fill(0);
+            }
+            
+            bindEvents() {
+                // 参数控制
+                document.getElementById('hiddenSize').addEventListener('input', (e) => {
+                    this.hiddenSize = parseInt(e.target.value);
+                    document.getElementById('hiddenSizeValue').textContent = this.hiddenSize;
+                    this.initializeWeights();
+                    this.draw();
+                    this.updateHiddenStateViz();
+                });
+                
+                document.getElementById('learningRate').addEventListener('input', (e) => {
+                    this.learningRate = parseFloat(e.target.value);
+                    document.getElementById('learningRateValue').textContent = this.learningRate;
+                });
+                
+                document.getElementById('seqLength').addEventListener('input', (e) => {
+                    this.seqLength = parseInt(e.target.value);
+                    document.getElementById('seqLengthValue').textContent = this.seqLength;
+                    this.currentStep = 0;
+                    this.updateTimestepDisplay();
+                    this.draw();
+                });
+                
+                document.getElementById('animSpeed').addEventListener('input', (e) => {
+                    this.animationSpeed = parseFloat(e.target.value);
+                    document.getElementById('animSpeedValue').textContent = this.animationSpeed + 'x';
+                });
+                
+                // 按钮事件
+                document.getElementById('resetBtn').addEventListener('click', () => {
+                    this.reset();
+                });
+                
+                document.getElementById('randomizeBtn').addEventListener('click', () => {
+                    this.initializeWeights();
+                    this.draw();
+                });
+                
+                document.getElementById('runBtn').addEventListener('click', () => {
+                    this.runForward();
+                });
+                
+                document.getElementById('playBtn').addEventListener('click', () => {
+                    this.togglePlay();
+                });
+                
+                document.getElementById('prevStep').addEventListener('click', () => {
+                    this.prevStep();
+                });
+                
+                document.getElementById('nextStep').addEventListener('click', () => {
+                    this.nextStep();
+                });
+                
+                // 预设按钮
+                document.querySelectorAll('.preset-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        document.getElementById('inputSequence').value = btn.dataset.text;
+                    });
+                });
+                
+                // 窗口调整
+                window.addEventListener('resize', () => {
+                    this.resizeCanvas();
+                    this.draw();
+                });
+            }
+            
+            reset() {
+                this.currentStep = 0;
+                this.isPlaying = false;
+                this.h = Array(this.hiddenSize).fill(0);
+                this.inputs = [];
+                this.outputs = [];
+                this.initializeWeights();
+                this.updateTimestepDisplay();
+                this.draw();
+                this.updateHiddenStateViz();
+                this.clearOutput();
+                
+                document.getElementById('playBtn').textContent = '▶ 播放';
+                document.getElementById('playBtn').classList.add('active');
+            }
+            
+            // 激活函数
+            tanh(x) {
+                return Math.tanh(x);
+            }
+            
+            softmax(arr) {
+                const max = Math.max(...arr);
+                const exp = arr.map(x => Math.exp(x - max));
+                const sum = exp.reduce((a, b) => a + b, 0);
+                return exp.map(x => x / sum);
+            }
+            
+            // 前向传播一步
+            forwardStep(input) {
+                // 计算新的隐藏状态
+                const newH = Array(this.hiddenSize).fill(0);
+                
+                for (let i = 0; i < this.hiddenSize; i++) {
+                    let sum = this.bh[i];
+                    
+                    // 来自输入的贡献
+                    for (let j = 0; j < this.inputSize; j++) {
+                        sum += this.Wxh[i][j] * input[j];
+                    }
+                    
+                    // 来自上一隐藏状态的贡献
+                    for (let j = 0; j < this.hiddenSize; j++) {
+                        sum += this.Whh[i][j] * this.h[j];
+                    }
+                    
+                    newH[i] = this.tanh(sum);
+                }
+                
+                this.h = newH;
+                
+                // 计算输出
+                const output = Array(this.outputSize).fill(0);
+                for (let i = 0; i < this.outputSize; i++) {
+                    let sum = this.by[i];
+                    for (let j = 0; j < this.hiddenSize; j++) {
+                        sum += this.Why[i][j] * this.h[j];
+                    }
+                    output[i] = sum;
+                }
+                
+                return this.softmax(output);
+            }
+            
+            // 将文本转换为one-hot编码
+            textToVector(text) {
+                const words = text.split(/\s+/).filter(w => w.length > 0);
+                const vocab = ['我', '喜欢', '深度', '学习', '今天', '天气', '真', '好', 
+                              '机器', '很', '有趣', '人工', '智能', '改变', '世界'];
+                
+                return words.map(word => {
+                    const vec = Array(vocab.length).fill(0);
+                    const idx = vocab.indexOf(word);
+                    if (idx >= 0) vec[idx] = 1;
+                    return vec;
+                });
+            }
+            
+            // 生成随机输入向量
+            generateRandomInput() {
+                const vec = Array(this.inputSize).fill(0).map(() => Math.random());
+                const sum = vec.reduce((a, b) => a + b, 0);
+                return vec.map(x => x / sum);
+            }
+            
+            runForward() {
+                const inputText = document.getElementById('inputSequence').value;
+                this.inputs = [];
+                
+                // 解析输入
+                const words = inputText.split(/\s+/).filter(w => w.length > 0);
+                
+                // 为每个词生成特征向量（简化处理）
+                for (let i = 0; i < this.seqLength; i++) {
+                    if (i < words.length) {
+                        // 基于词生成特征
+                        const word = words[i];
+                        const features = Array(this.inputSize).fill(0);
+                        for (let j = 0; j < word.length && j < this.inputSize; j++) {
+                            features[j] = word.charCodeAt(j) / 1000;
+                        }
+                        this.inputs.push(features);
+                    } else {
+                        this.inputs.push(Array(this.inputSize).fill(0));
+                    }
+                }
+                
+                this.currentStep = 0;
+                this.h = Array(this.hiddenSize).fill(0);
+                this.outputs = [];
+                
+                // 执行所有时间步
+                for (let i = 0; i < this.seqLength; i++) {
+                    const output = this.forwardStep(this.inputs[i]);
+                    this.outputs.push(output);
+                }
+                
+                this.updateTimestepDisplay();
+                this.draw();
+                this.updateOutput();
+                this.updateHiddenStateViz();
+            }
+            
+            togglePlay() {
+                this.isPlaying = !this.isPlaying;
+                const btn = document.getElementById('playBtn');
+                
+                if (this.isPlaying) {
+                    btn.textContent = '⏸ 暂停';
+                    btn.classList.remove('active');
+                    this.playAnimation();
+                } else {
+                    btn.textContent = '▶ 播放';
+                    btn.classList.add('active');
+                    if (this.animationId) {
+                        cancelAnimationFrame(this.animationId);
+                    }
+                }
+            }
+            
+            playAnimation() {
+                if (!this.isPlaying) return;
+                
+                if (this.currentStep < this.seqLength - 1) {
+                    this.currentStep++;
+                    this.updateTimestepDisplay();
+                    this.draw();
+                    this.updateHiddenStateViz();
+                    
+                    setTimeout(() => {
+                        this.animationId = requestAnimationFrame(() => this.playAnimation());
+                    }, 1000 / this.animationSpeed);
+                } else {
+                    this.isPlaying = false;
+                    document.getElementById('playBtn').textContent = '▶ 播放';
+                    document.getElementById('playBtn').classList.add('active');
+                }
+            }
+            
+            prevStep() {
+                if (this.currentStep > 0) {
+                    this.currentStep--;
+                    this.updateTimestepDisplay();
+                    this.draw();
+                    this.updateHiddenStateViz();
+                }
+            }
+            
+            nextStep() {
+                if (this.currentStep < this.seqLength - 1) {
+                    this.currentStep++;
+                    this.updateTimestepDisplay();
+                    this.draw();
+                    this.updateHiddenStateViz();
+                }
+            }
+            
+            updateTimestepDisplay() {
+                document.getElementById('currentTimestep').textContent = 
+                    `Step ${this.currentStep} / ${this.seqLength}`;
+            }
+            
+            updateHiddenStateViz() {
+                const container = document.getElementById('hiddenStateViz');
+                container.innerHTML = '';
+                
+                for (let i = 0; i < this.hiddenSize; i++) {
+                    const node = document.createElement('div');
+                    node.className = 'state-node';
+                    node.style.animationDelay = `${i * 0.05}s`;
+                    const value = this.h[i] || 0;
+                    const intensity = Math.abs(value);
+                    const color = value >= 0 ? 
+                        `rgba(233, 69, 96, ${intensity})` : 
+                        `rgba(100, 149, 237, ${intensity})`;
+                    node.style.backgroundColor = color;
+                    node.textContent = i + 1;
+                    node.title = `h${i+1}: ${value.toFixed(3)}`;
+                    
+                    // 添加悬停效果
+                    node.addEventListener('mouseenter', () => {
+                        node.style.transform = 'scale(1.2)';
+                        node.style.boxShadow = `0 0 15px ${color}`;
+                    });
+                    node.addEventListener('mouseleave', () => {
+                        node.style.transform = 'scale(1)';
+                        node.style.boxShadow = 'none';
+                    });
+                    
+                    container.appendChild(node);
+                }
+            }
+            
+            updateOutput() {
+                const container = document.getElementById('outputResults');
+                
+                if (this.outputs.length === 0) {
+                    container.innerHTML = `
+                        <div class="output-item fade-in-element">
+                            <span class="output-label">预测结果</span>
+                            <span class="output-value">-</span>
+                        </div>
+                        <div class="output-item fade-in-element delay-1">
+                            <span class="output-label">置信度</span>
+                            <span class="output-value">-</span>
+                        </div>
+                        <div class="probability-bar fade-in-element delay-2">
+                            <div class="probability-fill" style="width: 0%"></div>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                const lastOutput = this.outputs[this.outputs.length - 1];
+                const maxProb = Math.max(...lastOutput);
+                const maxIdx = lastOutput.indexOf(maxProb);
+                const labels = ['类别A', '类别B', '类别C', '类别D'];
+                
+                container.innerHTML = `
+                    <div class="output-item fade-in-element">
+                        <span class="output-label">预测结果</span>
+                        <span class="output-value highlight-animation">${labels[maxIdx]}</span>
+                    </div>
+                    <div class="output-item fade-in-element delay-1">
+                        <span class="output-label">置信度</span>
+                        <span class="output-value">${(maxProb * 100).toFixed(1)}%</span>
+                    </div>
+                    <div class="probability-bar fade-in-element delay-2">
+                        <div class="probability-fill" style="width: ${maxProb * 100}%"></div>
+                    </div>
+                    <div style="margin-top: 15px;" class="fade-in-element delay-3">
+                        ${lastOutput.map((prob, idx) => `
+                            <div class="output-item category-bar" style="padding: 5px 0; --bar-width: ${prob * 100}%; animation-delay: ${idx * 0.1}s;">
+                                <span class="output-label" style="font-size: 0.85rem;">${labels[idx]}</span>
+                                <span class="output-value" style="font-size: 0.9rem;">${(prob * 100).toFixed(1)}%</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+            
+            clearOutput() {
+                this.updateOutput();
+            }
+            
+            draw() {
+                const ctx = this.ctx;
+                const w = this.canvas.width;
+                const h = this.canvas.height;
+                
+                // 清空画布
+                ctx.clearRect(0, 0, w, h);
+                
+                // 绘制背景网格
+                this.drawGrid();
+                
+                // 绘制RNN展开结构
+                this.drawRNNStructure();
+                
+                // 绘制数据流动画
+                if (this.inputs.length > 0) {
+                    this.drawDataFlow();
+                }
+            }
+            
+            drawGrid() {
+                const ctx = this.ctx;
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+                ctx.lineWidth = 1;
+                
+                for (let i = 0; i < this.canvas.width; i += 30) {
+                    ctx.beginPath();
+                    ctx.moveTo(i, 0);
+                    ctx.lineTo(i, this.canvas.height);
+                    ctx.stroke();
+                }
+                
+                for (let i = 0; i < this.canvas.height; i += 30) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, i);
+                    ctx.lineTo(this.canvas.width, i);
+                    ctx.stroke();
+                }
+            }
+            
+            drawRNNStructure() {
+                const ctx = this.ctx;
+                const w = this.canvas.width;
+                const h = this.canvas.height;
+                
+                const cellWidth = Math.min(200, (w - 60) / this.seqLength);
+                const cellHeight = 200;
+                const startX = 30;
+                const centerY = h / 2;
+                
+                // 绘制每个时间步的单元
+                for (let t = 0; t < this.seqLength; t++) {
+                    const x = startX + t * cellWidth + cellWidth / 2;
+                    const isActive = t === this.currentStep;
+                    const hasPassed = t <= this.currentStep;
+                    
+                    // 绘制时间步标签
+                    ctx.fillStyle = isActive ? '#e94560' : '#a0a0a0';
+                    ctx.font = 'bold 14px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(`t=${t}`, x, centerY - cellHeight / 2 - 75);
+                    
+                    // 绘制RNN单元（圆角矩形）
+                    const rectSize = 60;
+                    ctx.save();
+                    ctx.translate(x, centerY);
+                    
+                    // 单元阴影
+                    if (isActive) {
+                        ctx.shadowColor = '#e94560';
+                        ctx.shadowBlur = 20;
+                    }
+                    
+                    // 单元背景
+                    ctx.fillStyle = hasPassed ? 'rgba(233, 69, 96, 0.2)' : 'rgba(255, 255, 255, 0.05)';
+                    ctx.strokeStyle = isActive ? '#e94560' : 'rgba(233, 69, 96, 0.3)';
+                    ctx.lineWidth = isActive ? 3 : 2;
+                    
+                    this.roundRect(ctx, -rectSize/2, -rectSize/2, rectSize, rectSize, 10);
+                    ctx.fill();
+                    ctx.stroke();
+                    
+                    // 单元标签
+                    ctx.fillStyle = isActive ? '#e94560' : '#c0c0c0';
+                    ctx.font = 'bold 16px Arial';
+                    ctx.shadowBlur = 0;
+                    ctx.fillText('RNN', 0, 5);
+                    
+                    ctx.restore();
+                    
+                    // 绘制输入
+                    if (this.inputs[t]) {
+                        ctx.fillStyle = hasPassed ? '#e94560' : '#a0a0a0';
+                        ctx.beginPath();
+                        ctx.arc(x, centerY + cellHeight / 2 + 30, 8, 0, Math.PI * 2);
+                        ctx.fill();
+                        
+                        // 输入标签
+                        ctx.fillStyle = '#a0a0a0';
+                        ctx.font = '12px Arial';
+                        ctx.fillText(`x${t}`, x, centerY + cellHeight / 2 + 55);
+                        
+                        // 输入连接线
+                        ctx.strokeStyle = hasPassed ? 'rgba(233, 69, 96, 0.5)' : 'rgba(255, 255, 255, 0.1)';
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.moveTo(x, centerY + cellHeight / 2 + 30);
+                        ctx.lineTo(x, centerY + rectSize / 2);
+                        ctx.stroke();
+                    }
+                    
+                    // 绘制输出
+                    ctx.fillStyle = hasPassed ? '#4CAF50' : '#a0a0a0';
+                    ctx.beginPath();
+                    ctx.arc(x, centerY - cellHeight / 2 - 30, 8, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // 输出标签
+                    ctx.fillStyle = '#a0a0a0';
+                    ctx.font = '12px Arial';
+                    ctx.fillText(`y${t}`, x, centerY - cellHeight / 2 - 45);
+                    
+                    // 输出连接线
+                    ctx.strokeStyle = hasPassed ? 'rgba(76, 175, 80, 0.5)' : 'rgba(255, 255, 255, 0.1)';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(x, centerY - rectSize / 2);
+                    ctx.lineTo(x, centerY - cellHeight / 2 - 30);
+                    ctx.stroke();
+                    
+                    // 绘制时间步之间的连接
+                    if (t < this.seqLength - 1) {
+                        const nextX = startX + (t + 1) * cellWidth + cellWidth / 2;
+                        ctx.strokeStyle = hasPassed ? 'rgba(233, 69, 96, 0.6)' : 'rgba(255, 255, 255, 0.1)';
+                        ctx.lineWidth = hasPassed ? 3 : 2;
+                        ctx.beginPath();
+                        ctx.moveTo(x + rectSize / 2, centerY);
+                        ctx.lineTo(nextX - rectSize / 2, centerY);
+                        ctx.stroke();
+                        
+                        // 箭头
+                        if (hasPassed) {
+                            ctx.fillStyle = '#e94560';
+                            ctx.beginPath();
+                            ctx.moveTo(nextX - rectSize / 2, centerY);
+                            ctx.lineTo(nextX - rectSize / 2 - 10, centerY - 5);
+                            ctx.lineTo(nextX - rectSize / 2 - 10, centerY + 5);
+                            ctx.closePath();
+                            ctx.fill();
+                        }
+                    }
+                }
+                
+                // 绘制标题
+                ctx.fillStyle = '#e94560';
+                ctx.font = 'bold 18px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('RNN 网络展开结构', w / 2, 30);
+                
+                // 绘制图例
+                this.drawLegend(w - 150, h - 80);
+            }
+            
+            drawDataFlow() {
+                const ctx = this.ctx;
+                const w = this.canvas.width;
+                const h = this.canvas.height;
+                
+                const cellWidth = Math.min(200, (w - 60) / this.seqLength);
+                const startX = 30;
+                const centerY = h / 2;
+                
+                // 绘制当前时间步的数据流
+                if (this.currentStep < this.inputs.length) {
+                    const x = startX + this.currentStep * cellWidth + cellWidth / 2;
+                    
+                    // 脉冲效果 - 增强动画
+                    const time = Date.now() / 1000;
+                    const pulse = Math.sin(time * 4) * 0.4 + 0.6;
+                    const radius = 45 + Math.sin(time * 6) * 5;
+                    
+                    // 外层光环
+                    ctx.save();
+                    ctx.translate(x, centerY);
+                    ctx.strokeStyle = `rgba(233, 69, 96, ${pulse * 0.5})`;
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, radius + 15, 0, Math.PI * 2);
+                    ctx.stroke();
+                    
+                    // 中层光环
+                    ctx.strokeStyle = `rgba(233, 69, 96, ${pulse * 0.8})`;
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+                    ctx.stroke();
+                    
+                    // 内层实心圆
+                    ctx.fillStyle = `rgba(233, 69, 96, ${0.3 + pulse * 0.2})`;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 25, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.restore();
+                    
+                    // 绘制数据流动画 - 从输入到RNN单元
+                    if (this.inputs[this.currentStep]) {
+                        const progress = (Date.now() % 1000) / 1000;
+                        const startY = centerY + 130;
+                        const endY = centerY + 30;
+                        const currentY = startY + (endY - startY) * progress;
+                        
+                        // 数据包
+                        ctx.fillStyle = '#e94560';
+                        ctx.beginPath();
+                        ctx.arc(x, currentY, 6, 0, Math.PI * 2);
+                        ctx.fill();
+                        
+                        // 轨迹线
+                        ctx.strokeStyle = `rgba(233, 69, 96, ${0.3 * (1 - progress)})`;
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.moveTo(x, startY);
+                        ctx.lineTo(x, currentY);
+                        ctx.stroke();
+                    }
+                    
+                    // 绘制隐藏状态传递动画
+                    if (this.currentStep < this.seqLength - 1) {
+                        const nextX = startX + (this.currentStep + 1) * cellWidth + cellWidth / 2;
+                        const progress = (Date.now() % 1200) / 1200;
+                        const startX_pos = x + 30;
+                        const endX_pos = nextX - 30;
+                        const currentX = startX_pos + (endX_pos - startX_pos) * progress;
+                        
+                        // 状态传递粒子
+                        ctx.fillStyle = '#60a5fa';
+                        ctx.beginPath();
+                        ctx.arc(currentX, centerY, 5, 0, Math.PI * 2);
+                        ctx.fill();
+                        
+                        // 粒子尾迹
+                        ctx.strokeStyle = `rgba(96, 165, 250, ${0.4 * (1 - progress)})`;
+                        ctx.lineWidth = 3;
+                        ctx.beginPath();
+                        ctx.moveTo(startX_pos, centerY);
+                        ctx.lineTo(currentX, centerY);
+                        ctx.stroke();
+                    }
+                }
+            }
+            
+            drawLegend(x, y) {
+                const ctx = this.ctx;
+                
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.fillRect(x, y, 130, 70);
+                ctx.strokeStyle = 'rgba(233, 69, 96, 0.3)';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(x, y, 130, 70);
+                
+                // 图例项
+                ctx.fillStyle = '#e94560';
+                ctx.beginPath();
+                ctx.arc(x + 15, y + 20, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#c0c0c0';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'left';
+                ctx.fillText('输入节点', x + 30, y + 25);
+                
+                ctx.fillStyle = '#4CAF50';
+                ctx.beginPath();
+                ctx.arc(x + 15, y + 45, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#c0c0c0';
+                ctx.fillText('输出节点', x + 30, y + 50);
+            }
+            
+            roundRect(ctx, x, y, width, height, radius) {
+                ctx.beginPath();
+                ctx.moveTo(x + radius, y);
+                ctx.lineTo(x + width - radius, y);
+                ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+                ctx.lineTo(x + width, y + height - radius);
+                ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+                ctx.lineTo(x + radius, y + height);
+                ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+                ctx.lineTo(x, y + radius);
+                ctx.quadraticCurveTo(x, y, x + radius, y);
+                ctx.closePath();
+            }
+        }
+        
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            const visualizer = new RNNVisualizer();
+        });
+        
+        // 粒子效果实现
+        const particlesCanvas = document.getElementById('particlesCanvas');
+        const pCtx = particlesCanvas.getContext('2d');
+        
+        // 设置canvas尺寸
+        function resizeParticlesCanvas() {
+            particlesCanvas.width = window.innerWidth;
+            particlesCanvas.height = window.innerHeight;
+        }
+        
+        resizeParticlesCanvas();
+        window.addEventListener('resize', resizeParticlesCanvas);
+        
+        // 创建粒子数组
+        const particles = [];
+        const particleCount = 100;
+        
+        // 粒子类
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+            
+            reset() {
+                this.x = Math.random() * particlesCanvas.width;
+                this.y = Math.random() * particlesCanvas.height;
+                this.size = Math.random() * 2 + 0.5;
+                this.speedX = (Math.random() - 0.5) * 0.5;
+                this.speedY = (Math.random() - 0.5) * 0.5;
+                this.opacity = Math.random() * 0.5 + 0.1;
+                this.color = `rgba(96, 165, 250, ${this.opacity})`;
+            }
+            
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                
+                // 边界检测
+                if (this.x < 0 || this.x > particlesCanvas.width || this.y < 0 || this.y > particlesCanvas.height) {
+                    this.reset();
+                }
+            }
+            
+            draw() {
+                pCtx.fillStyle = this.color;
+                pCtx.beginPath();
+                pCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                pCtx.fill();
+            }
+        }
+        
+        // 初始化粒子
+        for (let i = 0; i < particleCount; i++) {
+            particles.push(new Particle());
+        }
+        
+        // 动画循环
+        function animateParticles() {
+            pCtx.clearRect(0, 0, particlesCanvas.width, particlesCanvas.height);
+            
+            particles.forEach(particle => {
+                particle.update();
+                particle.draw();
+            });
+            
+            requestAnimationFrame(animateParticles);
+        }
+        
+        // 启动动画
+        animateParticles();
+    </script>
+</body>
+</html>

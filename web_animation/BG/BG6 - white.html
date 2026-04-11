@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>网络层面DNS劫持原理演示</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        light: '#f8fafc', // 浅色背景
+                        lighter: '#ffffff',
+                        primary: '#6d28d9', // 主色调稍深以适应浅色
+                        secondary: '#8b5cf6',
+                        highlight: '#7c3aed',
+                        success: '#059669',
+                        danger: '#dc2626',
+                        network: '#2563eb'
+                    },
+                    fontFamily: {
+                        mono: ['JetBrains Mono', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .text-glow {
+                text-shadow: 0 0 12px rgba(109, 40, 217, 0.5);
+            }
+            .border-glow {
+                box-shadow: 0 0 20px rgba(109, 40, 217, 0.3);
+            }
+            .network-glow {
+                box-shadow: 0 0 18px rgba(37, 99, 235, 0.3);
+            }
+            .hijack-glow {
+                box-shadow: 0 0 18px rgba(220, 38, 38, 0.3);
+            }
+            .grid-bg {
+                background-image: linear-gradient(rgba(109, 40, 217, 0.05) 1px, transparent 1px),
+                                linear-gradient(90deg, rgba(109, 40, 217, 0.05) 1px, transparent 1px);
+                background-size: 24px 24px;
+            }
+            .animate-float {
+                animation: float 5s ease-in-out infinite;
+            }
+            @keyframes float {
+                0% { transform: translateY(0); }
+                50% { transform: translateY(-12px); }
+                100% { transform: translateY(0); }
+            }
+            .animate-pulse-slow {
+                animation: pulse 3.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            }
+            .animate-data-flow {
+                animation: dataFlow 2.5s ease-in-out infinite;
+            }
+            @keyframes dataFlow {
+                0% { opacity: 0; transform: translateX(-15px); }
+                15% { opacity: 1; }
+                85% { opacity: 1; }
+                100% { opacity: 0; transform: translateX(15px); }
+            }
+            .animate-network-pulse {
+                animation: networkPulse 4s ease-in-out infinite;
+            }
+            @keyframes networkPulse {
+                0% { box-shadow: 0 0 15px rgba(37, 99, 235, 0.2); }
+                50% { box-shadow: 0 0 25px rgba(37, 99, 235, 0.4); }
+                100% { box-shadow: 0 0 15px rgba(37, 99, 235, 0.2); }
+            }
+            .animate-hijack-pulse {
+                animation: hijackPulse 3s ease-in-out infinite;
+            }
+            @keyframes hijackPulse {
+                0% { box-shadow: 0 0 15px rgba(220, 38, 38, 0.2); }
+                50% { box-shadow: 0 0 25px rgba(220, 38, 38, 0.4); }
+                100% { box-shadow: 0 0 15px rgba(220, 38, 38, 0.2); }
+            }
+        }
+    </style>
+</head>
+<body class="bg-light text-gray-800 min-h-screen font-mono overflow-x-hidden">
+    <!-- 粒子网络背景 -->
+    <div id="network-bg" class="fixed inset-0 z-0 opacity-20"></div>
+
+    <script>
+        // 网络背景粒子效果 - 浅色版
+        (function createNetworkBackground() {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const nodes = [];
+            const connections = [];
+            const particleCount = 80;
+            
+            // 初始化画布
+            function initCanvas() {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                canvas.id = 'network-bg';
+                document.body.appendChild(canvas);
+            }
+            
+            // 创建节点
+            class Node {
+                constructor() {
+                    this.x = Math.random() * canvas.width;
+                    this.y = Math.random() * canvas.height;
+                    this.size = Math.random() * 2 + 1;
+                    this.speedX = (Math.random() - 0.5) * 0.3;
+                    this.speedY = (Math.random() - 0.5) * 0.3;
+                    this.color = `rgba(109, 40, 217, ${Math.random() * 0.3 + 0.1})`; // 调整透明度适应浅色
+                    this.pulse = Math.random() * Math.PI * 2;
+                }
+                
+                update() {
+                    // 边界反弹
+                    if (this.x < 0 || this.x > canvas.width) this.speedX *= -1;
+                    if (this.y < 0 || this.y > canvas.height) this.speedY *= -1;
+                    
+                    // 更新位置
+                    this.x += this.speedX;
+                    this.y += this.speedY;
+                    
+                    // 更新呼吸效果
+                    this.pulse += 0.02;
+                }
+                
+                draw() {
+                    // 粒子呼吸效果
+                    const pulseSize = this.size * (1 + Math.sin(this.pulse) * 0.3);
+                    ctx.fillStyle = this.color;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, pulseSize, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // 粒子光晕效果
+                    const gradient = ctx.createRadialGradient(
+                        this.x, this.y, 0,
+                        this.x, this.y, pulseSize * 2
+                    );
+                    gradient.addColorStop(0, this.color);
+                    gradient.addColorStop(1, 'rgba(109, 40, 217, 0)');
+                    ctx.fillStyle = gradient;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, pulseSize * 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            
+            // 创建连接
+            function createConnections() {
+                connections.length = 0;
+                for (let i = 0; i < nodes.length; i++) {
+                    for (let j = i + 1; j < nodes.length; j++) {
+                        const dx = nodes[i].x - nodes[j].x;
+                        const dy = nodes[i].y - nodes[j].y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        
+                        // 距离小于150时创建连接
+                        if (distance < 150) {
+                            // 根据距离计算连接强度和颜色（适应浅色背景）
+                            const opacity = 1 - (distance / 150) * 0.7;
+                            let color;
+                            
+                            if (distance < 50) {
+                                // 近距离连接 - 紫色
+                                color = `rgba(109, 40, 217, ${opacity * 0.5})`;
+                            } else if (distance < 100) {
+                                // 中等距离 - 蓝紫色
+                                color = `rgba(102, 116, 255, ${opacity * 0.4})`;
+                            } else {
+                                // 远距离 - 蓝色
+                                color = `rgba(37, 99, 235, ${opacity * 0.3})`;
+                            }
+                            
+                            connections.push({
+                                node1: nodes[i],
+                                node2: nodes[j],
+                                color: color,
+                                opacity: opacity,
+                                thickness: 0.3 + (1 - distance / 150) * 0.7
+                            });
+                        }
+                    }
+                }
+            }
+            
+            // 绘制连接
+            function drawConnections() {
+                connections.forEach(conn => {
+                    ctx.strokeStyle = conn.color;
+                    ctx.lineWidth = conn.thickness;
+                    ctx.beginPath();
+                    ctx.moveTo(conn.node1.x, conn.node1.y);
+                    ctx.lineTo(conn.node2.x, conn.node2.y);
+                    ctx.stroke();
+                    
+                    // 添加连接点的动态效果
+                    const midX = (conn.node1.x + conn.node2.x) / 2;
+                    const midY = (conn.node1.y + conn.node2.y) / 2;
+                    const offsetX = Math.sin(Date.now() * 0.001 + midX) * 5;
+                    const offsetY = Math.cos(Date.now() * 0.001 + midY) * 5;
+                    
+                    ctx.fillStyle = conn.color;
+                    ctx.beginPath();
+                    ctx.arc(midX + offsetX, midY + offsetY, 1.5 * conn.thickness, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+            }
+            
+            // 初始化
+            function init() {
+                initCanvas();
+                // 创建更多节点
+                for (let i = 0; i < particleCount; i++) {
+                    nodes.push(new Node());
+                }
+                createConnections();
+                animate();
+            }
+            
+            // 动画循环
+            function animate() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // 更新并绘制节点
+                nodes.forEach(node => {
+                    node.update();
+                    node.draw();
+                });
+                
+                // 每30帧更新一次连接
+                if (Math.floor(Date.now() / 16) % 30 === 0) {
+                    createConnections();
+                }
+                drawConnections();
+                
+                requestAnimationFrame(animate);
+            }
+            
+            // 窗口大小变化时重置画布
+            window.addEventListener('resize', () => {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                createConnections();
+            });
+            
+            init();
+        })();
+
+        // 劫持模式切换逻辑
+        const switchBtn = document.getElementById('switch-mode');
+        const isHijacked = { status: false };
+
+        // 所有需要切换的元素
+        const elements = {
+            // 正常状态元素
+            normal: [
+                'normal-dns', 'real-website', 
+                'flow-device-normal', 'flow-dns-real',
+                'arrow1', 'arrow4', 'req1', 'req4',
+                'network-boundary'
+            ],
+            // 劫持状态元素
+            hijack: [
+                'hijack-dns', 'fake-website', 'hijack-node',
+                'flow-device-hijack', 'flow-hijack-dns', 'flow-hijack-fake',
+                'arrow2', 'arrow3', 'arrow5', 'req2', 'req3', 'req5'
+            ],
+            // 设备元素（切换边框颜色）
+            devices: ['device1', 'device2', 'device3']
+        };
+
+        // 切换模式函数
+        function toggleHijackMode() {
+            isHijacked.status = !isHijacked.status;
+            
+            if (isHijacked.status) {
+                // 切换到劫持模式
+                switchBtn.innerHTML = '<i class="fa fa-exchange mr-2"></i>切换到正常模式';
+                switchBtn.classList.remove('bg-primary', 'hover:bg-secondary');
+                switchBtn.classList.add('bg-danger', 'hover:bg-red-700');
+                
+                // 隐藏正常元素，显示劫持元素
+                elements.normal.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (id.includes('network-boundary')) {
+                        el.classList.remove('animate-network-pulse');
+                        el.classList.add('animate-hijack-pulse');
+                        el.classList.remove('bg-network/30');
+                        el.classList.add('bg-danger/30');
+                    } else {
+                        el.classList.add('opacity-0', 'scale-90');
+                        el.classList.remove('opacity-100', 'scale-100');
+                    }
+                });
+                
+                elements.hijack.forEach(id => {
+                    const el = document.getElementById(id);
+                    el.classList.remove('opacity-0', 'scale-90');
+                    el.classList.add('opacity-100', 'scale-100');
+                });
+                
+                // 设备边框变色（提示被影响）
+                elements.devices.forEach(id => {
+                    const el = document.getElementById(id);
+                    el.classList.remove('border-primary/30');
+                    el.classList.add('border-danger/30', 'hijack-glow');
+                    const icon = el.querySelector('i');
+                    icon.classList.remove('text-primary');
+                    icon.classList.add('text-danger');
+                });
+                
+            } else {
+                // 切换到正常模式
+                switchBtn.innerHTML = '<i class="fa fa-exchange mr-2"></i>切换到劫持模式';
+                switchBtn.classList.remove('bg-danger', 'hover:bg-red-700');
+                switchBtn.classList.add('bg-primary', 'hover:bg-secondary');
+                
+                // 显示正常元素，隐藏劫持元素
+                elements.normal.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (id.includes('network-boundary')) {
+                        el.classList.add('animate-network-pulse');
+                        el.classList.remove('animate-hijack-pulse');
+                        el.classList.add('bg-network/30');
+                        el.classList.remove('bg-danger/30');
+                    } else {
+                        el.classList.remove('opacity-0', 'scale-90');
+                        el.classList.add('opacity-100', 'scale-100');
+                    }
+                });
+                
+                elements.hijack.forEach(id => {
+                    const el = document.getElementById(id);
+                    el.classList.add('opacity-0', 'scale-90');
+                    el.classList.remove('opacity-100', 'scale-100');
+                });
+                
+                // 恢复设备边框颜色
+                elements.devices.forEach(id => {
+                    const el = document.getElementById(id);
+                    el.classList.add('border-primary/30');
+                    el.classList.remove('border-danger/30', 'hijack-glow');
+                    const icon = el.querySelector('i');
+                    icon.classList.add('text-primary');
+                    icon.classList.remove('text-danger');
+                });
+            }
+        }
+
+        // 绑定切换事件
+        switchBtn.addEventListener('click', toggleHijackMode);
+
+        // 初始加载时执行一次动画
+        window.addEventListener('load', () => {
+            elements.normal.forEach(id => {
+                const el = document.getElementById(id);
+                el.classList.add('animate-float');
+                setTimeout(() => {
+                    el.classList.remove('animate-float');
+                }, 2000);
+            });
+        });
+    </script>
+</body>
+</html>
