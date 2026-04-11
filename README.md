@@ -7,9 +7,9 @@
 ---
 
 ## 项目简介
-
-<img width="2560" height="1440" alt="QQ_1775901708474" src="https://github.com/user-attachments/assets/333ae988-1791-426b-81e4-afd8aabd160b" />
-
+<img width="2560" height="1440" alt="QQ_1775901765825" src="https://github.com/user-attachments/assets/77ee698e-7e88-43b7-b048-8eed006ed278" />
+<img width="2560" height="1440" alt="QQ_1775901779039" src="https://github.com/user-attachments/assets/e06a3dc6-a57f-40f6-b88b-d4da2c049f45" />
+<img width="2560" height="1440" alt="QQ_1775901789295" src="https://github.com/user-attachments/assets/657be29c-2770-46e2-8780-4d28712e3683" />
 
 本项目整理了用于生成**炫酷 HTML 动画网页**的 AI Prompts，涵盖动画效果、3D 可视化、PPT 风格演示、UI 美化等多个类别。
 
