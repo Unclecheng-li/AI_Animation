@@ -118,4 +118,4 @@ cd AI-Animation
 ## 致谢
 
 - AI 工具：[Trae](https://trae.ai/)、Claude、ChatGPT 等
-- 所有参与测试和反馈的社区成员
+- 所有参与测试和反馈的社区成员(虽然目前还没有desuwa)
