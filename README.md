@@ -58,7 +58,7 @@ AI Animation/
 
 ```bash
 # 克隆仓库
-git clone https://github.com/Unclecheng-li/AI-Animation.git
+git clone https://github.com/Unclecheng-li/AI_Animation.git
 cd AI-Animation
 
 # 在浏览器中打开任意 .html 文件
