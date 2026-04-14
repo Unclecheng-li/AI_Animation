@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent 为什么会失败？· 失败模式①</title>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+
+:root {
+    --dark-bg: #0A0A0F;
+    --dark-secondary: #12121A;
+    --dark-tertiary: #1A1A24;
+    --accent-red: #FF3B5C;
+    --accent-crimson: #FF1A4B;
+    --accent-gold: #FFD700;
+    --accent-amber: #FFB800;
+    --accent-orange: #FF6B35;
+    --text-primary: #F5F5FA;
+    --text-secondary: #A1A1AA;
+    --text-muted: #71717A;
+    --glow-red: rgba(255, 59, 92, 0.35);
+    --glow-gold: rgba(255, 215, 0, 0.25);
+}
+
+body{font-family:'Noto Sans SC',sans-serif;background:var(--dark-bg);color:var(--text-primary);overflow:hidden;width:100vw;height:100vh}
+
+/* Background effects */
+.bg-grid {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background-image: 
+        linear-gradient(rgba(255,59,92,0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,59,92,0.02) 1px, transparent 1px);
+    background-size: 50px 50px;
+    pointer-events: none;
+}
+
+.lc{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle}
+.lc-96 svg{width:96px;height:96px}.lc-80 svg{width:80px;height:80px}.lc-64 svg{width:64px;height:64px}
+.lc-48 svg{width:48px;height:48px}.lc-40 svg{width:40px;height:40px}.lc-36 svg{width:36px;height:36px}
+.lc-32 svg{width:32px;height:32px}.lc-28 svg{width:28px;height:28px}.lc-24 svg{width:24px;height:24px}
+.lc-20 svg{width:20px;height:20px}.lc-18 svg{width:18px;height:18px}
+
+.slide-container{width:100vw;height:100vh;position:relative}
+.slide{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:50px 80px;opacity:0;pointer-events:none;transition:opacity .6s ease;background:radial-gradient(ellipse at 50% 30%, var(--dark-secondary) 0%, var(--dark-bg) 100%);overflow:hidden}
+.slide.active{opacity:1;pointer-events:auto}
+.slide .anim{opacity:0;transform:translateY(45px);transition:none}
+.slide.active .anim.show{opacity:1;transform:translateY(0);transition:opacity .7s cubic-bezier(.25,.46,.45,.94),transform .7s cubic-bezier(.25,.46,.45,.94)}
+
+.deco{position:absolute;border-radius:50%;pointer-events:none;filter:blur(80px);opacity:0.12;animation:orbFloat 8s ease-in-out infinite alternate}
+@keyframes orbFloat {
+    0% { transform: translate(0, 0) scale(1); }
+    100% { transform: translate(30px, -30px) scale(1.1); }
+}
+.deco-red{background:var(--accent-red)}
+.deco-crimson{background:var(--accent-crimson)}
+.deco-gold{background:var(--accent-gold)}
+.deco-amber{background:var(--accent-amber)}
+.deco-orange{background:var(--accent-orange)}
+
+.t-hero{font-size:5.5rem;font-weight:900;line-height:1.15;text-align:center}
+.t-huge{font-size:4rem;font-weight:900;line-height:1.2;text-align:center}
+.t-big{font-size:3rem;font-weight:800;line-height:1.3;text-align:center}
+.t-mid{font-size:2.2rem;font-weight:700;line-height:1.4;text-align:center}
+.t-body{font-size:1.7rem;font-weight:400;line-height:1.6;text-align:center}
+.t-sm{font-size:1.2rem;font-weight:400;line-height:1.5;text-align:center}
+
+.c-red{color:var(--accent-red)}.c-crimson{color:var(--accent-crimson)}.c-gold{color:var(--accent-gold)}
+.c-amber{color:var(--accent-amber)}.c-orange{color:var(--accent-orange)}.c-dark{color:var(--text-primary)}
+.c-gray{color:var(--text-secondary)}.c-white{color:#fff}.c-muted{color:var(--text-muted)}
+
+.bg-red{background:rgba(255,59,92,0.12);padding:6px 20px;border-radius:10px;border:1px solid rgba(255,59,92,0.2)}
+.bg-crimson{background:rgba(255,26,75,0.1);padding:6px 20px;border-radius:10px;border:1px solid rgba(255,26,75,0.2)}
+.bg-gold{background:rgba(255,215,0,0.1);padding:6px 20px;border-radius:10px;border:1px solid rgba(255,215,0,0.2)}
+.bg-amber{background:rgba(255,184,0,0.1);padding:6px 20px;border-radius:10px;border:1px solid rgba(255,184,0,0.2)}
+
+.ul-red{text-decoration:underline;text-decoration-color:var(--accent-red);text-decoration-thickness:4px;text-underline-offset:8px}
+.ul-gold{text-decoration:underline;text-decoration-color:var(--accent-gold);text-decoration-thickness:4px;text-underline-offset:8px}
+.bold{font-weight:900}.italic{font-style:italic}
+.line{width:70px;height:4px;border-radius:2px;background:linear-gradient(90deg,var(--accent-red),var(--accent-gold));margin:18px auto}
+.strike{text-decoration:line-through;text-decoration-thickness:3px;color:var(--text-muted)}
+
+.era-badge{display:inline-flex;align-items:center;gap:10px;padding:10px 28px;border-radius:40px;font-size:1.6rem;font-weight:800;background:rgba(255,59,92,0.1);color:var(--accent-red);border:1px solid rgba(255,59,92,0.25);box-shadow:0 4px 20px var(--glow-red)}
+
+.person-card{display:flex;align-items:center;gap:28px;background:var(--dark-tertiary);border-radius:20px;padding:24px 32px;border:2px solid rgba(255,59,92,0.1);box-shadow:0 6px 24px rgba(0,0,0,0.3), 0 0 40px rgba(255,59,92,0.05);max-width:760px;width:85%}
+.person-avatar{width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+
+.concept-word{font-size:4.5rem;font-weight:900;letter-spacing:4px;background:linear-gradient(135deg,var(--accent-red),var(--accent-gold));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+
+.fail-badge{display:inline-flex;align-items:center;gap:10px;padding:12px 32px;border-radius:40px;font-size:2rem;font-weight:900;background:rgba(255,59,92,0.1);color:var(--accent-red);border:2.5px solid rgba(255,59,92,0.25);box-shadow:0 4px 20px var(--glow-red)}
+
+.result-card{display:flex;align-items:center;gap:24px;background:var(--dark-tertiary);border-radius:20px;padding:28px 36px;border:2px solid rgba(255,59,92,0.15);box-shadow:0 6px 30px rgba(255,59,92,0.08), 0 0 40px rgba(255,215,0,0.05);max-width:800px;width:85%}
+.result-icon{width:70px;height:70px;border-radius:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+
+.mode-row{display:flex;gap:20px;justify-content:center;width:90%;max-width:1000px}
+.mode-card{flex:1;display:flex;flex-direction:column;align-items:center;gap:10px;padding:24px 16px;border-radius:20px;background:var(--dark-tertiary);border:2px solid rgba(255,255,255,0.05);box-shadow:0 4px 20px rgba(0,0,0,0.3);min-width:200px;transition:transform .3s,box-shadow .3s}
+.mode-card:hover{transform:translateY(-4px)}
+.mode-card.active-mode{border-color:rgba(255,59,92,0.3);box-shadow:0 6px 30px rgba(255,59,92,0.15), 0 0 30px var(--glow-red);background:rgba(255,59,92,0.05)}
+
+.float-p{position:absolute;border-radius:50%;pointer-events:none;animation:floatP 5s ease-in-out infinite}
+@keyframes floatP{0%,100%{transform:translateY(0) scale(1);opacity:.2}50%{transform:translateY(-18px) scale(1.15);opacity:.35}}
+
+@keyframes pulse{0%,100%{transform:scale(1);opacity:.6}50%{transform:scale(1.15);opacity:1}}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+
+/* Floating particles */
+.float-particle {
+    position: absolute; border-radius: 50%; opacity: .25;
+    background: var(--accent-red);
+    animation: floatUp 6s ease-in-out infinite;
+    box-shadow: 0 0 20px var(--accent-red);
+}
+@keyframes floatUp {
+    0%,100% { transform: translateY(0) scale(1); opacity:.25; }
+    50% { transform: translateY(-20px) scale(1.2); opacity:.4; }
+}
+</style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+
+<div class="slide-container">
+
+<!-- ====== Slide 1: 前置问题 ====== -->
+<div class="slide active" id="s0">
+  <div class="deco deco-red" style="width:500px;height:500px;top:-200px;right:-150px"></div>
+  <div class="deco deco-gold" style="width:400px;height:400px;bottom:-120px;left:-120px;animation-delay:-4s"></div>
+  <div class="float-p" style="width:14px;height:14px;background:var(--accent-red);top:18%;left:10%;animation-delay:0s"></div>
+  <div class="float-p" style="width:10px;height:10px;background:var(--accent-gold);bottom:22%;right:14%;animation-delay:1.5s"></div>
+  <div class="float-particle" style="width:8px;height:8px;top:30%;right:25%;animation-delay:2s;"></div>
+
+  <div class="anim t-mid c-gray italic">讲 Harness 怎么设计之前 (｡･ω･｡)</div>
+  <div class="anim line" style="background:linear-gradient(90deg,var(--accent-red),var(--accent-gold))"></div>
+
+  <!-- Enhanced: Robot with question marks visual -->
+  <div class="anim" style="margin-top:10px">
+    <svg width="280" height="180" viewBox="0 0 280 180">
+      <!-- Robot body -->
+      <rect x="90" y="40" width="100" height="110" rx="20" fill="rgba(255,59,92,.08)" stroke="var(--accent-red)" stroke-width="2.5"/>
+      <!-- Robot head -->
+      <rect x="105" y="10" width="70" height="50" rx="14" fill="var(--dark-tertiary)" stroke="var(--accent-red)" stroke-width="2"/>
+      <!-- Eyes (X marks = confused) -->
+      <g stroke="var(--accent-red)" stroke-width="2.5" stroke-linecap="round">
+        <line x1="122" y1="28" x2="130" y2="36"/><line x1="130" y1="28" x2="122" y2="36"/>
+        <line x1="150" y1="28" x2="158" y2="36"/><line x1="158" y1="28" x2="150" y2="36"/>
+      </g>
+      <!-- Mouth (wavy = confused) -->
+      <path d="M120,48 Q130,42 140,48 Q150,54 160,48" fill="none" stroke="var(--accent-red)" stroke-width="2" stroke-linecap="round"/>
+      <!-- Antenna -->
+      <line x1="140" y1="10" x2="140" y2="0" stroke="var(--accent-red)" stroke-width="2"/>
+      <circle cx="140" cy="0" r="4" fill="var(--accent-red)" opacity=".5">
+        <animate attributeName="r" values="3;6;3" dur="1.5s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values=".3;.8;.3" dur="1.5s" repeatCount="indefinite"/>
+      </circle>
+      <!-- Arms hanging down -->
+      <line x1="90" y1="70" x2="65" y2="120" stroke="var(--accent-red)" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="190" y1="70" x2="215" y2="120" stroke="var(--accent-red)" stroke-width="2.5" stroke-linecap="round"/>
+      <!-- Error sparks -->
+      <g fill="none" stroke="var(--accent-gold)" stroke-width="1.5">
+        <path d="M60,60 L50,50 L55,55 L45,48" opacity=".6">
+          <animate attributeName="opacity" values=".2;.8;.2" dur="1.2s" repeatCount="indefinite"/>
+        </path>
+        <path d="M220,55 L232,45 L228,52 L240,42" opacity=".6">
+          <animate attributeName="opacity" values=".2;.8;.2" dur="1.2s" repeatCount="indefinite" begin=".4s"/>
+        </path>
+      </g>
+      <!-- Question marks floating -->
+      <text x="40" y="40" fill="var(--accent-red)" font-size="28" font-weight="900" opacity=".3">
+        ?<animate attributeName="y" values="42;30;42" dur="2.5s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values=".15;.5;.15" dur="2.5s" repeatCount="indefinite"/>
+      </text>
+      <text x="230" y="35" fill="var(--accent-gold)" font-size="22" font-weight="900" opacity=".3">
+        ?<animate attributeName="y" values="37;25;37" dur="2s" repeatCount="indefinite" begin=".6s"/>
+        <animate attributeName="opacity" values=".15;.5;.15" dur="2s" repeatCount="indefinite" begin=".6s"/>
+      </text>
+      <text x="250" y="70" fill="var(--accent-amber)" font-size="18" font-weight="900" opacity=".2">
+        ?<animate attributeName="y" values="72;62;72" dur="3s" repeatCount="indefinite" begin="1s"/>
+      </text>
+      <!-- Warning triangle -->
+      <polygon points="140,85 125,115 155,115" fill="none" stroke="var(--accent-gold)" stroke-width="2"/>
+      <text x="140" y="112" text-anchor="middle" fill="var(--accent-gold)" font-size="16" font-weight="900">!</text>
+    </svg>
+  </div>
+
+  <div class="anim t-hero c-dark" style="margin-top:8px">
+    Agent <span class="c-red bold ul-red">为什么会失败</span>？ 
+  </div>
+
+  <div class="anim t-mid c-gray" style="margin-top:16px">先搞清楚问题，再设计解决方案 (｀・ω・´)</div>
+</div>
+
+<!-- ====== Slide 2: Anthropic 总结 ====== -->
+<div class="slide" id="s1">
+  <div class="deco deco-crimson" style="width:450px;height:450px;top:-150px;left:-120px"></div>
+  <div class="deco deco-gold" style="width:350px;height:350px;bottom:-100px;right:-80px;animation-delay:-3s"></div>
+
+  <div class="anim person-card">
+    <div class="person-avatar" style="background:linear-gradient(135deg,rgba(255,59,92,.15),rgba(255,215,0,.1))">
+      <span class="lc lc-48 c-red"><i data-lucide="building-2"></i></span>
+    </div>
+    <div style="text-align:left">
+      <div style="font-size:2.2rem;font-weight:900;color:var(--text-primary)">Anthropic</div>
+      <div style="font-size:1.2rem;color:var(--text-muted);margin-top:4px">
+        <span class="lc lc-18 c-muted" style="margin-right:4px"><i data-lucide="users"></i></span>
+        工程师团队总结 (｀・ω・´)
+      </div>
+    </div>
+  </div>
+
+  <div class="anim line" style="margin:24px auto;background:linear-gradient(90deg,var(--accent-red),var(--accent-gold))"></div>
+
+  <div class="anim t-huge c-dark" style="margin-top:6px">
+    <span class="c-red bold" style="font-size:5rem">三种</span>典型失败模式 (｡･ω･｡)
+  </div>
+
+  <div class="anim mode-row" style="margin-top:24px">
+    <!-- Card 1 with visual -->
+    <div class="mode-card active-mode">
+      <div style="width:80px;height:80px;border-radius:50%;background:rgba(255,59,92,.1);display:flex;align-items:center;justify-content:center;position:relative">
+        <span class="lc lc-36 c-red"><i data-lucide="zap-off"></i></span>
+        <!-- Pulsing ring -->
+        <div style="position:absolute;inset:-6px;border-radius:50%;border:2px solid rgba(255,59,92,.3);animation:pulse 2s ease-in-out infinite"></div>
+      </div>
+      <div style="font-size:1.6rem;font-weight:900;color:var(--accent-red)">① 一步到位</div>
+      <div style="font-size:1rem;color:var(--text-muted)">One-shotting</div>
+    </div>
+    <div class="mode-card">
+      <div style="width:80px;height:80px;border-radius:50%;background:rgba(255,184,0,.08);display:flex;align-items:center;justify-content:center">
+        <span class="lc lc-36 c-amber"><i data-lucide="copy-x"></i></span>
+      </div>
+      <div style="font-size:1.6rem;font-weight:800;color:var(--accent-amber)">② 复制传播</div>
+      <div style="font-size:1rem;color:var(--text-muted)">Spreading bad patterns</div>
+    </div>
+    <div class="mode-card">
+      <div style="width:80px;height:80px;border-radius:50%;background:rgba(255,107,53,.08);display:flex;align-items:center;justify-content:center">
+        <span class="lc lc-36 c-orange"><i data-lucide="flag-off"></i></span>
+      </div>
+      <div style="font-size:1.6rem;font-weight:800;color:var(--accent-orange)">③ 提前收工</div>
+      <div style="font-size:1rem;color:var(--text-muted)">Premature completion</div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== Slide 3: 失败模式① 标题 ====== -->
+<div class="slide" id="s2">
+  <div class="deco deco-red" style="width:500px;height:500px;bottom:-200px;right:-180px"></div>
+  <div class="deco deco-gold" style="width:300px;height:300px;top:-100px;left:-80px;animation-delay:-2s"></div>
+
+  <div class="anim fail-badge">
+    <span class="lc lc-28 c-red"><i data-lucide="alert-triangle"></i></span>
+    失败模式 ① 
+  </div>
+
+  <div class="anim" style="margin-top:24px">
+    <span class="concept-word" style="font-size:5.5rem">试图一步到位</span>
+  </div>
+
+  <div class="anim line"></div>
+
+  <!-- Enhanced: Visual metaphor - cramming everything into one box -->
+  <div class="anim" style="margin-top:-12px">
+    <svg width="600" height="200" viewBox="0 0 600 200">
+      <!-- The "one session" box - overflowing -->
+      <rect x="180" y="30" width="240" height="140" rx="20" fill="rgba(255,59,92,.06)" stroke="var(--accent-red)" stroke-width="2.5" stroke-dasharray="0">
+        <animate attributeName="stroke-dasharray" values="0;8,4" dur="2s" fill="freeze" begin="1s"/>
+      </rect>
+      <text x="300" y="190" text-anchor="middle" fill="var(--accent-red)" font-size="16" font-weight="800">一个会话</text>
+
+      <!-- Task blocks trying to fit in -->
+      <rect x="195" y="42" width="80" height="28" rx="6" fill="rgba(255,59,92,.18)" stroke="rgba(255,59,92,.4)" stroke-width="1.5"/>
+      <text x="235" y="61" text-anchor="middle" fill="var(--accent-red)" font-size="12" font-weight="700">功能 A</text>
+
+      <rect x="285" y="42" width="80" height="28" rx="6" fill="rgba(255,184,0,.15)" stroke="rgba(255,184,0,.4)" stroke-width="1.5"/>
+      <text x="325" y="61" text-anchor="middle" fill="var(--accent-amber)" font-size="12" font-weight="700">功能 B</text>
+
+      <rect x="195" y="78" width="80" height="28" rx="6" fill="rgba(255,107,53,.15)" stroke="rgba(255,107,53,.4)" stroke-width="1.5"/>
+      <text x="235" y="97" text-anchor="middle" fill="var(--accent-orange)" font-size="12" font-weight="700">功能 C</text>
+
+      <rect x="285" y="78" width="80" height="28" rx="6" fill="rgba(255,215,0,.12)" stroke="rgba(255,215,0,.4)" stroke-width="1.5"/>
+      <text x="325" y="97" text-anchor="middle" fill="var(--accent-gold)" font-size="12" font-weight="700">功能 D</text>
+
+      <rect x="195" y="114" width="80" height="28" rx="6" fill="rgba(255,26,75,.12)" stroke="rgba(255,26,75,.4)" stroke-width="1.5"/>
+      <text x="235" y="133" text-anchor="middle" fill="var(--accent-crimson)" font-size="12" font-weight="700">功能 E</text>
+
+      <!-- Overflowing block - sticking out -->
+      <rect x="285" y="114" width="80" height="28" rx="6" fill="rgba(220,38,38,.15)" stroke="var(--accent-crimson)" stroke-width="1.5" stroke-dasharray="4,3"/>
+      <text x="325" y="133" text-anchor="middle" fill="var(--accent-crimson)" font-size="12" font-weight="700">功能 F</text>
+
+      <!-- Left arrow: tasks flowing in -->
+      <g opacity=".5">
+        <line x1="60" y1="100" x2="170" y2="100" stroke="var(--accent-red)" stroke-width="2" stroke-dasharray="6,4">
+          <animate attributeName="stroke-dashoffset" values="20;0" dur="1s" repeatCount="indefinite"/>
+        </line>
+        <polygon points="166,94 180,100 166,106" fill="var(--accent-red)"/>
+        <text x="100" y="88" text-anchor="middle" fill="var(--text-muted)" font-size="12">所有任务</text>
+      </g>
+    </svg>
+  </div>
+
+  <div class="anim t-mid c-dark" style="margin-top:8px;max-width:800px">
+    Agent 倾向于在<span class="bg-red c-red bold" style="font-size:2.6rem">一个会话里</span>把所有功能都做完 (｀・ω・´)
+  </div>
+</div>
+
+<!-- ====== Slide 4: 后果链条 ====== -->
+<div class="slide" id="s3">
+  <div class="deco deco-gold" style="width:500px;height:500px;top:-180px;left:-180px"></div>
+  <div class="deco deco-red" style="width:400px;height:400px;bottom:-150px;right:-100px;animation-delay:-3s"></div>
+
+  <div class="anim t-huge c-dark">会发生什么？ (｡ŏ_ŏ)</div>
+  <div class="anim line" style="background:linear-gradient(90deg,var(--accent-red),var(--accent-gold),var(--accent-amber))"></div>
+
+  <!-- Enhanced: Animated domino chain reaction -->
+  <div class="anim" style="margin-top:16px">
+    <svg width="900" height="260" viewBox="0 0 900 260">
+      <defs>
+        <marker id="ar1" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="var(--accent-red)"/></marker>
+        <linearGradient id="dangerGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="var(--accent-red)"/>
+          <stop offset="50%" stop-color="var(--accent-gold)"/>
+          <stop offset="100%" stop-color="var(--text-muted)"/>
+        </linearGradient>
+      </defs>
+
+      <!-- Step 1: One session -->
+      <rect x="15" y="50" width="180" height="140" rx="20" fill="rgba(255,59,92,.08)" stroke="var(--accent-red)" stroke-width="2.5"/>
+      <!-- Chat icon -->
+      <rect x="55" y="68" width="60" height="40" rx="10" fill="rgba(255,59,92,.12)" stroke="var(--accent-red)" stroke-width="1.5"/>
+      <circle cx="72" cy="88" r="4" fill="var(--accent-red)" opacity=".5"/>
+      <circle cx="85" cy="88" r="4" fill="var(--accent-red)" opacity=".5"/>
+      <circle cx="98" cy="88" r="4" fill="var(--accent-red)" opacity=".5"/>
+      <!-- Stacked task lines -->
+      <rect x="40" y="118" width="110" height="8" rx="4" fill="rgba(255,59,92,.2)"/>
+      <rect x="40" y="132" width="90" height="8" rx="4" fill="rgba(255,59,92,.16)"/>
+      <rect x="40" y="146" width="100" height="8" rx="4" fill="rgba(255,59,92,.12)"/>
+      <rect x="40" y="160" width="70" height="8" rx="4" fill="rgba(255,59,92,.1)"/>
+      <text x="105" y="210" text-anchor="middle" fill="var(--accent-red)" font-size="15" font-weight="900">一个会话做全部</text>
+
+      <!-- Arrow 1 with flowing dots -->
+      <line x1="200" y1="120" x2="248" y2="120" stroke="var(--accent-red)" stroke-width="2.5" stroke-dasharray="6,4">
+        <animate attributeName="stroke-dashoffset" values="20;0" dur="1s" repeatCount="indefinite"/>
+      </line>
+      <polygon points="244,114 258,120 244,126" fill="var(--accent-red)"/>
+
+      <!-- Step 2: Context overflow - meter visual -->
+      <rect x="262" y="50" width="180" height="140" rx="20" fill="rgba(255,184,0,.06)" stroke="var(--accent-amber)" stroke-width="2.5"/>
+      <!-- Memory meter -->
+      <rect x="302" y="68" width="100" height="24" rx="12" fill="rgba(255,184,0,.1)" stroke="var(--accent-amber)" stroke-width="1.5"/>
+      <rect x="304" y="70" width="96" height="20" rx="10" fill="linear-gradient(90deg,var(--accent-amber),var(--accent-red))">
+        <animate attributeName="width" values="30;96;96" dur="2s" fill="freeze" begin="1.5s"/>
+      </rect>
+      <text x="352" y="85" text-anchor="middle" fill="#fff" font-size="11" font-weight="800">FULL</text>
+      <!-- Overflow warning -->
+      <circle cx="352" cy="118" r="22" fill="none" stroke="var(--accent-crimson)" stroke-width="2">
+        <animate attributeName="stroke-width" values="1;3;1" dur="1.5s" repeatCount="indefinite"/>
+      </circle>
+      <text x="352" y="125" text-anchor="middle" fill="var(--accent-crimson)" font-size="22" font-weight="900">!</text>
+      <text x="352" y="162" text-anchor="middle" fill="var(--accent-amber)" font-size="13" font-weight="700">上下文窗口</text>
+      <text x="352" y="180" text-anchor="middle" fill="var(--accent-red)" font-size="15" font-weight="900">耗 尽</text>
+
+      <!-- Arrow 2 -->
+      <line x1="447" y1="120" x2="495" y2="120" stroke="var(--accent-amber)" stroke-width="2.5" stroke-dasharray="6,4">
+        <animate attributeName="stroke-dashoffset" values="20;0" dur="1s" repeatCount="indefinite"/>
+      </line>
+      <polygon points="491,114 505,120 491,126" fill="var(--accent-amber)"/>
+
+      <!-- Step 3: Half-baked code -->
+      <rect x="509" y="50" width="170" height="140" rx="20" fill="rgba(255,107,53,.06)" stroke="var(--accent-orange)" stroke-width="2.5"/>
+      <!-- Broken file icon -->
+      <rect x="555" y="68" width="46" height="56" rx="6" fill="none" stroke="var(--accent-orange)" stroke-width="1.8"/>
+      <polyline points="583,68 583,80 601,80" fill="none" stroke="var(--accent-orange)" stroke-width="1.5"/>
+      <!-- Code lines (some broken) -->
+      <line x1="562" y1="90" x2="590" y2="90" stroke="var(--accent-orange)" stroke-width="1.5" opacity=".5"/>
+      <line x1="562" y1="98" x2="580" y2="98" stroke="var(--accent-orange)" stroke-width="1.5" opacity=".3"/>
+      <line x1="562" y1="106" x2="575" y2="106" stroke="var(--accent-crimson)" stroke-width="1.5" opacity=".5" stroke-dasharray="3,2"/>
+      <line x1="562" y1="114" x2="585" y2="114" stroke="var(--accent-crimson)" stroke-width="1.5" opacity=".3" stroke-dasharray="3,2"/>
+      <!-- X mark over file -->
+      <g stroke="var(--accent-crimson)" stroke-width="2" opacity=".4" stroke-linecap="round">
+        <line x1="555" y1="68" x2="601" y2="124"/>
+        <line x1="601" y1="68" x2="555" y2="124"/>
+      </g>
+      <text x="594" y="158" text-anchor="middle" fill="var(--accent-orange)" font-size="13" font-weight="800">没有文档的</text>
+      <text x="594" y="178" text-anchor="middle" fill="var(--accent-orange)" font-size="15" font-weight="900">半成品代码</text>
+
+      <!-- Arrow 3 -->
+      <line x1="684" y1="120" x2="720" y2="120" stroke="var(--accent-orange)" stroke-width="2.5" stroke-dasharray="6,4">
+        <animate attributeName="stroke-dashoffset" values="20;0" dur="1s" repeatCount="indefinite"/>
+      </line>
+      <polygon points="716,114 730,120 716,126" fill="var(--text-muted)"/>
+
+      <!-- Step 4: Guessing -->
+      <rect x="734" y="50" width="150" height="140" rx="20" fill="rgba(113,113,122,.06)" stroke="var(--text-muted)" stroke-width="2.5"/>
+      <!-- Brain with question marks -->
+      <circle cx="809" cy="90" r="28" fill="none" stroke="var(--text-muted)" stroke-width="2"/>
+      <text x="809" y="98" text-anchor="middle" fill="var(--text-muted)" font-size="26" font-weight="900">?</text>
+      <!-- Orbiting question marks -->
+      <text font-size="16" fill="var(--text-muted)" font-weight="700" opacity=".4">
+        <animateMotion dur="3s" repeatCount="indefinite" path="M809,60 A30,30 0 1,1 808.99,60"/>?
+      </text>
+      <text x="809" y="155" text-anchor="middle" fill="var(--text-muted)" font-size="13" font-weight="800">下个会话</text>
+      <text x="809" y="178" text-anchor="middle" fill="var(--text-muted)" font-size="16" font-weight="900">只能猜 ？</text>
+
+      <!-- Bottom danger bar -->
+      <rect x="15" y="218" width="869" height="8" rx="4" fill="rgba(255,59,92,.08)"/>
+      <rect x="15" y="218" width="0" height="8" rx="4" fill="url(#dangerGrad)">
+        <animate attributeName="width" values="0;869" dur="3s" fill="freeze" begin="0.5s"/>
+      </rect>
+      <text x="450" y="248" text-anchor="middle" fill="var(--accent-red)" font-size="14" font-weight="800">一条链式反应 → 步步崩塌</text>
+    </svg>
+  </div>
+</div>
+
+<!-- ====== Slide 5: 结果 ====== -->
+<div class="slide" id="s4">
+  <div class="deco deco-red" style="width:500px;height:500px;top:-200px;right:-200px"></div>
+  <div class="deco deco-gold" style="width:400px;height:400px;bottom:-150px;left:-100px;animation-delay:-3s"></div>
+  <div class="float-particle" style="width:10px;height:10px;top:25%;left:15%;animation-delay:1s;"></div>
+  <div class="float-particle" style="width:6px;height:6px;top:65%;right:20%;animation-delay:3s;"></div>
+
+  <div class="anim t-huge c-dark">最终结果 (｡･ω･｡)</div>
+  <div class="anim line" style="background:linear-gradient(90deg,var(--accent-red),var(--accent-crimson))"></div>
+
+  <!-- Enhanced: result cards with visual gauges/meters -->
+  <div class="anim result-card" style="margin-top:14px">
+    <div class="result-icon" style="background:rgba(255,59,92,.1);position:relative">
+      <span class="lc lc-36 c-red"><i data-lucide="memory-stick"></i></span>
+      <!-- Mini overload meter -->
+      <svg width="70" height="6" style="position:absolute;bottom:4px;left:0">
+        <rect width="70" height="6" rx="3" fill="rgba(255,59,92,.15)"/>
+        <rect width="70" height="6" rx="3" fill="var(--accent-red)"/>
+      </svg>
+    </div>
+    <div style="text-align:left;flex:1">
+      <div style="font-size:2.2rem;font-weight:900;color:var(--accent-red)">上下文窗口耗尽</div>
+      <div style="font-size:1.2rem;color:var(--text-muted);margin-top:4px">信息溢出，无法继续理解任务 (´；ω；`)</div>
+    </div>
+    <!-- Severity indicator -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0">
+      <svg width="50" height="50" viewBox="0 0 50 50">
+        <circle cx="25" cy="25" r="20" fill="none" stroke="rgba(255,59,92,.15)" stroke-width="5"/>
+        <circle cx="25" cy="25" r="20" fill="none" stroke="var(--accent-red)" stroke-width="5" stroke-linecap="round" stroke-dasharray="126" stroke-dashoffset="0" transform="rotate(-90 25 25)"/>
+      </svg>
+      <div style="font-size:.8rem;color:var(--accent-red);font-weight:700">严重</div>
+    </div>
+  </div>
+
+  <div class="anim result-card" style="margin-top:12px;border-color:rgba(255,184,0,.2)">
+    <div class="result-icon" style="background:rgba(255,184,0,.1);position:relative">
+      <span class="lc lc-36 c-amber"><i data-lucide="file-x-2"></i></span>
+      <svg width="70" height="6" style="position:absolute;bottom:4px;left:0">
+        <rect width="70" height="6" rx="3" fill="rgba(255,184,0,.15)"/>
+        <rect width="50" height="6" rx="3" fill="var(--accent-amber)"/>
+      </svg>
+    </div>
+    <div style="text-align:left;flex:1">
+      <div style="font-size:2.2rem;font-weight:900;color:var(--accent-amber)">没有文档的半成品</div>
+      <div style="font-size:1.2rem;color:var(--text-muted);margin-top:4px">代码写了一半，没人知道意图 (｡ŏ_ŏ)</div>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0">
+      <svg width="50" height="50" viewBox="0 0 50 50">
+        <circle cx="25" cy="25" r="20" fill="none" stroke="rgba(255,184,0,.15)" stroke-width="5"/>
+        <circle cx="25" cy="25" r="20" fill="none" stroke="var(--accent-amber)" stroke-width="5" stroke-linecap="round" stroke-dasharray="126" stroke-dashoffset="30" transform="rotate(-90 25 25)"/>
+      </svg>
+      <div style="font-size:.8rem;color:var(--accent-amber);font-weight:700">高</div>
+    </div>
+  </div>
+
+  <div class="anim result-card" style="margin-top:12px;border-color:rgba(113,113,122,.2)">
+    <div class="result-icon" style="background:rgba(113,113,122,.1);position:relative">
+      <span class="lc lc-36 c-muted"><i data-lucide="brain"></i></span>
+      <svg width="70" height="6" style="position:absolute;bottom:4px;left:0">
+        <rect width="70" height="6" rx="3" fill="rgba(113,113,122,.15)"/>
+        <rect width="35" height="6" rx="3" fill="var(--text-muted)"/>
+      </svg>
+    </div>
+    <div style="text-align:left;flex:1">
+      <div style="font-size:2.2rem;font-weight:900;color:var(--text-muted)">下一轮疯狂猜测</div>
+      <div style="font-size:1.2rem;color:var(--text-muted);margin-top:4px">新会话启动，Agent 只能猜之前发生了什么 (｀・ω・´)</div>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0">
+      <svg width="50" height="50" viewBox="0 0 50 50">
+        <circle cx="25" cy="25" r="20" fill="none" stroke="rgba(113,113,122,.15)" stroke-width="5"/>
+        <circle cx="25" cy="25" r="20" fill="none" stroke="var(--text-muted)" stroke-width="5" stroke-linecap="round" stroke-dasharray="126" stroke-dashoffset="50" transform="rotate(-90 25 25)"/>
+      </svg>
+      <div style="font-size:.8rem;color:var(--text-muted);font-weight:700">中</div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== Slide 6: 视觉化总结 ====== -->
+<div class="slide" id="s5">
+  <div class="deco deco-crimson" style="width:600px;height:600px;top:50%;left:50%;margin-top:-300px;margin-left:-300px;opacity:0.1"></div>
+  <div class="deco deco-gold" style="width:400px;height:400px;top:-100px;right:-100px;animation-delay:-2s"></div>
+
+  <div class="anim">
+    <span class="lc lc-64 c-red"><i data-lucide="alert-octagon"></i></span>
+  </div>
+
+  <div class="anim t-mid c-gray" style="margin-top:10px">失败模式 ① 一句话总结 (｡･ω･｡)</div>
+  <div class="anim line"></div>
+
+  <!-- Enhanced: Visual summary with animated SVG -->
+  <div class="anim" style="margin-top:10px">
+    <svg width="760" height="230" viewBox="0 0 760 230">
+      <!-- Left: Box bursting with tasks -->
+      <rect x="20" y="30" width="200" height="170" rx="22" fill="rgba(255,59,92,.06)" stroke="var(--accent-red)" stroke-width="2.5"/>
+      <!-- Stacked bars overflowing -->
+      <rect x="40" y="50" width="160" height="18" rx="5" fill="rgba(255,59,92,.18)"/>
+      <rect x="40" y="74" width="140" height="18" rx="5" fill="rgba(255,184,0,.15)"/>
+      <rect x="40" y="98" width="150" height="18" rx="5" fill="rgba(255,107,53,.15)"/>
+      <rect x="40" y="122" width="130" height="18" rx="5" fill="rgba(255,215,0,.12)"/>
+      <rect x="40" y="146" width="145" height="18" rx="5" fill="rgba(255,26,75,.12)"/>
+      <!-- Overflow bars sticking out -->
+      <rect x="40" y="170" width="120" height="16" rx="5" fill="rgba(220,38,38,.12)" stroke="var(--accent-crimson)" stroke-width="1" stroke-dasharray="4,2" opacity=".6"/>
+      <text x="120" y="215" text-anchor="middle" fill="var(--accent-red)" font-size="15" font-weight="900">想做的事</text>
+      <text x="120" y="65" text-anchor="middle" fill="var(--accent-red)" font-size="11" font-weight="600">A + B + C + D + E…</text>
+
+      <!-- Middle: Context window meter -->
+      <rect x="275" y="40" width="200" height="150" rx="18" fill="var(--dark-tertiary)" stroke="var(--accent-amber)" stroke-width="2.5"/>
+      <text x="375" y="70" text-anchor="middle" fill="var(--accent-amber)" font-size="15" font-weight="900">上下文窗口</text>
+      <!-- Vertical meter gauge -->
+      <rect x="340" y="80" width="70" height="90" rx="8" fill="rgba(255,184,0,.08)" stroke="rgba(255,184,0,.3)" stroke-width="1.5"/>
+      <!-- Fill level - animated to full -->
+      <rect x="342" y="82" width="66" height="86" rx="6" fill="rgba(255,26,75,.25)">
+        <animate attributeName="y" values="150;82" dur="1.5s" fill="freeze" begin="0.8s"/>
+        <animate attributeName="height" values="18;86" dur="1.5s" fill="freeze" begin="0.8s"/>
+      </rect>
+      <!-- Danger line -->
+      <line x1="335" y1="95" x2="415" y2="95" stroke="var(--accent-crimson)" stroke-width="1.5" stroke-dasharray="4,3"/>
+      <text x="430" y="99" fill="var(--accent-crimson)" font-size="11" font-weight="700">上限</text>
+      <!-- Warning flash -->
+      <circle cx="375" cy="130" r="16" fill="none" stroke="var(--accent-crimson)" stroke-width="2">
+        <animate attributeName="r" values="12;20;12" dur="1.5s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values=".3;.8;.3" dur="1.5s" repeatCount="indefinite"/>
+      </circle>
+      <text x="375" y="136" text-anchor="middle" fill="var(--accent-crimson)" font-size="16" font-weight="900">!</text>
+
+      <!-- Arrows -->
+      <line x1="225" y1="115" x2="268" y2="115" stroke="var(--accent-red)" stroke-width="2" stroke-dasharray="5,3">
+        <animate attributeName="stroke-dashoffset" values="16;0" dur=".8s" repeatCount="indefinite"/>
+      </line>
+      <polygon points="264,109 278,115 264,121" fill="var(--accent-red)"/>
+
+      <line x1="480" y1="115" x2="524" y2="115" stroke="var(--accent-amber)" stroke-width="2" stroke-dasharray="5,3">
+        <animate attributeName="stroke-dashoffset" values="16;0" dur=".8s" repeatCount="indefinite"/>
+      </line>
+      <polygon points="520,109 534,115 520,121" fill="var(--accent-amber)"/>
+
+      <!-- Right: Result -->
+      <rect x="538" y="40" width="200" height="150" rx="22" fill="rgba(113,113,122,.04)" stroke="var(--text-muted)" stroke-width="2.5"/>
+      <!-- Broken pieces -->
+      <rect x="570" y="65" width="50" height="40" rx="8" fill="rgba(255,59,92,.1)" stroke="var(--accent-red)" stroke-width="1.5" transform="rotate(-8 595 85)"/>
+      <rect x="630" y="60" width="50" height="40" rx="8" fill="rgba(255,184,0,.08)" stroke="var(--accent-amber)" stroke-width="1.5" transform="rotate(5 655 80)"/>
+      <!-- Question marks -->
+      <text x="610" y="135" text-anchor="middle" fill="var(--text-muted)" font-size="32" font-weight="900" opacity=".3">? ? ?</text>
+      <text x="638" y="172" text-anchor="middle" fill="var(--text-muted)" font-size="14" font-weight="900">半成品 + 无文档</text>
+    </svg>
+  </div>
+
+  <div class="anim t-huge c-dark" style="margin-top:16px">
+    <span class="strike" style="font-size:3rem">一步到位</span> 
+    <span style="margin:0 16px;color:var(--text-muted);font-size:2.4rem">→</span>
+    <span class="bg-red c-red bold" style="font-size:4rem">一步崩盘</span>
+  </div>
+</div>
+
+</div>
+
+<script>
+lucide.createIcons();
+
+const slides=document.querySelectorAll('.slide'),
+      total=slides.length;
+let cur=0;
+
+function go(n){
+  if(n<0||n>=total||n===cur)return;
+  slides[cur].classList.remove('active');
+  slides[cur].querySelectorAll('.anim').forEach(e=>e.classList.remove('show'));
+  cur=n;
+  slides[cur].classList.add('active');
+  slides[cur].querySelectorAll('.anim').forEach((e,i)=>{
+    e.classList.remove('show');
+    setTimeout(()=>e.classList.add('show'),200+i*300);
+  });
+}
+
+slides[0].querySelectorAll('.anim').forEach((e,i)=>setTimeout(()=>e.classList.add('show'),400+i*350));
+
+document.addEventListener('keydown',e=>{
+  if(['ArrowRight','ArrowDown',' ','PageDown'].includes(e.key)){e.preventDefault();go(cur+1)}
+  else if(['ArrowLeft','ArrowUp','PageUp'].includes(e.key)){e.preventDefault();go(cur-1)}
+  else if(e.key==='Home'){e.preventDefault();go(0)}
+  else if(e.key==='End'){e.preventDefault();go(total-1)}
+});
+
+let tx=0,ty=0;
+document.addEventListener('touchstart',e=>{tx=e.changedTouches[0].screenX;ty=e.changedTouches[0].screenY});
+document.addEventListener('touchend',e=>{
+  const dx=e.changedTouches[0].screenX-tx,dy=e.changedTouches[0].screenY-ty;
+  if(Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>50){dx<0?go(cur+1):go(cur-1)}
+});
+
+let wc=false;
+document.addEventListener('wheel',e=>{
+  if(wc)return;wc=true;setTimeout(()=>wc=false,800);
+  e.deltaY>0?go(cur+1):go(cur-1);
+});
+</script>
+
+</body>
+</html>

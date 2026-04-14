@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPsec Pro Visualization | Swiper Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] },
+                    colors: {
+                        primary: '#0A84FF',
+                        accent: '#30D158',
+                        card: '#1c1c1e'
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        body {
+            background-color: #000;
+            color: #fff;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+        }
+
+        /* --- 侧边栏布局 --- */
+        .sidebar-container {
+            width: 350px;
+            flex-shrink: 0;
+            background: rgba(20, 20, 20, 0.6);
+            backdrop-filter: blur(20px);
+            border-right: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 2rem;
+            z-index: 20;
+            position: relative;
+        }
+
+        /* --- Swiper 容器 --- */
+        .main-stage {
+            flex-grow: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            background: radial-gradient(circle at center, #1a1a1a 0%, #000 100%);
+        }
+
+        .swiper {
+            width: 100%;
+            padding-top: 50px;
+            padding-bottom: 50px;
+        }
+
+        .swiper-slide {
+            background-position: center;
+            background-size: cover;
+            width: 300px;
+            height: 420px;
+            /* 玻璃拟态基础样式 */
+            background: rgba(40, 40, 45, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.5);
+            transition: all 0.3s;
+            user-select: none;
+        }
+
+        /* 3D 效果增强：非激活状态变暗 */
+        .swiper-slide-shadow-left,
+        .swiper-slide-shadow-right {
+            border-radius: 24px;
+        }
+
+        /* --- 激活状态 (Active State) --- */
+        .swiper-slide-active {
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 0 30px rgba(48, 209, 88, 0.2); /* 绿色微光 */
+            background: rgba(60, 60, 65, 0.8);
+        }
+
+        /* --- 荧光笔动画 (Highlighter) --- */
+        .highlight-text {
+            background: linear-gradient(120deg, transparent 50%, transparent 50%);
+            background-size: 200% 100%;
+            background-position: 100% 0;
+            transition: background-position 0.5s ease;
+            display: inline-block;
+            padding: 0 4px;
+        }
+
+        /* 只有当卡片变为 active 时，才播放划线动画 */
+        .swiper-slide-active .highlight-text {
+            background-image: linear-gradient(120deg, transparent 0%, #F59E0B 0%, #F59E0B 100%);
+            background-position: 0 0;
+            color: white; /* 确保对比度 */
+        }
+
+        /* 大数字背景 */
+        .bg-number {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 140px;
+            font-weight: 900;
+            color: rgba(255,255,255,0.03);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* 隧道模式隐藏 */
+        .tunnel-hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+
+    <aside class="sidebar-container">
+        <div class="mb-auto">
+            <h5 class="text-xs font-bold text-gray-500 tracking-[4px] uppercase mb-2">Presentation</h5>
+            <h1 class="text-4xl font-bold text-white mb-6 leading-tight">IPsec<br><span class="text-accent">Flow Analysis</span></h1>
+            
+            <div id="info-panel" class="transition-all duration-300">
+                <h2 id="info-title" class="text-xl font-bold text-primary mb-2">Ready?</h2>
+                <p id="info-desc" class="text-gray-300 text-sm leading-relaxed">
+                    Swipe or use arrow keys to navigate the packet flow.
+                </p>
+                <div class="mt-6 p-3 bg-white/5 rounded border-l-2 border-accent">
+                    <p id="info-note" class="text-xs text-gray-400 font-mono">
+                        System ready. Waiting for input.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <button id="mode-toggle" class="w-full py-3 bg-white/10 hover:bg-white/20 border border-white/10 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 group">
+            <div class="w-2 h-2 rounded-full bg-gray-500 group-hover:bg-accent transition-colors" id="mode-indicator"></div>
+            <span id="mode-text">ENABLE TUNNEL MODE</span>
+        </button>
+    </aside>
+
+    <main class="main-stage">
+        <div class="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/20 rounded-full blur-[100px] pointer-events-none"></div>
+        <div class="absolute bottom-1/4 right-1/4 w-80 h-80 bg-accent/10 rounded-full blur-[80px] pointer-events-none"></div>
+
+        <div class="swiper mySwiper">
+            <div class="swiper-wrapper" id="swiper-wrapper">
+                
+                <div class="swiper-slide">
+                    <span class="bg-number">01</span>
+                    <div class="relative z-10 flex flex-col items-center text-center">
+                        <i class="fa-solid fa-file-code text-5xl mb-6 text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.5)]"></i>
+                        <h3 class="text-2xl font-bold mb-2">Payload</h3>
+                        <p class="text-gray-400 text-sm mb-4">HTTP / Application Data</p>
+                        <div class="font-mono text-sm highlight-text rounded">DATA: CLEAR TEXT</div>
+                    </div>
+                </div>
+
+                <div class="swiper-slide">
+                    <span class="bg-number">02</span>
+                    <div class="relative z-10 flex flex-col items-center text-center">
+                        <i class="fa-solid fa-layer-group text-5xl mb-6 text-primary drop-shadow-[0_0_15px_rgba(10,132,255,0.5)]"></i>
+                        <h3 class="text-2xl font-bold mb-2">Layer 4</h3>
+                        <p class="text-gray-400 text-sm mb-4">TCP Segment</p>
+                        <div class="font-mono text-sm highlight-text rounded">PORT: 443 -> 1024</div>
+                    </div>
+                </div>
+
+                <div class="swiper-slide">
+                    <span class="bg-number">03</span>
+                    <div class="relative z-10 flex flex-col items-center text-center">
+                        <i class="fa-solid fa-network-wired text-5xl mb-6 text-purple-500 drop-shadow-[0_0_15px_rgba(168,85,247,0.5)]"></i>
+                        <h3 class="text-2xl font-bold mb-2">Layer 3</h3>
+                        <p class="text-gray-400 text-sm mb-4">Original IP Header</p>
+                        <div class="font-mono text-sm highlight-text rounded">SRC: 192.168.1.5</div>
+                    </div>
+                </div>
+
+                <div class="swiper-slide">
+                    <span class="bg-number">04</span>
+                    <div class="relative z-10 flex flex-col items-center text-center">
+                        <i class="fa-solid fa-shield-halved text-5xl mb-6 text-accent drop-shadow-[0_0_15px_rgba(48,209,88,0.5)] animate-pulse"></i>
+                        <h3 class="text-2xl font-bold mb-2">IPsec ESP</h3>
+                        <p class="text-gray-400 text-sm mb-4">Encryption & Auth</p>
+                        <div class="font-mono text-sm highlight-text rounded">AES-256 ENCRYPTED</div>
+                    </div>
+                </div>
+
+                <div class="swiper-slide tunnel-slide" style="display:none"> <span class="bg-number">05</span>
+                    <div class="relative z-10 flex flex-col items-center text-center">
+                        <div class="absolute inset-0 border-4 border-dashed border-gray-600 rounded-2xl pointer-events-none"></div>
+                        <i class="fa-solid fa-globe text-5xl mb-6 text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]"></i>
+                        <h3 class="text-2xl font-bold mb-2">New Header</h3>
+                        <p class="text-gray-400 text-sm mb-4">Tunnel Gateway IP</p>
+                        <div class="font-mono text-sm highlight-text rounded">SRC: 203.0.113.1</div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
+
+    <script>
+        // --- 1. 数据配置 (Model) ---
+        const contentData = [
+            {
+                title: "应用层载荷 (Payload)",
+                desc: "这是用户产生的原始数据。例如一个 HTTP GET 请求或数据库查询。在进入网络协议栈之前，它是明文的。",
+                note: "此时数据尚未被任何协议包裹。"
+            },
+            {
+                title: "传输层封装 (TCP)",
+                desc: "操作系统添加 TCP 头部，定义源端口和目的端口，确保数据的可靠传输和顺序。",
+                note: "Layer 4 准备就绪，即将进入网络层。"
+            },
+            {
+                title: "网络层 (Original IP)",
+                desc: "添加原始 IP 头部。这包含了发送者真实的私网 IP 地址。在普通模式下，这就是最终的包头。",
+                note: "如果是传输模式，IPsec 将插入在此之后。"
+            },
+            {
+                title: "IPsec 安全层 (ESP)",
+                desc: "IPsec 介入！ESP 协议对载荷进行加密，并添加尾部认证。此时中间人无法窥探数据内容。",
+                note: "数据包变黑盒，安全性 Max。"
+            },
+            {
+                title: "隧道新头部 (Tunnel IP)",
+                desc: "在隧道模式下，为了隐藏真实网络拓扑，IPsec 生成一个新的外层 IP 头（通常是网关地址）包裹一切。",
+                note: "外界只能看到网关在通信，内部主机隐身。"
+            }
+        ];
+
+        // --- 2. Swiper 初始化 (Controller) ---
+        // 关键点：使用 coverflow 效果实现 3D
+        var swiper = new Swiper(".mySwiper", {
+            effect: "coverflow",
+            grabCursor: true,
+            centeredSlides: true,
+            slidesPerView: "auto",
+            // 初始展示第几个？
+            initialSlide: 0,
+            // 3D 参数微调
+            coverflowEffect: {
+                rotate: 40,      // 侧边旋转角度
+                stretch: 0,      // 拉伸
+                depth: 120,      // 深度 (值越大，远近感越强)
+                modifier: 1,     // 效果倍率
+                slideShadows: true, // 开启阴影
+            },
+            // 键盘控制
+            keyboard: {
+                enabled: true,
+            },
+            // 鼠标滚轮
+            mousewheel: {
+                thresholdDelta: 50,
+                sensitivity: 1,
+            },
+            // 速度
+            speed: 600,
+            // 监听事件
+            on: {
+                slideChange: function () {
+                    updateSidebar(this.activeIndex);
+                }
+            }
+        });
+
+        // --- 3. 逻辑控制 ---
+
+        const titleEl = document.getElementById('info-title');
+        const descEl = document.getElementById('info-desc');
+        const noteEl = document.getElementById('info-note');
+        const infoPanel = document.getElementById('info-panel');
+        
+        // 更新侧边栏文字
+        function updateSidebar(index) {
+            // 简单的淡入淡出动画
+            infoPanel.style.opacity = '0';
+            infoPanel.style.transform = 'translateY(10px)';
+            
+            setTimeout(() => {
+                if (contentData[index]) {
+                    titleEl.innerText = contentData[index].title;
+                    descEl.innerText = contentData[index].desc;
+                    noteEl.innerText = contentData[index].note;
+                }
+                infoPanel.style.opacity = '1';
+                infoPanel.style.transform = 'translateY(0)';
+            }, 300);
+        }
+
+        // 初始化第一次内容
+        updateSidebar(0);
+
+        // --- 隧道模式切换 ---
+        let isTunnelMode = false;
+        const toggleBtn = document.getElementById('mode-toggle');
+        const indicator = document.getElementById('mode-indicator');
+        const modeText = document.getElementById('mode-text');
+        const tunnelSlide = document.querySelector('.tunnel-slide');
+
+        toggleBtn.addEventListener('click', () => {
+            isTunnelMode = !isTunnelMode;
+
+            if (isTunnelMode) {
+                // 开启模式
+                modeText.innerText = "SWITCH TO TRANSPORT";
+                indicator.classList.remove('bg-gray-500');
+                indicator.classList.add('bg-accent', 'animate-pulse');
+                toggleBtn.classList.add('border-accent');
+                
+                // 显示第五张卡片
+                tunnelSlide.style.display = 'flex';
+                swiper.update(); // 通知 Swiper DOM 变了
+                swiper.slideTo(4); // 自动滑过去以示强调
+            } else {
+                // 关闭模式
+                modeText.innerText = "ENABLE TUNNEL MODE";
+                indicator.classList.add('bg-gray-500');
+                indicator.classList.remove('bg-accent', 'animate-pulse');
+                toggleBtn.classList.remove('border-accent');
+
+                // 如果当前在第5张，先滑回来
+                if (swiper.activeIndex === 4) {
+                    swiper.slideTo(3);
+                    setTimeout(() => {
+                        tunnelSlide.style.display = 'none';
+                        swiper.update();
+                    }, 600);
+                } else {
+                    tunnelSlide.style.display = 'none';
+                    swiper.update();
+                }
+            }
+        });
+
+    </script>
+</body>
+</html>

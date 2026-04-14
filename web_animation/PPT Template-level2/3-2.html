@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Context Engineering · 上下文工程</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        
+        :root {
+            --dark-bg: #0D1117;
+            --dark-secondary: #161B22;
+            --dark-tertiary: #21262D;
+            --accent-cyan: #00D9FF;
+            --accent-teal: #2DD4BF;
+            --accent-blue: #60A5FA;
+            --accent-purple: #A78BFA;
+            --text-primary: #E6EDF3;
+            --text-secondary: #8B949E;
+            --text-muted: #6E7681;
+            --glow-cyan: rgba(0, 217, 255, 0.3);
+            --glow-teal: rgba(45, 212, 191, 0.25);
+        }
+        
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            background: var(--dark-bg);
+            color: var(--text-primary);
+            overflow: hidden;
+            width: 100vw; height: 100vh;
+        }
+
+        /* ============ Background Effects ============ */
+        .bg-grid {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-image: 
+                linear-gradient(rgba(0,217,255,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,217,255,0.03) 1px, transparent 1px);
+            background-size: 60px 60px;
+            pointer-events: none;
+        }
+        
+        .glow-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.15;
+            pointer-events: none;
+            animation: orbFloat 8s ease-in-out infinite alternate;
+        }
+        @keyframes orbFloat {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(30px, -30px) scale(1.1); }
+        }
+
+        /* ============ Slide Container ============ */
+        .deck { position: relative; width:100%; height:100%; }
+        .slide {
+            position: absolute; inset:0;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            padding: 50px 80px;
+            opacity: 0; pointer-events: none;
+            transition: opacity .5s ease;
+            background: radial-gradient(ellipse at 50% 30%, var(--dark-secondary) 0%, var(--dark-bg) 100%);
+            overflow: hidden;
+        }
+        .slide.active { opacity:1; pointer-events:auto; }
+
+        /* ============ Stagger entrance animation ============ */
+        .slide .anim {
+            opacity: 0;
+            transform: translateY(38px);
+            transition: opacity .65s cubic-bezier(.23,1,.32,1), transform .65s cubic-bezier(.23,1,.32,1);
+        }
+        .slide.active .anim.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* ============ Typography ============ */
+        .title-lg { font-size: 58px; font-weight:800; line-height:1.25; color:var(--text-primary); }
+        .title-md { font-size: 46px; font-weight:700; line-height:1.3; color:var(--text-primary); }
+        .subtitle { font-size: 28px; font-weight:400; color:var(--text-secondary); line-height:1.5; }
+        .text-xl { font-size: 32px; line-height:1.7; color:var(--text-primary); }
+        .text-lg { font-size: 28px; line-height:1.7; color:var(--text-secondary); }
+
+        .hl-cyan { color:var(--accent-cyan); font-weight:700; }
+        .hl-teal { color:var(--accent-teal); font-weight:700; }
+        .hl-blue { color:var(--accent-blue); }
+        .hl-bg { background:rgba(0,217,255,0.1); padding:2px 10px; border-radius:5px; border:1px solid rgba(0,217,255,0.2); }
+        .hl-bg2 { background:rgba(45,212,191,0.1); padding:2px 10px; border-radius:5px; border:1px solid rgba(45,212,191,0.2); }
+        .hl-underline { text-decoration: underline; text-decoration-color:var(--accent-cyan); text-underline-offset:6px; text-decoration-thickness:3px; }
+        .hl-italic { font-style:italic; }
+
+        .tag {
+            display:inline-flex; align-items:center; gap:6px;
+            background:rgba(0,217,255,0.1); color:var(--accent-cyan); font-size:20px; font-weight:600;
+            padding:6px 18px; border-radius:20px; border:1.5px solid rgba(0,217,255,0.25);
+            backdrop-filter: blur(10px);
+        }
+
+        .divider {
+            width:80px; height:4px; border-radius:2px;
+            background: linear-gradient(90deg,var(--accent-cyan),var(--accent-teal));
+            margin:16px 0;
+        }
+
+        .year-badge {
+            display:inline-flex; align-items:center; gap:8px;
+            background: linear-gradient(135deg,rgba(0,217,255,0.2),rgba(45,212,191,0.15));
+            color:var(--accent-cyan); font-size:24px; font-weight:700;
+            padding:10px 28px; border-radius:30px;
+            border: 1px solid rgba(0,217,255,0.3);
+            box-shadow: 0 4px 18px var(--glow-cyan);
+        }
+
+        /* ============ Slide 1 - Title ============ */
+        .slide-1 { background: radial-gradient(ellipse at 50% 30%, var(--dark-secondary) 0%, var(--dark-bg) 100%); }
+        .slide-1 .glow-orb-1 {
+            width: 500px; height: 500px;
+            background: var(--accent-cyan);
+            top: -100px; right: -100px;
+        }
+        .slide-1 .glow-orb-2 {
+            width: 400px; height: 400px;
+            background: var(--accent-purple);
+            bottom: -100px; left: -50px;
+            animation-delay: -4s;
+        }
+
+        .hero-visual {
+            position: relative;
+            width: 520px; height: 280px;
+            margin: 20px auto 0;
+        }
+        .hero-window {
+            position: absolute;
+            background: var(--dark-tertiary);
+            border-radius: 14px;
+            border: 2px solid rgba(0,217,255,0.15);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            overflow: hidden;
+        }
+        .hero-window .win-bar {
+            height: 28px; background: var(--dark-secondary);
+            display: flex; align-items: center; padding: 0 10px; gap: 6px;
+            border-bottom: 1px solid rgba(0,217,255,0.1);
+        }
+        .hero-window .win-bar span {
+            width: 10px; height: 10px; border-radius: 50%;
+        }
+        .hero-window .win-body {
+            padding: 14px 16px;
+        }
+        .hero-window .win-line {
+            height: 8px; border-radius: 4px; margin-bottom: 8px;
+        }
+        .hero-w1 { width: 260px; top: 0; left: 0; z-index: 3; }
+        .hero-w2 { width: 240px; top: 30px; left: 160px; z-index: 2; opacity:.85; }
+        .hero-w3 { width: 200px; top: 60px; left: 300px; z-index: 1; opacity:.65; }
+        .hero-gear {
+            position: absolute;
+            bottom: 10px; left: 50%;
+            transform: translateX(-50%);
+            animation: spin 12s linear infinite;
+        }
+        @keyframes spin { from{transform:translateX(-50%) rotate(0deg)} to{transform:translateX(-50%) rotate(360deg)} }
+
+        /* Floating particles */
+        .float-particle {
+            position: absolute; border-radius: 50%; opacity: .2;
+            background: var(--accent-cyan);
+            animation: floatUp 6s ease-in-out infinite;
+            box-shadow: 0 0 20px var(--accent-cyan);
+        }
+        @keyframes floatUp {
+            0%,100% { transform: translateY(0) scale(1); opacity:.2; }
+            50% { transform: translateY(-20px) scale(1.2); opacity:.35; }
+        }
+
+        /* ============ Slide 2 - Before vs After ============ */
+        .compare-box {
+            display: flex; align-items: stretch; gap: 0;
+            max-width: 1000px; width: 100%;
+        }
+        .compare-side {
+            flex: 1; padding: 36px 32px; text-align: center;
+            display: flex; flex-direction: column; align-items: center; gap: 16px;
+        }
+        .compare-side.before {
+            background: var(--dark-tertiary); border-radius: 20px 0 0 20px;
+            border: 2px solid rgba(110,118,129,0.3); border-right: none;
+        }
+        .compare-side.after {
+            background: rgba(0,217,255,0.08); border-radius: 0 20px 20px 0;
+            border: 2px solid rgba(0,217,255,0.25);
+        }
+        .compare-arrow-col {
+            display: flex; align-items: center; justify-content: center;
+            width: 80px; flex-shrink: 0;
+        }
+        .compare-icon-wrap {
+            width: 130px; height: 130px; border-radius: 28px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .compare-icon-wrap.dim { background: var(--dark-secondary); border: 2px solid rgba(110,118,129,0.3); }
+        .compare-icon-wrap.lit { background: rgba(0,217,255,0.1); border: 2px solid var(--accent-cyan); box-shadow: 0 0 30px var(--glow-cyan); }
+
+        /* Context stack */
+        .ctx-stack {
+            display: flex; flex-direction: column; gap: 6px; align-items: center;
+        }
+        .ctx-layer {
+            display: flex; align-items: center; gap: 8px;
+            background: var(--dark-secondary); border: 1.5px solid rgba(0,217,255,0.2);
+            border-radius: 10px; padding: 6px 16px;
+            font-size: 16px; font-weight: 600; color: var(--text-secondary);
+        }
+
+        /* ============ Slide 3 - Center Diagram ============ */
+        .center-diagram {
+            position: relative;
+            width: 500px; height: 500px;
+            margin: 0 auto;
+        }
+        .orbit-ring {
+            position:absolute; top:50%; left:50%;
+            transform:translate(-50%,-50%);
+            border-radius:50%; z-index:1;
+        }
+        .orbit-ring-1 { width:380px; height:380px; border:2px dashed rgba(0,217,255,0.2); }
+        .orbit-ring-2 { width:260px; height:260px; border:2px dotted rgba(45,212,191,0.15); }
+
+        .center-node {
+            position:absolute; top:50%; left:50%;
+            transform:translate(-50%,-50%);
+            width:150px; height:150px; border-radius:50%;
+            background: linear-gradient(135deg,var(--accent-cyan),var(--accent-teal));
+            color:var(--dark-bg); display:flex; flex-direction:column;
+            align-items:center; justify-content:center;
+            font-size:22px; font-weight:700;
+            box-shadow: 0 6px 30px var(--glow-cyan);
+            z-index:10;
+        }
+        /* Pulse ring */
+        .center-node::before {
+            content:''; position:absolute; inset:-18px;
+            border-radius:50%; border:3px solid var(--glow-cyan);
+            animation: pulse 2.5s ease-out infinite;
+        }
+        @keyframes pulse {
+            0% { transform:scale(.9); opacity:1; }
+            100% { transform:scale(1.3); opacity:0; }
+        }
+
+        .orbit-item {
+            position:absolute; z-index:5;
+            display:flex; flex-direction:column; align-items:center; gap:8px;
+        }
+        .orbit-icon-box {
+            width:100px; height:100px; border-radius:22px;
+            background:var(--dark-tertiary); border:2px solid rgba(0,217,255,0.2);
+            display:flex; align-items:center; justify-content:center;
+            box-shadow: 0 4px 18px rgba(0,0,0,0.3);
+            transition: transform .3s, box-shadow .3s;
+        }
+        .orbit-icon-box:hover { transform:scale(1.08); box-shadow:0 6px 24px var(--glow-cyan); }
+        .orbit-label {
+            font-size:18px; font-weight:700; color:var(--text-secondary);
+            background:var(--dark-secondary); padding:3px 12px; border-radius:8px;
+            border: 1px solid rgba(0,217,255,0.1);
+        }
+
+        /* Connector lines using SVG */
+        .diagram-connectors {
+            position:absolute; inset:0; z-index:2;
+        }
+
+        /* Orbit positions */
+        .orbit-item.pos-top    { top: -20px; left:50%; transform:translateX(-50%); }
+        .orbit-item.pos-right  { top:50%; right:-30px; transform:translateY(-50%); }
+        .orbit-item.pos-bottom { bottom:-20px; left:50%; transform:translateX(-50%); }
+        .orbit-item.pos-left   { top:50%; left:-30px; transform:translateY(-50%); }
+
+        /* ============ Slide 4 - Enhanced Cards ============ */
+        .card-grid {
+            display:grid; gap:28px;
+            width:100%; max-width:1100px;
+        }
+        .card-grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+
+        .card-enhanced {
+            background:var(--dark-tertiary); border-radius:20px;
+            padding:30px 24px; text-align:center;
+            border:2px solid rgba(0,217,255,0.1);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            transition: transform .3s, box-shadow .3s;
+            position: relative;
+            overflow: hidden;
+        }
+        .card-enhanced::before {
+            content:''; position:absolute; top:0; left:0; right:0;
+            height:5px;
+            border-radius: 20px 20px 0 0;
+        }
+        .card-enhanced.c1::before { background: linear-gradient(90deg,var(--accent-cyan),var(--accent-teal)); }
+        .card-enhanced.c2::before { background: linear-gradient(90deg,var(--accent-teal),var(--accent-blue)); }
+        .card-enhanced.c3::before { background: linear-gradient(90deg,var(--accent-blue),var(--accent-purple)); }
+        .card-enhanced.c4::before { background: linear-gradient(90deg,var(--accent-purple),var(--accent-cyan)); }
+        .card-enhanced:hover { transform:translateY(-6px); box-shadow:0 10px 35px rgba(0,217,255,0.15); border-color: rgba(0,217,255,0.25); }
+
+        .card-icon-lg {
+            width:90px; height:90px; border-radius:24px;
+            display:flex; align-items:center; justify-content:center;
+            margin:0 auto 14px;
+        }
+        .card-icon-lg.o1 { background:rgba(0,217,255,0.1); border: 2px solid rgba(0,217,255,0.2); }
+        .card-icon-lg.o2 { background:rgba(45,212,191,0.1); border: 2px solid rgba(45,212,191,0.2); }
+        .card-icon-lg.o3 { background:rgba(96,165,250,0.1); border: 2px solid rgba(96,165,250,0.2); }
+        .card-icon-lg.o4 { background:rgba(167,139,250,0.1); border: 2px solid rgba(167,139,250,0.2); }
+        .card-enhanced .card-title { font-size:28px; font-weight:700; color:var(--text-primary); margin-bottom:10px; }
+        .card-enhanced .card-desc { font-size:20px; color:var(--text-secondary); line-height:1.5; }
+
+        /* Illustration inside card */
+        .card-illust {
+            display: flex; flex-direction: column; gap: 5px;
+            margin-top: 12px; align-items: center;
+        }
+        .card-illust-bar {
+            height: 6px; border-radius: 3px;
+        }
+
+        /* ============ Slide 5 - Summary visual ============ */
+        .slide-5 { background: radial-gradient(ellipse at 50% 30%, var(--dark-secondary) 0%, var(--dark-bg) 100%); }
+        .slide-5 .glow-orb-1 {
+            width: 500px; height: 500px;
+            background: var(--accent-teal);
+            bottom: -150px; left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .summary-visual {
+            display: flex; align-items: center; gap: 40px;
+            margin-top: 20px;
+        }
+        .summary-left {
+            display: flex; flex-direction: column; align-items: center; gap: 14px;
+        }
+        .sum-funnel {
+            position: relative; width: 200px; height: 240px;
+        }
+        .funnel-layer {
+            position: absolute; left: 50%; transform: translateX(-50%);
+            border-radius: 14px; display: flex; align-items: center;
+            justify-content: center; gap: 8px;
+            font-size: 15px; font-weight: 600; color: var(--dark-bg);
+            box-shadow: 0 3px 12px rgba(0,0,0,.3);
+        }
+        .funnel-layer.f1 { width:190px; height:46px; top:0;   background:linear-gradient(90deg,var(--accent-cyan),var(--accent-teal)); }
+        .funnel-layer.f2 { width:160px; height:46px; top:54px; background:linear-gradient(90deg,var(--accent-teal),var(--accent-blue)); }
+        .funnel-layer.f3 { width:130px; height:46px; top:108px; background:linear-gradient(90deg,var(--accent-blue),var(--accent-purple)); }
+        .funnel-layer.f4 { width:100px; height:46px; top:162px; background:linear-gradient(90deg,var(--accent-purple),var(--accent-cyan)); }
+
+        .funnel-arrow-down {
+            position: absolute; bottom: -10px; left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .summary-right {
+            display: flex; flex-direction: column; align-items: center; gap: 12px;
+        }
+        .result-box {
+            width: 280px; background: var(--dark-tertiary); border-radius: 20px;
+            border: 3px solid var(--accent-cyan); padding: 28px;
+            text-align: center;
+            box-shadow: 0 8px 30px var(--glow-cyan);
+        }
+        .result-box .result-icon {
+            width: 80px; height: 80px; border-radius: 50%;
+            background: linear-gradient(135deg,var(--accent-cyan),var(--accent-teal));
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 14px;
+        }
+
+        /* ============ Responsive ============ */
+        @media(max-width:900px){
+            .slide { padding:30px 24px; }
+            .title-lg { font-size:38px; }
+            .title-md { font-size:30px; }
+            .card-grid.cols-4 { grid-template-columns:1fr 1fr; }
+            .compare-box { flex-direction: column; }
+            .compare-arrow-col { width: auto; height: 50px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+
+<div class="deck" id="deck">
+
+    <!-- ======================== SLIDE 1: Title ======================== -->
+    <div class="slide slide-1 active" data-index="0">
+        <div class="glow-orb glow-orb-1"></div>
+        <div class="glow-orb glow-orb-2"></div>
+        <!-- Floating particles -->
+        <div class="float-particle" style="width:12px;height:12px;top:15%;left:12%;animation-delay:0s;"></div>
+        <div class="float-particle" style="width:8px;height:8px;top:25%;right:18%;animation-delay:1.5s;"></div>
+        <div class="float-particle" style="width:10px;height:10px;bottom:20%;left:25%;animation-delay:3s;"></div>
+        <div class="float-particle" style="width:6px;height:6px;top:60%;right:10%;animation-delay:4s;"></div>
+
+        <div class="anim" style="margin-bottom:12px;">
+            <span class="tag">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                第二阶段
+            </span>
+        </div>
+
+        <div class="anim">
+            <div class="year-badge">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                2025
+            </div>
+        </div>
+
+        <div class="anim" style="margin-top:22px;">
+            <div class="title-lg" style="text-align:center;">
+                <span class="hl-cyan">Context Engineering</span> <span style="font-size:1.8rem;color:var(--accent-cyan)">(｡･ω･｡)ﾉ</span>
+            </div>
+        </div>
+        <div class="anim" style="margin-top:4px;">
+            <div class="title-lg" style="text-align:center;">上下文工程 ✧</div>
+        </div>
+
+        <div class="anim" style="margin-top:16px;">
+            <div class="divider" style="margin:0 auto;"></div>
+        </div>
+
+        <!-- Hero visual: stacked windows illustration -->
+        <div class="anim" style="margin-top:10px;">
+            <div class="hero-visual">
+                <!-- Window 1 -->
+                <div class="hero-window hero-w1">
+                    <div class="win-bar">
+                        <span style="background:var(--accent-cyan);"></span>
+                        <span style="background:var(--accent-teal);"></span>
+                        <span style="background:var(--text-muted);"></span>
+                    </div>
+                    <div class="win-body">
+                        <div class="win-line" style="width:85%;background:rgba(0,217,255,0.2);"></div>
+                        <div class="win-line" style="width:65%;background:rgba(45,212,191,0.15);"></div>
+                        <div class="win-line" style="width:75%;background:rgba(0,217,255,0.18);"></div>
+                        <div class="win-line" style="width:50%;background:rgba(0,217,255,0.12);"></div>
+                    </div>
+                </div>
+                <!-- Window 2 -->
+                <div class="hero-window hero-w2">
+                    <div class="win-bar">
+                        <span style="background:var(--accent-teal);"></span>
+                        <span style="background:var(--accent-blue);"></span>
+                        <span style="background:var(--text-muted);"></span>
+                    </div>
+                    <div class="win-body">
+                        <div class="win-line" style="width:70%;background:rgba(45,212,191,0.15);"></div>
+                        <div class="win-line" style="width:90%;background:rgba(96,165,250,0.12);"></div>
+                        <div class="win-line" style="width:55%;background:rgba(0,217,255,0.1);"></div>
+                    </div>
+                </div>
+                <!-- Window 3 -->
+                <div class="hero-window hero-w3">
+                    <div class="win-bar">
+                        <span style="background:var(--accent-blue);"></span>
+                        <span style="background:var(--accent-purple);"></span>
+                        <span style="background:var(--text-muted);"></span>
+                    </div>
+                    <div class="win-body">
+                        <div class="win-line" style="width:80%;background:rgba(96,165,250,0.12);"></div>
+                        <div class="win-line" style="width:60%;background:rgba(167,139,250,0.1);"></div>
+                    </div>
+                </div>
+                <!-- Gear icon -->
+                <div class="hero-gear">
+                    <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.4">
+                        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <div class="anim" style="margin-top:6px;">
+            <div class="subtitle" style="text-align:center; max-width:700px;">
+                为模型<span class="hl-underline">动态构建</span>整个上下文环境 (｀・ω・´)
+            </div>
+        </div>
+    </div>
+
+    <!-- ======================== SLIDE 2: Before vs After ======================== -->
+    <div class="slide" data-index="1">
+        <div class="glow-orb glow-orb-1" style="width:400px;height:400px;top:-120px;left:-100px;background:var(--accent-teal);"></div>
+
+        <div class="anim">
+            <div class="title-md" style="text-align:center;">
+                <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:12px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                单条 Prompt <span class="hl-cyan">不够用了</span> (｡ŏ_ŏ)
+            </div>
+        </div>
+
+        <div class="anim" style="margin-top:10px;">
+            <div class="divider" style="margin:0 auto;"></div>
+        </div>
+
+        <div class="anim" style="margin-top:30px; width:100%;">
+            <div class="compare-box" style="margin:0 auto;">
+                <!-- Before -->
+                <div class="compare-side before">
+                    <div class="compare-icon-wrap dim">
+                        <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    </div>
+                    <div class="text-lg" style="font-weight:700; font-size:32px;">过去 (´；ω；`)</div>
+
+                    <div class="text-lg" style="color:var(--text-muted); font-size:24px;">
+                        一条 Prompt → 一次回答
+                    </div>
+                </div>
+
+                <!-- Arrow -->
+                <div class="compare-arrow-col">
+                    <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                </div>
+
+                <!-- After -->
+                <div class="compare-side after">
+                    <div class="compare-icon-wrap lit">
+                        <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                    </div>
+                    <div class="text-lg" style="font-weight:700; font-size:32px;">现在 ✧(≖ ◡ ≖✿)</div>
+                    <!-- Context stack illustration -->
+                    <div class="ctx-stack">
+                        <div class="ctx-layer">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                            文件
+                        </div>
+                        <div class="ctx-layer">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-teal)" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                            对话
+                        </div>
+                        <div class="ctx-layer">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                            工具
+                        </div>
+                        <div class="ctx-layer">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-purple)" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                            知识库
+                        </div>
+                    </div>
+                    <div class="text-lg" style="color:var(--text-secondary); font-size:24px;">
+                        构建<span class="hl-bg">完整上下文</span> (｡･ω･｡)
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="anim" style="margin-top:30px;">
+            <div class="text-xl" style="text-align:center;">
+                模型每做决策，都要<span class="hl-underline hl-cyan" style="font-size:38px;">看到所有信息</span> (｀・ω・´)
+            </div>
+        </div>
+    </div>
+
+    <!-- ======================== SLIDE 3: Core Diagram ======================== -->
+    <div class="slide" data-index="2">
+        <div class="glow-orb glow-orb-1" style="width:350px;height:350px;bottom:-100px;right:-80px;background:var(--accent-blue);"></div>
+
+        <div class="anim">
+            <div class="title-md" style="text-align:center;">
+                上下文工程的<span class="hl-cyan">核心</span> (｡･ω･｡)
+            </div>
+        </div>
+
+        <div class="anim" style="margin-top:4px;">
+            <div class="divider" style="margin:0 auto;"></div>
+        </div>
+
+        <div class="anim" style="margin-top:8px;">
+            <div class="subtitle" style="text-align:center;">
+                <span class="hl-italic">动态构建</span>模型决策所需的<span class="hl-bg hl-underline">全部环境</span> (｀・ω・´)
+            </div>
+        </div>
+
+        <div class="anim" style="margin-top:6px;">
+            <div class="center-diagram">
+                <!-- SVG connector lines -->
+                <svg class="diagram-connectors" viewBox="0 0 500 500" fill="none">
+                    <!-- top -->
+                    <line x1="250" y1="100" x2="250" y2="185" stroke="rgba(0,217,255,0.3)" stroke-width="2.5" stroke-dasharray="6,4"/>
+                    <!-- right -->
+                    <line x1="400" y1="250" x2="315" y2="250" stroke="rgba(0,217,255,0.3)" stroke-width="2.5" stroke-dasharray="6,4"/>
+                    <!-- bottom -->
+                    <line x1="250" y1="400" x2="250" y2="315" stroke="rgba(0,217,255,0.3)" stroke-width="2.5" stroke-dasharray="6,4"/>
+                    <!-- left -->
+                    <line x1="100" y1="250" x2="185" y2="250" stroke="rgba(0,217,255,0.3)" stroke-width="2.5" stroke-dasharray="6,4"/>
+                    <!-- Animated dots on connectors -->
+                    <circle r="5" fill="var(--accent-cyan)" opacity=".6">
+                        <animateMotion dur="2.5s" repeatCount="indefinite" path="M250,100 L250,185"/>
+                    </circle>
+                    <circle r="5" fill="var(--accent-cyan)" opacity=".6">
+                        <animateMotion dur="2.5s" repeatCount="indefinite" path="M400,250 L315,250" begin=".6s"/>
+                    </circle>
+                    <circle r="5" fill="var(--accent-cyan)" opacity=".6">
+                        <animateMotion dur="2.5s" repeatCount="indefinite" path="M250,400 L250,315" begin="1.2s"/>
+                    </circle>
+                    <circle r="5" fill="var(--accent-cyan)" opacity=".6">
+                        <animateMotion dur="2.5s" repeatCount="indefinite" path="M100,250 L185,250" begin="1.8s"/>
+                    </circle>
+                </svg>
+
+                <div class="orbit-ring orbit-ring-1"></div>
+                <div class="orbit-ring orbit-ring-2"></div>
+
+                <div class="center-node">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                    <span style="margin-top:4px;">AI 模型</span>
+                </div>
+
+                <!-- Top: Files -->
+                <div class="orbit-item pos-top">
+                    <div class="orbit-icon-box">
+                        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                    </div>
+                    <div class="orbit-label">文件内容</div>
+                </div>
+
+                <!-- Right: Chat -->
+                <div class="orbit-item pos-right">
+                    <div class="orbit-icon-box">
+                        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--accent-teal)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    </div>
+                    <div class="orbit-label">历史对话</div>
+                </div>
+
+                <!-- Bottom: Tools -->
+                <div class="orbit-item pos-bottom">
+                    <div class="orbit-icon-box">
+                        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                    </div>
+                    <div class="orbit-label">工具规则</div>
+                </div>
+
+                <!-- Left: Knowledge -->
+                <div class="orbit-item pos-left">
+                    <div class="orbit-icon-box">
+                        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--accent-purple)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                    </div>
+                    <div class="orbit-label">知识库</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ======================== SLIDE 4: Four Components Cards ======================== -->
+    <div class="slide" data-index="3">
+        <div class="glow-orb glow-orb-1" style="width:450px;height:450px;top:-180px;right:-150px;background:var(--accent-purple);"></div>
+
+        <div class="anim">
+            <div class="title-md" style="text-align:center;">
+                上下文的 <span class="hl-cyan">四大组成</span> (｡･ω･｡)ﾉ
+            </div>
+        </div>
+
+        <div class="anim" style="margin-top:6px;">
+            <div class="divider" style="margin:0 auto;"></div>
+        </div>
+
+        <div class="anim" style="margin-top:32px; width:100%; display:flex; justify-content:center;">
+            <div class="card-grid cols-4" style="max-width:1100px;">
+                <!-- Card 1 -->
+                <div class="card-enhanced c1 anim">
+                    <div class="card-icon-lg o1">
+                        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                    </div>
+                    <div class="card-title">任务文件<br> (｡･ω･｡)</div>
+                    <!-- Mini illustration -->
+                    <div class="card-illust">
+                        <div class="card-illust-bar" style="width:80%;background:rgba(0,217,255,0.3);"></div>
+                        <div class="card-illust-bar" style="width:60%;background:rgba(0,217,255,0.2);"></div>
+                        <div class="card-illust-bar" style="width:70%;background:rgba(0,217,255,0.25);"></div>
+                    </div>
+                    <div class="card-desc" style="margin-top:10px;">
+                        与任务相关的<br><b class="hl-cyan">所有文件内容</b> <br>(｀・ω・´)
+                    </div>
+                </div>
+                <!-- Card 2 -->
+                <div class="card-enhanced c2 anim">
+                    <div class="card-icon-lg o2">
+                        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--accent-teal)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    </div>
+                    <div class="card-title">历史对话 <br>(｀・ω・´)</div>
+                    <div class="card-illust">
+                        <div style="display:flex;gap:6px;align-items:flex-end;">
+                            <div style="width:28px;height:20px;border-radius:6px 6px 6px 2px;background:rgba(45,212,191,0.2);"></div>
+                            <div style="width:36px;height:16px;border-radius:6px 6px 2px 6px;background:rgba(45,212,191,0.15);"></div>
+                        </div>
+                        <div style="display:flex;gap:6px;align-items:flex-end;">
+                            <div style="width:32px;height:18px;border-radius:6px 6px 6px 2px;background:rgba(45,212,191,0.25);"></div>
+                            <div style="width:28px;height:14px;border-radius:6px 6px 2px 6px;background:rgba(45,212,191,0.1);"></div>
+                        </div>
+                    </div>
+                    <div class="card-desc" style="margin-top:10px;">
+                        与 AI 的<br><b class="hl-teal">全部对话记录</b> (｡ŏ_ŏ)
+                    </div>
+                </div>
+                <!-- Card 3 -->
+                <div class="card-enhanced c3 anim">
+                    <div class="card-icon-lg o3">
+                        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                    </div>
+                    <div class="card-title">工具规则 <br>(｡ŏ_ŏ)</div>
+                    <div class="card-illust">
+                        <div style="display:flex;gap:4px;">
+                            <div style="width:22px;height:22px;border-radius:6px;background:rgba(96,165,250,0.2);display:flex;align-items:center;justify-content:center;">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                            </div>
+                            <div style="width:22px;height:22px;border-radius:6px;background:rgba(96,165,250,0.15);display:flex;align-items:center;justify-content:center;">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                            </div>
+                            <div style="width:22px;height:22px;border-radius:6px;background:rgba(96,165,250,0.2);display:flex;align-items:center;justify-content:center;">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-desc" style="margin-top:10px;">
+                        可调用工具的<br><b style="color:var(--accent-blue);">使用规则</b> (｀・ω・´)
+                    </div>
+                </div>
+                <!-- Card 4 -->
+                <div class="card-enhanced c4 anim">
+                    <div class="card-icon-lg o4">
+                        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--accent-purple)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                    </div>
+                    <div class="card-title">知识库 <br>✧(≖ ◡ ≖✿)</div>
+                    <div class="card-illust">
+                        <div style="display:flex;gap:4px;">
+                            <div style="width:16px;height:30px;border-radius:4px;background:rgba(167,139,250,0.2);"></div>
+                            <div style="width:16px;height:24px;border-radius:4px;background:rgba(167,139,250,0.15);margin-top:6px;"></div>
+                            <div style="width:16px;height:28px;border-radius:4px;background:rgba(167,139,250,0.25);margin-top:2px;"></div>
+                        </div>
+                    </div>
+                    <div class="card-desc" style="margin-top:10px;">
+                        检索到的<br><b style="color:var(--accent-purple);">专属相关资料</b> (｡･ω･｡)
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ======================== SLIDE 5: Summary ======================== -->
+    <div class="slide slide-5" data-index="4">
+        <div class="glow-orb glow-orb-1"></div>
+        <div class="glow-orb glow-orb-2" style="width:300px;height:300px;top:-100px;right:-80px;background:var(--accent-cyan);animation-delay:-4s;"></div>
+
+        <div class="anim">
+            <div class="year-badge" style="font-size:20px;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                核心理念
+            </div>
+        </div>
+
+        <div class="anim" style="margin-top:24px;">
+            <div class="title-md" style="text-align:center;">
+                让模型在<span class="hl-underline">每一个决策</span>时 (｡･ω･｡)
+            </div>
+        </div>
+        <div class="anim" style="margin-top:6px;">
+            <div class="title-lg" style="text-align:center;">
+                都能<span class="hl-bg2 hl-cyan" style="font-size:64px;">看到所需信息</span> ✧*｡٩(ˊᗜˋ*)و✧*｡
+            </div>
+        </div>
+
+        <div class="anim" style="margin-top:20px;">
+            <div class="divider" style="margin:0 auto; width:120px;"></div>
+        </div>
+
+        <!-- Funnel + Result visual -->
+        <div class="anim" style="margin-top:20px;">
+            <div class="summary-visual">
+                <!-- Funnel -->
+                <div class="summary-left">
+                    <div class="sum-funnel">
+                        <div class="funnel-layer f1">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                            文件内容
+                        </div>
+                        <div class="funnel-layer f2">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                            历史对话
+                        </div>
+                        <div class="funnel-layer f3">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                            工具规则
+                        </div>
+                        <div class="funnel-layer f4">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                            知识库
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Arrow -->
+                <div style="display:flex;align-items:center;">
+                    <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                </div>
+
+                <!-- Result -->
+                <div class="summary-right">
+                    <div class="result-box">
+                        <div class="result-icon">
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--dark-bg)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                        </div>
+                        <div style="font-size:28px; font-weight:800; color:var(--accent-cyan);">精准决策</div>
+                        <div style="font-size:18px; color:var(--text-secondary); margin-top:6px;">模型获得完整上下文</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="anim" style="margin-top:24px;">
+            <div class="subtitle" style="text-align:center; max-width:750px;">
+                从 <span class="hl-italic">"写好一条提示词"</span> 进化到
+                <b class="hl-cyan" style="font-size:32px;">"构建完整信息环境"</b> <br>(｀・ω・´)ゞ
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+(function(){
+    const slides = document.querySelectorAll('.slide');
+    const total = slides.length;
+    let current = 0;
+
+    function animateSlide(slide){
+        const anims = slide.querySelectorAll('.anim');
+        anims.forEach(el=>{ el.classList.remove('show'); });
+        anims.forEach((el,i)=>{
+            setTimeout(()=>{ el.classList.add('show'); }, 120 + i*200);
+        });
+    }
+
+    function goTo(index){
+        if(index<0||index>=total||index===current) return;
+        slides[current].classList.remove('active');
+        slides[current].querySelectorAll('.anim').forEach(el=>el.classList.remove('show'));
+        current = index;
+        slides[current].classList.add('active');
+        animateSlide(slides[current]);
+    }
+
+    function changeSlide(dir){ goTo(current+dir); }
+    window.changeSlide = changeSlide;
+
+    document.addEventListener('keydown', e=>{
+        if(e.key==='ArrowRight'||e.key===' '||e.key==='Enter') changeSlide(1);
+        if(e.key==='ArrowLeft'||e.key==='Backspace') changeSlide(-1);
+    });
+
+    let touchX = 0;
+    document.addEventListener('touchstart', e=>{ touchX=e.touches[0].clientX; });
+    document.addEventListener('touchend', e=>{
+        const dx = e.changedTouches[0].clientX - touchX;
+        if(Math.abs(dx)>50){ changeSlide(dx<0?1:-1); }
+    });
+
+    let wheelLock = false;
+    document.addEventListener('wheel', e=>{
+        if(wheelLock) return;
+        wheelLock = true;
+        setTimeout(()=>wheelLock=false, 800);
+        changeSlide(e.deltaY>0?1:-1);
+    });
+
+    animateSlide(slides[0]);
+})();
+</script>
+</body>
+</html>

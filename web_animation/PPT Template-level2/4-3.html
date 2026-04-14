@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>案例③ · OpenAI 百万行代码实验</title>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#0F0E17;color:#FFFFFE;overflow:hidden;width:100vw;height:100vh}
+
+:root {
+  --accent: #06B6D4;
+  --accent2: #22D3EE;
+  --accent3: #67E8F9;
+  --accent-glow: rgba(6, 182, 212, 0.3);
+  --green: #10B981;
+  --red: #EF4444;
+  --dark: #0F0E17;
+  --dark2: #1A1932;
+  --gray: #A7A9BE;
+  --light: #FFFFFE;
+}
+
+.lc{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle}
+.lc-96 svg{width:96px;height:96px}.lc-80 svg{width:80px;height:80px}.lc-64 svg{width:64px;height:64px}
+.lc-48 svg{width:48px;height:48px}.lc-40 svg{width:40px;height:40px}.lc-36 svg{width:36px;height:36px}
+.lc-32 svg{width:32px;height:32px}.lc-28 svg{width:28px;height:28px}.lc-24 svg{width:24px;height:24px}
+.lc-20 svg{width:20px;height:20px}.lc-18 svg{width:18px;height:18px}
+
+.slide-container{width:100vw;height:100vh;position:relative}
+.slide{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:50px 80px;opacity:0;pointer-events:none;transition:opacity .6s ease;overflow:hidden}
+.slide.active{opacity:1;pointer-events:auto}
+.slide .anim{opacity:0;transform:translateY(45px);transition:none}
+.slide.active .anim.show{opacity:1;transform:translateY(0);transition:opacity .7s cubic-bezier(.25,.46,.45,.94),transform .7s cubic-bezier(.25,.46,.45,.94)}
+
+.deco{position:absolute;border-radius:50%;pointer-events:none}
+.deco-cyan{background:radial-gradient(circle,rgba(6,182,212,.15),transparent)}
+.deco-teal{background:radial-gradient(circle,rgba(20,184,166,.12),transparent)}
+.deco-sky{background:radial-gradient(circle,rgba(14,165,233,.1),transparent)}
+.deco-emerald{background:radial-gradient(circle,rgba(16,185,129,.1),transparent)}
+.deco-rose{background:radial-gradient(circle,rgba(244,63,94,.1),transparent)}
+.deco-violet{background:radial-gradient(circle,rgba(139,92,246,.08),transparent)}
+
+.t-hero{font-size:5.5rem;font-weight:900;line-height:1.15;text-align:center}
+.t-huge{font-size:4rem;font-weight:900;line-height:1.2;text-align:center}
+.t-big{font-size:3rem;font-weight:800;line-height:1.3;text-align:center}
+.t-mid{font-size:2.2rem;font-weight:700;line-height:1.4;text-align:center}
+.t-body{font-size:1.7rem;font-weight:400;line-height:1.6;text-align:center}
+.t-sm{font-size:1.2rem;font-weight:400;line-height:1.5;text-align:center}
+
+.c-pink{color:#F472B6}.c-rose{color:#F43F5E}.c-orange{color:#F97316}
+.c-purple{color:#A78BFA}.c-teal{color:#14B8A6}.c-cyan{color:#06B6D4}.c-dark{color:#FFFFFE}
+.c-gray{color:#A7A9BE}.c-white{color:#fff}.c-amber{color:#F59E0B}.c-sky{color:#0EA5E9}
+.c-emerald{color:#10B981}.c-red{color:#EF4444}
+
+.bg-pink{background:rgba(244,114,182,.12);padding:6px 20px;border-radius:10px}
+.bg-rose{background:rgba(244,63,94,.12);padding:6px 20px;border-radius:10px}
+.bg-peach{background:rgba(251,146,60,.12);padding:6px 20px;border-radius:10px}
+.bg-teal{background:rgba(20,184,166,.12);padding:6px 20px;border-radius:10px}
+.bg-cyan{background:rgba(6,182,212,.12);padding:6px 20px;border-radius:10px}
+.bg-sky{background:rgba(14,165,233,.12);padding:6px 20px;border-radius:10px}
+.bg-emerald{background:rgba(16,185,129,.12);padding:6px 20px;border-radius:10px}
+
+.ul-rose{text-decoration:underline;text-decoration-color:#F43F5E;text-decoration-thickness:4px;text-underline-offset:8px}
+.ul-pink{text-decoration:underline;text-decoration-color:#F472B6;text-decoration-thickness:4px;text-underline-offset:8px}
+.ul-cyan{text-decoration:underline;text-decoration-color:#06B6D4;text-decoration-thickness:4px;text-underline-offset:8px}
+.ul-teal{text-decoration:underline;text-decoration-color:#14B8A6;text-decoration-thickness:4px;text-underline-offset:8px}
+.bold{font-weight:900}.italic{font-style:italic}
+.line{width:70px;height:4px;border-radius:2px;background:linear-gradient(90deg,#06B6D4,#22D3EE);margin:18px auto}
+
+.bg-s1{background:radial-gradient(ellipse at 50% 30%, #1A1932 0%, #0F0E17 100%)}
+.bg-s2{background:radial-gradient(ellipse at 30% 60%, #1A1932 0%, #0F0E17 100%)}
+.bg-s3{background:radial-gradient(ellipse at 70% 40%, #1A1932 0%, #0F0E17 100%)}
+.bg-s4{background:radial-gradient(ellipse at 40% 70%, #1A1932 0%, #0F0E17 100%)}
+.bg-s5{background:radial-gradient(ellipse at 50% 50%, #1A1932 0%, #0F0E17 100%)}
+.bg-s6{background:radial-gradient(ellipse at 60% 30%, #1A1932 0%, #0F0E17 100%)}
+
+.era-badge{display:inline-flex;align-items:center;gap:10px;padding:10px 28px;border-radius:40px;font-size:1.6rem;font-weight:800}
+
+.person-card{display:flex;align-items:center;gap:28px;background:rgba(255,255,255,0.04);border-radius:20px;padding:24px 32px;border:2px solid rgba(6,182,212,.15);box-shadow:0 6px 24px rgba(0,0,0,.3);max-width:760px;width:85%;backdrop-filter:blur(10px)}
+.person-avatar{width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+
+.concept-word{font-size:4.5rem;font-weight:900;letter-spacing:4px;background:linear-gradient(135deg,#06B6D4,#22D3EE,#67E8F9);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+
+.quote-card{background:rgba(255,255,255,0.04);border-radius:24px;padding:36px 44px;border:2px solid rgba(6,182,212,.2);box-shadow:0 8px 40px rgba(6,182,212,.1);max-width:900px;width:88%;position:relative;backdrop-filter:blur(10px)}
+.quote-mark{position:absolute;top:-18px;left:30px;font-size:5rem;font-weight:900;color:rgba(6,182,212,.2);line-height:1;font-family:Georgia,serif}
+
+.stat-row{display:flex;gap:24px;justify-content:center;flex-wrap:wrap}
+.stat-card{display:flex;flex-direction:column;align-items:center;gap:10px;padding:28px 32px;border-radius:22px;background:rgba(255,255,255,0.04);border:2px solid rgba(6,182,212,.15);box-shadow:0 6px 24px rgba(0,0,0,.3);min-width:200px;backdrop-filter:blur(10px)}
+.stat-val{font-size:4.2rem;font-weight:900;line-height:1}
+.stat-label{font-size:1.1rem;font-weight:700}
+
+.eff-row{display:flex;gap:20px;justify-content:center;flex-wrap:wrap;width:90%;max-width:1000px}
+.eff-card{flex:1;min-width:200px;display:flex;flex-direction:column;align-items:center;gap:10px;padding:24px 20px;border-radius:20px;background:rgba(255,255,255,0.04);border:2px solid rgba(6,182,212,.1);box-shadow:0 4px 20px rgba(0,0,0,.3);backdrop-filter:blur(10px)}
+
+.tri-row{display:flex;gap:28px;align-items:center;justify-content:center;flex-wrap:wrap}
+.tri-card{display:flex;flex-direction:column;align-items:center;gap:8px;padding:24px 28px;border-radius:20px;min-width:180px}
+
+.strike{text-decoration:line-through;text-decoration-thickness:3px;color:#6B7280}
+
+/* ===== Enhanced Graphic Styles ===== */
+
+/* Animated code rain for title */
+.code-rain-container{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:hidden;opacity:.08}
+.code-col{position:absolute;top:-100%;font-family:'Courier New',monospace;font-size:14px;color:#06B6D4;writing-mode:vertical-rl;animation:codefall linear infinite}
+@keyframes codefall{0%{top:-100%}100%{top:120%}}
+
+/* Terminal window */
+.terminal{background:#1e1e3e;border-radius:16px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.4);width:100%;max-width:520px;border:1px solid rgba(6,182,212,.2)}
+.terminal-bar{height:36px;background:#2d2d5a;display:flex;align-items:center;padding:0 14px;gap:8px}
+.terminal-bar span{width:12px;height:12px;border-radius:50%}
+.terminal-body{padding:18px 22px;font-family:'Courier New',monospace;font-size:16px;line-height:1.8;color:#A7A9BE}
+.terminal-body .t-green{color:#10B981}.terminal-body .t-blue{color:#22D3EE}
+.terminal-body .t-yellow{color:#F59E0B}.terminal-body .t-pink{color:#F472B6}
+.terminal-body .t-cursor{display:inline-block;width:10px;height:20px;background:#22D3EE;animation:blink 1s step-end infinite;vertical-align:middle}
+@keyframes blink{50%{opacity:0}}
+
+/* Git branch visual */
+.git-visual{position:relative;width:360px;height:200px}
+.git-branch{position:absolute}
+.git-dot{width:18px;height:18px;border-radius:50%;position:absolute}
+.git-line-v{width:3px;position:absolute;border-radius:2px}
+.git-merge-label{position:absolute;font-size:13px;font-weight:700;padding:4px 12px;border-radius:8px;white-space:nowrap}
+
+/* Progress ring */
+.ring-container{position:relative;display:flex;align-items:center;justify-content:center}
+.ring-label{position:absolute;display:flex;flex-direction:column;align-items:center}
+.ring-val{font-weight:900;line-height:1}
+.ring-sub{font-size:14px;font-weight:600;margin-top:4px}
+
+/* Flowing dots animation on connectors */
+@keyframes flowDot{0%{offset-distance:0%}100%{offset-distance:100%}}
+
+/* Efficiency multiplier visual */
+.mult-visual{display:flex;align-items:center;gap:20px;background:rgba(255,255,255,0.04);border-radius:20px;padding:20px 36px;border:2px solid rgba(6,182,212,.1);box-shadow:0 6px 24px rgba(0,0,0,.3);backdrop-filter:blur(10px)}
+.mult-bar-stack{display:flex;flex-direction:column;gap:6px}
+.mult-bar{height:14px;border-radius:7px;transition:width 1.2s ease}
+
+/* Converge diagram enhanced */
+.converge-layout{display:flex;align-items:center;gap:0;width:95%;max-width:1050px}
+.converge-left{display:flex;flex-direction:column;gap:14px;flex-shrink:0}
+.converge-arrows{flex:1;display:flex;align-items:center;justify-content:center;min-width:80px}
+.converge-right{flex-shrink:0}
+.case-chip{display:flex;align-items:center;gap:12px;padding:14px 22px;border-radius:16px;background:rgba(255,255,255,0.04);border:2px solid rgba(6,182,212,.1);box-shadow:0 3px 15px rgba(0,0,0,.3);min-width:220px;backdrop-filter:blur(10px)}
+.case-chip-icon{width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.conclusion-box{display:flex;align-items:center;gap:20px;background:linear-gradient(135deg,rgba(6,182,212,.1),rgba(34,211,238,.06));border:2.5px solid rgba(6,182,212,.25);border-radius:22px;padding:24px 36px;box-shadow:0 8px 32px rgba(6,182,212,.15);backdrop-filter:blur(10px)}
+.conclusion-icon{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#06B6D4,#22D3EE);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+
+/* Number cards with ring */
+.num-ring-card{display:flex;flex-direction:column;align-items:center;gap:12px;padding:22px 24px;border-radius:22px;background:rgba(255,255,255,0.04);border:2px solid rgba(6,182,212,.1);box-shadow:0 6px 24px rgba(0,0,0,.3);min-width:220px;backdrop-filter:blur(10px)}
+
+/* Closing slide visuals */
+.closing-visual{display:flex;align-items:center;gap:32px;margin-top:16px}
+.closing-book{width:120px;height:140px;background:linear-gradient(135deg,rgba(6,182,212,.1),rgba(34,211,238,.08));border-radius:16px;border:2px solid rgba(6,182,212,.2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;position:relative}
+.closing-book::after{content:'';position:absolute;left:16px;top:0;bottom:0;width:2px;background:rgba(6,182,212,.15)}
+.closing-rocket{width:120px;height:140px;background:linear-gradient(135deg,rgba(244,63,94,.1),rgba(251,146,60,.08));border-radius:16px;border:2px solid rgba(244,63,94,.2);display:flex;align-items:center;justify-content:center;position:relative}
+.closing-rocket::before{content:'';position:absolute;bottom:-8px;left:50%;transform:translateX(-50%);width:40px;height:16px;background:radial-gradient(ellipse,rgba(244,63,94,.2),transparent);border-radius:50%}
+
+/* Floating particles */
+.float-p{position:absolute;border-radius:50%;pointer-events:none;animation:floatP 5s ease-in-out infinite}
+@keyframes floatP{0%,100%{transform:translateY(0) scale(1);opacity:.15}50%{transform:translateY(-18px) scale(1.15);opacity:.25}}
+</style>
+</head>
+<body>
+
+<div class="slide-container">
+
+<!-- ====== Slide 1: 标题 ====== -->
+<div class="slide bg-s5 active" id="s0">
+  <div class="deco deco-emerald" style="width:500px;height:500px;top:-200px;right:-150px"></div>
+  <div class="deco deco-cyan" style="width:400px;height:400px;bottom:-120px;left:-120px"></div>
+
+  <!-- Code rain background -->
+  <div class="code-rain-container">
+    <div class="code-col" style="left:5%;animation-duration:8s;animation-delay:0s">const pr = await merge();</div>
+    <div class="code-col" style="left:15%;animation-duration:10s;animation-delay:1.5s">function build() {}</div>
+    <div class="code-col" style="left:28%;animation-duration:7s;animation-delay:0.8s">import { agent } from 'ai';</div>
+    <div class="code-col" style="left:42%;animation-duration:9s;animation-delay:2s">class CodeGen extends AI {}</div>
+    <div class="code-col" style="left:55%;animation-duration:11s;animation-delay:0.5s">export default harness;</div>
+    <div class="code-col" style="left:68%;animation-duration:8.5s;animation-delay:3s">async function deploy()</div>
+    <div class="code-col" style="left:80%;animation-duration:9.5s;animation-delay:1s">return await test();</div>
+    <div class="code-col" style="left:92%;animation-duration:7.5s;animation-delay:2.5s">git commit -m "feat"</div>
+  </div>
+
+  <div class="float-p" style="width:14px;height:14px;background:#06B6D4;top:18%;left:8%;animation-delay:0s"></div>
+  <div class="float-p" style="width:10px;height:10px;background:#22D3EE;top:30%;right:12%;animation-delay:1.8s"></div>
+  <div class="float-p" style="width:8px;height:8px;background:#14B8A6;bottom:25%;left:20%;animation-delay:3.2s"></div>
+
+  <div class="anim era-badge" style="background:rgba(6,182,212,.12);color:#22D3EE;">
+    <span class="lc lc-28 c-cyan"><i data-lucide="flask-conical"></i></span> 案例 ③
+  </div>
+
+  <div class="anim t-hero c-dark" style="margin-top:20px">
+    OpenAI 百万行代码实验 <span style="font-size:2rem;color:#22D3EE">(｡･ω･｡)ﾉ</span>
+  </div>
+
+  <div class="anim line"></div>
+
+  <!-- Enhanced: Terminal + Code illustration -->
+  <div class="anim" style="margin-top:16px">
+    <div class="terminal" style="max-width:580px">
+      <div class="terminal-bar">
+        <span style="background:#ff5f57"></span>
+        <span style="background:#febc2e"></span>
+        <span style="background:#28c840"></span>
+        <span style="font-size:13px;color:#A7A9BE;margin-left:10px;font-family:sans-serif;white-space:nowrap">codex-terminal</span>
+      </div>
+      <div class="terminal-body">
+        <div><span class="t-green">$</span> <span class="t-blue">codex</span> generate --project full-stack</div>
+        <div><span class="lc lc-16" style="color:#F59E0B;vertical-align:middle"><i data-lucide="zap"></i></span> <span class="t-yellow">Generating...</span> <span class="t-green">1,000,000 lines</span></div>
+        <div><span class="t-green">✓</span> 1500 PRs merged · <span class="t-pink">0 human lines</span></div>
+        <div><span class="t-green">$</span> <span class="t-cursor"></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="anim t-mid c-gray italic" style="margin-top:14px">最有说服力的证明 (｀・ω・´)</div>
+</div>
+
+<!-- ====== Slide 2: 实验起点 ====== -->
+<div class="slide bg-s3" id="s1">
+  <div class="deco deco-sky" style="width:450px;height:450px;top:-150px;left:-120px"></div>
+
+  <div class="anim t-mid c-gray">Codex 团队 (｡･ω･｡)</div>
+  <div class="anim line" style="background:linear-gradient(90deg,#0EA5E9,#06B6D4)"></div>
+
+  <div class="anim t-huge c-dark" style="margin-top:10px">
+    从一个<span class="bg-cyan c-cyan bold" style="font-size:4.5rem">空的 Git 仓库</span>开始
+  </div>
+
+  <!-- Enhanced: Git branch visual + animated SVG flow -->
+  <div class="anim" style="margin-top:20px">
+    <svg width="700" height="200" viewBox="0 0 700 200">
+      <defs>
+        <marker id="ar1" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#06B6D4"/></marker>
+        <linearGradient id="flowGrad1" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#06B6D4" stop-opacity=".15"/>
+          <stop offset="50%" stop-color="#06B6D4" stop-opacity=".4"/>
+          <stop offset="100%" stop-color="#06B6D4" stop-opacity=".15"/>
+        </linearGradient>
+      </defs>
+
+      <!-- Empty Repo -->
+      <rect x="20" y="55" width="160" height="90" rx="18" fill="rgba(6,182,212,.08)" stroke="#06B6D4" stroke-width="2.5"/>
+      <!-- Folder icon inside -->
+      <rect x="55" y="72" width="38" height="30" rx="4" fill="none" stroke="#06B6D4" stroke-width="1.5"/>
+      <path d="M55 78 L63 72 L80 72" stroke="#06B6D4" stroke-width="1.5" fill="none"/>
+      <text x="100" y="118" text-anchor="middle" fill="#06B6D4" font-size="16" font-weight="800">空仓库</text>
+      <text x="100" y="136" text-anchor="middle" fill="#06B6D4" font-size="12">0 行代码</text>
+
+      <!-- Animated flow line 1 -->
+      <line x1="185" y1="100" x2="275" y2="100" stroke="url(#flowGrad1)" stroke-width="4"/>
+      <line x1="185" y1="100" x2="275" y2="100" stroke="#06B6D4" stroke-width="2" stroke-dasharray="8,6">
+        <animate attributeName="stroke-dashoffset" values="28;0" dur="1.5s" repeatCount="indefinite"/>
+      </line>
+      <polygon points="270,94 282,100 270,106" fill="#06B6D4"/>
+
+      <!-- 5 Months -->
+      <rect x="286" y="55" width="140" height="90" rx="18" fill="rgba(14,165,233,.08)" stroke="#0EA5E9" stroke-width="2.5"/>
+      <!-- Clock icon -->
+      <circle cx="330" cy="88" r="16" fill="none" stroke="#0EA5E9" stroke-width="1.5"/>
+      <line x1="330" y1="88" x2="330" y2="78" stroke="#0EA5E9" stroke-width="2"/>
+      <line x1="330" y1="88" x2="338" y2="92" stroke="#0EA5E9" stroke-width="2"/>
+      <text x="356" y="118" text-anchor="middle" fill="#0EA5E9" font-size="16" font-weight="800">5 个月</text>
+      <text x="356" y="136" text-anchor="middle" fill="#0EA5E9" font-size="12">AI 生成</text>
+
+      <!-- Animated flow line 2 -->
+      <line x1="430" y1="100" x2="500" y2="100" stroke="#06B6D4" stroke-width="2" stroke-dasharray="8,6">
+        <animate attributeName="stroke-dashoffset" values="28;0" dur="1.5s" repeatCount="indefinite"/>
+      </line>
+      <polygon points="496,94 508,100 496,106" fill="#F43F5E"/>
+
+      <!-- Result -->
+      <rect x="512" y="45" width="170" height="110" rx="18" fill="rgba(244,63,94,.08)" stroke="#F43F5E" stroke-width="2.5"/>
+      <!-- Code file stack -->
+      <rect x="540" y="62" width="30" height="38" rx="4" fill="none" stroke="#F43F5E" stroke-width="1.2"/>
+      <line x1="548" y1="72" x2="564" y2="72" stroke="#F43F5E" stroke-width="1" opacity=".5"/>
+      <line x1="548" y1="78" x2="560" y2="78" stroke="#F43F5E" stroke-width="1" opacity=".5"/>
+      <line x1="548" y1="84" x2="562" y2="84" stroke="#F43F5E" stroke-width="1" opacity=".5"/>
+      <rect x="548" y="66" width="30" height="38" rx="4" fill="rgba(244,63,94,.04)" stroke="#F43F5E" stroke-width="1.2"/>
+      <text x="597" y="122" text-anchor="middle" fill="#F43F5E" font-size="18" font-weight="900">100万行</text>
+      <text x="597" y="142" text-anchor="middle" fill="#F43F5E" font-size="12">完整项目</text>
+
+      <!-- Sparkle effects -->
+      <circle cx="660" cy="55" r="4" fill="#F43F5E" opacity=".3">
+        <animate attributeName="r" values="2;5;2" dur="2s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values=".1;.4;.1" dur="2s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="675" cy="75" r="3" fill="#0EA5E9" opacity=".2">
+        <animate attributeName="r" values="1;4;1" dur="2.5s" repeatCount="indefinite" begin=".5s"/>
+      </circle>
+    </svg>
+  </div>
+
+  <div class="anim t-big c-dark" style="margin-top:16px">
+    人类工程师<span class="c-rose bold ul-rose" style="font-size:3.4rem">一行代码都没写</span> ✧*｡٩(ˊᗜˋ*)و✧*｡
+  </div>
+</div>
+
+<!-- ====== Slide 3: 核心数字 ====== -->
+<div class="slide bg-s2" id="s2">
+  <div class="deco deco-rose" style="width:500px;height:500px;bottom:-180px;right:-150px"></div>
+
+  <div class="anim t-huge c-dark">核心数字 (｡･ω･｡)</div>
+  <div class="anim line"></div>
+
+  <!-- Enhanced: stat cards with progress rings -->
+  <div class="anim stat-row" style="margin-top:20px">
+    <!-- Card 1: Code lines with ring -->
+    <div class="num-ring-card" style="border-left:5px solid #F43F5E">
+      <div class="ring-container" style="width:120px;height:120px">
+        <svg width="120" height="120" viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(244,63,94,.1)" stroke-width="10"/>
+          <circle cx="60" cy="60" r="50" fill="none" stroke="#F43F5E" stroke-width="10" stroke-linecap="round"
+            stroke-dasharray="314" stroke-dashoffset="314" transform="rotate(-90 60 60)">
+            <animate attributeName="stroke-dashoffset" from="314" to="0" dur="1.8s" fill="freeze" begin="0.6s"/>
+          </circle>
+        </svg>
+        <div class="ring-label">
+          <span class="lc lc-32 c-rose"><i data-lucide="file-code-2"></i></span>
+        </div>
+      </div>
+      <div class="stat-val c-rose">100万</div>
+      <div class="stat-label c-rose">行代码 (｡･ω･｡)</div>
+    </div>
+
+    <!-- Card 2: PRs with mini bar chart -->
+    <div class="num-ring-card" style="border-left:5px solid #0EA5E9">
+      <div style="display:flex;flex-direction:column;gap:4px;width:110px;height:120px;justify-content:flex-end;padding-bottom:10px">
+        <div style="display:flex;align-items:flex-end;gap:4px;height:90px">
+          <div style="flex:1;background:rgba(14,165,233,.15);border-radius:4px 4px 0 0;height:30%"></div>
+          <div style="flex:1;background:rgba(14,165,233,.2);border-radius:4px 4px 0 0;height:45%"></div>
+          <div style="flex:1;background:rgba(14,165,233,.3);border-radius:4px 4px 0 0;height:60%"></div>
+          <div style="flex:1;background:rgba(14,165,233,.4);border-radius:4px 4px 0 0;height:75%"></div>
+          <div style="flex:1;background:#0EA5E9;border-radius:4px 4px 0 0;height:100%"></div>
+        </div>
+        <div style="font-size:10px;color:#6B7280;text-align:center">5 个月累计</div>
+      </div>
+      <div class="stat-val c-sky">1500</div>
+      <div class="stat-label c-sky">个 PR (｀・ω・´)</div>
+    </div>
+
+    <!-- Card 3: 100% AI with checkmark ring -->
+    <div class="num-ring-card" style="border-left:5px solid #10B981">
+      <div class="ring-container" style="width:120px;height:120px">
+        <svg width="120" height="120" viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(16,185,129,.1)" stroke-width="10"/>
+          <circle cx="60" cy="60" r="50" fill="none" stroke="#10B981" stroke-width="10" stroke-linecap="round"
+            stroke-dasharray="314" stroke-dashoffset="314" transform="rotate(-90 60 60)">
+            <animate attributeName="stroke-dashoffset" from="314" to="0" dur="1.8s" fill="freeze" begin="0.8s"/>
+          </circle>
+        </svg>
+        <div class="ring-label">
+          <span class="lc lc-32 c-emerald"><i data-lucide="bot"></i></span>
+        </div>
+      </div>
+      <div class="stat-val c-emerald">100%</div>
+      <div class="stat-label c-emerald">AI 生成 ✧(≖ ◡ ≖✿)</div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== Slide 4: 团队效率 ====== -->
+<div class="slide bg-s4" id="s3">
+  <div class="deco deco-cyan" style="width:500px;height:500px;top:-180px;left:-150px"></div>
+
+  <div class="anim t-huge c-dark">团队效率 (｡･ω･｡)</div>
+  <div class="anim line" style="background:linear-gradient(90deg,#06B6D4,#22D3EE)"></div>
+
+  <div class="anim eff-row" style="margin-top:20px">
+    <!-- Card 1: Team size with people icons -->
+    <div class="eff-card" style="border-top:4px solid #0EA5E9">
+      <span class="lc lc-40 c-sky"><i data-lucide="users"></i></span>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin:6px 0">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="rgba(14,165,233,.15)" stroke="#0EA5E9" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="rgba(14,165,233,.15)" stroke="#0EA5E9" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="rgba(14,165,233,.15)" stroke="#0EA5E9" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="rgba(14,165,233,.2)" stroke="#0EA5E9" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="rgba(14,165,233,.2)" stroke="#0EA5E9" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="rgba(14,165,233,.2)" stroke="#0EA5E9" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="rgba(14,165,233,.2)" stroke="#0EA5E9" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
+      </div>
+      <div style="font-size:2.6rem;font-weight:900;color:#0EA5E9">3 → 7 人</div>
+      <div style="font-size:1.1rem;color:#A7A9BE;font-weight:600">工程师团队 (｀・ω・´)</div>
+    </div>
+
+    <!-- Card 2: PR/day with mini chart -->
+    <div class="eff-card" style="border-top:4px solid #06B6D4">
+      <span class="lc lc-40 c-cyan"><i data-lucide="git-merge"></i></span>
+      <!-- Mini daily PR bars -->
+      <div style="display:flex;align-items:flex-end;gap:3px;height:60px;margin:6px 0">
+        <div style="width:12px;background:rgba(6,182,212,.25);border-radius:3px 3px 0 0;height:40%"></div>
+        <div style="width:12px;background:rgba(6,182,212,.35);border-radius:3px 3px 0 0;height:65%"></div>
+        <div style="width:12px;background:rgba(6,182,212,.3);border-radius:3px 3px 0 0;height:55%"></div>
+        <div style="width:12px;background:#06B6D4;border-radius:3px 3px 0 0;height:90%"></div>
+        <div style="width:12px;background:rgba(6,182,212,.4);border-radius:3px 3px 0 0;height:70%"></div>
+        <div style="width:12px;background:rgba(6,182,212,.35);border-radius:3px 3px 0 0;height:80%"></div>
+        <div style="width:12px;background:#06B6D4;border-radius:3px 3px 0 0;height:100%"></div>
+      </div>
+      <div style="font-size:2.6rem;font-weight:900;color:#06B6D4">3.5 PR/天</div>
+      <div style="font-size:1.1rem;color:#A7A9BE;font-weight:600">每人每天 (｡ŏ_ŏ)</div>
+    </div>
+
+    <!-- Card 3: 10x with multiplier visual -->
+    <div class="eff-card" style="border-top:4px solid #F43F5E">
+      <span class="lc lc-40 c-rose"><i data-lucide="zap"></i></span>
+      <!-- Multiplier visual: 1x vs 10x bars -->
+      <div style="width:150px;margin:6px 0">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <div style="font-size:12px;color:#6B7280;width:32px;text-align:right">传统</div>
+          <div style="height:12px;border-radius:6px;background:rgba(255,255,255,.06);flex:1;position:relative">
+            <div id="bar1x" style="height:100%;width:0%;border-radius:6px;background:#4B5563;transition:width 1.2s ease"></div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="font-size:12px;color:#F43F5E;width:32px;text-align:right;font-weight:700">AI</div>
+          <div style="height:12px;border-radius:6px;background:rgba(244,63,94,.08);flex:1;position:relative">
+            <div id="bar10x" style="height:100%;width:0%;border-radius:6px;background:linear-gradient(90deg,#F43F5E,#F472B6);transition:width 1.2s ease"></div>
+          </div>
+        </div>
+      </div>
+      <div style="font-size:2.6rem;font-weight:900;color:#F43F5E">10 倍</div>
+      <div style="font-size:1.1rem;color:#A7A9BE;font-weight:600">效率提升 ✧*｡٩(ˊᗜˋ*)و✧*｡</div>
+    </div>
+  </div>
+
+  <div class="anim t-body c-gray" style="margin-top:20px">
+    传统手写工期 <span class="c-rose bold" style="font-size:2rem">× 10</span> (｡･ω･｡)ﾉ
+  </div>
+</div>
+
+<!-- ====== Slide 5: Ryan 引言 ====== -->
+<div class="slide bg-s6" id="s4">
+  <div class="deco deco-violet" style="width:600px;height:600px;top:50%;left:50%;margin-top:-300px;margin-left:-300px"></div>
+
+  <div class="anim person-card">
+    <div class="person-avatar" style="background:linear-gradient(135deg,rgba(6,182,212,.15),rgba(34,211,238,.1))">
+      <span class="lc lc-48 c-cyan"><i data-lucide="user-round"></i></span>
+    </div>
+    <div style="text-align:left">
+      <div style="font-size:2.2rem;font-weight:900;color:#FFFFFE">Ryan Lopopolo</div>
+      <div style="font-size:1.2rem;color:#A7A9BE;margin-top:4px">
+        <span class="lc lc-18 c-gray" style="margin-right:4px"><i data-lucide="building-2"></i></span>
+        Codex 核心工程师 (｀・ω・´)
+      </div>
+    </div>
+  </div>
+
+  <div class="anim" style="margin-top:24px">
+    <span class="lc lc-40 c-rose"><i data-lucide="quote"></i></span>
+  </div>
+
+  <div class="anim quote-card" style="margin-top:10px">
+    <div class="quote-mark">"</div>
+    <!-- Enhanced: visual equation inside quote -->
+    <div style="display:flex;align-items:center;justify-content:center;gap:24px;flex-wrap:wrap">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+        <div style="width:90px;height:90px;border-radius:20px;background:rgba(255,255,255,.04);border:2px dashed #6B7280;display:flex;align-items:center;justify-content:center">
+          <span class="lc lc-40" style="color:#6B7280"><i data-lucide="bot"></i></span>
+        </div>
+        <div class="strike" style="font-size:1.8rem">Agent</div>
+        <div style="font-size:1rem;color:#6B7280">不难 (｡ŏ_ŏ)</div>
+      </div>
+      <div style="font-size:3rem;color:#6B7280;font-weight:300">→</div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+        <div style="width:90px;height:90px;border-radius:20px;background:linear-gradient(135deg,rgba(6,182,212,.12),rgba(34,211,238,.08));border:2.5px solid rgba(6,182,212,.3);display:flex;align-items:center;justify-content:center">
+          <span class="lc lc-40 c-cyan"><i data-lucide="settings"></i></span>
+        </div>
+        <div class="concept-word" style="font-size:2.6rem">Harness</div>
+        <div style="font-size:1rem;color:#22D3EE;font-weight:700">才难 (｡･ω･｡)</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== Slide 6: 三案例共同结论 ====== -->
+<div class="slide bg-s2" id="s5">
+  <div class="deco deco-cyan" style="width:500px;height:500px;top:-200px;right:-150px"></div>
+
+  <div class="anim">
+    <span class="lc lc-64 c-rose"><i data-lucide="target"></i></span>
+  </div>
+
+  <div class="anim t-mid c-gray" style="margin-top:8px">三个案例，同一个结论 (｡･ω･｡)</div>
+  <div class="anim line"></div>
+
+  <!-- Enhanced: converge layout with chip cards -->
+  <div class="anim converge-layout" style="margin-top:12px">
+    <div class="converge-left">
+      <div class="case-chip">
+        <div class="case-chip-icon" style="background:rgba(167,139,250,.1)">
+          <span class="lc lc-28 c-purple"><i data-lucide="building-2"></i></span>
+        </div>
+        <div>
+          <div style="font-size:1.2rem;font-weight:800;color:#A78BFA">HashiCorp</div>
+          <div style="font-size:.95rem;color:#A7A9BE">52.8% 提升</div>
+        </div>
+      </div>
+      <div class="case-chip">
+        <div class="case-chip-icon" style="background:rgba(14,165,233,.1)">
+          <span class="lc lc-28 c-sky"><i data-lucide="user-round"></i></span>
+        </div>
+        <div>
+          <div style="font-size:1.2rem;font-weight:800;color:#0EA5E9">Nate B Jones</div>
+          <div style="font-size:.95rem;color:#A7A9BE">42% → 78%</div>
+        </div>
+      </div>
+      <div class="case-chip">
+        <div class="case-chip-icon" style="background:rgba(6,182,212,.1)">
+          <span class="lc lc-28 c-cyan"><i data-lucide="code-2"></i></span>
+        </div>
+        <div>
+          <div style="font-size:1.2rem;font-weight:800;color:#06B6D4">OpenAI Codex</div>
+          <div style="font-size:.95rem;color:#A7A9BE">100万行代码</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Animated convergence arrows -->
+    <div class="converge-arrows">
+      <svg width="120" height="200" viewBox="0 0 120 200">
+        <defs>
+          <marker id="arC" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#F43F5E"/></marker>
+        </defs>
+        <path d="M20,30 Q60,30 100,100" fill="none" stroke="rgba(167,139,250,.3)" stroke-width="2.5" marker-end="url(#arC)"/>
+        <path d="M20,100 L100,100" fill="none" stroke="rgba(14,165,233,.3)" stroke-width="2.5" marker-end="url(#arC)"/>
+        <path d="M20,170 Q60,170 100,100" fill="none" stroke="rgba(6,182,212,.3)" stroke-width="2.5" marker-end="url(#arC)"/>
+        <!-- Flowing dots -->
+        <circle r="4" fill="#A78BFA" opacity=".5">
+          <animateMotion dur="2s" repeatCount="indefinite" path="M20,30 Q60,30 100,100"/>
+        </circle>
+        <circle r="4" fill="#0EA5E9" opacity=".5">
+          <animateMotion dur="2s" repeatCount="indefinite" path="M20,100 L100,100" begin=".6s"/>
+        </circle>
+        <circle r="4" fill="#06B6D4" opacity=".5">
+          <animateMotion dur="2s" repeatCount="indefinite" path="M20,170 Q60,170 100,100" begin="1.2s"/>
+        </circle>
+      </svg>
+    </div>
+
+    <!-- Conclusion card -->
+    <div class="converge-right">
+      <div class="conclusion-box">
+        <div class="conclusion-icon">
+          <span class="lc lc-36 c-white"><i data-lucide="zap"></i></span>
+        </div>
+        <div style="text-align:left">
+          <div style="font-size:1.1rem;color:#A7A9BE;font-weight:600">共同结论</div>
+          <div style="font-size:1.6rem;font-weight:900;color:#FFFFFE;margin-top:4px">模型不是瓶颈</div>
+          <div style="font-size:2.2rem;font-weight:900;margin-top:2px">
+            <span class="concept-word" style="font-size:2.4rem">Harness 才是</span> (｡･ω･｡)ﾉ
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="anim t-huge c-dark" style="margin-top:20px">
+    <span class="strike" style="font-size:3rem">模型不是瓶颈</span> (｡ŏ_ŏ)
+    <span style="margin:0 16px;color:#6B7280;font-size:2.4rem">→</span>
+    <span class="bg-cyan c-cyan bold" style="font-size:4.5rem">Harness 才是</span> (｡･ω･｡)ﾉ
+  </div>
+</div>
+
+<!-- ====== Slide 7: 三个数字 ====== -->
+<div class="slide bg-s4" id="s6">
+  <div class="deco deco-teal" style="width:500px;height:500px;bottom:-200px;left:-180px"></div>
+
+  <div class="anim">
+    <span class="lc lc-64 c-cyan"><i data-lucide="bookmark"></i></span>
+  </div>
+  <div class="anim t-huge c-dark" style="margin-top:12px">记住这三个数字 (｡･ω･｡)</div>
+  <div class="anim line" style="background:linear-gradient(90deg,#06B6D4,#22D3EE)"></div>
+
+  <!-- Enhanced: tri-cards with progress rings -->
+  <div class="anim tri-row" style="margin-top:16px">
+    <div class="tri-card" style="background:rgba(167,139,250,.08);border:2.5px solid rgba(167,139,250,.25)">
+      <!-- Progress ring for 52.8% -->
+      <div class="ring-container" style="width:100px;height:100px">
+        <svg width="100" height="100" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(167,139,250,.1)" stroke-width="8"/>
+          <circle cx="50" cy="50" r="40" fill="none" stroke="#A78BFA" stroke-width="8" stroke-linecap="round"
+            stroke-dasharray="251" stroke-dashoffset="251" transform="rotate(-90 50 50)">
+            <animate attributeName="stroke-dashoffset" from="251" to="118" dur="1.5s" fill="freeze" begin="0.5s"/>
+          </circle>
+        </svg>
+        <div class="ring-label">
+          <span class="ring-val" style="font-size:22px;color:#A78BFA">52.8%</span>
+        </div>
+      </div>
+      <div style="font-size:1.2rem;font-weight:800;color:#A78BFA;margin-top:4px">HashiCorp</div>
+      <div style="font-size:.9rem;color:#A7A9BE">代码采纳率提升 (｀・ω・´)</div>
+    </div>
+
+    <div class="tri-card" style="background:rgba(14,165,233,.08);border:2.5px solid rgba(14,165,233,.25)">
+      <!-- Animated bar comparison -->
+      <div style="width:120px;height:100px;display:flex;flex-direction:column;justify-content:center;gap:8px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="font-size:11px;color:#6B7280;width:28px;text-align:right">前</div>
+          <div style="flex:1;height:16px;background:rgba(14,165,233,.08);border-radius:8px;overflow:hidden">
+            <div id="triBar1" style="width:0%;height:100%;background:rgba(14,165,233,.4);border-radius:8px;transition:width 1.2s ease"></div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="font-size:11px;color:#0EA5E9;width:28px;text-align:right;font-weight:700">后</div>
+          <div style="flex:1;height:16px;background:rgba(14,165,233,.08);border-radius:8px;overflow:hidden">
+            <div id="triBar2" style="width:0%;height:100%;background:linear-gradient(90deg,#0EA5E9,#38BDF8);border-radius:8px;transition:width 1.2s ease"></div>
+          </div>
+        </div>
+        <div style="text-align:center;font-size:18px;font-weight:900;color:#0EA5E9">42% → 78%</div>
+      </div>
+      <div style="font-size:1.2rem;font-weight:800;color:#0EA5E9;margin-top:4px">Nate B Jones</div>
+      <div style="font-size:.9rem;color:#A7A9BE">成功率翻倍 (｡ŏ_ŏ)</div>
+    </div>
+
+    <div class="tri-card" style="background:rgba(6,182,212,.08);border:2.5px solid rgba(6,182,212,.25)">
+      <!-- Code stack visual -->
+      <div style="position:relative;width:100px;height:100px;display:flex;align-items:center;justify-content:center">
+        <div style="position:absolute;width:70px;height:20px;background:rgba(6,182,212,.08);border:1.5px solid rgba(6,182,212,.15);border-radius:6px;top:10px;left:15px"></div>
+        <div style="position:absolute;width:76px;height:20px;background:rgba(6,182,212,.12);border:1.5px solid rgba(6,182,212,.2);border-radius:6px;top:28px;left:12px"></div>
+        <div style="position:absolute;width:82px;height:20px;background:rgba(6,182,212,.16);border:1.5px solid rgba(6,182,212,.25);border-radius:6px;top:46px;left:9px"></div>
+        <div style="position:absolute;width:88px;height:20px;background:rgba(6,182,212,.22);border:1.5px solid rgba(6,182,212,.3);border-radius:6px;top:64px;left:6px;display:flex;align-items:center;justify-content:center">
+          <span style="font-size:10px;color:#06B6D4;font-weight:700">1,000,000</span>
+        </div>
+      </div>
+      <div style="font-size:1.2rem;font-weight:800;color:#06B6D4;margin-top:4px">OpenAI</div>
+      <div style="font-size:.9rem;color:#A7A9BE">百万行代码 ✧(≖ ◡ ≖✿)</div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== Slide 8: 理论→实战 ====== -->
+<div class="slide bg-s5" id="s7">
+  <div class="deco deco-cyan" style="width:600px;height:600px;top:50%;left:50%;margin-top:-300px;margin-left:-300px"></div>
+  <div class="float-p" style="width:16px;height:16px;background:#06B6D4;top:15%;left:15%;animation-delay:0s"></div>
+  <div class="float-p" style="width:10px;height:10px;background:#22D3EE;bottom:20%;right:18%;animation-delay:2s"></div>
+  <div class="float-p" style="width:12px;height:12px;background:#14B8A6;top:60%;left:10%;animation-delay:3.5s"></div>
+
+  <div class="anim">
+    <span class="lc lc-80 c-cyan"><i data-lucide="check-circle-2"></i></span>
+  </div>
+
+  <div class="anim t-huge c-dark" style="margin-top:16px">
+    理论讲完了 (｡･ω･｡)
+  </div>
+
+  <div class="anim line" style="background:linear-gradient(90deg,#06B6D4,#22D3EE)"></div>
+
+  <!-- Enhanced: visual transition from theory to practice -->
+  <div class="anim closing-visual">
+    <div class="closing-book">
+      <span class="lc lc-40 c-cyan"><i data-lucide="book-open"></i></span>
+      <div style="font-size:14px;font-weight:700;color:#06B6D4">理论</div>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+      <svg width="80" height="40" viewBox="0 0 80 40">
+        <line x1="5" y1="20" x2="65" y2="20" stroke="#06B6D4" stroke-width="3" stroke-dasharray="8,5">
+          <animate attributeName="stroke-dashoffset" values="26;0" dur="1s" repeatCount="indefinite"/>
+        </line>
+        <polygon points="62,14 76,20 62,26" fill="#06B6D4"/>
+      </svg>
+      <div style="font-size:12px;color:#A7A9BE;font-weight:600">转换 (｀・ω・´)</div>
+    </div>
+    <div class="closing-rocket">
+      <span class="lc lc-48 c-rose"><i data-lucide="rocket"></i></span>
+    </div>
+  </div>
+
+  <div class="anim t-hero c-dark" style="margin-top:20px">
+    接下来看<span class="concept-word" style="font-size:5.5rem">实战</span> ✧*｡٩(ˊᗜˋ*)و✧*｡
+  </div>
+
+  <div class="anim" style="margin-top:24px">
+    <span class="lc lc-48 c-cyan"><i data-lucide="arrow-right-circle"></i></span>
+  </div>
+</div>
+
+</div>
+
+<script>
+lucide.createIcons();
+
+const slides=document.querySelectorAll('.slide'),
+      total=slides.length;
+let cur=0;
+
+function animateEffBars(){
+  const b1=document.getElementById('bar1x');
+  const b10=document.getElementById('bar10x');
+  if(b1) setTimeout(()=>{b1.style.width='10%'},500);
+  if(b10) setTimeout(()=>{b10.style.width='100%'},800);
+}
+function resetEffBars(){
+  const b1=document.getElementById('bar1x');
+  const b10=document.getElementById('bar10x');
+  if(b1) b1.style.width='0%';
+  if(b10) b10.style.width='0%';
+}
+
+function animateTriBars(){
+  const t1=document.getElementById('triBar1');
+  const t2=document.getElementById('triBar2');
+  if(t1) setTimeout(()=>{t1.style.width='42%'},500);
+  if(t2) setTimeout(()=>{t2.style.width='78%'},800);
+}
+function resetTriBars(){
+  const t1=document.getElementById('triBar1');
+  const t2=document.getElementById('triBar2');
+  if(t1) t1.style.width='0%';
+  if(t2) t2.style.width='0%';
+}
+
+function go(n){
+  if(n<0||n>=total||n===cur)return;
+  // Reset bars on leave
+  if(cur===3) resetEffBars();
+  if(cur===6) resetTriBars();
+
+  slides[cur].classList.remove('active');
+  slides[cur].querySelectorAll('.anim').forEach(e=>e.classList.remove('show'));
+  cur=n;
+  slides[cur].classList.add('active');
+  slides[cur].querySelectorAll('.anim').forEach((e,i)=>{
+    e.classList.remove('show');
+    setTimeout(()=>e.classList.add('show'),200+i*300);
+  });
+
+  // Animate bars on enter
+  if(cur===3) animateEffBars();
+  if(cur===6) animateTriBars();
+}
+
+slides[0].querySelectorAll('.anim').forEach((e,i)=>setTimeout(()=>e.classList.add('show'),400+i*350));
+
+document.addEventListener('keydown',e=>{
+  if(['ArrowRight','ArrowDown',' ','PageDown'].includes(e.key)){e.preventDefault();go(cur+1)}
+  else if(['ArrowLeft','ArrowUp','PageUp'].includes(e.key)){e.preventDefault();go(cur-1)}
+  else if(e.key==='Home'){e.preventDefault();go(0)}
+  else if(e.key==='End'){e.preventDefault();go(total-1)}
+});
+
+let tx=0,ty=0;
+document.addEventListener('touchstart',e=>{tx=e.changedTouches[0].screenX;ty=e.changedTouches[0].screenY});
+document.addEventListener('touchend',e=>{
+  const dx=e.changedTouches[0].screenX-tx,dy=e.changedTouches[0].screenY-ty;
+  if(Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>50){dx<0?go(cur+1):go(cur-1)}
+});
+
+let wc=false;
+document.addEventListener('wheel',e=>{
+  if(wc)return;wc=true;setTimeout(()=>wc=false,800);
+  e.deltaY>0?go(cur+1):go(cur-1);
+});
+</script>
+
+</body>
+</html>

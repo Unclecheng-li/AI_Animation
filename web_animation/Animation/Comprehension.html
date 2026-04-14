@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 理解语言的技术架构</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+            background: 
+                radial-gradient(circle at bottom left, #001f54 0%, transparent 50%),
+                radial-gradient(circle at top right, #001f54 0%, transparent 30%),
+                #000000;
+            min-height: 100vh;
+            overflow: hidden;
+            color: #fff;
+            position: relative;
+        }
+
+        /* 噪点效果 */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            opacity: 0.15;
+            mix-blend-mode: overlay;
+            animation: noiseMove 20s linear infinite;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        @keyframes noiseMove {
+            0% { transform: translate(0, 0) scale(1.1); }
+            25% { transform: translate(-2%, -2%) scale(1.05); }
+            50% { transform: translate(0, 0) scale(1.1); }
+            75% { transform: translate(2%, 2%) scale(1.05); }
+            100% { transform: translate(0, 0) scale(1.1); }
+        }
+
+        /* 粒子画布 */
+        #particlesCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        /* 右上角Logo */
+        .logo {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            color: #fff;
+            font-family: sans-serif;
+            text-align: right;
+            z-index: 100;
+        }
+        .logo svg {
+            width: 32px;
+            height: 32px;
+            margin-bottom: 4px;
+        }
+        .logo-text {
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(96, 165, 250, 0.5);
+        }
+
+        .container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 60px 80px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .section-title {
+            font-size: 56px;
+            font-weight: 800;
+            margin-bottom: 20px;
+            text-align: center;
+            color: #e94560;
+            text-shadow: 0 0 20px rgba(233, 69, 96, 0.5);
+            opacity: 0;
+            transform: translateY(30px);
+            animation: fadeInUp 0.8s ease forwards;
+            animation-delay: 0.2s;
+        }
+
+        .section-subtitle {
+            text-align: center;
+            font-size: 24px;
+            color: #aaa;
+            margin-bottom: 30px;
+            opacity: 0;
+            transform: translateY(30px);
+            animation: fadeInUp 0.8s ease forwards;
+            animation-delay: 0.6s;
+        }
+
+        /* 缓入动画 */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* ========== AI架构图样式 ========== */
+        .ai-arch-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 25px;
+            padding: 50px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 30px;
+            max-width: 1600px;
+            transform: scale(1.25);
+            opacity: 0;
+            animation: archFadeIn 1s ease forwards;
+            animation-delay: 1s;
+        }
+
+        @keyframes archFadeIn {
+            from {
+                opacity: 0;
+                transform: scale(1.25) translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1.25) translateY(0);
+            }
+        }
+
+        .ai-arch-layer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeInUp 0.6s ease forwards;
+        }
+
+        /* 输入层 */
+        .input-section { animation-delay: 1.2s; }
+        /* 词义表征层 */
+        .embedding-layer { animation-delay: 2.0s; }
+        /* RNN层 */
+        .rnn-layer { animation-delay: 2.8s; }
+        /* 输出层 */
+        .output-section { animation-delay: 3.6s; }
+
+        .ai-layer-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .ai-layer-box {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+            padding: 20px;
+            min-width: 140px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        .ai-layer-box:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .ai-icon {
+            width: 32px;
+            height: 32px;
+            margin: 0 auto 10px;
+            color: #fff;
+        }
+
+        .ai-icon svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .ai-box-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 6px;
+        }
+
+        .ai-box-desc {
+            font-size: 11px;
+            color: #888;
+        }
+
+        /* 输入层样式 */
+        .input-box {
+            border-color: rgba(96, 165, 250, 0.4);
+            background: linear-gradient(135deg, rgba(96, 165, 250, 0.1), rgba(59, 130, 246, 0.05));
+        }
+
+        .input-box .ai-icon {
+            color: #60a5fa;
+        }
+
+        /* 词义表征层样式 */
+        .embedding-box {
+            border-color: rgba(52, 211, 153, 0.4);
+            background: linear-gradient(135deg, rgba(52, 211, 153, 0.1), rgba(34, 197, 94, 0.05));
+            position: relative;
+        }
+
+        .embedding-box .ai-icon {
+            color: #34d399;
+        }
+
+        /* RNN层样式 */
+        .rnn-box {
+            border-color: rgba(233, 69, 96, 0.4);
+            background: linear-gradient(135deg, rgba(233, 69, 96, 0.1), rgba(220, 38, 38, 0.05));
+            position: relative;
+        }
+
+        .rnn-box .ai-icon {
+            color: #e94560;
+        }
+
+        /* 输出层样式 */
+        .output-box {
+            border-color: rgba(254, 202, 87, 0.4);
+            background: linear-gradient(135deg, rgba(254, 202, 87, 0.1), rgba(251, 191, 36, 0.05));
+        }
+
+        .output-box .ai-icon {
+            color: #feca57;
+        }
+
+        /* 状态徽章 */
+        .ai-status-badge {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 600;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .ai-status-badge.pending {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            color: #fca5a5;
+        }
+
+        .ai-status-badge.ready {
+            background: rgba(52, 211, 153, 0.2);
+            border: 1px solid rgba(52, 211, 153, 0.4);
+            color: #34d399;
+        }
+
+        .badge-icon {
+            width: 12px;
+            height: 12px;
+        }
+
+        /* 连接线样式 */
+        .ai-arch-connector {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            min-width: 60px;
+            opacity: 0;
+            animation: fadeIn 0.5s ease forwards;
+        }
+
+        /* 原始输入箭头 - 在人类语言和词义表征之间 */
+        .ai-arch-connector:nth-child(2) { animation-delay: 1.6s; }
+        /* 词向量箭头 - 在词义表征和序列建模之间 */
+        .ai-arch-connector:nth-child(4) { animation-delay: 2.4s; }
+        /* 语义理解箭头 - 在序列建模和AI理解之间 */
+        .ai-arch-connector:nth-child(6) { animation-delay: 3.2s; }
+
+        .ai-connector-svg {
+            width: 60px;
+            height: 20px;
+        }
+
+        .ai-connector-label {
+            font-size: 10px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* RNN困境部分 */
+        .ai-dilemma-section {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 25px 35px;
+            backdrop-filter: blur(10px);
+            max-width: 1200px;
+            opacity: 0;
+            transform: translateY(30px);
+            animation: fadeInUp 0.8s ease forwards;
+            animation-delay: 4.0s;
+        }
+
+        .ai-dilemma-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 18px;
+            font-weight: 700;
+            color: #e94560;
+            margin-bottom: 15px;
+            opacity: 0;
+            transform: translateX(-20px);
+            animation: fadeInLeft 0.5s ease forwards;
+            animation-delay: 4.4s;
+        }
+
+        @keyframes fadeInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .ai-dilemma-title svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        .ai-dilemma-content {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            opacity: 0;
+            animation: fadeIn 0.6s ease forwards;
+            animation-delay: 4.8s;
+        }
+
+        .ai-dilemma-quote {
+            font-size: 20px;
+            font-weight: 700;
+            color: #e94560;
+            font-style: italic;
+            padding: 15px 20px;
+            background: rgba(233, 69, 96, 0.1);
+            border-left: 3px solid #e94560;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .ai-dilemma-text {
+            font-size: 16px;
+            color: #ddd;
+            line-height: 1.6;
+            margin: 0;
+        }
+
+        .ai-highlight {
+            color: #888;
+            font-style: italic;
+        }
+
+        .ai-problem {
+            color: #ef4444;
+            font-weight: 700;
+        }
+
+        .ai-time {
+            color: #00d2d3;
+            font-weight: 700;
+        }
+
+        .ai-core-issue {
+            margin-top: 10px;
+            padding: 15px 20px;
+            background: rgba(52, 211, 153, 0.1);
+            border: 1px solid rgba(52, 211, 153, 0.3);
+            border-radius: 10px;
+            font-size: 15px;
+            color: #ddd;
+            line-height: 1.5;
+            opacity: 0;
+            transform: translateY(15px);
+            animation: fadeInUp 0.5s ease forwards;
+            animation-delay: 5.4s;
+        }
+
+        .ai-core-label {
+            display: inline-block;
+            padding: 4px 10px;
+            background: rgba(52, 211, 153, 0.2);
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #34d399;
+            margin-right: 8px;
+        }
+
+        /* 响应式调整 */
+        @media (max-width: 1600px) {
+            .ai-arch-diagram {
+                transform: scale(1.1);
+            }
+        }
+
+        @media (max-width: 1400px) {
+            .ai-arch-diagram {
+                flex-wrap: wrap;
+                gap: 20px;
+                transform: scale(1);
+            }
+            
+            .ai-arch-connector {
+                transform: rotate(90deg);
+                margin: 10px 0;
+            }
+            
+            .ai-connector-label {
+                transform: rotate(-90deg);
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .container {
+                padding: 40px;
+            }
+            
+            .section-title {
+                font-size: 40px;
+            }
+            
+            .ai-arch-diagram {
+                flex-direction: column;
+                gap: 15px;
+                transform: scale(0.9);
+            }
+            
+            .ai-arch-connector {
+                transform: rotate(90deg);
+            }
+            
+            .ai-dilemma-section {
+                padding: 20px;
+            }
+            
+            .ai-dilemma-quote {
+                font-size: 16px;
+            }
+            
+            .ai-dilemma-text {
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 右上角logo -->
+    <div class="logo">
+        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="30" r="12" fill="#60a5fa"/>
+            <path d="M35 45 Q50 70 65 45" stroke="#60a5fa" stroke-width="4" fill="none"/>
+            <path d="M30 60 Q50 90 70 60" stroke="#60a5fa" stroke-width="4" fill="none"/>
+        </svg>
+        <div class="logo-text">NetworkNoob</div>
+    </div>
+
+    <!-- Canvas粒子效果 -->
+    <canvas id="particlesCanvas"></canvas>
+
+    <div class="container">
+        <h1 class="section-title">AI 理解语言的技术架构</h1>
+        <p class="section-subtitle">科学家们必须依次攻克两道技术难关</p>
+        
+        <div class="ai-arch-diagram">
+            <!-- 左侧：输入层 -->
+            <div class="ai-arch-layer input-section">
+                <div class="ai-layer-label">Input</div>
+                <div class="ai-layer-box input-box">
+                    <div class="ai-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M12 4v16M4 12h16"/>
+                        </svg>
+                    </div>
+                    <div class="ai-box-title">人类语言</div>
+                    <div class="ai-box-desc">文字 / 语音 / 句子</div>
+                </div>
+            </div>
+
+            <!-- 连接线1 -->
+            <div class="ai-arch-connector">
+                <svg class="ai-connector-svg" viewBox="0 0 80 20">
+                    <line x1="0" y1="10" x2="75" y2="10" stroke="rgba(96, 165, 250, 0.5)" stroke-width="2"/>
+                    <polygon points="70,6 80,10 70,14" fill="rgba(96, 165, 250, 0.5)"/>
+                </svg>
+                <span class="ai-connector-label">原始输入</span>
+            </div>
+
+            <!-- 中间第一关：词义表征层 -->
+            <div class="ai-arch-layer embedding-layer">
+                <div class="ai-layer-label">Layer 1</div>
+                <div class="ai-layer-box embedding-box">
+                    <div class="ai-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <rect x="3" y="3" width="18" height="18" rx="2"/>
+                            <path d="M8 12h8M8 8h8M8 16h5"/>
+                        </svg>
+                    </div>
+                    <div class="ai-box-title">词义表征</div>
+                    <div class="ai-box-desc">Word2Vec</div>
+                    <div class="ai-status-badge pending">
+                        <svg class="badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                            <path d="M7 11V7a5 5 0 0110 0v4"/>
+                        </svg>
+                        第一关
+                    </div>
+                </div>
+            </div>
+
+            <!-- 连接线2 -->
+            <div class="ai-arch-connector">
+                <svg class="ai-connector-svg" viewBox="0 0 80 20">
+                    <line x1="0" y1="10" x2="75" y2="10" stroke="rgba(52, 211, 153, 0.5)" stroke-width="2"/>
+                    <polygon points="70,6 80,10 70,14" fill="rgba(52, 211, 153, 0.5)"/>
+                </svg>
+                <span class="ai-connector-label">词向量</span>
+            </div>
+
+            <!-- 中间第二关：序列建模层 -->
+            <div class="ai-arch-layer rnn-layer">
+                <div class="ai-layer-label">Layer 2</div>
+                <div class="ai-layer-box rnn-box">
+                    <div class="ai-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M4 4v16M8 8v8M12 4v16M16 8v8M20 4v16"/>
+                        </svg>
+                    </div>
+                    <div class="ai-box-title">序列建模</div>
+                    <div class="ai-box-desc">RNN</div>
+                    <div class="ai-status-badge ready">
+                        <svg class="badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20 6L9 17l-5-5"/>
+                        </svg>
+                        第二关
+                    </div>
+                </div>
+            </div>
+
+            <!-- 连接线3 -->
+            <div class="ai-arch-connector">
+                <svg class="ai-connector-svg" viewBox="0 0 80 20">
+                    <line x1="0" y1="10" x2="75" y2="10" stroke="rgba(233, 69, 96, 0.5)" stroke-width="2"/>
+                    <polygon points="70,6 80,10 70,14" fill="rgba(233, 69, 96, 0.5)"/>
+                </svg>
+                <span class="ai-connector-label">语义理解</span>
+            </div>
+
+            <!-- 右侧：输出层 -->
+            <div class="ai-arch-layer output-section">
+                <div class="ai-layer-label">Output</div>
+                <div class="ai-layer-box output-box">
+                    <div class="ai-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M12 6v6l4 2"/>
+                        </svg>
+                    </div>
+                    <div class="ai-box-title">AI 理解</div>
+                    <div class="ai-box-desc">语义 / 逻辑 / 意图</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 底部：RNN困境说明 -->
+        <div class="ai-dilemma-section">
+            <div class="ai-dilemma-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 8v4M12 16h.01"/>
+                </svg>
+                RNN 的困境
+            </div>
+            <div class="ai-dilemma-content">
+                <div class="ai-dilemma-quote">"空有一身武艺，却无处施展"</div>
+                <p class="ai-dilemma-text">在 RNN 诞生后的很长一段时间里，它其实处于一种<span class="ai-highlight">尴尬的状态</span>。</p>
+                <p class="ai-dilemma-text">因为在科学家们死磕第二关的时候，<span class="ai-problem">第一关——"如何让 AI 看懂文字"</span>这个底层难题，就<span class="ai-time">整整困扰了 AI 界十几年</span>。</p>
+                <div class="ai-core-issue">
+                    <span class="ai-core-label">核心问题</span>
+                    如果 AI 连最基本的汉字和单词都无法转化成有效的数字格式，那么即使有 RNN 这种处理顺序的利器，它也没法读懂任何一句话。
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 粒子效果
+        const canvas = document.getElementById('particlesCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        const particles = [];
+        const particleCount = 100;
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 2 + 0.5;
+                this.speedX = (Math.random() - 0.5) * 0.5;
+                this.speedY = (Math.random() - 0.5) * 0.5;
+                this.opacity = Math.random() * 0.5 + 0.1;
+                this.color = `rgba(96, 165, 250, ${this.opacity})`;
+            }
+
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
+                    this.reset();
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        for (let i = 0; i < particleCount; i++) {
+            particles.push(new Particle());
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(particle => {
+                particle.update();
+                particle.draw();
+            });
+            requestAnimationFrame(animateParticles);
+        }
+
+        animateParticles();
+    </script>
+</body>
+</html>

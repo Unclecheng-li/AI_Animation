@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D 几何旋转背景</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            background-color: #05051a; /* 深色背景凸显3D几何体 */
+        }
+
+        /* Three.js 渲染容器：全屏铺满 */
+        #scene-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            /* 硬件加速，提升渲染流畅度 */
+            will-change: transform;
+        }
+
+        /* 可选：控制面板（切换几何体/调整速度） */
+        .control-panel {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            font-family: Arial, sans-serif;
+            z-index: 10;
+        }
+
+        .control-panel button {
+            display: block;
+            width: 100%;
+            padding: 8px 0;
+            margin: 8px 0;
+            background: rgba(99, 102, 241, 0.3);
+            border: 1px solid rgba(99, 102, 241, 0.5);
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .control-panel button:hover {
+            background: rgba(99, 102, 241, 0.5);
+        }
+
+        .control-panel .speed-slider {
+            width: 100%;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <!-- Three.js 渲染容器 -->
+    <div id="scene-container"></div>
+
+    <!-- 可选：控制面板 -->
+        <div class="control-panel">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <div>当前几何体：<span id="geo-name">立方体</span></div>
+                <button id="close-btn" style="padding: 2px 8px; font-size: 12px;">关闭</button>
+            </div>
+            <button id="cube-btn">立方体</button>
+            <button id="sphere-btn">球体</button>
+            <button id="dodeca-btn">十二面体</button>
+            <div>旋转速度：</div>
+            <input type="range" class="speed-slider" id="speed" min="0.001" max="0.01" step="0.001" value="0.005">
+        </div>
+
+    <!-- 引入 Three.js CDN 库 -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <script>
+        // 1. 核心配置（可自定义）
+        const config = {
+            rotateSpeed: 0.005, // 基础旋转速度
+            geoType: 'cube',    // 默认几何体：cube/sphere/dodeca
+            geoCount: 8,        // 几何体数量（多元素更丰富）
+            geoSize: 1.5,       // 单个几何体大小
+            color: 0x6366f1     // 几何体主色调（蓝紫色）
+        };
+
+        // 2. Three.js 核心组件
+        let scene, camera, renderer, geometries = [];
+
+        // 3. 初始化 Three.js 场景
+        function initScene() {
+            // 场景：承载所有3D元素
+            scene = new THREE.Scene();
+            // 场景背景色（与body一致，避免边缘色差）
+            scene.background = new THREE.Color(0x05051a);
+
+            // 相机：透视相机（模拟人眼视角）
+            camera = new THREE.PerspectiveCamera(
+                75,                                  // 视角（FOV）
+                window.innerWidth / window.innerHeight, // 宽高比
+                0.1,                                 // 近裁剪面
+                1000                                 // 远裁剪面
+            );
+            camera.position.z = 10; // 相机距离几何体的距离（控制视觉大小）
+
+            // 渲染器：WebGL渲染，开启抗锯齿+高清适配
+            renderer = new THREE.WebGLRenderer({
+                antialias: true,    // 抗锯齿（几何体边缘更平滑）
+                powerPreference: "high-performance" // 优先高性能渲染
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // 适配高清屏
+            document.getElementById('scene-container').appendChild(renderer.domElement);
+
+            // 添加光照（核心：让几何体有明暗层次）
+            addLights();
+
+            // 创建几何体
+            createGeometries();
+
+            // 监听窗口大小变化
+            window.addEventListener('resize', onWindowResize);
+
+            // 绑定控制面板事件
+            bindControlEvents();
+        }
+
+        // 4. 添加光照系统
+        function addLights() {
+            // 环境光：基础照明，消除全黑区域
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+            scene.add(ambientLight);
+
+            // 方向光1：主光源，模拟太阳光
+            const dirLight1 = new THREE.DirectionalLight(config.color, 0.8);
+            dirLight1.position.set(5, 5, 5); // 光源位置（右上前方）
+            scene.add(dirLight1);
+
+            // 方向光2：辅助光源，增强立体感
+            const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.5);
+            dirLight2.position.set(-5, -5, 5); // 光源位置（左下前方）
+            scene.add(dirLight2);
+        }
+
+        // 5. 创建几何体（支持多数量、随机位置）
+        function createGeometries() {
+            // 清空现有几何体
+            geometries.forEach(geo => scene.remove(geo));
+            geometries = [];
+
+            // 循环创建多个几何体
+            for (let i = 0; i < config.geoCount; i++) {
+                let geometry, material;
+
+                // 根据类型创建不同几何体
+                switch (config.geoType) {
+                    case 'cube':
+                        // 立方体
+                        geometry = new THREE.BoxGeometry(config.geoSize, config.geoSize, config.geoSize);
+                        break;
+                    case 'sphere':
+                        // 球体（分段数越高越圆，性能稍低）
+                        geometry = new THREE.SphereGeometry(config.geoSize, 32, 32);
+                        break;
+                    case 'dodeca':
+                        // 十二面体（正多面体，科技感强）
+                        geometry = new THREE.DodecahedronGeometry(config.geoSize, 0);
+                        break;
+                }
+
+                // 材质：半透明+反光+线框（增强3D质感）
+                material = new THREE.MeshPhongMaterial({
+                    color: config.color,
+                    transparent: true,    // 开启透明
+                    opacity: 0.7,         // 透明度
+                    wireframe: true,      // 显示线框
+                    wireframeLinewidth: 1, // 线框宽度
+                    shininess: 100        // 反光度
+                });
+
+                // 创建网格模型（几何体+材质）
+                const mesh = new THREE.Mesh(geometry, material);
+
+                // 随机位置（分散布局，避免重叠）
+                mesh.position.set(
+                    (Math.random() - 0.5) * 15, // X轴：-7.5 ~ 7.5
+                    (Math.random() - 0.5) * 15, // Y轴：-7.5 ~ 7.5
+                    (Math.random() - 0.5) * 15  // Z轴：-7.5 ~ 7.5
+                );
+
+                // 随机初始旋转角度
+                mesh.rotation.x = Math.random() * Math.PI;
+                mesh.rotation.y = Math.random() * Math.PI;
+                mesh.rotation.z = Math.random() * Math.PI;
+
+                // 添加到场景和数组
+                scene.add(mesh);
+                geometries.push(mesh);
+            }
+
+            // 更新控制面板显示
+            document.getElementById('geo-name').textContent = {
+                cube: '立方体',
+                sphere: '球体',
+                dodeca: '十二面体'
+            }[config.geoType];
+        }
+
+        // 6. 动画循环（核心：旋转和移动逻辑）
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // 遍历所有几何体，实现多轴旋转和移动
+            geometries.forEach(mesh => {
+                // 旋转
+                mesh.rotation.x += config.rotateSpeed;
+                mesh.rotation.y += config.rotateSpeed * 0.8; // Y轴稍慢，更自然
+                mesh.rotation.z += config.rotateSpeed * 0.6; // Z轴最慢
+
+                // 移动（向右）
+                mesh.position.x += config.rotateSpeed * 5; // 移动速度与旋转速度相关
+
+                // 检测是否离开屏幕右侧，如果是则在左侧屏幕外重新出现
+                if (mesh.position.x > 10) { // 屏幕右侧边界
+                    mesh.position.x = -15; // 左侧屏幕外重新出现
+                    // 随机Y和Z位置
+                    mesh.position.y = (Math.random() - 0.5) * 15;
+                    mesh.position.z = (Math.random() - 0.5) * 15;
+                    // 随机初始旋转角度
+                    mesh.rotation.x = Math.random() * Math.PI;
+                    mesh.rotation.y = Math.random() * Math.PI;
+                    mesh.rotation.z = Math.random() * Math.PI;
+                }
+            });
+
+            // 相机轻微旋转（增强沉浸感，可选）
+            camera.rotation.y += config.rotateSpeed * 0.1;
+
+            // 渲染场景
+            renderer.render(scene, camera);
+        }
+
+        // 7. 窗口大小适配
+        function onWindowResize() {
+            // 更新相机宽高比
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix(); // 刷新投影矩阵
+            // 更新渲染器尺寸
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // 8. 绑定控制面板事件
+        function bindControlEvents() {
+            // 关闭按钮
+            document.getElementById('close-btn').addEventListener('click', () => {
+                document.querySelector('.control-panel').style.display = 'none';
+            });
+
+            // 切换立方体
+            document.getElementById('cube-btn').addEventListener('click', () => {
+                config.geoType = 'cube';
+                createGeometries();
+            });
+
+            // 切换球体
+            document.getElementById('sphere-btn').addEventListener('click', () => {
+                config.geoType = 'sphere';
+                createGeometries();
+            });
+
+            // 切换十二面体
+            document.getElementById('dodeca-btn').addEventListener('click', () => {
+                config.geoType = 'dodeca';
+                createGeometries();
+            });
+
+            // 调整旋转速度
+            document.getElementById('speed').addEventListener('input', (e) => {
+                config.rotateSpeed = parseFloat(e.target.value);
+            });
+        }
+
+        // 9. 启动程序
+        initScene();
+        animate();
+    </script>
+</body>
+</html>

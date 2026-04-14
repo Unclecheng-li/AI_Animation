@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DHCP Offer报文格式演示</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    
+    <!-- 配置Tailwind自定义颜色 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#121a2e',
+                        darker: '#0b1120',
+                        'dark-card': '#1e293b',
+                        accent: '#ff4d94', // 粉红色点缀
+                        'accent-light': '#ff75b0',
+                        'dhcp-blue': '#36bffa',
+                        'dhcp-yellow': '#facc15',
+                        'dhcp-green': '#10b981',
+                        'gateway-highlight': '#7c3aed' // 网关IP强调色
+                    },
+                    fontFamily: {
+                        cyber: ['Orbitron', 'sans-serif'],
+                        mono: ['Fira Code', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .glow {
+                box-shadow: 0 0 15px theme('colors.accent');
+            }
+            .glow-blue {
+                box-shadow: 0 0 10px theme('colors.dhcp-blue');
+            }
+            .glow-gateway {
+                box-shadow: 0 0 10px theme('colors.gateway-highlight');
+            }
+            .text-glow {
+                text-shadow: 0 0 8px theme('colors.accent-light');
+            }
+            .grid-bg {
+                background-size: 30px 30px;
+                background-image: 
+                    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+            }
+            .packet-border {
+                background-image: 
+                    linear-gradient(to right, theme('colors.dhcp-blue') 1px, transparent 1px),
+                    linear-gradient(to left, theme('colors.dhcp-blue') 1px, transparent 1px),
+                    linear-gradient(to top, theme('colors.dhcp-blue') 1px, transparent 1px),
+                    linear-gradient(to bottom, theme('colors.dhcp-blue') 1px, transparent 1px);
+            }
+            .field-highlight {
+                transition: all 0.3s ease;
+            }
+            .field-highlight:hover {
+                background-color: rgba(255, 77, 148, 0.1);
+                transform: translateX(5px);
+            }
+            
+            /* 动画效果类 */
+            .animate-fade-in {
+                opacity: 0;
+                animation: fadeIn 0.7s forwards;
+            }
+            .animate-slide-up {
+                opacity: 0;
+                transform: translateY(20px);
+                animation: slideUp 0.7s forwards;
+            }
+            .animate-slide-left {
+                opacity: 0;
+                transform: translateX(-20px);
+                animation: slideLeft 0.7s forwards;
+            }
+            .animate-slide-right {
+                opacity: 0;
+                transform: translateX(20px);
+                animation: slideRight 0.7s forwards;
+            }
+            .animate-scale {
+                opacity: 0;
+                transform: scale(0.95);
+                animation: scaleIn 0.7s forwards;
+            }
+            .pulse-highlight {
+                animation: pulseHighlight 2s infinite;
+            }
+            
+            @keyframes fadeIn {
+                to { opacity: 1; }
+            }
+            @keyframes slideUp {
+                to { 
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+            @keyframes slideLeft {
+                to { 
+                    opacity: 1;
+                    transform: translateX(0);
+                }
+            }
+            @keyframes slideRight {
+                to { 
+                    opacity: 1;
+                    transform: translateX(0);
+                }
+            }
+            @keyframes scaleIn {
+                to { 
+                    opacity: 1;
+                    transform: scale(1);
+                }
+            }
+            @keyframes pulseHighlight {
+                0%, 100% { 
+                    background-color: rgba(124, 58, 237, 0.1);
+                    box-shadow: 0 0 5px rgba(124, 58, 237, 0.5);
+                }
+                50% { 
+                    background-color: rgba(124, 58, 237, 0.25);
+                    box-shadow: 0 0 10px rgba(124, 58, 237, 0.8);
+                }
+            }
+        }
+    </style>
+    
+    <!-- 添加Google字体 -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body class="bg-darker text-gray-200 min-h-screen grid-bg font-sans">
+    <!-- 页面标题 - 淡入效果 -->
+    <header class="py-6 px-4 md:px-8 border-b border-gray-800 animate-fade-in" style="animation-delay: 0.1s;">
+        <div class="container mx-auto">
+            <h1 class="text-[clamp(1.5rem,3vw,2.5rem)] font-cyber font-bold text-white">
+                <i class="fa fa-exchange mr-3 text-accent"></i>DHCP 
+                <span class="text-accent text-glow">Offer</span> 报文格式
+            </h1>
+            <p class="text-gray-400 mt-2">动态主机配置协议提供报文结构与字段可视化</p>
+        </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="container mx-auto px-4 md:px-8 py-8">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- 左侧：DHCP流程简介 - 从右侧滑入 -->
+            <div class="lg:col-span-1 animate-slide-right" style="animation-delay: 0.4s;">
+                <div class="bg-dark-card rounded-lg p-5 border border-gray-700 transform transition-all duration-300 hover:border-accent/50 animate-scale" style="animation-delay: 0.5s;">
+                    <h2 class="text-xl font-cyber font-semibold mb-6">
+                        <i class="fa fa-sitemap mr-2 text-accent"></i>DHCP工作流程
+                    </h2>
+                    
+                    <!-- DHCP四步握手动画 -->
+                    <div class="w-full h-[300px] relative mb-4 opacity-0" id="workflow-svg">
+                        <svg class="w-full h-full" viewBox="0 0 300 300">
+                            <!-- 背景网格 -->
+                            <pattern id="smallGrid" width="20" height="20" patternUnits="userSpaceOnUse">
+                                <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#374151" stroke-width="0.5"/>
+                            </pattern>
+                            <rect width="100%" height="100%" fill="url(#smallGrid)" />
+                            
+                            <!-- 客户端和服务器 -->
+                            <g transform="translate(70, 70)">
+                                <rect x="-50" y="-25" width="100" height="50" rx="5" fill="#1e293b" stroke="#ff4d94" stroke-width="2" />
+                                <text x="0" y="5" text-anchor="middle" fill="white" font-size="12" font-family="Orbitron">Client</text>
+                            </g>
+                            
+                            <g transform="translate(230, 70)">
+                                <rect x="-50" y="-25" width="100" height="50" rx="5" fill="#1e293b" stroke="#36bffa" stroke-width="2" />
+                                <text x="0" y="5" text-anchor="middle" fill="white" font-size="12" font-family="Orbitron">Server</text>
+                            </g>
+                            
+                            <!-- 箭头和流程 -->
+                            <path d="M 120,70 L 180,70" stroke="#64748b" stroke-width="2" stroke-dasharray="5,3" />
+                            <polygon points="180,70 170,65 170,75" fill="#64748b" />
+                            <text x="150" y="55" text-anchor="middle" fill="#facc15" font-size="10">Discover</text>
+                            
+                            <path d="M 180,100 L 120,100" stroke="#64748b" stroke-width="2" />
+                            <polygon points="120,100 130,95 130,105" fill="#64748b" />
+                            <text x="150" y="115" text-anchor="middle" fill="#ff4d94" font-size="10">Offer</text>
+                            
+                            <path d="M 120,130 L 180,130" stroke="#64748b" stroke-width="2" stroke-dasharray="5,3" />
+                            <polygon points="180,130 170,125 170,135" fill="#64748b" />
+                            <text x="150" y="145" text-anchor="middle" fill="#facc15" font-size="10">Request</text>
+                            
+                            <path d="M 180,160 L 120,160" stroke="#64748b" stroke-width="2" />
+                            <polygon points="120,160 130,155 130,165" fill="#64748b" />
+                            <text x="150" y="175" text-anchor="middle" fill="#10b981" font-size="10">Acknowledge</text>
+                            
+                            <!-- 突出显示Offer步骤 -->
+                            <circle cx="150" cy="100" r="25" fill="none" stroke="#ff4d94" stroke-width="2" class="glow" />
+                            
+                            <!-- 数据流动画 -->
+                            <circle id="offer-packet" cx="180" cy="100" r="4" fill="#ff4d94">
+                                <animate attributeName="cx" from="180" to="120" dur="2s" repeatCount="indefinite" />
+                            </circle>
+                        </svg>
+                    </div>
+                    
+                    <div class="text-sm text-gray-300 space-y-3 opacity-0" id="workflow-description">
+                        <p class="flex items-start">
+                            <i class="fa fa-info-circle text-accent mt-1 mr-2"></i>
+                            <span>DHCP Offer是服务器对客户端Discover请求的响应，提供IP地址和网络配置信息。</span>
+                        </p>
+                        <p class="flex items-start">
+                            <i class="fa fa-clock-o text-dhcp-blue mt-1 mr-2"></i>
+                            <span>Offer报文包含一个IP地址租约期限，通常为8天。</span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 右侧：DHCP Offer报文结构 - 从左侧滑入 -->
+            <div class="lg:col-span-2 animate-slide-left" style="animation-delay: 0.2s;">
+                <div class="bg-dark-card rounded-lg p-5 border border-gray-700 transform transition-all duration-300 hover:border-accent/50 animate-scale" style="animation-delay: 0.3s;">
+                    <div class="flex justify-between items-center mb-6 opacity-0" id="packet-header">
+                        <h2 class="text-xl font-cyber font-semibold">
+                            <i class="fa fa-file-code-o mr-2 text-accent"></i>报文结构 (RFC 2131)
+                        </h2>
+                        <span class="px-3 py-1 bg-dhcp-blue/20 text-dhcp-blue text-sm rounded-full">
+                            240-300 字节
+                        </span>
+                    </div>
+                    
+                    <!-- 报文可视化展示 -->
+                    <div class="packet-border rounded-lg p-4 mb-6 bg-dark/50 opacity-0" id="packet-visualization">
+                        <!-- 报文头部 -->
+                        <div class="mb-4 pb-4 border-b border-gray-700 opacity-0" id="bootp-header">
+                            <h3 class="text-dhcp-blue font-cyber mb-3 text-sm uppercase tracking-wider">BOOTP 头部 (固定 236 字节)</h3>
+                            
+                            <div class="space-y-2 text-sm">
+                                <div class="field-highlight flex">
+                                    <div class="w-24 text-gray-400">操作码</div>
+                                    <div class="w-32 font-mono text-dhcp-yellow">0x02</div>
+                                    <div class="flex-1 text-gray-300">（1字节）- Offer报文</div>
+                                </div>
+                                
+                                <div class="field-highlight flex">
+                                    <div class="w-24 text-gray-400">硬件类型</div>
+                                    <div class="w-32 font-mono text-dhcp-yellow">0x01</div>
+                                    <div class="flex-1 text-gray-300">（1字节）- 以太网</div>
+                                </div>
+                                
+                                <div class="field-highlight flex">
+                                    <div class="w-24 text-gray-400">硬件长度</div>
+                                    <div class="w-32 font-mono text-dhcp-yellow">0x06</div>
+                                    <div class="flex-1 text-gray-300">（1字节）- MAC地址长度</div>
+                                </div>
+                                
+                                <div class="field-highlight flex">
+                                    <div class="w-24 text-gray-400">跳数</div>
+                                    <div class="w-32 font-mono text-dhcp-yellow">0x00</div>
+                                    <div class="flex-1 text-gray-300">（1字节）- 中继代理跳数</div>
+                                </div>
+                                
+                                <div class="field-highlight flex">
+                                    <div class="w-24 text-gray-400">事务ID</div>
+                                    <div class="w-32 font-mono text-dhcp-yellow">0xABCD1234</div>
+                                    <div class="flex-1 text-gray-300">（4字节）- 匹配请求与响应</div>
+                                </div>
+                                
+                                <div class="field-highlight flex">
+                                    <div class="w-24 text-gray-400">秒数</div>
+                                    <div class="w-32 font-mono text-dhcp-yellow">0x0000</div>
+                                    <div class="flex-1 text-gray-300">（2字节）- 客户端已使用地址时间</div>
+                                </div>
+                                
+                                <div class="field-highlight flex">
+                                    <div class="w-24 text-gray-400">标志</div>
+                                    <div class="w-32 font-mono text-dhcp-yellow">0x8000</div>
+                                    <div class="flex-1 text-gray-300">（2字节）- 广播标志</div>
+                                </div>
+                                
+                                <div class="field-highlight flex">
+                                    <div class="w-24 text-gray-400">客户端IP</div>
+                                    <div class="w-32 font-mono text-dhcp-yellow">0.0.0.0</div>
+                                    <div class="flex-1 text-gray-300">（4字节）- 客户端当前IP</div>
+                                </div>
+                                
+                                <div class="field-highlight flex">
+                                    <div class="w-24 text-gray-400">你的IP</div>
+                                    <div class="w-32 font-mono text-dhcp-yellow">192.168.1.105</div>
+                                    <div class="flex-1 text-gray-300">（4字节）- 提供给客户端的IP</div>
+                                </div>
+                                
+                                <div class="field-highlight flex">
+                                    <div class="w-24 text-gray-400">服务器IP</div>
+                                    <div class="w-32 font-mono text-dhcp-yellow">192.168.1.1</div>
+                                    <div class="flex-1 text-gray-300">（4字节）- DHCP服务器IP</div>
+                                </div>
+                                
+                                <!-- 网关IP字段 - 带强调效果 -->
+                                <div class="field-highlight flex pulse-highlight rounded-md p-1 border border-gateway-highlight/30">
+                                    <div class="w-24 text-gray-400">网关IP</div>
+                                    <div class="w-32 font-mono text-gateway-highlight font-bold">0.0.0.0</div>
+                                    <div class="flex-1 text-gray-300">（4字节）- 中继代理IP <span class="text-xs px-1.5 py-0.5 bg-gateway-highlight/20 text-gateway-highlight rounded ml-2">关键字段</span></div>
+                                </div>
+                                
+                                <div class="field-highlight flex">
+                                    <div class="w-24 text-gray-400">客户端MAC</div>
+                                    <div class="w-32 font-mono text-dhcp-yellow">00:1A:2B:3C:4D:5E</div>
+                                    <div class="flex-1 text-gray-300">（16字节）- 客户端硬件地址</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 选项字段 -->
+                        <div class="opacity-0" id="dhcp-options">
+                            <h3 class="text-accent font-cyber mb-3 text-sm uppercase tracking-wider">DHCP 选项 (可变长度)</h3>
+                            
+                            <div class="space-y-2 text-sm">
+                                <div class="field-highlight flex">
+                                    <div class="w-24 text-gray-400">选项类型</div>
+                                    <div class="w-32 font-mono text-accent">0x35 = 0x02</div>
+                                    <div class="flex-1 text-gray-300">（3字节）- DHCP消息类型：Offer</div>
+                                </div>
+                                
+                                <div class="field-highlight flex">
+                                    <div class="w-24 text-gray-400">子网掩码</div>
+                                    <div class="w-32 font-mono text-accent">0x01 = 255.255.255.0</div>
+                                    <div class="flex-1 text-gray-300">（4字节）- 网络子网掩码</div>
+                                </div>
+                                
+                                <div class="field-highlight flex">
+                                    <div class="w-24 text-gray-400">路由器</div>
+                                    <div class="w-32 font-mono text-accent">0x03 = 192.168.1.1</div>
+                                    <div class="flex-1 text-gray-300">（4字节）- 默认网关IP</div>
+                                </div>
+                                
+                                <div class="field-highlight flex">
+                                    <div class="w-24 text-gray-400">DNS服务器</div>
+                                    <div class="w-32 font-mono text-accent">0x06 = 8.8.8.8</div>
+                                    <div class="flex-1 text-gray-300">（4字节）- DNS服务器IP</div>
+                                </div>
+                                
+                                <div class="field-highlight flex">
+                                    <div class="w-24 text-gray-400">租约期限</div>
+                                    <div class="w-32 font-mono text-accent">0x33 = 691200秒</div>
+                                    <div class="flex-1 text-gray-300">（4字节）- IP地址租用时间（8天）</div>
+                                </div>
+                                
+                                <div class="field-highlight flex">
+                                    <div class="w-24 text-gray-400">服务器标识</div>
+                                    <div class="w-32 font-mono text-accent">0x36 = 192.168.1.1</div>
+                                    <div class="flex-1 text-gray-300">（4字节）- 提供此IP的服务器</div>
+                                </div>
+                                
+                                <div class="field-highlight flex">
+                                    <div class="w-24 text-gray-400">结束标记</div>
+                                    <div class="w-32 font-mono text-accent">0xFF</div>
+                                    <div class="flex-1 text-gray-300">（1字节）- 选项字段结束</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 报文十六进制视图 -->
+                    <div class="bg-darker rounded-lg p-4 overflow-x-auto text-xs font-mono opacity-0" id="hex-view">
+                        <div class="text-gray-400 mb-2">十六进制视图:</div>
+                        <div class="flex flex-wrap">
+                            <span class="text-dhcp-yellow mr-1">02</span>
+                            <span class="text-dhcp-yellow mr-1">01</span>
+                            <span class="text-dhcp-yellow mr-1">06</span>
+                            <span class="text-dhcp-yellow mr-1">00</span>
+                            <span class="text-dhcp-blue mr-1">AB</span>
+                            <span class="text-dhcp-blue mr-1">CD</span>
+                            <span class="text-dhcp-blue mr-1">12</span>
+                            <span class="text-dhcp-blue mr-1">34</span>
+                            <span class="text-gray-300 mr-1">00</span>
+                            <span class="text-gray-300 mr-1">00</span>
+                            <span class="text-gray-300 mr-1">80</span>
+                            <span class="text-gray-300 mr-1">00</span>
+                            <span class="text-gray-300 mr-1">00</span>
+                            <span class="text-gray-300 mr-1">00</span>
+                            <span class="text-gray-300 mr-1">00</span>
+                            <span class="text-gray-300 mr-1">00</span>
+                            <span class="text-accent mr-1">C0</span>
+                            <span class="text-accent mr-1">A8</span>
+                            <span class="text-accent mr-1">01</span>
+                            <span class="text-accent mr-1">69</span>
+                            <span class="text-dhcp-green mr-1">C0</span>
+                            <span class="text-dhcp-green mr-1">A8</span>
+                            <span class="text-dhcp-green mr-1">01</span>
+                            <span class="text-dhcp-green mr-1">01</span>
+                            <!-- 网关IP对应十六进制值 - 强调显示 -->
+                            <span class="text-gateway-highlight mr-1 font-bold">00</span>
+                            <span class="text-gateway-highlight mr-1 font-bold">00</span>
+                            <span class="text-gateway-highlight mr-1 font-bold">00</span>
+                            <span class="text-gateway-highlight mr-1 font-bold">00</span>
+                            <span class="text-dhcp-blue mr-1">00</span>
+                            <span class="text-dhcp-blue mr-1">1A</span>
+                            <span class="text-dhcp-blue mr-1">2B</span>
+                            <span class="text-dhcp-blue mr-1">3C</span>
+                            <span class="text-dhcp-blue mr-1">4D</span>
+                            <span class="text-dhcp-blue mr-1">5E</span>
+                            <!-- ... 更多十六进制数据 ... -->
+                            <span class="text-accent mr-1">35</span>
+                            <span class="text-accent mr-1">01</span>
+                            <span class="text-accent mr-1">02</span>
+                            <span class="text-accent mr-1">33</span>
+                            <span class="text-accent mr-1">04</span>
+                            <span class="text-accent mr-1">0A</span>
+                            <span class="text-accent mr-1">8A</span>
+                            <span class="text-accent mr-1">00</span>
+                            <span class="text-accent mr-1">00</span>
+                            <span class="text-accent mr-1">FF</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 选项字段分布图表 - 从下方滑入 -->
+        <div class="mt-8 bg-dark-card rounded-lg p-5 border border-gray-700 transform transition-all duration-300 hover:border-accent/50 animate-slide-up" style="animation-delay: 0.7s;">
+            <h2 class="text-xl font-cyber font-semibold mb-6 opacity-0" id="chart-title">
+                <i class="fa fa-pie-chart mr-2 text-accent"></i>DHCP Offer选项字段分布
+            </h2>
+            <div class="h-[250px] opacity-0" id="chart-container">
+                <canvas id="dhcpOptionsChart"></canvas>
+            </div>
+        </div>
+    </main>
+
+    <!-- 页脚 - 淡入效果 -->
+    <footer class="mt-12 py-6 px-4 md:px-8 border-t border-gray-800 animate-fade-in" style="animation-delay: 1.0s;">
+        <div class="container mx-auto text-center text-gray-500 text-sm">
+            <p>DHCP Offer报文格式演示 &copy; 2023 | 基于 RFC 2131 标准</p>
+        </div>
+    </footer>
+
+    <script>
+        // 控制元素动画顺序和时间
+        document.addEventListener('DOMContentLoaded', function() {
+            // 分步显示工作流程区域元素
+            setTimeout(() => {
+                document.getElementById('workflow-svg').style.transition = 'opacity 0.8s ease';
+                document.getElementById('workflow-svg').style.opacity = '1';
+                
+                setTimeout(() => {
+                    document.getElementById('workflow-description').style.transition = 'opacity 0.5s ease';
+                    document.getElementById('workflow-description').style.opacity = '1';
+                }, 600);
+            }, 700);
+            
+            // 分步显示报文结构区域元素
+            setTimeout(() => {
+                document.getElementById('packet-header').style.transition = 'opacity 0.5s ease';
+                document.getElementById('packet-header').style.opacity = '1';
+                
+                setTimeout(() => {
+                    document.getElementById('packet-visualization').style.transition = 'opacity 0.7s ease';
+                    document.getElementById('packet-visualization').style.opacity = '1';
+                    
+                    setTimeout(() => {
+                        document.getElementById('bootp-header').style.transition = 'opacity 0.7s ease';
+                        document.getElementById('bootp-header').style.opacity = '1';
+                        
+                        // 字段逐一出现动画
+                        const fields = document.querySelectorAll('#bootp-header .field-highlight');
+                        fields.forEach((field, index) => {
+                            field.style.opacity = '0';
+                            field.style.transform = 'translateX(-10px)';
+                            field.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                            
+                            setTimeout(() => {
+                                field.style.opacity = '1';
+                                field.style.transform = 'translateX(0)';
+                            }, 300 + (index * 100));
+                        });
+                        
+                        // 显示选项字段
+                        setTimeout(() => {
+                            document.getElementById('dhcp-options').style.transition = 'opacity 0.7s ease';
+                            document.getElementById('dhcp-options').style.opacity = '1';
+                            
+                            // 选项字段逐一出现
+                            const optionFields = document.querySelectorAll('#dhcp-options .field-highlight');
+                            optionFields.forEach((field, index) => {
+                                field.style.opacity = '0';
+                                field.style.transform = 'translateX(-10px)';
+                                field.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                                
+                                setTimeout(() => {
+                                    field.style.opacity = '1';
+                                    field.style.transform = 'translateX(0)';
+                                }, 200 + (index * 80));
+                            });
+                            
+                            // 显示十六进制视图
+                            setTimeout(() => {
+                                document.getElementById('hex-view').style.transition = 'opacity 0.7s ease';
+                                document.getElementById('hex-view').style.opacity = '1';
+                            }, 1000);
+                        }, 1500);
+                    }, 500);
+                }, 400);
+            }, 500);
+            
+            // 显示图表
+            setTimeout(() => {
+                document.getElementById('chart-title').style.transition = 'opacity 0.5s ease';
+                document.getElementById('chart-title').style.opacity = '1';
+                
+                setTimeout(() => {
+                    document.getElementById('chart-container').style.transition = 'opacity 0.7s ease';
+                    document.getElementById('chart-container').style.opacity = '1';
+                    
+                    // 初始化选项字段分布图表
+                    const ctx = document.getElementById('dhcpOptionsChart').getContext('2d');
+                    new Chart(ctx, {
+                        type: 'pie',
+                        data: {
+                            labels: ['IP地址信息', '子网掩码', '路由器/网关', 'DNS服务器', '租约期限', '服务器标识', '其他选项'],
+                            datasets: [{
+                                data: [30, 15, 15, 15, 10, 10, 5],
+                                backgroundColor: [
+                                    '#ff4d94',  // 粉红色
+                                    '#36bffa',  // 蓝色
+                                    '#7c3aed',  // 网关强调色
+                                    '#10b981',  // 绿色
+                                    '#8b5cf6',  // 紫色
+                                    '#6366f1',  // 靛蓝色
+                                    '#64748b'   // 灰色
+                                ],
+                                borderColor: '#1e293b',
+                                borderWidth: 2
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'right',
+                                    labels: {
+                                        color: '#e2e8f0',
+                                        font: {
+                                            family: 'Orbitron',
+                                            size: 11
+                                        }
+                                    }
+                                }
+                            },
+                            animation: {
+                                animateScale: true,
+                                animateRotate: true,
+                                duration: 2000
+                            }
+                        }
+                    });
+                }, 400);
+            }, 4000);
+        });
+    </script>
+</body>
+</html>
+    

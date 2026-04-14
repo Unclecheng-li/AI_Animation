@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPsec 数据流转演示 | 下一代可视化</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        background: '#030508', // 极深背景
+                        surface: '#0F172A',     // 卡片表面
+                        primary: '#00E096',     // IPsec 绿
+                        secondary: '#3B82F6',   // 网络蓝
+                        accent: '#8B5CF6',      // 传输紫
+                        glass: 'rgba(255, 255, 255, 0.05)',
+                        glassBorder: 'rgba(255, 255, 255, 0.1)',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+                    },
+                    animation: {
+                        'float': 'float 6s ease-in-out infinite',
+                        'pulse-glow': 'pulseGlow 3s infinite',
+                        'flow-line': 'flowLine 2s linear infinite',
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-20px)' },
+                        },
+                        pulseGlow: {
+                            '0%, 100%': { opacity: 0.5, transform: 'scale(1)' },
+                            '50%': { opacity: 1, transform: 'scale(1.05)' },
+                        },
+                        flowLine: {
+                            '0%': { strokeDashoffset: '24' },
+                            '100%': { strokeDashoffset: '0' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* 核心滚动行为 */
+        html, body {
+            height: 100%;
+            margin: 0;
+            overflow: hidden; /* 由JS控制平滑滚动或CSS snap */
+            background-color: #030508;
+            color: #E2E8F0;
+        }
+
+        .scroll-container {
+            height: 100vh;
+            overflow-y: scroll;
+            scroll-snap-type: y mandatory;
+            scroll-behavior: smooth;
+        }
+
+        .slide-section {
+            height: 100vh;
+            width: 100%;
+            scroll-snap-align: start;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* 动态背景网格 */
+        .cyber-grid {
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            top: -50%;
+            left: -50%;
+            background-image:
+                linear-gradient(rgba(0, 224, 150, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 224, 150, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            transform: perspective(500px) rotateX(60deg);
+            animation: gridMove 20s linear infinite;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        @keyframes gridMove {
+            0% { transform: perspective(500px) rotateX(60deg) translateY(0); }
+            100% { transform: perspective(500px) rotateX(60deg) translateY(50px); }
+        }
+
+        /* 3D 卡片容器 */
+        .tilt-card {
+            transform-style: preserve-3d;
+            transform: perspective(1000px);
+            transition: transform 0.1s ease-out; /* 快速响应鼠标 */
+        }
+        
+        .tilt-inner {
+            transform-style: preserve-3d;
+            transform: translateZ(20px);
+        }
+
+        /* 玻璃拟态 */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        /* 移动端横向滚动隐藏滚动条 */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* 隧道模式动画 */
+        .packet-wrapper {
+            transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        
+        /* 荧光文字效果 */
+        .text-glow {
+            text-shadow: 0 0 10px rgba(0, 224, 150, 0.5);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="scroll-container">
+        
+        <div class="cyber-grid"></div>
+
+        <section class="slide-section">
+            <div class="text-center relative z-10 p-6 animate-float">
+                <div class="inline-block p-4 rounded-full bg-primary/10 border border-primary/30 mb-6 shadow-[0_0_30px_rgba(0,224,150,0.2)]">
+                    <i class="fa-solid fa-shield-halved text-5xl text-primary"></i>
+                </div>
+                <h1 class="text-5xl md:text-7xl font-bold tracking-tight mb-4 bg-clip-text text-transparent bg-gradient-to-b from-white to-gray-400">
+                    IPsec 协议
+                </h1>
+                <p class="text-xl text-gray-400 font-light tracking-widest uppercase mb-8">网络层安全拦截与封装机制</p>
+                
+                <div class="flex justify-center gap-2">
+                    <span class="px-3 py-1 rounded text-xs border border-white/10 text-gray-500 font-mono">AH / ESP</span>
+                    <span class="px-3 py-1 rounded text-xs border border-white/10 text-gray-500 font-mono">Tunnel / Transport</span>
+                </div>
+
+                <div class="absolute bottom-[-100px] left-1/2 -translate-x-1/2 text-gray-600 animate-bounce">
+                    <p class="text-sm mb-2">向下滚动开始演示</p>
+                    <i class="fa-solid fa-chevron-down"></i>
+                </div>
+            </div>
+        </section>
+
+        <section class="slide-section perspective-container">
+            <div id="mainCard" class="tilt-card w-full max-w-6xl mx-4 relative group">
+                
+                <div class="absolute -inset-1 bg-gradient-to-r from-primary/30 via-secondary/30 to-accent/30 rounded-3xl blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
+
+                <div class="glass-panel rounded-2xl p-6 md:p-10 relative overflow-hidden bg-background/80">
+                    
+                    <div class="flex flex-col md:flex-row justify-between items-center mb-10 border-b border-white/5 pb-6 tilt-inner">
+                        <div>
+                            <h2 class="text-2xl font-bold text-white flex items-center gap-3">
+                                <span class="w-2 h-8 bg-primary rounded-full"></span>
+                                数据流转可视化
+                            </h2>
+                        </div>
+                        
+                        <div class="mt-4 md:mt-0 flex items-center bg-black/40 rounded-full p-1 border border-white/10">
+                            <button onclick="setMode('transport')" id="btn-transport" class="px-6 py-2 rounded-full text-sm font-medium transition-all duration-300 bg-white/10 text-white shadow-lg">
+                                传输模式
+                            </button>
+                            <button onclick="setMode('tunnel')" id="btn-tunnel" class="px-6 py-2 rounded-full text-sm font-medium transition-all duration-300 text-gray-400 hover:text-white">
+                                隧道模式
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="relative min-h-[300px] tilt-inner">
+                        
+                        <div class="hidden md:block absolute top-1/2 left-0 w-full h-0.5 bg-white/5 -translate-y-1/2 z-0"></div>
+                        
+                        <div class="flex md:justify-between gap-4 overflow-x-auto md:overflow-visible no-scrollbar snap-x snap-mandatory py-4 px-2" id="flow-steps">
+                            
+                            <div class="step-card min-w-[240px] md:min-w-0 md:w-1/6 snap-center group/card cursor-pointer">
+                                <div class="relative bg-surface/50 border border-white/10 p-5 rounded-xl hover:bg-surface hover:border-accent/50 transition-all duration-300 h-full flex flex-col justify-between">
+                                    <div class="text-xs text-gray-500 font-mono mb-2">Step 01</div>
+                                    <div class="mb-3">
+                                        <i class="fa-solid fa-layer-group text-accent text-2xl mb-2"></i>
+                                        <h3 class="text-lg font-bold text-accent">应用数据</h3>
+                                    </div>
+                                    <div class="text-xs text-gray-400 font-mono bg-black/30 p-2 rounded border border-white/5">
+                                        HTTP/Payload
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="step-card min-w-[240px] md:min-w-0 md:w-1/6 snap-center group/card cursor-pointer">
+                                <div class="relative bg-surface/50 border border-white/10 p-5 rounded-xl hover:bg-surface hover:border-secondary/50 transition-all duration-300 h-full flex flex-col justify-between">
+                                    <div class="text-xs text-gray-500 font-mono mb-2">Step 02</div>
+                                    <div class="mb-3">
+                                        <i class="fa-solid fa-cube text-secondary text-2xl mb-2"></i>
+                                        <h3 class="text-lg font-bold text-secondary">TCP封装</h3>
+                                    </div>
+                                    <div class="text-xs text-gray-400 font-mono bg-black/30 p-2 rounded border border-white/5">
+                                        SrcPort | DstPort
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="step-card min-w-[240px] md:min-w-0 md:w-1/6 snap-center group/card cursor-pointer z-10">
+                                <div class="relative bg-surface/50 border border-white/10 p-5 rounded-xl hover:bg-surface hover:border-blue-400/50 transition-all duration-300 h-full flex flex-col justify-between">
+                                    <div class="text-xs text-gray-500 font-mono mb-2">Step 03</div>
+                                    <div class="mb-3">
+                                        <i class="fa-solid fa-network-wired text-blue-400 text-2xl mb-2"></i>
+                                        <h3 class="text-lg font-bold text-blue-400">IP头</h3>
+                                    </div>
+                                    <div class="text-xs text-gray-400 font-mono bg-black/30 p-2 rounded border border-white/5">
+                                        192.168.1.5
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="step-card min-w-[240px] md:min-w-0 md:w-1/6 snap-center group/card cursor-pointer z-20">
+                                <div class="relative bg-primary/10 border border-primary/50 p-5 rounded-xl shadow-[0_0_20px_rgba(0,224,150,0.2)] h-full flex flex-col justify-between transform scale-105">
+                                    <div class="absolute -top-3 -right-3 bg-primary text-black text-[10px] font-bold px-2 py-1 rounded">ACTIVE</div>
+                                    <div class="text-xs text-primary/80 font-mono mb-2">Step 04</div>
+                                    <div class="mb-3">
+                                        <i class="fa-solid fa-lock text-primary text-2xl mb-2 animate-pulse"></i>
+                                        <h3 class="text-lg font-bold text-primary">IPsec 拦截</h3>
+                                    </div>
+                                    <div class="text-xs text-primary/60 font-mono bg-black/30 p-2 rounded border border-primary/20">
+                                        ESP Encrypt
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="step-tunnel" class="packet-wrapper w-0 opacity-0 overflow-hidden md:w-0 transition-all duration-500 ease-in-out">
+                                <div class="min-w-[240px] md:min-w-full h-full p-1">
+                                    <div class="bg-surface/50 border-2 border-dashed border-primary/50 p-5 rounded-xl h-full flex flex-col justify-between bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjIiIGZpbGw9IiMwMEUwOTYiIGZpbGwtb3BhY2l0eT0iMC4yIi8+PC9zdmc+')]">
+                                        <div class="text-xs text-gray-500 font-mono mb-2">Step 05 (隧道)</div>
+                                        <div class="mb-3">
+                                            <i class="fa-solid fa-box-open text-white text-2xl mb-2"></i>
+                                            <h3 class="text-lg font-bold text-white">新 IP 头</h3>
+                                        </div>
+                                        <div class="text-xs text-gray-400 font-mono bg-black/30 p-2 rounded border border-white/5">
+                                            Gate.IP > Gate.IP
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="step-card min-w-[240px] md:min-w-0 md:w-1/6 snap-center group/card cursor-pointer">
+                                <div class="relative bg-surface/50 border border-white/10 p-5 rounded-xl hover:bg-surface hover:border-white/50 transition-all duration-300 h-full flex flex-col justify-between">
+                                    <div class="text-xs text-gray-500 font-mono mb-2">Step 06</div>
+                                    <div class="mb-3">
+                                        <i class="fa-solid fa-paper-plane text-gray-300 text-2xl mb-2"></i>
+                                        <h3 class="text-lg font-bold text-gray-300">路由转发</h3>
+                                    </div>
+                                    <div class="text-xs text-gray-400 font-mono bg-black/30 p-2 rounded border border-white/5">
+                                        Internet
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <div class="mt-8 pt-6 border-t border-white/5 flex flex-col md:flex-row justify-between items-start md:items-center text-sm tilt-inner">
+                        <div class="flex items-center gap-2 text-gray-400">
+                            <i class="fa-solid fa-circle-info text-primary"></i>
+                            <span id="mode-desc">当前：传输模式 - 仅加密数据载荷，保留原始 IP 头</span>
+                        </div>
+                        <div class="mt-4 md:mt-0 flex gap-4 text-xs font-mono text-gray-600">
+                            <span>ENC: AES-256</span>
+                            <span>HASH: SHA-256</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <script>
+        // 1. 3D Tilt Effect Logic (Elegant Mouse Follow)
+        const card = document.getElementById('mainCard');
+        const container = document.querySelector('.perspective-container');
+
+        // 仅在 PC 端启用鼠标跟随
+        if (window.matchMedia("(min-width: 768px)").matches) {
+            document.addEventListener('mousemove', (e) => {
+                if (!card) return;
+                
+                const xAxis = (window.innerWidth / 2 - e.pageX) / 40; // 调整除数以控制灵敏度
+                const yAxis = (window.innerHeight / 2 - e.pageY) / 40;
+                
+                // 应用旋转，添加一点平滑
+                requestAnimationFrame(() => {
+                    card.style.transform = `perspective(1000px) rotateY(${xAxis}deg) rotateX(${yAxis}deg)`;
+                });
+            });
+
+            // 鼠标离开复位
+            document.addEventListener('mouseleave', () => {
+                card.style.transform = `perspective(1000px) rotateY(0deg) rotateX(0deg)`;
+            });
+        }
+
+        // 2. Mode Switching Logic (Transport vs Tunnel)
+        const btnTransport = document.getElementById('btn-transport');
+        const btnTunnel = document.getElementById('btn-tunnel');
+        const stepTunnel = document.getElementById('step-tunnel');
+        const modeDesc = document.getElementById('mode-desc');
+
+        function setMode(mode) {
+            if (mode === 'tunnel') {
+                // UI 状态
+                btnTunnel.classList.add('bg-white/10', 'text-white', 'shadow-lg');
+                btnTunnel.classList.remove('text-gray-400');
+                btnTransport.classList.remove('bg-white/10', 'text-white', 'shadow-lg');
+                btnTransport.classList.add('text-gray-400');
+                
+                // 动画展示“外层IP”插入
+                stepTunnel.classList.remove('w-0', 'opacity-0', 'md:w-0');
+                stepTunnel.classList.add('w-full', 'md:w-1/6', 'opacity-100');
+                
+                // 文字更新
+                modeDesc.innerHTML = '当前：<span class="text-primary font-bold">隧道模式</span> - 封装新 IP 头，隐藏通信端点';
+            } else {
+                // UI 状态
+                btnTransport.classList.add('bg-white/10', 'text-white', 'shadow-lg');
+                btnTransport.classList.remove('text-gray-400');
+                btnTunnel.classList.remove('bg-white/10', 'text-white', 'shadow-lg');
+                btnTunnel.classList.add('text-gray-400');
+                
+                // 动画隐藏
+                stepTunnel.classList.remove('w-full', 'md:w-1/6', 'opacity-100');
+                stepTunnel.classList.add('w-0', 'opacity-0', 'md:w-0');
+                
+                // 文字更新
+                modeDesc.innerHTML = '当前：<span class="text-blue-400 font-bold">传输模式</span> - 仅加密数据载荷，保留原始 IP 头';
+            }
+        }
+
+        // 3. 简单的进入动画 (Intersection Observer)
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('opacity-100', 'translate-y-0');
+                    entry.target.classList.remove('opacity-0', 'translate-y-10');
+                }
+            });
+        }, { threshold: 0.1 });
+
+        // 初始化
+        document.querySelectorAll('.step-card').forEach((el, index) => {
+            el.style.transitionDelay = `${index * 100}ms`; // 瀑布流延迟
+            observer.observe(el);
+        });
+    </script>
+</body>
+</html>

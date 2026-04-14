@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DHCP Offer 报文格式</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#0F111A',
+                        darker: '#080A12',
+                        accent: '#FF2E7E',
+                        'accent-light': '#FF5E9E',
+                        primary: '#165DFF',
+                        secondary: '#722ED1',
+                        neutral: '#1D2129',
+                        'neutral-light': '#272B36'
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'float': 'float 6s ease-in-out infinite',
+                        'glow': 'glow 2s ease-in-out infinite',
+                        'fade-in': 'fadeIn 0.6s ease-out forwards',
+                        'slide-up': 'slideUp 0.5s ease-out forwards',
+                        'slide-in': 'slideIn 0.5s ease-out forwards',
+                        'scale-in': 'scaleIn 0.4s ease-out forwards',
+                        'border-pulse': 'borderPulse 2s infinite'
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-10px)' }
+                        },
+                        glow: {
+                            '0%, 100%': { boxShadow: '0 0 15px rgba(255, 46, 126, 0.5)' },
+                            '50%': { boxShadow: '0 0 25px rgba(255, 46, 126, 0.8)' }
+                        },
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' }
+                        },
+                        slideUp: {
+                            '0%': { transform: 'translateY(20px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' }
+                        },
+                        slideIn: {
+                            '0%': { transform: 'translateX(-20px)', opacity: '0' },
+                            '100%': { transform: 'translateX(0)', opacity: '1' }
+                        },
+                        scaleIn: {
+                            '0%': { transform: 'scale(0.95)', opacity: '0' },
+                            '100%': { transform: 'scale(1)', opacity: '1' }
+                        },
+                        borderPulse: {
+                            '0%, 100%': { borderColor: 'rgba(255, 46, 126, 0.7)' },
+                            '50%': { borderColor: 'rgba(255, 46, 126, 1)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .text-shadow { text-shadow: 0 0 8px rgba(255, 46, 126, 0.6); }
+            .border-glow { box-shadow: 0 0 10px rgba(255, 46, 126, 0.5); }
+            .packet-shadow { box-shadow: 0 0 15px rgba(22, 93, 255, 0.3); }
+            .bg-grid { 
+                background-image: 
+                    linear-gradient(rgba(22, 93, 255, 0.05) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(22, 93, 255, 0.05) 1px, transparent 1px);
+                background-size: 30px 30px;
+            }
+            .field-hover { transition: all 0.3s ease; }
+            .field-hover:hover { 
+                transform: translateX(5px);
+                border-color: theme('colors.accent');
+                box-shadow: 0 0 10px rgba(255, 46, 126, 0.3);
+            }
+            .reveal-element {
+                opacity: 0;
+                transform: translateY(20px);
+                transition: opacity 0.5s ease, transform 0.5s ease;
+            }
+            .protocol-layer {
+                position: relative;
+                overflow: hidden;
+            }
+            .protocol-layer::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 3px;
+                background: linear-gradient(90deg, transparent, theme('colors.accent'), transparent);
+                transform: translateX(-100%);
+                transition: transform 1s ease;
+            }
+            .protocol-layer.revealed::before {
+                transform: translateX(100%);
+            }
+        }
+    </style>
+</head>
+<body class="bg-dark text-gray-300 min-h-screen p-4 md:p-8 overflow-x-hidden bg-grid">
+    <div class="max-w-6xl mx-auto">
+        <!-- 标题区域 -->
+        <header class="mb-10 text-center reveal-element" data-delay="100">
+            <h1 class="text-[clamp(1.8rem,5vw,3rem)] font-bold mb-3 text-white">
+                DHCP <span class="text-accent text-shadow">Offer</span> 报文格式
+            </h1>
+            <p class="text-gray-400 max-w-2xl mx-auto">
+                服务器响应客户端请求，提供IP地址和网络配置信息的报文结构
+            </p>
+        </header>
+
+        <!-- 主报文展示区 -->
+        <div class="relative mb-12 reveal-element" data-delay="300">
+            <!-- 报文头部 -->
+            <div class="bg-neutral rounded-t-2xl p-6 border-t-4 border-accent packet-shadow animate-glow">
+                <div class="flex justify-between items-center mb-4 reveal-element" data-delay="500">
+                    <div class="flex items-center">
+                        <i class="fa fa-exchange text-accent mr-3 text-xl"></i>
+                        <h2 class="text-xl font-bold text-white">DHCP Offer 报文</h2>
+                    </div>
+                    <span class="text-xs bg-accent/20 text-accent px-3 py-1 rounded-full">
+                        长度: 576 字节
+                    </span>
+                </div>
+                
+                <!-- 以太网帧头部 -->
+                <div class="mb-6 reveal-element protocol-layer" data-delay="700">
+                    <h3 class="text-white font-semibold mb-3 flex items-center">
+                        <span class="w-2 h-2 bg-accent rounded-full mr-2 animate-pulse-slow"></span>
+                        以太网帧头部
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pl-4">
+                        <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-primary field-hover reveal-element" data-delay="800">
+                            <div class="text-xs text-gray-400 mb-1">目的MAC地址</div>
+                            <div class="font-mono text-white">FF:FF:FF:FF:FF:FF <span class="text-xs text-gray-500">(广播)</span></div>
+                        </div>
+                        <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-primary field-hover reveal-element" data-delay="900">
+                            <div class="text-xs text-gray-400 mb-1">源MAC地址</div>
+                            <div class="font-mono text-white">AA:BB:CC:DD:EE:FF <span class="text-xs text-gray-500">(服务器MAC)</span></div>
+                        </div>
+                        <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-primary field-hover md:col-span-2 reveal-element" data-delay="1000">
+                            <div class="text-xs text-gray-400 mb-1">类型</div>
+                            <div class="font-mono text-white">0x0800 <span class="text-xs text-gray-500">(IPv4)</span></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- IP头部 -->
+                <div class="mb-6 reveal-element protocol-layer" data-delay="1200">
+                    <h3 class="text-white font-semibold mb-3 flex items-center">
+                        <span class="w-2 h-2 bg-primary rounded-full mr-2 animate-pulse-slow"></span>
+                        IP 头部
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pl-4">
+                        <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-secondary field-hover reveal-element" data-delay="1300">
+                            <div class="text-xs text-gray-400 mb-1">版本 / 首部长度</div>
+                            <div class="font-mono text-white">IPv4 / 20 字节</div>
+                        </div>
+                        <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-secondary field-hover reveal-element" data-delay="1400">
+                            <div class="text-xs text-gray-400 mb-1">服务类型</div>
+                            <div class="font-mono text-white">0x00 <span class="text-xs text-gray-500">(普通服务)</span></div>
+                        </div>
+                        <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-secondary field-hover reveal-element" data-delay="1500">
+                            <div class="text-xs text-gray-400 mb-1">总长度</div>
+                            <div class="font-mono text-white">~300 字节</div>
+                        </div>
+                        <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-secondary field-hover reveal-element" data-delay="1600">
+                            <div class="text-xs text-gray-400 mb-1">标识</div>
+                            <div class="font-mono text-white">0x1234</div>
+                        </div>
+                        <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-secondary field-hover reveal-element" data-delay="1700">
+                            <div class="text-xs text-gray-400 mb-1">标志 / 片偏移</div>
+                            <div class="font-mono text-white">0x4000 / 0</div>
+                        </div>
+                        <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-secondary field-hover reveal-element" data-delay="1800">
+                            <div class="text-xs text-gray-400 mb-1">生存时间(TTL)</div>
+                            <div class="font-mono text-white">128</div>
+                        </div>
+                        <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-secondary field-hover reveal-element" data-delay="1900">
+                            <div class="text-xs text-gray-400 mb-1">协议</div>
+                            <div class="font-mono text-white">UDP (0x11)</div>
+                        </div>
+                        <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-secondary field-hover reveal-element" data-delay="2000">
+                            <div class="text-xs text-gray-400 mb-1">首部校验和</div>
+                            <div class="font-mono text-white">0x5678</div>
+                        </div>
+                        <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-secondary field-hover reveal-element" data-delay="2100">
+                            <div class="text-xs text-gray-400 mb-1">源IP地址</div>
+                            <div class="font-mono text-white">192.168.1.1 <span class="text-xs text-gray-500">(DHCP服务器)</span></div>
+                        </div>
+                        <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-secondary field-hover reveal-element" data-delay="2200">
+                            <div class="text-xs text-gray-400 mb-1">目的IP地址</div>
+                            <div class="font-mono text-white">255.255.255.255 <span class="text-xs text-gray-500">(广播)</span></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- UDP头部 -->
+                <div class="mb-6 reveal-element protocol-layer" data-delay="2400">
+                    <h3 class="text-white font-semibold mb-3 flex items-center">
+                        <span class="w-2 h-2 bg-secondary rounded-full mr-2 animate-pulse-slow"></span>
+                        UDP 头部
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pl-4">
+                        <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-accent field-hover reveal-element" data-delay="2500">
+                            <div class="text-xs text-gray-400 mb-1">源端口</div>
+                            <div class="font-mono text-white">67 <span class="text-xs text-gray-500">(DHCP服务器)</span></div>
+                        </div>
+                        <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-accent field-hover reveal-element" data-delay="2600">
+                            <div class="text-xs text-gray-400 mb-1">目的端口</div>
+                            <div class="font-mono text-white">68 <span class="text-xs text-gray-500">(DHCP客户端)</span></div>
+                        </div>
+                        <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-accent field-hover reveal-element" data-delay="2700">
+                            <div class="text-xs text-gray-400 mb-1">长度</div>
+                            <div class="font-mono text-white">~280 字节</div>
+                        </div>
+                        <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-accent field-hover reveal-element" data-delay="2800">
+                            <div class="text-xs text-gray-400 mb-1">校验和</div>
+                            <div class="font-mono text-white">0x9ABC</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- DHCP消息 -->
+                <div class="reveal-element protocol-layer" data-delay="3000">
+                    <h3 class="text-white font-semibold mb-3 flex items-center">
+                        <span class="w-2 h-2 bg-accent rounded-full mr-2 animate-pulse-slow"></span>
+                        DHCP 消息
+                    </h3>
+                    
+                    <!-- DHCP固定字段 -->
+                    <div class="mb-5 reveal-element" data-delay="3100">
+                        <h4 class="text-gray-300 font-medium mb-2 pl-4">固定字段</h4>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pl-4">
+                            <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-accent-light field-hover reveal-element" data-delay="3200">
+                                <div class="text-xs text-gray-400 mb-1">操作码</div>
+                                <div class="font-mono text-white">2 <span class="text-xs text-gray-500">(回复)</span></div>
+                            </div>
+                            <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-accent-light field-hover reveal-element" data-delay="3300">
+                                <div class="text-xs text-gray-400 mb-1">硬件类型</div>
+                                <div class="font-mono text-white">1 <span class="text-xs text-gray-500">(以太网)</span></div>
+                            </div>
+                            <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-accent-light field-hover reveal-element" data-delay="3400">
+                                <div class="text-xs text-gray-400 mb-1">硬件长度</div>
+                                <div class="font-mono text-white">6</div>
+                            </div>
+                            <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-accent-light field-hover reveal-element" data-delay="3500">
+                                <div class="text-xs text-gray-400 mb-1">跳数</div>
+                                <div class="font-mono text-white">0</div>
+                            </div>
+                            <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-accent-light field-hover sm:col-span-2 md:col-span-4 reveal-element" data-delay="3600">
+                                <div class="text-xs text-gray-400 mb-1">事务ID</div>
+                                <div class="font-mono text-white">0xABCDEF12 <span class="text-xs text-gray-500">(与请求匹配)</span></div>
+                            </div>
+                            <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-accent-light field-hover reveal-element" data-delay="3700">
+                                <div class="text-xs text-gray-400 mb-1">秒数</div>
+                                <div class="font-mono text-white">0</div>
+                            </div>
+                            <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-accent-light field-hover reveal-element" data-delay="3800">
+                                <div class="text-xs text-gray-400 mb-1">标志</div>
+                                <div class="font-mono text-white">0x8000 <span class="text-xs text-gray-500">(广播)</span></div>
+                            </div>
+                            <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-accent-light field-hover reveal-element" data-delay="3900">
+                                <div class="text-xs text-gray-400 mb-1">客户端IP</div>
+                                <div class="font-mono text-white">0.0.0.0 <span class="text-xs text-gray-500">(尚未分配)</span></div>
+                            </div>
+                            <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-accent-light field-hover reveal-element animate-border-pulse" data-delay="4000">
+                                <div class="text-xs text-gray-400 mb-1">你的IP</div>
+                                <div class="font-mono text-white">192.168.1.100 <span class="text-xs text-gray-500">(提供的IP)</span></div>
+                            </div>
+                            <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-accent-light field-hover reveal-element" data-delay="4100">
+                                <div class="text-xs text-gray-400 mb-1">服务器IP</div>
+                                <div class="font-mono text-white">192.168.1.1</div>
+                            </div>
+                            <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-accent-light field-hover reveal-element" data-delay="4200">
+                                <div class="text-xs text-gray-400 mb-1">网关IP</div>
+                                <div class="font-mono text-white">0.0.0.0</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- DHCP选项字段 -->
+                    <div class="reveal-element" data-delay="4400">
+                        <h4 class="text-gray-300 font-medium mb-2 pl-4">选项字段 (关键选项)</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pl-4">
+                            <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-primary field-hover reveal-element animate-border-pulse" data-delay="4500">
+                                <div class="text-xs text-gray-400 mb-1">消息类型 (53)</div>
+                                <div class="font-mono text-white">2 <span class="text-xs text-gray-500">(Offer)</span></div>
+                            </div>
+                            <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-primary field-hover reveal-element" data-delay="4600">
+                                <div class="text-xs text-gray-400 mb-1">子网掩码 (1)</div>
+                                <div class="font-mono text-white">255.255.255.0</div>
+                            </div>
+                            <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-primary field-hover reveal-element" data-delay="4700">
+                                <div class="text-xs text-gray-400 mb-1">路由器 (3)</div>
+                                <div class="font-mono text-white">192.168.1.1</div>
+                            </div>
+                            <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-primary field-hover reveal-element" data-delay="4800">
+                                <div class="text-xs text-gray-400 mb-1">DNS服务器 (6)</div>
+                                <div class="font-mono text-white">8.8.8.8, 8.8.4.4</div>
+                            </div>
+                            <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-primary field-hover reveal-element" data-delay="4900">
+                                <div class="text-xs text-gray-400 mb-1">IP地址租约期 (51)</div>
+                                <div class="font-mono text-white">86400 秒 <span class="text-xs text-gray-500">(24小时)</span></div>
+                            </div>
+                            <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-primary field-hover reveal-element" data-delay="5000">
+                                <div class="text-xs text-gray-400 mb-1">服务器标识符 (54)</div>
+                                <div class="font-mono text-white">192.168.1.1</div>
+                            </div>
+                            <div class="bg-neutral-light p-3 rounded-lg border-l-2 border-primary field-hover md:col-span-2 reveal-element" data-delay="5100">
+                                <div class="text-xs text-gray-400 mb-1">结束标记 (255)</div>
+                                <div class="font-mono text-white">0xFF <span class="text-xs text-gray-500">(选项列表结束)</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 报文尾部装饰 -->
+            <div class="h-4 bg-gradient-to-r from-accent via-primary to-secondary rounded-b-2xl"></div>
+        </div>
+        
+        <!-- 交互按钮 -->
+        <div class="flex flex-wrap justify-center space-x-4 mb-10 reveal-element" data-delay="5300">
+            <button id="highlightKey" class="bg-neutral hover:bg-neutral-light text-white px-5 py-2 rounded-lg flex items-center transition-all">
+                <i class="fa fa-magic text-accent mr-2"></i>
+                高亮关键字段
+            </button>
+            <button id="resetView" class="bg-neutral hover:bg-neutral-light text-white px-5 py-2 rounded-lg flex items-center transition-all">
+                <i class="fa fa-refresh mr-2"></i>
+                重置视图
+            </button>
+            <button id="replayAnimation" class="bg-neutral hover:bg-neutral-light text-white px-5 py-2 rounded-lg flex items-center transition-all">
+                <i class="fa fa-play mr-2"></i>
+                重播动画
+            </button>
+        </div>
+        
+        <!-- 图形化展示 -->
+        <div class="relative h-64 md:h-80 mb-8 bg-neutral rounded-xl overflow-hidden reveal-element" data-delay="5500">
+            <div class="absolute inset-0 p-6">
+                <h3 class="text-white font-semibold mb-4">报文传输示意图</h3>
+                
+                <!-- 服务器图标 -->
+                <div class="absolute top-1/4 left-10 w-16 h-16 bg-primary/20 rounded-lg flex items-center justify-center border border-primary animate-float reveal-element" data-delay="5700">
+                    <i class="fa fa-server text-2xl text-primary"></i>
+                    <div class="absolute -bottom-6 left-1/2 transform -translate-x-1/2 text-xs text-primary">DHCP服务器</div>
+                </div>
+                
+                <!-- 客户端图标 -->
+                <div class="absolute top-1/4 right-10 w-16 h-16 bg-accent/20 rounded-lg flex items-center justify-center border border-accent animate-float reveal-element" data-delay="6000" style="animation-delay: 1s">
+                    <i class="fa fa-laptop text-2xl text-accent"></i>
+                    <div class="absolute -bottom-6 left-1/2 transform -translate-x-1/2 text-xs text-accent">客户端</div>
+                </div>
+                
+                <!-- 箭头和报文 -->
+                <div class="absolute top-1/4 left-[25%] right-[25%] h-10 flex items-center justify-center reveal-element" data-delay="6300">
+                    <div class="w-full h-0.5 bg-gradient-to-r from-primary to-accent relative">
+                        <div class="absolute top-1/2 left-1/3 transform -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-dark border border-accent rounded-full flex items-center justify-center animate-pulse-slow">
+                            <div class="w-3 h-3 bg-accent rounded-full"></div>
+                        </div>
+                        <i class="fa fa-long-arrow-right absolute top-1/2 right-1/4 transform -translate-y-1/2 text-accent"></i>
+                    </div>
+                </div>
+                
+                <!-- 广播范围示意 -->
+                <div class="absolute bottom-10 left-1/2 transform -translate-x-1/2 w-[80%] h-1 bg-gray-700 rounded-full reveal-element" data-delay="6600">
+                    <div class="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-accent/30 to-transparent animate-pulse-slow"></div>
+                    <div class="absolute -bottom-6 left-1/2 transform -translate-x-1/2 text-xs text-gray-400">广播域</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 元素出现动画初始化
+        function initRevealAnimations() {
+            const revealElements = document.querySelectorAll('.reveal-element');
+            
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const delay = entry.target.getAttribute('data-delay') || 0;
+                        setTimeout(() => {
+                            // 显示元素
+                            entry.target.style.opacity = '1';
+                            entry.target.style.transform = 'translateY(0)';
+                            
+                            // 如果是协议层，添加特殊动画效果
+                            if (entry.target.classList.contains('protocol-layer')) {
+                                setTimeout(() => {
+                                    entry.target.classList.add('revealed');
+                                }, 300);
+                            }
+                        }, delay);
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, { threshold: 0.1 });
+            
+            revealElements.forEach(element => {
+                observer.observe(element);
+            });
+        }
+        
+        // 高亮关键字段功能
+        document.getElementById('highlightKey').addEventListener('click', function() {
+            // 重置所有高亮
+            document.querySelectorAll('.field-hover').forEach(el => {
+                el.classList.remove('border-accent', 'bg-accent/10', 'scale-105');
+            });
+            
+            // 高亮关键字段并添加缩放动画
+            const keyFields = [
+                "你的IP",
+                "消息类型 (53)",
+                "子网掩码 (1)",
+                "路由器 (3)",
+                "IP地址租约期 (51)",
+                "源端口",
+                "目的端口",
+                "源IP地址",
+                "目的IP地址"
+            ];
+            
+            document.querySelectorAll('.field-hover').forEach(el => {
+                const label = el.querySelector('.text-xs').textContent;
+                if (keyFields.some(key => label.includes(key))) {
+                    el.classList.add('border-accent', 'bg-accent/10');
+                    el.style.transition = 'all 0.3s ease';
+                    el.classList.add('scale-105');
+                }
+            });
+        });
+        
+        // 重置视图功能
+        document.getElementById('resetView').addEventListener('click', function() {
+            document.querySelectorAll('.field-hover').forEach(el => {
+                el.classList.remove('border-accent', 'bg-accent/10', 'scale-105');
+                el.style.transform = 'translateX(0)';
+            });
+        });
+        
+        // 重播动画功能
+        document.getElementById('replayAnimation').addEventListener('click', function() {
+            const revealElements = document.querySelectorAll('.reveal-element');
+            
+            // 重置所有元素状态
+            revealElements.forEach(element => {
+                element.style.opacity = '0';
+                element.style.transform = 'translateY(20px)';
+                element.classList.remove('revealed');
+            });
+            
+            // 重新触发动画
+            setTimeout(initRevealAnimations, 600);
+        });
+        
+        // 为关键字段添加持续脉冲效果
+        document.querySelectorAll('.animate-border-pulse').forEach(el => {
+            el.style.animation = 'borderPulse 2s infinite';
+        });
+        
+        // 初始化动画
+        window.addEventListener('load', initRevealAnimations);
+    </script>
+</body>
+</html>

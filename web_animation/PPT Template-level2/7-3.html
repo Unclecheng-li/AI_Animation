@@ -1,0 +1,1378 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>检测并破解 Doom Loop</title>
+<link href="https://cdn.jsdelivr.net/npm/remixicon@4.1.0/fonts/remixicon.css" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg-dark: #0a0a14;
+    --bg-dark2: #12121e;
+    --bg-card: rgba(255,255,255,0.03);
+    --accent-primary: #6366f1;
+    --accent-secondary: #8b5cf6;
+    --accent-glow: rgba(99,102,241,0.3);
+    --text-primary: #ffffff;
+    --text-secondary: #a0a0b0;
+    --text-muted: #606070;
+    --red: #f43f5e;
+    --red-bg: rgba(244,63,94,0.1);
+    --red-light: rgba(244,63,94,0.3);
+    --green: #10b981;
+    --green-bg: rgba(16,185,129,0.1);
+    --green-light: rgba(16,185,129,0.3);
+    --blue: #3b82f6;
+    --cyan: #06b6d4;
+  }
+
+  body {
+    font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+    background: var(--bg-dark);
+    color: var(--text-primary);
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+  }
+
+  /* ===== Background Grid ===== */
+  .bg-grid {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background-image: 
+      linear-gradient(rgba(99,102,241,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(99,102,241,0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+  }
+
+  /* ===== Glow Orbs ===== */
+  .glow-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.12;
+    pointer-events: none;
+    animation: orbFloat 8s ease-in-out infinite alternate;
+  }
+  @keyframes orbFloat {
+    0% { transform: translate(0, 0) scale(1); }
+    100% { transform: translate(30px, -30px) scale(1.1); }
+  }
+
+  .slide-container { width: 100vw; height: 100vh; position: relative; }
+
+  .slide {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    padding: 60px 80px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.6s ease;
+    background: radial-gradient(ellipse at 50% 30%, var(--bg-dark2) 0%, var(--bg-dark) 100%);
+  }
+
+  .slide.active { opacity: 1; pointer-events: auto; }
+
+  .slide .anim {
+    opacity: 0; transform: translateY(40px);
+    transition: opacity 0.7s cubic-bezier(.25,.46,.45,.94), transform 0.7s cubic-bezier(.25,.46,.45,.94);
+  }
+
+  .slide.active .anim.show { opacity: 1; transform: translateY(0); }
+
+  /* ========== Floating Decorations ========== */
+  .deco {
+    position: absolute;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .deco-circle {
+    border-radius: 50%;
+    opacity: 0.06;
+  }
+
+  .deco-ring {
+    border-radius: 50%;
+    border: 3px solid var(--accent-primary);
+    opacity: 0.1;
+  }
+
+  .deco-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    opacity: 0.15;
+  }
+
+  @keyframes floatUp {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-16px) rotate(4deg); }
+  }
+
+  @keyframes floatDown {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(10px); }
+  }
+
+  @keyframes pulse-soft {
+    0%, 100% { transform: scale(1); opacity: 0.06; }
+    50% { transform: scale(1.12); opacity: 0.12; }
+  }
+
+  @keyframes spin-slow {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  @keyframes glow-pulse {
+    0%, 100% { box-shadow: 0 0 20px rgba(99,102,241,0.15); }
+    50% { box-shadow: 0 0 40px rgba(99,102,241,0.35); }
+  }
+
+  @keyframes glow-pulse-red {
+    0%, 100% { box-shadow: 0 0 20px rgba(244,63,94,0.15); }
+    50% { box-shadow: 0 0 40px rgba(244,63,94,0.35); }
+  }
+
+  @keyframes shimmer {
+    0% { left: -100%; }
+    100% { left: 200%; }
+  }
+
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-4px); }
+    40% { transform: translateX(4px); }
+    60% { transform: translateX(-3px); }
+    80% { transform: translateX(3px); }
+  }
+
+  @keyframes ripple {
+    0% { transform: translate(-50%,-50%) scale(0.8); opacity: 0.5; }
+    100% { transform: translate(-50%,-50%) scale(2.5); opacity: 0; }
+  }
+
+  @keyframes blink-warning {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  @keyframes countUp {
+    0% { transform: translateY(10px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+  }
+
+  @keyframes loopSpin {
+    to { transform: rotate(360deg); }
+  }
+
+  @keyframes arrow-pulse {
+    0%, 100% { transform: translateX(0); opacity: 0.7; }
+    50% { transform: translateX(5px); opacity: 1; }
+  }
+
+  /* ========== SLIDE 1: Title ========== */
+  .slide-1 {
+    overflow: hidden;
+  }
+
+  .slide-1::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image:
+      radial-gradient(circle at 25% 35%, rgba(244,63,94,0.08) 0%, transparent 45%),
+      radial-gradient(circle at 75% 65%, rgba(99,102,241,0.06) 0%, transparent 45%);
+    pointer-events: none;
+  }
+
+  /* Background danger loop graphic */
+  .slide-1 .bg-loop {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 500px; height: 500px;
+    pointer-events: none; z-index: 0;
+  }
+
+  .slide-1 .bg-loop .orbit {
+    position: absolute;
+    top: 50%; left: 50%;
+    border-radius: 50%;
+    border: 2px dashed rgba(244,63,94,0.1);
+    transform: translate(-50%, -50%);
+  }
+
+  .slide-1 .bg-loop .orbit-1 { width: 380px; height: 380px; animation: spin-slow 30s linear infinite; }
+  .slide-1 .bg-loop .orbit-2 { width: 500px; height: 500px; animation: spin-slow 50s linear infinite reverse; }
+
+  .slide-1 .bg-loop .orbit-dot {
+    position: absolute;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--red);
+    opacity: 0.2;
+  }
+
+  .slide-1 .badge {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    color: #fff;
+    padding: 10px 28px; border-radius: 30px;
+    font-size: 22px; font-weight: 700; margin-bottom: 20px; letter-spacing: 2px;
+    z-index: 1;
+    box-shadow: 0 4px 20px rgba(99,102,241,0.3);
+  }
+
+  .slide-1 .main-title {
+    font-size: 76px; font-weight: 900; color: var(--text-primary);
+    margin-bottom: 12px; text-align: center; line-height: 1.2;
+    z-index: 1;
+  }
+
+  .slide-1 .main-title .hl {
+    color: var(--red);
+    position: relative;
+  }
+
+  .slide-1 .main-title .hl::after {
+    content: '';
+    position: absolute;
+    bottom: -4px; left: 0;
+    width: 100%; height: 6px;
+    background: linear-gradient(90deg, var(--red-light), var(--red), var(--red-light));
+    border-radius: 3px;
+  }
+
+  .slide-1 .main-title .hl2 {
+    color: var(--accent-primary);
+  }
+
+  .slide-1 .subtitle {
+    font-size: 30px; color: var(--text-secondary); font-style: italic;
+    margin-bottom: 36px; text-align: center;
+    z-index: 1;
+  }
+
+  .slide-1 .subtitle b { color: var(--accent-primary); }
+
+  .slide-1 .icon-row {
+    display: flex; gap: 20px; margin-top: 10px;
+    z-index: 1;
+  }
+
+  .icon-card {
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    transition: transform 0.3s;
+  }
+
+  .icon-circle {
+    width: 80px; height: 80px; border-radius: 50%;
+    background: var(--bg-card);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 36px; color: var(--accent-primary);
+    box-shadow: 0 4px 16px rgba(99,102,241,0.15); border: 2px solid rgba(99,102,241,0.3);
+    animation: glow-pulse 3s ease-in-out infinite;
+    transition: transform 0.3s, box-shadow 0.3s;
+    backdrop-filter: blur(10px);
+  }
+
+  .icon-circle.red {
+    color: var(--red); border-color: var(--red-light);
+    animation: glow-pulse-red 2.5s ease-in-out infinite;
+  }
+
+  .icon-label { font-size: 18px; color: var(--text-secondary); font-weight: 700; }
+
+  /* 二次元颜文字样式 */
+  .kaomoji {
+    font-size: 22px;
+    color: var(--accent-primary);
+    letter-spacing: 2px;
+    margin-top: 10px;
+  }
+
+  /* Arrows between icons */
+  .icon-arrow {
+    display: flex; align-items: center;
+    color: rgba(99,102,241,0.4); font-size: 26px;
+    padding-bottom: 30px;
+    animation: arrow-pulse 2s ease-in-out infinite;
+  }
+
+  /* ========== SLIDE 2: What is Doom Loop ========== */
+  .slide-2 {
+    padding: 60px 90px;
+    overflow: hidden;
+  }
+
+  .slide-2::before {
+    content: '';
+    position: absolute;
+    top: -80px; right: -80px;
+    width: 300px; height: 300px;
+    background: radial-gradient(circle, rgba(244,63,94,0.08) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  .section-title {
+    font-size: 50px; font-weight: 900; color: var(--text-primary);
+    margin-bottom: 40px; display: flex; align-items: center; gap: 16px;
+    z-index: 1;
+  }
+
+  .section-title i { font-size: 46px; }
+  .section-title .accent { color: var(--accent-primary); }
+  .section-title .red { color: var(--red); }
+
+  .doom-layout {
+    display: flex; gap: 60px; align-items: center;
+    width: 100%; max-width: 1200px;
+    z-index: 1;
+  }
+
+  /* Doom Loop Visual - Enhanced */
+  .doom-visual {
+    flex: 0 0 360px; display: flex; justify-content: center; align-items: center;
+    position: relative; min-height: 380px;
+  }
+
+  .loop-ring {
+    width: 280px; height: 280px;
+    border: 6px solid var(--red-light);
+    border-top-color: var(--red);
+    border-right-color: var(--red);
+    border-radius: 50%;
+    animation: loopSpin 2.5s linear infinite;
+    position: relative;
+  }
+
+  /* Outer ripple rings */
+  .doom-visual .ripple-ring {
+    position: absolute;
+    top: 50%; left: 50%;
+    border-radius: 50%;
+    border: 2px solid var(--red);
+    pointer-events: none;
+  }
+
+  .doom-visual .ripple-ring:nth-child(1) {
+    width: 320px; height: 320px;
+    animation: ripple 3s ease-out infinite;
+  }
+
+  .doom-visual .ripple-ring:nth-child(2) {
+    width: 320px; height: 320px;
+    animation: ripple 3s ease-out infinite 1s;
+  }
+
+  .doom-visual .ripple-ring:nth-child(3) {
+    width: 320px; height: 320px;
+    animation: ripple 3s ease-out infinite 2s;
+  }
+
+  .loop-center {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 110px; height: 110px;
+    background: linear-gradient(135deg, var(--red), #E07070);
+    border-radius: 50%;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    color: #fff; font-size: 40px;
+    box-shadow: 0 8px 30px rgba(244,63,94,0.3);
+    z-index: 5;
+    animation: glow-pulse-red 2s ease-in-out infinite;
+  }
+
+  .loop-center span { font-size: 13px; font-weight: 700; margin-top: 2px; }
+
+  /* Loop labels floating around */
+  .loop-label {
+    position: absolute; background: var(--bg-card);
+    border: 2px solid var(--red-light); border-radius: 12px;
+    padding: 8px 14px; font-size: 15px; font-weight: 700;
+    color: var(--red); white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    display: flex; align-items: center; gap: 6px;
+    z-index: 6;
+    transition: transform 0.3s;
+    backdrop-filter: blur(10px);
+  }
+
+  .loop-label:hover { transform: scale(1.08); }
+
+  .loop-label.lbl-top { top: -16px; left: 50%; transform: translateX(-50%); }
+  .loop-label.lbl-bottom { bottom: -16px; left: 50%; transform: translateX(-50%); }
+  .loop-label.lbl-right { right: -90px; top: 50%; transform: translateY(-50%); }
+  .loop-label.lbl-left { left: -80px; top: 50%; transform: translateY(-50%); }
+
+  /* Counter display */
+  .loop-counter {
+    position: absolute;
+    bottom: -55px; left: 50%;
+    transform: translateX(-50%);
+    display: flex; align-items: center; gap: 8px;
+    background: var(--red-bg);
+    border: 2px solid var(--red-light);
+    border-radius: 30px;
+    padding: 6px 18px;
+    font-size: 16px; font-weight: 900;
+    color: var(--red);
+    z-index: 6;
+  }
+
+  .loop-counter .count-num {
+    font-size: 22px;
+    animation: blink-warning 1.5s ease-in-out infinite;
+  }
+
+  .slide-2 .text-panel {margin-left: 100px; flex: 1; display: flex; flex-direction: column; gap: 18px; }
+
+  .doom-line {
+    display: flex; align-items: flex-start; gap: 14px;
+    font-size: 26px; font-weight: 700; color: var(--text-primary);
+    padding: 16px 20px; border-radius: 14px;
+    background: var(--bg-card); border-left: 5px solid var(--red);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    line-height: 1.5;
+    transition: transform 0.3s;
+    position: relative;
+    overflow: hidden;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(244,63,94,0.15);
+    border-left-width: 5px;
+  }
+
+  .doom-line:hover { transform: translateX(5px); }
+
+  .doom-line i { color: var(--red); font-size: 26px; flex-shrink: 0; margin-top: 4px; }
+
+  .doom-line .em { color: var(--red); font-weight: 900; text-decoration: underline; text-underline-offset: 4px; }
+  .doom-line .em-orange { color: var(--accent-primary); font-weight: 900; }
+
+  /* Severity indicator */
+  .doom-line .severity {
+    position: absolute;
+    right: 12px; top: 50%;
+    transform: translateY(-50%);
+    display: flex; gap: 3px;
+  }
+
+  .severity-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+  }
+
+  .severity-dot.active { background: var(--red); }
+  .severity-dot.active-orange { background: var(--accent-primary); }
+
+  /* Big background icon */
+  .slide-2 .bg-icon {
+    position: absolute;
+    bottom: 30px; right: 50px;
+    font-size: 180px;
+    color: var(--red);
+    opacity: 0.04;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ========== SLIDE 3: Solution ========== */
+  .slide-3 {
+    padding: 60px 80px;
+    overflow: hidden;
+  }
+
+  .slide-3::before {
+    content: '';
+    position: absolute;
+    bottom: -50px; left: -50px;
+    width: 280px; height: 280px;
+    background: radial-gradient(circle, rgba(99,102,241,0.08) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  .slide-3 .section-sub {
+    font-size: 24px; color: var(--text-muted); font-style: italic; margin-bottom: 50px;
+    z-index: 1;
+  }
+
+  .mw-layout {
+    display: flex; gap: 50px; align-items: center;
+    width: 100%; max-width: 1200px;
+    z-index: 1;
+  }
+
+  .monitor-diagram {
+    flex: 1.2; display: flex; flex-direction: column; align-items: center; gap: 0;
+    position: relative;
+  }
+
+  /* Data flow line */
+  .monitor-diagram::before {
+    content: '';
+    position: absolute;
+    top: 30px; bottom: 30px;
+    left: 50%;
+    width: 2px;
+    background: linear-gradient(180deg, rgba(99,102,241,0.3), var(--accent-primary), var(--red));
+    z-index: 0;
+    opacity: 0.3;
+  }
+
+  .mw-block {
+    width: 340px; padding: 16px 22px;
+    background: var(--bg-card); border: 2px solid rgba(99,102,241,0.25);
+    border-radius: 16px; display: flex; align-items: center; gap: 14px;
+    font-size: 21px; font-weight: 700; color: var(--text-primary);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    position: relative; z-index: 1;
+    transition: transform 0.3s, box-shadow 0.3s;
+    backdrop-filter: blur(10px);
+  }
+
+  .mw-block:hover {
+    transform: translateX(5px);
+    box-shadow: 0 4px 20px rgba(99,102,241,0.2);
+  }
+
+  .mw-block i { font-size: 28px; color: var(--accent-primary); flex-shrink: 0; }
+
+  .mw-block.core {
+    background: linear-gradient(135deg, rgba(99,102,241,0.3), rgba(139,92,246,0.2));
+    color: #fff; border-color: var(--accent-primary);
+    font-size: 22px; padding: 20px 24px;
+    box-shadow: 0 6px 24px rgba(99,102,241,0.25);
+    animation: glow-pulse 3s ease-in-out infinite;
+  }
+
+  .mw-block.core i { color: #fff; }
+
+  .mw-block.core .core-badge {
+    position: absolute;
+    top: -10px; right: -10px;
+    background: var(--accent-primary);
+    color: #fff;
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 900;
+    box-shadow: 0 2px 8px rgba(99,102,241,0.3);
+  }
+
+  .mw-block.alert {
+    background: var(--red-bg); border-color: var(--red-light);
+    color: var(--red);
+  }
+
+  .mw-block.alert i { color: var(--red); }
+
+  .mw-arrow {
+    font-size: 28px; color: var(--accent-primary); margin: 4px 0;
+    z-index: 1;
+    animation: floatDown 2s ease-in-out infinite;
+  }
+
+  .slide-3 .detail-panel { flex: 1; display: flex; flex-direction: column; gap: 16px; }
+
+  .detail-card {
+    display: flex; align-items: center; gap: 14px;
+    padding: 16px 20px; background: var(--bg-card);
+    border-radius: 14px; border-left: 5px solid var(--accent-primary);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    font-size: 23px; font-weight: 700; color: var(--text-primary);
+    transition: transform 0.3s;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(99,102,241,0.15);
+    border-left-width: 5px;
+  }
+
+  .detail-card:hover { transform: translateX(5px); }
+
+  .detail-num {
+    width: 40px; height: 40px; background: var(--accent-primary);
+    color: #fff; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; font-weight: 900; flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(99,102,241,0.3);
+  }
+
+  .detail-card .em { color: var(--accent-primary); font-weight: 900; }
+
+  /* Code preview */
+  .code-preview {
+    background: #1a1a2e;
+    border-radius: 14px;
+    padding: 18px 22px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 15px;
+    line-height: 1.7;
+    color: #CDD6F4;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    border: 1px solid rgba(99,102,241,0.2);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .code-preview::before {
+    content: 'Python';
+    position: absolute;
+    top: 8px; right: 12px;
+    font-size: 11px;
+    color: #6C7086;
+    font-family: 'Microsoft YaHei', sans-serif;
+  }
+
+  .code-preview .keyword { color: #CBA6F7; }
+  .code-preview .func { color: #89B4FA; }
+  .code-preview .string { color: #A6E3A1; }
+  .code-preview .comment { color: #6C7086; font-style: italic; }
+  .code-preview .var { color: #F38BA8; }
+  .code-preview .num { color: #FAB387; }
+
+  /* ========== SLIDE 4: Intervention ========== */
+  .slide-4 {
+    padding: 60px 80px;
+    overflow: hidden;
+  }
+
+  .slide-4::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background:
+      radial-gradient(circle at 50% 20%, rgba(244,63,94,0.05) 0%, transparent 40%),
+      radial-gradient(circle at 50% 80%, rgba(16,185,129,0.05) 0%, transparent 40%);
+    pointer-events: none;
+  }
+
+  .intervene-layout {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 28px; width: 100%; max-width: 1000px;
+    z-index: 1;
+  }
+
+  .threshold-visual {
+    display: flex; align-items: center; gap: 20px; width: 100%;
+  }
+
+  .meter-bar {
+    flex: 1; height: 50px; background: rgba(255,255,255,0.05);
+    border-radius: 14px; position: relative; overflow: hidden;
+    border: 2px solid rgba(99,102,241,0.25);
+  }
+
+  .meter-bar .meter-fill-bar {
+    height: 100%; border-radius: 12px;
+    background: linear-gradient(90deg, var(--green), var(--accent-primary), var(--red));
+    width: 0%; transition: width 2s cubic-bezier(.25,.46,.45,.94);
+  }
+
+  .meter-label-left {
+    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+    font-size: 16px; font-weight: 700; color: #fff; z-index: 2;
+  }
+
+  .meter-threshold {
+    position: absolute; right: 18%; top: -8px; bottom: -8px;
+    width: 4px; background: var(--red);
+    border-radius: 2px; z-index: 3;
+    animation: blink-warning 2s ease-in-out infinite;
+  }
+
+  .meter-threshold::after {
+    content: '⚠️ 阈值'; position: absolute; top: -28px;
+    left: 50%; transform: translateX(-50%);
+    font-size: 14px; font-weight: 900; color: var(--red);
+    white-space: nowrap;
+  }
+
+  /* Tick marks */
+  .meter-ticks {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    display: flex; justify-content: space-evenly;
+    z-index: 1;
+  }
+
+  .meter-tick {
+    width: 1px; height: 100%;
+    background: rgba(255,255,255,0.1);
+  }
+
+  .threshold-icon {
+    width: 70px; height: 70px; border-radius: 50%;
+    background: var(--red-bg); border: 3px solid var(--red);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 34px; color: var(--red);
+    flex-shrink: 0;
+    animation: shake 3s ease-in-out infinite;
+  }
+
+  .msg-bubble {
+    background: var(--bg-card);
+    border: 3px solid var(--accent-primary);
+    border-radius: 24px;
+    padding: 28px 40px;
+    font-size: 34px;
+    font-weight: 900;
+    color: var(--text-primary);
+    text-align: center;
+    position: relative;
+    box-shadow: 0 6px 24px rgba(99,102,241,0.2);
+    max-width: 700px;
+    overflow: hidden;
+    backdrop-filter: blur(10px);
+  }
+
+  .msg-bubble::before {
+    content: '';
+    position: absolute; top: -16px; left: 50%;
+    transform: translateX(-50%);
+    border: 8px solid transparent;
+    border-bottom-color: var(--accent-primary);
+  }
+
+  /* Shimmer effect */
+  .msg-bubble::after {
+    content: '';
+    position: absolute;
+    top: 0; left: -100%;
+    width: 50%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(99,102,241,0.1), transparent);
+    animation: shimmer 3s ease-in-out infinite;
+  }
+
+  .msg-bubble i { font-size: 32px; vertical-align: middle; margin-right: 8px; color: var(--accent-primary); }
+
+  .msg-bubble .quote-text {
+    color: var(--accent-primary);
+    text-decoration: underline;
+    text-underline-offset: 6px;
+  }
+
+  .effect-row {
+    display: flex; gap: 20px; width: 100%;
+  }
+
+  .effect-card {
+    flex: 1; display: flex; align-items: center; gap: 14px;
+    padding: 18px 22px; background: var(--green-bg);
+    border-radius: 16px; border: 2px solid var(--green-light);
+    font-size: 22px; font-weight: 700; color: var(--text-primary);
+    transition: transform 0.3s, box-shadow 0.3s;
+    backdrop-filter: blur(10px);
+  }
+
+  .effect-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(16,185,129,0.15);
+  }
+
+  .effect-card i { font-size: 28px; color: var(--green); flex-shrink: 0; }
+  .effect-card .em-g { color: var(--green); font-weight: 900; }
+
+  /* Token savings visual */
+  .savings-visual {
+    display: flex; align-items: center; gap: 24px;
+    padding: 16px 24px;
+    background: var(--bg-card);
+    border-radius: 16px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+    border: 2px solid rgba(99,102,241,0.15);
+  }
+
+  .savings-before, .savings-after {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    font-weight: 700;
+  }
+
+  .savings-before .cost {
+    font-size: 36px; color: var(--red);
+    text-decoration: line-through;
+  }
+
+  .savings-after .cost {
+    font-size: 36px; color: var(--green);
+  }
+
+  .savings-label { font-size: 14px; color: var(--text-muted); }
+
+  .savings-arrow {
+    font-size: 36px; color: var(--accent-primary);
+  }
+
+  .savings-badge {
+    background: var(--green);
+    color: #fff;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 18px;
+    font-weight: 900;
+  }
+
+  /* ========== SLIDE 5: Summary ========== */
+  .slide-5 {
+    text-align: center; padding: 60px 80px;
+    overflow: hidden;
+  }
+
+  .slide-5::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image:
+      radial-gradient(circle at 30% 20%, rgba(99,102,241,0.1) 0%, transparent 40%),
+      radial-gradient(circle at 70% 80%, rgba(139,92,246,0.08) 0%, transparent 40%);
+    pointer-events: none;
+  }
+
+  .slide-5 .final-icon {
+    width: 120px; height: 120px;
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 56px; color: #fff; margin: 0 auto 28px;
+    box-shadow: 0 10px 40px rgba(99,102,241,0.3);
+    z-index: 1;
+    animation: glow-pulse 3s ease-in-out infinite;
+    position: relative;
+  }
+
+  .slide-5 .final-icon::after {
+    content: '';
+    position: absolute;
+    width: 145px; height: 145px;
+    border-radius: 50%;
+    border: 2px dashed rgba(99,102,241,0.3);
+    animation: spin-slow 20s linear infinite;
+  }
+
+  .slide-5 .final-title {
+    font-size: 54px; font-weight: 900; color: var(--text-primary);
+    margin-bottom: 18px; line-height: 1.35;
+    z-index: 1;
+  }
+
+  .slide-5 .final-title .hl { color: var(--accent-primary); }
+  .slide-5 .final-title .red { color: var(--red); }
+
+  .slide-5 .final-quote {
+    font-size: 30px; font-weight: 700; color: var(--accent-primary);
+    font-style: italic; margin-bottom: 44px;
+    padding: 18px 36px; background: var(--bg-card);
+    border-radius: 18px; display: inline-block;
+    border: 2px solid rgba(99,102,241,0.25);
+    z-index: 1;
+    position: relative;
+    backdrop-filter: blur(10px);
+  }
+
+  .slide-5 .chain-flow {
+    display: flex; align-items: center; justify-content: center; gap: 14px;
+    z-index: 1;
+    position: relative;
+  }
+
+  .chain-box {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    padding: 20px 24px; background: var(--bg-card); border-radius: 20px;
+    box-shadow: 0 4px 18px rgba(99,102,241,0.15);
+    border: 2px solid rgba(99,102,241,0.25); min-width: 120px;
+    transition: transform 0.3s, box-shadow 0.3s;
+    backdrop-filter: blur(10px);
+  }
+
+  .chain-box:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 30px rgba(99,102,241,0.25);
+  }
+
+  .chain-box i { font-size: 36px; color: var(--accent-primary); }
+  .chain-box span { font-size: 18px; font-weight: 900; color: var(--text-primary); }
+
+  .chain-box.danger { border-color: var(--red-light); }
+  .chain-box.danger i { color: var(--red); }
+  .chain-box.danger span { color: var(--red); }
+
+  .chain-box.solution {
+    border-color: var(--accent-primary);
+    box-shadow: 0 4px 20px rgba(99,102,241,0.2);
+    animation: glow-pulse 3s ease-in-out infinite;
+  }
+  .chain-box.solution span { color: var(--accent-primary); }
+
+  .chain-box.success { border-color: var(--green-light); }
+  .chain-box.success i { color: var(--green); }
+  .chain-box.success span { color: var(--green); }
+
+  .chain-arrow {
+    font-size: 30px; color: var(--accent-primary);
+    animation: arrow-pulse 2s ease-in-out infinite;
+  }
+
+  /* Loop SVG */
+  .loop-svg {
+    position: absolute;
+    bottom: -30px; left: 50%;
+    transform: translateX(-50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ========== Responsive ========== */
+  @media (max-width: 900px) {
+    .slide { padding: 30px 24px; }
+    .slide-1 .main-title { font-size: 48px; }
+    .section-title { font-size: 36px; }
+    .doom-layout { flex-direction: column; gap: 30px; }
+    .mw-layout { flex-direction: column; }
+    .effect-row { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+
+<div class="slide-container">
+
+  <!-- ====== SLIDE 1: Title ====== -->
+  <div class="slide slide-1 active" data-slide="0">
+    <div class="glow-orb" style="width:500px;height:500px;background:var(--red);top:-100px;right:-100px;"></div>
+    <div class="glow-orb" style="width:400px;height:400px;background:var(--accent-primary);bottom:-100px;left:-50px;animation-delay:-4s;"></div>
+
+    <!-- Background loop graphic -->
+    <div class="bg-loop">
+      <div class="orbit orbit-1">
+        <div class="orbit-dot" style="top:0;left:50%;transform:translate(-50%,-50%);"></div>
+        <div class="orbit-dot" style="bottom:0;left:50%;transform:translate(-50%,50%);"></div>
+      </div>
+      <div class="orbit orbit-2">
+        <div class="orbit-dot" style="top:50%;left:0;transform:translate(-50%,-50%);"></div>
+        <div class="orbit-dot" style="top:50%;right:0;transform:translate(50%,-50%);"></div>
+      </div>
+    </div>
+
+    <!-- Decorations -->
+    <div class="deco deco-circle" style="width:180px;height:180px;background:var(--red);top:8%;left:5%;animation:pulse-soft 5s ease-in-out infinite;"></div>
+    <div class="deco deco-ring" style="width:100px;height:100px;top:12%;right:10%;animation:floatUp 6s ease-in-out infinite;border-color:var(--red);"></div>
+    <div class="deco deco-dot" style="top:70%;left:8%;animation:floatDown 4s ease-in-out infinite;background:var(--red);"></div>
+    <div class="deco deco-ring" style="width:60px;height:60px;bottom:18%;right:8%;animation:floatDown 5s ease-in-out infinite;"></div>
+
+    <div class="anim badge"><i class="ri-settings-4-line"></i> LangChain 优化技巧 3</div>
+    <div class="anim main-title">检测并破解</div>
+    <div class="anim main-title"><span class="hl">Doom Loop</span></div>
+    <div class="anim subtitle">当 Agent 陷入<b>死循环</b>，如何<b>自动干预</b>？</div>
+    <div class="anim icon-row">
+      <div class="icon-card">
+        <div class="icon-circle red"><i class="ri-loop-left-line"></i></div>
+        <div class="icon-label">死循环</div>
+      </div>
+      <div class="icon-arrow"><i class="ri-arrow-right-s-line"></i></div>
+      <div class="icon-card">
+        <div class="icon-circle"><i class="ri-eye-line"></i></div>
+        <div class="icon-label">实时监控</div>
+      </div>
+      <div class="icon-arrow"><i class="ri-arrow-right-s-line"></i></div>
+      <div class="icon-card">
+        <div class="icon-circle"><i class="ri-alarm-warning-line"></i></div>
+        <div class="icon-label">阈值警报</div>
+      </div>
+      <div class="icon-arrow"><i class="ri-arrow-right-s-line"></i></div>
+      <div class="icon-card">
+        <div class="icon-circle"><i class="ri-route-line"></i></div>
+        <div class="icon-label">方案重审</div>
+      </div>
+    </div>
+
+    <div class="anim kaomoji" style="margin-top:30px;">
+      (⚆_⚆) 检测到死循环，准备破解！
+    </div>
+  </div>
+
+  <!-- ====== SLIDE 2: What is Doom Loop ====== -->
+  <div class="slide slide-2" data-slide="1">
+    <div class="glow-orb" style="width:400px;height:400px;background:var(--red);top:-80px;right:-80px;opacity:0.1;"></div>
+
+    <!-- Background icon -->
+    <div class="bg-icon"><i class="ri-loop-left-line"></i></div>
+
+    <!-- Decorations -->
+    <div class="deco deco-circle" style="width:140px;height:140px;background:var(--red);bottom:8%;left:4%;animation:pulse-soft 6s ease-in-out infinite;"></div>
+    <div class="deco deco-ring" style="width:80px;height:80px;top:10%;right:18%;animation:floatUp 5s ease-in-out infinite;border-color:var(--red);"></div>
+
+    <div class="anim section-title">
+      <i class="ri-error-warning-line" style="color:var(--red);"></i>
+      什么是 <span class="red">Doom Loop</span>？
+    </div>
+    <div class="doom-layout">
+      <div class="anim doom-visual">
+        <!-- Ripple rings -->
+        <div class="ripple-ring"></div>
+        <div class="ripple-ring"></div>
+        <div class="ripple-ring"></div>
+
+        <div class="loop-ring">
+          <div class="loop-center">
+            <i class="ri-loop-left-line"></i>
+            <span>死循环</span>
+          </div>
+        </div>
+
+        <!-- Labels around the loop -->
+        <div class="loop-label lbl-top"><i class="ri-edit-line"></i>小修小补</div>
+        <div class="loop-label lbl-right"><i class="ri-close-line"></i>方向错误</div>
+        <div class="loop-label lbl-bottom"><i class="ri-repeat-line"></i>重复操作</div>
+        <div class="loop-label lbl-left"><i class="ri-money-dollar-circle-line"></i>耗费Token</div>
+
+        <!-- Counter -->
+        <div class="loop-counter">
+          <i class="ri-refresh-line"></i> 重复次数：<span class="count-num" id="loopCount">0</span>
+        </div>
+      </div>
+
+      <div class="text-panel">
+        <div class="anim doom-line">
+          <i class="ri-arrow-right-circle-line"></i>
+          <div>Agent 决定了某个方案后<br><span class="em">不断小修小补</span></div>
+          <div class="severity">
+            <div class="severity-dot active"></div>
+            <div class="severity-dot active"></div>
+            <div class="severity-dot"></div>
+          </div>
+        </div>
+        <div class="anim doom-line">
+          <i class="ri-close-circle-line"></i>
+          <div>哪怕方向是错的<br>也会<span class="em">执着地继续</span></div>
+          <div class="severity">
+            <div class="severity-dot active"></div>
+            <div class="severity-dot active"></div>
+            <div class="severity-dot active"></div>
+          </div>
+        </div>
+        <div class="anim doom-line">
+          <i class="ri-brain-line"></i>
+          <div><span class="em">不会重新思考</span>方案的合理性</div>
+          <div class="severity">
+            <div class="severity-dot active"></div>
+            <div class="severity-dot active"></div>
+            <div class="severity-dot active"></div>
+          </div>
+        </div>
+        <div class="anim doom-line" style="border-left-color:var(--accent-primary);background:rgba(99,102,241,0.08);">
+          <i class="ri-money-dollar-circle-line" style="color:var(--accent-primary);"></i>
+          <div style="color:var(--text-primary);">最终：<span class="em-orange">浪费大量 Token</span>，任务无法完成</div>
+          <div class="severity">
+            <div class="severity-dot active-orange"></div>
+            <div class="severity-dot active-orange"></div>
+            <div class="severity-dot active-orange"></div>
+          </div>
+        </div>
+
+        <div class="anim kaomoji" style="margin-top:16px;text-align:center;">
+          (；´Д｀) 这样下去钱包要空了...
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== SLIDE 3: LoopDetectionMiddleware ====== -->
+  <div class="slide slide-3" data-slide="2">
+    <div class="glow-orb" style="width:450px;height:450px;background:var(--accent-primary);bottom:-150px;right:-100px;"></div>
+
+    <!-- Decorations -->
+    <div class="deco deco-circle" style="width:200px;height:200px;background:var(--accent-primary);top:4%;right:3%;animation:pulse-soft 7s ease-in-out infinite;"></div>
+    <div class="deco deco-ring" style="width:70px;height:70px;bottom:12%;left:5%;animation:floatUp 4s ease-in-out infinite;"></div>
+
+    <div class="anim section-title">
+      <i class="ri-shield-check-line" style="color:var(--accent-primary);"></i>
+      解决方案：<span class="accent">LoopDetectionMiddleware</span>
+    </div>
+    <div class="anim section-sub">循环检测中间件 — 通过工具调用钩子实时追踪</div>
+
+    <div class="mw-layout">
+      <div class="anim monitor-diagram">
+        <div class="mw-block"><i class="ri-robot-2-line"></i>Agent 执行操作</div>
+        <div class="mw-arrow"><i class="ri-arrow-down-line"></i></div>
+        <div class="mw-block core">
+          <i class="ri-shield-check-line"></i>LoopDetectionMiddleware
+          <span class="core-badge">核心</span>
+        </div>
+        <div class="mw-arrow"><i class="ri-arrow-down-line"></i></div>
+        <div class="mw-block"><i class="ri-bar-chart-grouped-line"></i>追踪编辑次数 / 重复操作</div>
+        <div class="mw-arrow"><i class="ri-arrow-down-line"></i></div>
+        <div class="mw-block alert"><i class="ri-alarm-warning-line"></i>超过阈值 → 注入提醒</div>
+      </div>
+
+      <div class="detail-panel">
+        <div class="anim detail-card">
+          <div class="detail-num">1</div>
+          <div>通过<span class="em">工具调用钩子</span>拦截操作</div>
+        </div>
+        <div class="anim detail-card">
+          <div class="detail-num">2</div>
+          <div>追踪每个文件的<span class="em">编辑次数</span></div>
+        </div>
+        <div class="anim detail-card">
+          <div class="detail-num">3</div>
+          <div>追踪同一操作的<span class="em">重复执行次数</span></div>
+        </div>
+        <div class="anim detail-card">
+          <div class="detail-num">4</div>
+          <div>超过阈值 → 向上下文<span class="em">追加提醒</span></div>
+        </div>
+
+        <!-- Code Preview -->
+        <div class="anim code-preview">
+          <span class="comment"># LoopDetectionMiddleware 核心逻辑</span><br>
+          <span class="keyword">class</span> <span class="func">LoopDetection</span>:<br>
+          &nbsp;&nbsp;<span class="keyword">def</span> <span class="func">on_tool_call</span>(<span class="var">self</span>, call):<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span class="var">self</span>.counts[call.file] += <span class="num">1</span><br>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">if</span> <span class="var">self</span>.counts[call.file] > <span class="num">THRESHOLD</span>:<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="func">inject_warning</span>(<span class="string">"重审方案"</span>)
+        </div>
+
+        <div class="anim kaomoji" style="margin-top:16px;">
+          (｡◕‿◕｡) 中间件守护，循环无处藏~
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== SLIDE 4: Intervention ====== -->
+  <div class="slide slide-4" data-slide="3">
+    <div class="glow-orb" style="width:400px;height:400px;background:var(--red);top:-80px;left:-80px;opacity:0.1;"></div>
+    <div class="glow-orb" style="width:350px;height:350px;background:var(--green);bottom:-80px;right:-80px;opacity:0.1;"></div>
+
+    <!-- Decorations -->
+    <div class="deco deco-ring" style="width:120px;height:120px;top:6%;left:5%;animation:floatUp 6s ease-in-out infinite;border-color:var(--red);opacity:0.06;"></div>
+    <div class="deco deco-ring" style="width:90px;height:90px;bottom:8%;right:6%;animation:floatDown 5s ease-in-out infinite;border-color:var(--green);opacity:0.06;"></div>
+
+    <div class="anim section-title">
+      <i class="ri-chat-check-line" style="color:var(--accent-primary);"></i>
+      超过阈值时的<span class="accent">自动干预</span>
+    </div>
+
+    <div class="intervene-layout">
+      <div class="anim threshold-visual">
+        <div class="meter-bar">
+          <div class="meter-fill-bar" id="meterFill"></div>
+          <div class="meter-label-left">重复次数</div>
+          <div class="meter-threshold"></div>
+          <div class="meter-ticks">
+            <div class="meter-tick"></div>
+            <div class="meter-tick"></div>
+            <div class="meter-tick"></div>
+            <div class="meter-tick"></div>
+            <div class="meter-tick"></div>
+            <div class="meter-tick"></div>
+            <div class="meter-tick"></div>
+            <div class="meter-tick"></div>
+            <div class="meter-tick"></div>
+          </div>
+        </div>
+        <div class="threshold-icon"><i class="ri-alarm-warning-line"></i></div>
+      </div>
+
+      <div class="anim msg-bubble">
+        <i class="ri-chat-voice-line"></i>
+        <span class="quote-text">"考虑重新审视你的方案。"</span>
+      </div>
+
+      <div class="anim savings-visual">
+        <div class="savings-before">
+          <div class="savings-label">无检测</div>
+          <div class="cost">$2.40</div>
+        </div>
+        <div class="savings-arrow"><i class="ri-arrow-right-double-line"></i></div>
+        <div class="savings-after">
+          <div class="savings-label">有检测</div>
+          <div class="cost">$0.60</div>
+        </div>
+        <div class="savings-badge">节省 75%</div>
+      </div>
+
+      <div class="effect-row">
+        <div class="anim effect-card">
+          <i class="ri-refresh-line"></i>
+          <div>打破固有思路，<span class="em-g">重新规划</span></div>
+        </div>
+        <div class="anim effect-card">
+          <i class="ri-money-dollar-circle-line"></i>
+          <div>避免无效循环，<span class="em-g">节省 Token</span></div>
+        </div>
+        <div class="anim effect-card">
+          <i class="ri-check-double-line"></i>
+          <div>提高任务<span class="em-g">完成率</span></div>
+        </div>
+      </div>
+
+      <div class="anim kaomoji" style="margin-top:20px;">
+        ٩(ˊᗜˋ*)و 省钱又高效，太棒了！
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== SLIDE 5: Summary ====== -->
+  <div class="slide slide-5" data-slide="4">
+    <div class="glow-orb" style="width:600px;height:600px;background:var(--accent-primary);top:50%;left:50%;transform:translate(-50%,-50%);opacity:0.08;"></div>
+    <div class="glow-orb" style="width:400px;height:400px;background:var(--accent-secondary);bottom:-100px;left:-100px;animation-delay:-4s;"></div>
+
+    <!-- Decorations -->
+    <div class="deco deco-circle" style="width:250px;height:250px;background:var(--accent-primary);top:4%;right:5%;animation:pulse-soft 8s ease-in-out infinite;"></div>
+    <div class="deco deco-circle" style="width:160px;height:160px;background:var(--red);bottom:6%;left:6%;animation:pulse-soft 6s ease-in-out infinite 2s;"></div>
+    <div class="deco deco-ring" style="width:90px;height:90px;top:18%;left:10%;animation:floatUp 5s ease-in-out infinite;"></div>
+    <div class="deco deco-ring" style="width:70px;height:70px;bottom:22%;right:12%;animation:floatDown 4s ease-in-out infinite;"></div>
+
+    <div class="anim final-icon"><i class="ri-loop-left-line"></i></div>
+    <div class="anim final-title">
+      用<span class="hl">中间件</span>打破 <span class="red">Doom Loop</span>
+    </div>
+    <div class="anim final-title" style="font-size:44px;">
+      监控重复 → 超过阈值 → <span class="hl" style="text-decoration:underline;text-underline-offset:8px;">自动提醒重审</span>
+    </div>
+    <div class="anim final-quote">
+      <i class="ri-double-quotes-l" style="font-size:22px;vertical-align:top;margin-right:4px;"></i>
+      让 Agent 学会在错误中及时刹车
+      <i class="ri-double-quotes-r" style="font-size:22px;vertical-align:top;margin-left:4px;"></i>
+    </div>
+    <div class="anim chain-flow">
+      <div class="chain-box">
+        <i class="ri-robot-2-line"></i>
+        <span>Agent 执行</span>
+      </div>
+      <div class="chain-arrow"><i class="ri-arrow-right-line"></i></div>
+      <div class="chain-box danger">
+        <i class="ri-loop-left-line"></i>
+        <span>重复操作</span>
+      </div>
+      <div class="chain-arrow"><i class="ri-arrow-right-line"></i></div>
+      <div class="chain-box solution">
+        <i class="ri-shield-check-line"></i>
+        <span>中间件检测</span>
+      </div>
+      <div class="chain-arrow"><i class="ri-arrow-right-line"></i></div>
+      <div class="chain-box">
+        <i class="ri-alarm-warning-line"></i>
+        <span>超阈值提醒</span>
+      </div>
+      <div class="chain-arrow"><i class="ri-arrow-right-line"></i></div>
+      <div class="chain-box success">
+        <i class="ri-route-line"></i>
+        <span>重审方案</span>
+      </div>
+
+      <!-- Loop SVG -->
+      <svg class="loop-svg" width="660" height="45" viewBox="0 0 660 45">
+        <path d="M 40 5 Q 330 48 620 5" fill="none" stroke="var(--accent-primary)" stroke-width="2" stroke-dasharray="8,6" opacity="0.3"/>
+        <polygon points="618,0 628,5 618,10" fill="var(--accent-primary)" opacity="0.4"/>
+      </svg>
+    </div>
+
+    <div class="anim kaomoji" style="margin-top:20px;">
+      (๑•̀ㅂ•́)و✧ 智能监控，让Agent更聪明！
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  const totalSlides = slides.length;
+  let currentSlide = 0;
+
+  function goToSlide(idx) {
+    if (idx < 0 || idx >= totalSlides || idx === currentSlide) return;
+    slides[currentSlide].classList.remove('active');
+    resetAnims(slides[currentSlide]);
+    currentSlide = idx;
+    slides[currentSlide].classList.add('active');
+    triggerAnims(slides[currentSlide]);
+    // Slide-specific animations
+    if (currentSlide === 1) animateLoopCounter();
+    if (currentSlide === 3) animateMeter();
+  }
+
+  function changeSlide(dir) {
+    const next = currentSlide + dir;
+    if (next >= 0 && next < totalSlides) goToSlide(next);
+  }
+
+  function triggerAnims(slide) {
+    const items = slide.querySelectorAll('.anim');
+    items.forEach((el, i) => {
+      el.classList.remove('show');
+      setTimeout(() => { el.classList.add('show'); }, 150 + i * 200);
+    });
+  }
+
+  function resetAnims(slide) {
+    slide.querySelectorAll('.anim').forEach(el => el.classList.remove('show'));
+  }
+
+  // Animate loop counter on slide 2
+  function animateLoopCounter() {
+    const counter = document.getElementById('loopCount');
+    if (!counter) return;
+    counter.textContent = '0';
+    let count = 0;
+    const maxCount = 47;
+    const interval = setInterval(() => {
+      count += Math.ceil(Math.random() * 3);
+      if (count > maxCount) count = maxCount;
+      counter.textContent = count;
+      if (count >= maxCount) clearInterval(interval);
+    }, 120);
+  }
+
+  // Animate meter on slide 4
+  function animateMeter() {
+    const fill = document.getElementById('meterFill');
+    if (!fill) return;
+    fill.style.width = '0%';
+    setTimeout(() => {
+      fill.style.width = '85%';
+    }, 600);
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') {
+      e.preventDefault(); changeSlide(1);
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault(); changeSlide(-1);
+    }
+  });
+
+  let touchStartX = 0;
+  document.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; });
+  document.addEventListener('touchend', e => {
+    const diff = e.changedTouches[0].clientX - touchStartX;
+    if (Math.abs(diff) > 60) changeSlide(diff < 0 ? 1 : -1);
+  });
+
+  // Mouse click navigation
+  document.addEventListener('click', (e) => {
+    if (e.clientX < window.innerWidth * 0.3) {
+      changeSlide(-1);
+    } else if (e.clientX > window.innerWidth * 0.7) {
+      changeSlide(1);
+    }
+  });
+
+  setTimeout(() => {
+    triggerAnims(slides[0]);
+  }, 300);
+</script>
+
+</body>
+</html>

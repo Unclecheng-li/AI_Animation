@@ -1,0 +1,1188 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>给 Agent 提供环境上下文</title>
+<link href="https://cdn.jsdelivr.net/npm/remixicon@4.1.0/fonts/remixicon.css" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg-primary: #0a0a12;
+    --bg-secondary: #12121f;
+    --bg-card: rgba(255, 255, 255, 0.03);
+    --accent-indigo: #6366f1;
+    --accent-violet: #8b5cf6;
+    --accent-fuchsia: #d946ef;
+    --accent-cyan: #06b6d4;
+    --accent-blue: #3b82f6;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --glow-indigo: rgba(99, 102, 241, 0.4);
+    --glow-violet: rgba(139, 92, 246, 0.4);
+    --red-glow: rgba(239, 68, 68, 0.4);
+  }
+
+  body {
+    font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+  }
+
+  /* Background grid pattern */
+  .bg-grid {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background-image: 
+      linear-gradient(rgba(99, 102, 241, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(99, 102, 241, 0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+  }
+
+  /* Glowing orbs */
+  .glow-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(100px);
+    opacity: 0.15;
+    pointer-events: none;
+    animation: orbFloat 10s ease-in-out infinite alternate;
+  }
+  @keyframes orbFloat {
+    0% { transform: translate(0, 0) scale(1); }
+    100% { transform: translate(30px, -30px) scale(1.1); }
+  }
+
+  .slide-container { width: 100vw; height: 100vh; position: relative; }
+
+  .slide {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    padding: 60px 80px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.6s ease;
+    overflow: hidden;
+    background: radial-gradient(ellipse at 50% 0%, var(--bg-secondary) 0%, var(--bg-primary) 70%);
+  }
+
+  .slide.active { opacity: 1; pointer-events: auto; }
+
+  .slide .anim {
+    opacity: 0; transform: translateY(40px);
+    transition: opacity 0.7s cubic-bezier(.25,.46,.45,.94), transform 0.7s cubic-bezier(.25,.46,.45,.94);
+  }
+
+  .slide.active .anim.show { opacity: 1; transform: translateY(0); }
+
+  /* ========== Floating Decorations ========== */
+  .deco {
+    position: absolute;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .deco-circle {
+    border-radius: 50%;
+    opacity: 0.08;
+  }
+
+  .deco-ring {
+    border-radius: 50%;
+    border: 3px solid var(--accent-indigo);
+    opacity: 0.15;
+  }
+
+  .deco-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent-indigo);
+    opacity: 0.3;
+  }
+
+  @keyframes floatUp {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-18px) rotate(5deg); }
+  }
+
+  @keyframes floatDown {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(12px); }
+  }
+
+  @keyframes pulse-soft {
+    0%, 100% { transform: scale(1); opacity: 0.08; }
+    50% { transform: scale(1.12); opacity: 0.15; }
+  }
+
+  @keyframes spin-slow {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  @keyframes glow-pulse {
+    0%, 100% { box-shadow: 0 0 20px var(--glow-indigo); }
+    50% { box-shadow: 0 0 40px var(--glow-violet); }
+  }
+
+  @keyframes shimmer {
+    0% { left: -100%; }
+    100% { left: 200%; }
+  }
+
+  @keyframes scan-line {
+    0% { top: 0; opacity: 0; }
+    10% { opacity: 0.6; }
+    90% { opacity: 0.6; }
+    100% { top: 100%; opacity: 0; }
+  }
+
+  @keyframes wiggle {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-4deg); }
+    75% { transform: rotate(4deg); }
+  }
+
+  @keyframes blink-warning {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  @keyframes flow-right {
+    0% { transform: translateX(-6px); opacity: 0.5; }
+    50% { transform: translateX(6px); opacity: 1; }
+    100% { transform: translateX(-6px); opacity: 0.5; }
+  }
+
+  @keyframes inject-pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.06); }
+    100% { transform: scale(1); }
+  }
+
+  /* ========== SLIDE 1: Title ========== */
+  .slide-1 { background: radial-gradient(ellipse at 50% 30%, var(--bg-secondary) 0%, var(--bg-primary) 100%); }
+
+  /* Orbit animation background */
+  .slide-1 .bg-orbits {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 600px; height: 600px;
+    pointer-events: none; z-index: 0;
+  }
+
+  .slide-1 .bg-orbits .orbit {
+    position: absolute;
+    top: 50%; left: 50%;
+    border-radius: 50%;
+    border: 1.5px dashed rgba(99, 102, 241, 0.15);
+    transform: translate(-50%, -50%);
+  }
+
+  .slide-1 .bg-orbits .orbit-1 { width: 380px; height: 380px; animation: spin-slow 45s linear infinite; }
+  .slide-1 .bg-orbits .orbit-2 { width: 530px; height: 530px; animation: spin-slow 65s linear infinite reverse; }
+
+  .slide-1 .bg-orbits .orbit-dot {
+    position: absolute;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--accent-indigo);
+    opacity: 0.3;
+  }
+
+  .slide-1 .badge {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: linear-gradient(135deg, var(--accent-indigo), var(--accent-violet));
+    color: #fff;
+    padding: 10px 28px; border-radius: 30px;
+    font-size: 22px; font-weight: 700; margin-bottom: 20px; letter-spacing: 2px;
+    z-index: 1;
+    box-shadow: 0 4px 30px var(--glow-indigo);
+  }
+
+  .slide-1 .main-title {
+    font-size: 72px; font-weight: 900; color: var(--text-primary);
+    margin-bottom: 12px; text-align: center; line-height: 1.2;
+    z-index: 1;
+  }
+
+  .slide-1 .main-title .hl {
+    color: var(--accent-indigo);
+    position: relative;
+  }
+
+  .slide-1 .main-title .hl::after {
+    content: '';
+    position: absolute;
+    bottom: -4px; left: 0;
+    width: 100%; height: 6px;
+    background: linear-gradient(90deg, var(--accent-indigo), var(--accent-violet), var(--accent-fuchsia));
+    border-radius: 3px;
+  }
+
+  .slide-1 .sub-en {
+    font-size: 36px; color: var(--text-muted); font-weight: 700;
+    font-style: italic; margin-bottom: 10px; z-index: 1;
+  }
+
+  .slide-1 .subtitle {
+    font-size: 28px; color: var(--text-secondary); margin-bottom: 36px; text-align: center; z-index: 1;
+  }
+
+  .slide-1 .subtitle b { color: var(--accent-indigo); }
+
+  .slide-1 .icon-row { display: flex; gap: 30px; margin-top: 10px; z-index: 1; }
+
+  .icon-card {
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    transition: transform 0.3s;
+  }
+
+  .icon-card:hover { transform: translateY(-6px); }
+
+  .icon-circle {
+    width: 80px; height: 80px; border-radius: 50%;
+    background: rgba(99, 102, 241, 0.1);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 36px; color: var(--accent-indigo);
+    box-shadow: 0 4px 20px var(--glow-indigo);
+    border: 2px solid rgba(99, 102, 241, 0.3);
+    animation: glow-pulse 3s ease-in-out infinite;
+    transition: transform 0.3s;
+  }
+
+  .icon-label { font-size: 18px; color: var(--text-secondary); font-weight: 700; }
+
+  .icon-arrow {
+    display: flex; align-items: center;
+    color: var(--accent-violet); font-size: 26px; padding-bottom: 28px;
+  }
+
+  /* ========== SLIDE 2: Problem ========== */
+  .slide-2 { background: var(--bg-primary); padding: 60px 90px; }
+
+  .section-title {
+    font-size: 50px; font-weight: 900; color: var(--text-primary);
+    margin-bottom: 40px; display: flex; align-items: center; gap: 16px;
+    z-index: 1;
+  }
+
+  .section-title i { font-size: 46px; }
+  .section-title .accent { color: var(--accent-indigo); }
+  .section-title .red { color: #ef4444; }
+
+  .slide-2 .problem-layout {
+    display: flex; gap: 60px; align-items: center;
+    width: 100%; max-width: 1200px; z-index: 1;
+  }
+
+  .lost-visual {
+    flex: 1; display: flex; justify-content: center; align-items: center;
+    position: relative; min-height: 360px;
+  }
+
+  /* Confusion waves around agent */
+  .confusion-wave {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    border: 2px dashed rgba(239, 68, 68, 0.2);
+    pointer-events: none;
+  }
+
+  .confusion-wave:nth-child(1) { width: 180px; height: 180px; animation: pulse-soft 3s ease-in-out infinite; }
+  .confusion-wave:nth-child(2) { width: 260px; height: 260px; animation: pulse-soft 4s ease-in-out infinite 0.5s; border-color: rgba(239, 68, 68, 0.15); }
+  .confusion-wave:nth-child(3) { width: 340px; height: 340px; animation: pulse-soft 5s ease-in-out infinite 1s; border-color: rgba(239, 68, 68, 0.1); }
+
+  .agent-box {
+    width: 120px; height: 120px;
+    background: linear-gradient(135deg, var(--accent-indigo), var(--accent-violet));
+    border-radius: 28px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    color: #fff; font-size: 48px;
+    box-shadow: 0 8px 32px var(--glow-indigo);
+    position: relative; z-index: 2;
+    animation: wiggle 3s ease-in-out infinite;
+  }
+
+  .agent-box span { font-size: 14px; font-weight: 700; margin-top: 4px; }
+
+  /* Status indicator */
+  .agent-status {
+    position: absolute;
+    top: -10px; right: -10px;
+    width: 28px; height: 28px;
+    background: #ef4444;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 16px;
+    animation: blink-warning 1.5s ease-in-out infinite;
+    box-shadow: 0 2px 8px var(--red-glow);
+  }
+
+  .question-bubble {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid rgba(239, 68, 68, 0.3);
+    border-radius: 14px; padding: 10px 16px;
+    font-size: 17px; font-weight: 700; color: #ef4444;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.3);
+    white-space: nowrap;
+    display: flex; align-items: center; gap: 8px;
+    z-index: 3;
+    backdrop-filter: blur(10px);
+  }
+
+  .question-bubble i { font-size: 20px; }
+  .question-bubble:nth-of-type(1) { top: 20px; left: -30px; animation: floatUp 4s ease-in-out infinite; }
+  .question-bubble:nth-of-type(2) { top: 20px; right: -30px; animation: floatUp 4.5s ease-in-out infinite 0.5s; }
+  .question-bubble:nth-of-type(3) { bottom: 40px; left: -50px; animation: floatDown 4s ease-in-out infinite 0.3s; }
+  .question-bubble:nth-of-type(4) { bottom: 40px; right: -50px; animation: floatDown 4.5s ease-in-out infinite 0.8s; }
+
+  .slide-2 .text-panel { flex: 1; display: flex; flex-direction: column; gap: 16px; }
+
+  .err-line {
+    display: flex; align-items: center; gap: 14px;
+    font-size: 26px; font-weight: 700; color: var(--text-primary);
+    padding: 14px 20px; border-radius: 14px;
+    background: rgba(239, 68, 68, 0.08);
+    border-left: 5px solid #ef4444;
+    position: relative; overflow: hidden;
+    transition: transform 0.3s;
+    backdrop-filter: blur(10px);
+  }
+
+  .err-line:hover { transform: translateX(4px); }
+
+  .err-line i { color: #ef4444; font-size: 24px; flex-shrink: 0; }
+  .err-line .em { color: #ef4444; font-weight: 900; text-decoration: underline; text-underline-offset: 4px; }
+
+  /* Error severity indicator */
+  .err-severity {
+    position: absolute;
+    right: 16px; top: 50%;
+    transform: translateY(-50%);
+    display: flex; gap: 3px;
+  }
+
+  .err-severity .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #ef4444;
+    opacity: 0.3;
+  }
+
+  .err-severity .dot.active { opacity: 1; }
+
+  /* ========== SLIDE 3: Solution ========== */
+  .slide-3 { background: radial-gradient(ellipse at 50% 100%, var(--bg-secondary) 0%, var(--bg-primary) 100%); padding: 60px 80px; }
+
+  .slide-3 .section-sub {
+    font-size: 24px; color: var(--text-muted); font-style: italic; margin-bottom: 50px; z-index: 1;
+  }
+
+  .middleware-layout {
+    display: flex; gap: 50px; align-items: center;
+    width: 100%; max-width: 1200px; z-index: 1;
+  }
+
+  .middleware-diagram {
+    flex: 1.1; display: flex; flex-direction: column; align-items: center; gap: 0;
+    position: relative;
+  }
+
+  /* Data flow indicator */
+  .middleware-diagram::after {
+    content: '';
+    position: absolute;
+    left: 50%; top: 0; bottom: 0;
+    width: 2px;
+    background: linear-gradient(180deg, transparent, var(--accent-indigo), var(--accent-violet), var(--accent-indigo), transparent);
+    opacity: 0.2;
+    z-index: 0;
+    transform: translateX(-50%);
+  }
+
+  .mw-block {
+    width: 340px; padding: 18px 24px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 2px solid rgba(99, 102, 241, 0.3);
+    border-radius: 16px; display: flex; align-items: center; gap: 14px;
+    font-size: 22px; font-weight: 700; color: var(--text-primary);
+    box-shadow: 0 2px 20px rgba(0,0,0,0.3);
+    position: relative; z-index: 1;
+    transition: transform 0.3s, box-shadow 0.3s;
+    backdrop-filter: blur(10px);
+  }
+
+  .mw-block:hover {
+    transform: translateX(6px);
+    box-shadow: 0 4px 30px var(--glow-indigo);
+  }
+
+  .mw-block i { font-size: 28px; color: var(--accent-indigo); flex-shrink: 0; }
+
+  .mw-block.center {
+    background: linear-gradient(135deg, var(--accent-indigo), var(--accent-violet));
+    color: #fff; border-color: var(--accent-indigo);
+    font-size: 24px; padding: 22px 28px;
+    box-shadow: 0 6px 30px var(--glow-indigo);
+    animation: inject-pulse 3s ease-in-out infinite;
+  }
+
+  .mw-block.center i { color: #fff; }
+
+  /* Middleware label badge */
+  .mw-badge {
+    position: absolute;
+    right: -12px; top: -10px;
+    background: var(--accent-fuchsia);
+    color: #fff;
+    padding: 3px 10px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+
+  .mw-arrow-down {
+    font-size: 28px; color: var(--accent-indigo); margin: 4px 0;
+    z-index: 1;
+    animation: flow-right 2s ease-in-out infinite;
+    transform-origin: center;
+  }
+
+  .slide-3 .steps-panel { flex: 1; display: flex; flex-direction: column; gap: 16px; }
+
+  .step-card {
+    display: flex; align-items: center; gap: 14px;
+    padding: 16px 20px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 14px;
+    border-left: 5px solid var(--accent-indigo);
+    box-shadow: 0 2px 20px rgba(0,0,0,0.3);
+    font-size: 26px; font-weight: 700; color: var(--text-primary);
+    position: relative; overflow: hidden;
+    transition: transform 0.3s;
+    backdrop-filter: blur(10px);
+  }
+
+  .step-card:hover { transform: translateX(4px); }
+
+  .step-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 5px; height: 100%;
+    background: linear-gradient(180deg, var(--accent-indigo), var(--accent-violet));
+  }
+
+  .step-num {
+    width: 40px; height: 40px;
+    background: linear-gradient(135deg, var(--accent-indigo), var(--accent-violet));
+    color: #fff; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; font-weight: 900; flex-shrink: 0;
+    box-shadow: 0 2px 15px var(--glow-indigo);
+  }
+
+  .step-card .em { color: var(--accent-indigo); font-weight: 900; }
+
+  /* Code snippet visual */
+  .code-preview {
+    margin-top: 12px;
+    padding: 14px 18px;
+    background: #0d0d15;
+    border-radius: 12px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #cdd6f4;
+    overflow: hidden;
+    position: relative;
+    z-index: 1;
+    border: 1px solid rgba(99, 102, 241, 0.2);
+  }
+
+  .code-preview .comment { color: #6c7086; }
+  .code-preview .keyword { color: #cba6f7; }
+  .code-preview .func { color: #89b4fa; }
+  .code-preview .string { color: #a6e3a1; }
+  .code-preview .var { color: #f9e2af; }
+
+  /* ========== SLIDE 4: Before/After ========== */
+  .slide-4 { background: var(--bg-primary); padding: 60px 80px; }
+
+  .slide-4 .compare-layout {
+    display: flex; gap: 40px; width: 100%; max-width: 1200px; margin-top: 10px; z-index: 1;
+  }
+
+  .compare-col {
+    flex: 1; border-radius: 24px; padding: 32px 28px;
+    display: flex; flex-direction: column; gap: 14px;
+    position: relative; overflow: hidden;
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(10px);
+  }
+
+  .compare-col.before { border: 2px solid rgba(239, 68, 68, 0.4); }
+  .compare-col.after { border: 2px solid rgba(99, 102, 241, 0.4); }
+
+  .compare-header {
+    display: flex; align-items: center; gap: 12px;
+    font-size: 30px; font-weight: 900;
+  }
+
+  .compare-header i { font-size: 30px; }
+  .compare-col.before .compare-header { color: #ef4444; }
+  .compare-col.after .compare-header { color: var(--accent-indigo); }
+
+  .compare-item {
+    display: flex; align-items: center; gap: 12px;
+    font-size: 24px; font-weight: 700; color: var(--text-primary);
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    transition: transform 0.3s;
+  }
+
+  .compare-item:hover { transform: translateX(4px); }
+
+  .compare-item i { font-size: 22px; flex-shrink: 0; }
+  .compare-col.before .compare-item i { color: #ef4444; }
+  .compare-col.after .compare-item i { color: var(--accent-indigo); }
+
+  .em-bad { color: #ef4444; font-weight: 900; text-decoration: line-through; }
+  .em-good { color: var(--accent-indigo); font-weight: 900; text-decoration: underline; text-underline-offset: 4px; }
+
+  /* Score meter */
+  .score-meter {
+    display: flex; align-items: center; gap: 10px;
+    margin-top: 6px; padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+  }
+
+  .score-meter .meter-label {
+    font-size: 14px; font-weight: 700; color: var(--text-muted); white-space: nowrap;
+  }
+
+  .score-meter .meter-track {
+    flex: 1; height: 10px; background: rgba(255, 255, 255, 0.1);
+    border-radius: 5px; overflow: hidden;
+  }
+
+  .score-meter .meter-fill {
+    height: 100%; border-radius: 5px;
+    transition: width 1.5s cubic-bezier(.25,.46,.45,.94);
+    width: 0;
+  }
+
+  .compare-col.before .meter-fill { background: linear-gradient(90deg, #ef4444, #f87171); }
+  .compare-col.after .meter-fill { background: linear-gradient(90deg, var(--accent-indigo), var(--accent-violet)); }
+
+  .score-meter .meter-val {
+    font-size: 16px; font-weight: 900; min-width: 36px; text-align: right;
+  }
+
+  .compare-col.before .meter-val { color: #ef4444; }
+  .compare-col.after .meter-val { color: var(--accent-indigo); }
+
+  .vs-divider {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  }
+
+  .vs-icon {
+    width: 60px; height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #ef4444, var(--accent-indigo));
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 24px; font-weight: 900;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  }
+
+  .vs-text {
+    font-size: 36px; font-weight: 900; color: var(--text-muted);
+  }
+
+  /* Result emoji row */
+  .result-row {
+    display: flex; align-items: center; justify-content: center;
+    gap: 24px; margin-top: 16px; z-index: 1;
+  }
+
+  .result-card {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+  }
+
+  .result-card .result-emoji { font-size: 48px; line-height: 1; }
+  .result-card .result-text { font-size: 15px; font-weight: 700; color: var(--text-muted); }
+
+  .result-arrow { font-size: 36px; color: var(--accent-indigo); }
+
+  /* ========== SLIDE 5: Summary ========== */
+  .slide-5 {
+    background: radial-gradient(ellipse at 50% 50%, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+    text-align: center; padding: 60px 80px;
+  }
+
+  .slide-5 .final-icon {
+    width: 120px; height: 120px;
+    background: linear-gradient(135deg, var(--accent-indigo), var(--accent-violet));
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 56px; color: #fff; margin: 0 auto 28px;
+    box-shadow: 0 10px 40px var(--glow-indigo);
+    z-index: 1;
+    animation: glow-pulse 3s ease-in-out infinite;
+    position: relative;
+  }
+
+  .slide-5 .final-icon::after {
+    content: '';
+    position: absolute;
+    width: 140px; height: 140px;
+    border-radius: 50%;
+    border: 2px dashed rgba(99, 102, 241, 0.3);
+    animation: spin-slow 20s linear infinite;
+  }
+
+  .slide-5 .final-title {
+    font-size: 54px; font-weight: 900; color: var(--text-primary);
+    margin-bottom: 18px; line-height: 1.35; z-index: 1;
+  }
+
+  .slide-5 .final-title .hl { color: var(--accent-indigo); }
+
+  .slide-5 .final-quote {
+    font-size: 30px; font-weight: 700; color: var(--accent-indigo);
+    font-style: italic; margin-bottom: 44px;
+    padding: 18px 36px;
+    background: rgba(99, 102, 241, 0.1);
+    border-radius: 18px;
+    display: inline-block;
+    border: 2px solid rgba(99, 102, 241, 0.3);
+    z-index: 1;
+    position: relative; overflow: hidden;
+  }
+
+  .slide-5 .final-quote::before {
+    content: '';
+    position: absolute;
+    top: 0; left: -100%;
+    width: 50%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+    animation: shimmer 3s ease-in-out infinite;
+  }
+
+  .slide-5 .inject-flow {
+    display: flex; align-items: center; justify-content: center; gap: 14px;
+    z-index: 1;
+  }
+
+  .inject-box {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    padding: 20px 26px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    border: 2px solid rgba(99, 102, 241, 0.3);
+    min-width: 120px;
+    transition: transform 0.3s, box-shadow 0.3s;
+    backdrop-filter: blur(10px);
+  }
+
+  .inject-box:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 30px var(--glow-indigo);
+  }
+
+  .inject-box i { font-size: 38px; color: var(--accent-indigo); }
+  .inject-box span { font-size: 17px; font-weight: 900; color: var(--text-primary); }
+
+  .inject-box.highlight {
+    border-color: var(--accent-fuchsia);
+    box-shadow: 0 4px 20px rgba(217, 70, 239, 0.2);
+    animation: inject-pulse 2s ease-in-out infinite;
+  }
+
+  .inject-box.highlight span { color: var(--accent-fuchsia); }
+  .inject-box.highlight i { color: var(--accent-fuchsia); }
+
+  .inject-arrow { font-size: 34px; color: var(--accent-violet); animation: flow-right 2s ease-in-out infinite; }
+
+  /* Loop SVG */
+  .loop-svg {
+    margin-top: 16px; z-index: 1;
+  }
+
+  /* Big background icon */
+  .bg-icon-watermark {
+    position: absolute;
+    opacity: 0.04;
+    font-size: 220px;
+    color: var(--accent-indigo);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ========== 二次元颜文字样式 ========== */
+  .kaomoji {
+    display: inline-block;
+    font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+    font-weight: 700;
+    letter-spacing: 1px;
+    vertical-align: middle;
+  }
+  .kmo-small { font-size: 1.1rem; }
+  .kmo-mid { font-size: 1.5rem; }
+  .kmo-big { font-size: 2rem; }
+  .kmo-huge { font-size: 2.8rem; }
+
+  /* 颜色 - 与页面主题协调 */
+  .kmo-indigo { color: var(--accent-indigo); }
+  .kmo-violet { color: var(--accent-violet); }
+  .kmo-fuchsia { color: var(--accent-fuchsia); }
+  .kmo-cyan { color: var(--accent-cyan); }
+  .kmo-red { color: #ef4444; }
+  .kmo-muted { color: var(--text-secondary); }
+
+  /* 动画效果 */
+  .kmo-bounce { animation: kmoBounce 2s ease-in-out infinite; }
+  .kmo-float { animation: kmoFloat 3s ease-in-out infinite; }
+  .kmo-wiggle { animation: kmoWiggle 1.2s ease-in-out infinite; }
+  .kmo-pulse { animation: kmoPulse 1.5s ease-in-out infinite; }
+  .kmo-shake { animation: kmoShake 0.8s ease-in-out infinite; }
+
+  @keyframes kmoBounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+  }
+  @keyframes kmoFloat {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-6px) rotate(3deg); }
+  }
+  @keyframes kmoWiggle {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-5deg); }
+    75% { transform: rotate(5deg); }
+  }
+  @keyframes kmoPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+  }
+  @keyframes kmoShake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-3px); }
+    75% { transform: translateX(3px); }
+  }
+
+  /* ========== Responsive ========== */
+  @media (max-width: 900px) {
+    .slide { padding: 30px 24px; }
+    .slide-1 .main-title { font-size: 48px; }
+    .section-title { font-size: 36px; }
+    .slide-2 .problem-layout { flex-direction: column; gap: 30px; }
+    .middleware-layout { flex-direction: column; }
+    .slide-4 .compare-layout { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+
+<!-- Glowing orbs -->
+<div class="glow-orb" style="width: 500px; height: 500px; background: var(--accent-indigo); top: -100px; right: -100px;"></div>
+<div class="glow-orb" style="width: 400px; height: 400px; background: var(--accent-fuchsia); bottom: -100px; left: -100px; animation-delay: -5s;"></div>
+
+<div class="slide-container">
+
+  <!-- ====== SLIDE 1: Title ====== -->
+  <div class="slide slide-1 active" data-slide="0">
+    <!-- Orbit background -->
+    <div class="bg-orbits">
+      <div class="orbit orbit-1">
+        <div class="orbit-dot" style="top:0;left:50%;transform:translate(-50%,-50%);"></div>
+        <div class="orbit-dot" style="bottom:0;left:50%;transform:translate(-50%,50%);"></div>
+      </div>
+      <div class="orbit orbit-2">
+        <div class="orbit-dot" style="top:50%;left:0;transform:translate(-50%,-50%);"></div>
+        <div class="orbit-dot" style="top:50%;right:0;transform:translate(50%,-50%);"></div>
+      </div>
+    </div>
+
+    <!-- Decorations -->
+    <div class="deco deco-circle" style="width:200px;height:200px;background:var(--accent-indigo);top:6%;left:4%;animation:pulse-soft 6s ease-in-out infinite;"></div>
+    <div class="deco deco-ring" style="width:100px;height:100px;top:12%;right:10%;animation:floatUp 6s ease-in-out infinite;"></div>
+    <div class="deco deco-dot" style="top:70%;left:8%;animation:floatDown 4s ease-in-out infinite;"></div>
+    <div class="deco deco-dot" style="top:30%;left:28%;animation:floatUp 5s ease-in-out infinite 1s;"></div>
+    <div class="deco deco-ring" style="width:60px;height:60px;bottom:18%;right:7%;animation:floatDown 5s ease-in-out infinite;"></div>
+
+    <div class="anim badge"><i class="ri-lightbulb-flash-line"></i> LangChain 优化技巧 2</div>
+    <div class="anim main-title">给 Agent 提供 <span class="kaomoji kmo-mid kmo-indigo kmo-wiggle">(｀・ω・´)</span></div>
+    <div class="anim main-title"><span class="hl">环境上下文</span></div>
+    <div class="anim sub-en">LocalContextMiddleware</div>
+    <div class="anim subtitle">让 Agent <b>认识自己所在的环境</b></div>
+
+    <!-- 颜文字装饰 -->
+    <div class="anim kaomoji kmo-small kmo-violet kmo-float" style="position:absolute;top:10%;right:8%">(ﾉ◕ヮ◕)ﾉ</div>
+    <div class="anim kaomoji kmo-small kmo-muted" style="position:absolute;bottom:12%;left:6%">(´-ω-`)</div>
+    <div class="anim icon-row">
+      <div class="icon-card">
+        <div class="icon-circle"><i class="ri-folder-chart-line"></i></div>
+        <div class="icon-label">目录结构</div>
+      </div>
+      <div class="icon-arrow"><i class="ri-arrow-right-s-line"></i></div>
+      <div class="icon-card">
+        <div class="icon-circle"><i class="ri-terminal-box-line"></i></div>
+        <div class="icon-label">工具路径</div>
+      </div>
+      <div class="icon-arrow"><i class="ri-arrow-right-s-line"></i></div>
+      <div class="icon-card">
+        <div class="icon-circle"><i class="ri-download-2-line"></i></div>
+        <div class="icon-label">自动注入</div>
+      </div>
+      <div class="icon-arrow"><i class="ri-arrow-right-s-line"></i></div>
+      <div class="icon-card">
+        <div class="icon-circle"><i class="ri-shield-check-line"></i></div>
+        <div class="icon-label">减少出错</div>
+      </div>
+    </div>
+
+    <!-- 底部颜文字 -->
+    <div class="anim kaomoji kmo-small kmo-indigo kmo-bounce" style="position:absolute;bottom:8%;right:12%">(｡♥‿♥｡)</div>
+  </div>
+
+  <!-- ====== SLIDE 2: Problem ====== -->
+  <div class="slide slide-2" data-slide="1">
+    <!-- Background watermark -->
+    <div class="bg-icon-watermark" style="bottom:20px;right:40px;"><i class="ri-error-warning-line"></i></div>
+
+    <!-- Decorations -->
+    <div class="deco deco-circle" style="width:140px;height:140px;background:#ef4444;bottom:8%;left:4%;animation:pulse-soft 5s ease-in-out infinite;"></div>
+    <div class="deco deco-ring" style="width:80px;height:80px;top:8%;right:18%;animation:floatUp 5s ease-in-out infinite;border-color:#ef4444;"></div>
+
+    <!-- 颜文字装饰 -->
+    <div class="anim kaomoji kmo-small kmo-red kmo-float" style="position:absolute;top:10%;left:5%">(；´Д｀)</div>
+    <div class="anim kaomoji kmo-small kmo-fuchsia" style="position:absolute;top:8%;right:8%">(｡ŏ_ŏ)</div>
+
+    <div class="anim section-title">
+      <i class="ri-error-warning-line" style="color:#ef4444;"></i>
+      Agent 在陌生环境中的<span class="red">困境</span> <span class="kaomoji kmo-mid kmo-red kmo-wiggle">(；一_一)</span>
+    </div>
+    <div class="problem-layout">
+      <div class="anim lost-visual">
+        <!-- Confusion waves -->
+        <div class="confusion-wave"></div>
+        <div class="confusion-wave"></div>
+        <div class="confusion-wave"></div>
+
+        <div class="agent-box">
+          <i class="ri-robot-2-line"></i>
+          <span>Agent</span>
+          <div class="agent-status"><i class="ri-question-mark"></i></div>
+        </div>
+
+      </div>
+      <div class="text-panel">
+        <div class="anim err-line">
+          <i class="ri-folder-unknow-line"></i>
+          <div>不知道 <span class="em">当前目录结构</span></div>
+          <div class="err-severity"><div class="dot active"></div><div class="dot active"></div><div class="dot"></div></div>
+        </div>
+        <div class="anim err-line">
+          <i class="ri-file-unknow-line"></i>
+          <div>不知道 <span class="em">项目有哪些文件</span></div>
+          <div class="err-severity"><div class="dot active"></div><div class="dot active"></div><div class="dot"></div></div>
+        </div>
+        <div class="anim err-line">
+          <i class="ri-tools-line"></i>
+          <div>不知道 <span class="em">工具安装位置</span></div>
+          <div class="err-severity"><div class="dot active"></div><div class="dot active"></div><div class="dot active"></div></div>
+        </div>
+        <div class="anim err-line">
+          <i class="ri-close-circle-line"></i>
+          <div>导致：路径错误 / 调用失败 / <span class="em">任务失败</span></div>
+          <div class="err-severity"><div class="dot active"></div><div class="dot active"></div><div class="dot active"></div></div>
+        </div>
+
+        <!-- 底部颜文字 -->
+        <div class="anim kaomoji kmo-small kmo-red kmo-bounce" style="position:absolute;bottom:10%;right:10%">(；へ：)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== SLIDE 3: Solution ====== -->
+  <div class="slide slide-3" data-slide="2">
+    <!-- Decorations -->
+    <div class="deco deco-circle" style="width:180px;height:180px;background:var(--accent-indigo);top:4%;right:4%;animation:pulse-soft 7s ease-in-out infinite;"></div>
+    <div class="deco deco-ring" style="width:70px;height:70px;bottom:12%;left:5%;animation:floatUp 4.5s ease-in-out infinite;"></div>
+    <div class="deco deco-dot" style="top:50%;right:10%;animation:floatDown 3.5s ease-in-out infinite;"></div>
+
+    <!-- 颜文字装饰 -->
+    <div class="anim kaomoji kmo-small kmo-indigo kmo-float" style="position:absolute;top:8%;left:6%">(｡♥‿♥｡)</div>
+    <div class="anim kaomoji kmo-small kmo-violet" style="position:absolute;top:10%;right:8%">(｀・ω・´)</div>
+
+    <div class="anim section-title">
+      <i class="ri-settings-4-line" style="color:var(--accent-indigo);"></i>
+      解决方案：<span class="accent">LocalContextMiddleware</span> <span class="kaomoji kmo-mid kmo-indigo kmo-wiggle">(ﾉ◕ヮ◕)ﾉ</span>
+    </div>
+    <div class="anim section-sub" style="font-size:24px;color:var(--text-muted);font-style:italic;margin-bottom:50px;z-index:1;">本地上下文中间件 — 在执行过程中自动完成标准化操作</div>
+
+    <div class="middleware-layout">
+      <div class="anim middleware-diagram">
+        <div class="mw-block"><i class="ri-play-circle-line"></i>Agent 开始执行任务</div>
+        <div class="mw-arrow-down"><i class="ri-arrow-down-line"></i></div>
+        <div class="mw-block center">
+          <i class="ri-settings-4-line"></i>LocalContextMiddleware
+          <div class="mw-badge">核心</div>
+        </div>
+        <div class="mw-arrow-down"><i class="ri-arrow-down-line"></i></div>
+        <div class="mw-block"><i class="ri-download-2-line"></i>注入环境信息给 Agent</div>
+        <div class="mw-arrow-down"><i class="ri-arrow-down-line"></i></div>
+        <div class="mw-block"><i class="ri-check-double-line"></i>Agent 准确执行</div>
+      </div>
+
+      <div class="steps-panel">
+        <div class="anim step-card">
+          <div class="step-num">1</div>
+          <div><span class="em">映射</span>当前工作目录与父子目录结构</div>
+        </div>
+        <div class="anim step-card">
+          <div class="step-num">2</div>
+          <div><span class="em">查找</span> Python 等工具的安装路径</div>
+        </div>
+        <div class="anim step-card">
+          <div class="step-num">3</div>
+          <div>将所有信息<span class="em">自动注入</span>给 Agent</div>
+        </div>
+
+        <!-- Code preview -->
+        <div class="anim code-preview">
+          <span class="comment"># Middleware 自动注入示例</span><br>
+          <span class="keyword">class</span> <span class="func">LocalContextMiddleware</span>:<br>
+          &nbsp;&nbsp;<span class="keyword">def</span> <span class="func">inject</span>(<span class="var">self</span>, agent):<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;agent.context[<span class="string">"cwd"</span>] = <span class="func">os.getcwd</span>()<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;agent.context[<span class="string">"tools"</span>] = <span class="func">find_tools</span>()
+        </div>
+
+        <!-- 底部颜文字 -->
+        <div class="anim kaomoji kmo-small kmo-indigo kmo-bounce" style="position:absolute;bottom:10%;right:8%">(｡♥‿♥｡)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== SLIDE 4: Before/After ====== -->
+  <div class="slide slide-4" data-slide="3">
+    <!-- Decorations -->
+    <div class="deco deco-ring" style="width:130px;height:130px;top:7%;left:4%;animation:floatUp 6s ease-in-out infinite;border-color:#ef4444;opacity:0.1;"></div>
+    <div class="deco deco-ring" style="width:100px;height:100px;bottom:7%;right:4%;animation:floatDown 5s ease-in-out infinite;border-color:var(--accent-indigo);opacity:0.1;"></div>
+
+    <!-- 颜文字装饰 -->
+    <div class="anim kaomoji kmo-small kmo-red kmo-float" style="position:absolute;top:8%;left:5%">(；一_一)</div>
+    <div class="anim kaomoji kmo-small kmo-indigo" style="position:absolute;top:10%;right:6%">(｡♥‿♥｡)</div>
+
+    <div class="anim section-title">
+      <i class="ri-contrast-2-line" style="color:var(--accent-indigo);"></i>
+      效果对比：<span class="accent">注入前 vs 注入后</span> <span class="kaomoji kmo-mid kmo-indigo kmo-wiggle">(・・ ) ?</span>
+    </div>
+
+    <div class="compare-layout">
+      <div class="anim compare-col before">
+        <div class="compare-header"><i class="ri-close-circle-line"></i> 无上下文</div>
+        <div class="anim compare-item"><i class="ri-close-line"></i><span class="em-bad">路径写错</span></div>
+        <div class="anim compare-item"><i class="ri-close-line"></i><span class="em-bad">找不到工具</span></div>
+        <div class="anim compare-item"><i class="ri-close-line"></i><span class="em-bad">无法读取已有文件</span></div>
+        <div class="anim compare-item"><i class="ri-close-line"></i>基础执行错误频发</div>
+        <div class="score-meter">
+          <span class="meter-label">成功率</span>
+          <div class="meter-track"><div class="meter-fill" data-width="30"></div></div>
+          <span class="meter-val">30%</span>
+        </div>
+      </div>
+
+      <div class="vs-divider">
+        <div class="vs-icon"><i class="ri-arrow-left-right-line"></i></div>
+        <div class="vs-text">VS</div>
+      </div>
+
+      <div class="anim compare-col after">
+        <div class="compare-header"><i class="ri-checkbox-circle-line"></i> 有上下文</div>
+        <div class="anim compare-item"><i class="ri-check-line"></i><span class="em-good">路径准确</span></div>
+        <div class="anim compare-item"><i class="ri-check-line"></i><span class="em-good">工具可调用</span></div>
+        <div class="anim compare-item"><i class="ri-check-line"></i><span class="em-good">文件可读取</span></div>
+        <div class="anim compare-item"><i class="ri-check-line"></i>任务成功率大幅提升</div>
+        <div class="score-meter">
+          <span class="meter-label">成功率</span>
+          <div class="meter-track"><div class="meter-fill" data-width="92"></div></div>
+          <span class="meter-val">92%</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="anim result-row">
+      <div class="result-card">
+      </div>
+      <div class="result-arrow"></div>
+      <div class="result-card">
+      </div>
+      <div class="result-arrow"></div>
+      <div class="result-card">
+      </div>
+    </div>
+
+    <!-- 底部颜文字 -->
+    <div class="anim kaomoji kmo-small kmo-indigo kmo-bounce" style="position:absolute;bottom:8%;right:12%">(ﾉ◕ヮ◕)ﾉ</div>
+    <div class="anim kaomoji kmo-small kmo-violet kmo-float" style="position:absolute;bottom:12%;left:8%">(｡♥‿♥｡)</div>
+  </div>
+
+  <!-- ====== SLIDE 5: Summary ====== -->
+  <div class="slide slide-5" data-slide="4">
+    <!-- Decorations -->
+    <div class="deco deco-circle" style="width:250px;height:250px;background:var(--accent-indigo);top:4%;right:5%;animation:pulse-soft 8s ease-in-out infinite;"></div>
+    <div class="deco deco-circle" style="width:160px;height:160px;background:var(--accent-violet);bottom:6%;left:6%;animation:pulse-soft 6s ease-in-out infinite 2s;"></div>
+    <div class="deco deco-ring" style="width:90px;height:90px;top:18%;left:10%;animation:floatUp 5s ease-in-out infinite;"></div>
+    <div class="deco deco-ring" style="width:70px;height:70px;bottom:22%;right:12%;animation:floatDown 4s ease-in-out infinite;"></div>
+
+    <!-- 颜文字装饰 -->
+    <div class="anim kaomoji kmo-small kmo-indigo kmo-float" style="position:absolute;top:8%;left:6%">(｡♥‿♥｡)</div>
+    <div class="anim kaomoji kmo-small kmo-violet" style="position:absolute;top:12%;right:8%">(ﾉ◕ヮ◕)ﾉ</div>
+
+    <div class="anim final-icon"><i class="ri-map-pin-line"></i></div>
+    <div class="anim final-title">
+      先让 Agent <span class="hl">认识环境</span> <span class="kaomoji kmo-mid kmo-indigo kmo-wiggle">(｀・ω・´)</span>
+    </div>
+    <div class="anim final-title" style="font-size:48px;">
+      再让它<span class="hl" style="text-decoration:underline;text-underline-offset:8px;">执行任务</span>
+    </div>
+    <div class="anim final-quote">
+      <i class="ri-double-quotes-l" style="font-size:22px;vertical-align:top;margin-right:4px;"></i>
+      Middleware 自动注入，消除基础执行错误
+      <i class="ri-double-quotes-r" style="font-size:22px;vertical-align:top;margin-left:4px;"></i>
+    </div>
+    <div class="anim inject-flow">
+      <div class="inject-box">
+        <i class="ri-folder-chart-line"></i>
+        <span>目录结构</span>
+      </div>
+      <div class="inject-arrow"><i class="ri-arrow-right-line"></i></div>
+      <div class="inject-box">
+        <i class="ri-terminal-box-line"></i>
+        <span>工具路径</span>
+      </div>
+      <div class="inject-arrow"><i class="ri-arrow-right-line"></i></div>
+      <div class="inject-box highlight">
+        <i class="ri-settings-4-line"></i>
+        <span>中间件注入</span>
+      </div>
+      <div class="inject-arrow"><i class="ri-arrow-right-line"></i></div>
+      <div class="inject-box">
+        <i class="ri-robot-2-line"></i>
+        <span>Agent</span>
+      </div>
+      <div class="inject-arrow"><i class="ri-arrow-right-line"></i></div>
+      <div class="inject-box">
+        <i class="ri-check-double-line"></i>
+        <span>准确执行</span>
+      </div>
+    </div>
+
+    <!-- Loop SVG -->
+    <svg class="loop-svg anim" width="650" height="45" viewBox="0 0 650 45">
+      <path d="M 40 5 Q 325 45 610 5" fill="none" stroke="var(--accent-indigo)" stroke-width="2" stroke-dasharray="8,6" opacity="0.4"/>
+      <polygon points="608,0 618,5 608,10" fill="var(--accent-indigo)" opacity="0.5"/>
+    </svg>
+
+    <!-- 底部颜文字 -->
+    <div class="anim kaomoji kmo-small kmo-fuchsia kmo-bounce" style="position:absolute;bottom:8%;right:15%">(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧</div>
+    <div class="anim kaomoji kmo-small kmo-indigo kmo-float" style="position:absolute;bottom:12%;left:10%">(´-ω-`)</div>
+  </div>
+
+</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  const totalSlides = slides.length;
+  let currentSlide = 0;
+
+  function goToSlide(idx) {
+    if (idx < 0 || idx >= totalSlides || idx === currentSlide) return;
+    slides[currentSlide].classList.remove('active');
+    resetAnims(slides[currentSlide]);
+    currentSlide = idx;
+    slides[currentSlide].classList.add('active');
+    triggerAnims(slides[currentSlide]);
+    if (currentSlide === 3) animateMeters();
+  }
+
+  function changeSlide(dir) {
+    const next = currentSlide + dir;
+    if (next >= 0 && next < totalSlides) goToSlide(next);
+  }
+
+  function triggerAnims(slide) {
+    const items = slide.querySelectorAll('.anim');
+    items.forEach((el, i) => {
+      el.classList.remove('show');
+      setTimeout(() => { el.classList.add('show'); }, 150 + i * 200);
+    });
+  }
+
+  function resetAnims(slide) {
+    slide.querySelectorAll('.anim').forEach(el => el.classList.remove('show'));
+  }
+
+  // Animate meters on slide 4
+  function animateMeters() {
+    const fills = document.querySelectorAll('.meter-fill');
+    fills.forEach((fill) => {
+      const w = fill.getAttribute('data-width');
+      fill.style.width = '0%';
+      setTimeout(() => {
+        fill.style.width = w + '%';
+      }, 1000);
+    });
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') {
+      e.preventDefault(); changeSlide(1);
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault(); changeSlide(-1);
+    }
+  });
+
+  let touchStartX = 0;
+  document.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; });
+  document.addEventListener('touchend', e => {
+    const diff = e.changedTouches[0].clientX - touchStartX;
+    if (Math.abs(diff) > 60) changeSlide(diff < 0 ? 1 : -1);
+  });
+
+  // Mouse click navigation
+  document.addEventListener('click', (e) => {
+    if (e.clientX < window.innerWidth * 0.3) {
+      changeSlide(-1);
+    } else if (e.clientX > window.innerWidth * 0.7) {
+      changeSlide(1);
+    }
+  });
+
+  setTimeout(() => {
+    triggerAnims(slides[0]);
+  }, 300);
+</script>
+
+</body>
+</html>

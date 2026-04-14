@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DHCP Acknowledgment 报文格式</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#0F121A',
+                        darker: '#080A10',
+                        'dark-card': '#1A1E2C',
+                        'dark-card-hover': '#22283E',
+                        accent: '#FF3E7E',
+                        'accent-light': '#FF6B9D',
+                        primary: '#1E40AF',
+                        secondary: '#4C1D95',
+                        success: '#10B981',
+                        'neutral-dark': '#121624'
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'float': 'float 6s ease-in-out infinite',
+                        'glow': 'glow 2s ease-in-out infinite',
+                        'slide-up': 'slideUp 0.6s ease-out forwards',
+                        'border-pulse': 'borderPulse 2s infinite',
+                        'shine': 'shine 2s infinite',
+                        'success-pulse': 'successPulse 2s infinite'
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-10px)' }
+                        },
+                        glow: {
+                            '0%, 100%': { boxShadow: '0 0 15px rgba(255, 62, 126, 0.5)' },
+                            '50%': { boxShadow: '0 0 25px rgba(255, 62, 126, 0.8)' }
+                        },
+                        slideUp: {
+                            '0%': { transform: 'translateY(20px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' }
+                        },
+                        borderPulse: {
+                            '0%, 100%': { borderColor: 'rgba(255, 62, 126, 0.7)' },
+                            '50%': { borderColor: 'rgba(255, 62, 126, 1)' }
+                        },
+                        successPulse: {
+                            '0%, 100%': { borderColor: 'rgba(16, 185, 129, 0.7), box-shadow: 0 0 10px rgba(16, 185, 129, 0.3)' },
+                            '50%': { borderColor: 'rgba(16, 185, 129, 1), box-shadow: 0 0 15px rgba(16, 185, 129, 0.5)' }
+                        },
+                        shine: {
+                            '0%, 100%': { backgroundPosition: '200% center' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .text-shadow { text-shadow: 0 0 8px rgba(255, 62, 126, 0.6); }
+            .success-shadow { text-shadow: 0 0 8px rgba(16, 185, 129, 0.6); }
+            .glow-border { 
+                box-shadow: 0 0 10px rgba(255, 62, 126, 0.5);
+                border: 1px solid rgba(255, 62, 126, 0.3);
+            }
+            .success-glow { 
+                box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+                border: 1px solid rgba(16, 185, 129, 0.5);
+            }
+            .bg-grid { 
+                background-image: 
+                    linear-gradient(rgba(30, 64, 175, 0.05) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(30, 64, 175, 0.05) 1px, transparent 1px);
+                background-size: 30px 30px;
+            }
+            .protocol-layer {
+                position: relative;
+                overflow: hidden;
+                transition: all 0.3s ease;
+            }
+            .protocol-layer::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 2px;
+                background: linear-gradient(90deg, transparent, theme('colors.accent'), transparent);
+                transform: translateX(-100%);
+                transition: transform 1s ease;
+            }
+            .protocol-layer.revealed::before {
+                transform: translateX(100%);
+            }
+            .shine-effect {
+                background: linear-gradient(
+                    to right,
+                    rgba(255, 62, 126, 0) 0%,
+                    rgba(255, 62, 126, 0.2) 20%,
+                    rgba(255, 62, 126, 0) 40%
+                );
+                background-size: 200% 100%;
+                animation: shine 2s infinite;
+            }
+            .success-shine {
+                background: linear-gradient(
+                    to right,
+                    rgba(16, 185, 129, 0) 0%,
+                    rgba(16, 185, 129, 0.2) 20%,
+                    rgba(16, 185, 129, 0) 40%
+                );
+                background-size: 200% 100%;
+                animation: shine 2s infinite;
+            }
+        }
+    </style>
+</head>
+<body class="bg-dark bg-grid text-gray-300 min-h-screen p-4 md:p-8 overflow-x-hidden">
+    <div class="max-w-5xl mx-auto">
+        <!-- 标题区域 -->
+        <header class="mb-10 text-center reveal-element" data-delay="100">
+            <div class="inline-block mb-4 relative">
+                <div class="absolute -inset-1 bg-gradient-to-r from-success to-accent rounded-lg blur opacity-30"></div>
+                <h1 class="relative text-[clamp(1.8rem,5vw,3rem)] font-bold text-white px-4 py-2">
+                    DHCP <span class="text-success success-shadow">ACK</span> 报文
+                </h1>
+            </div>
+            <p class="text-gray-400 max-w-2xl mx-auto">
+                服务器对客户端请求的确认，最终分配IP地址和网络配置信息
+            </p>
+        </header>
+
+        <!-- 报文可视化流程 -->
+        <div class="mb-12 relative reveal-element" data-delay="300">
+            <div class="absolute -inset-4 bg-gradient-to-r from-primary/20 to-success/20 rounded-2xl blur-xl opacity-20"></div>
+            <div class="relative bg-dark-card rounded-xl p-6 md:p-8 glow-border animate-glow">
+                <!-- 报文传输图示 -->
+                <div class="flex flex-col md:flex-row items-center justify-between mb-10 relative">
+                    <div class="absolute top-1/2 left-0 right-0 h-0.5 bg-gradient-to-r from-primary via-success to-accent -z-10"></div>
+                    
+                    <!-- 服务器图标 -->
+                    <div class="mb-6 md:mb-0 w-20 h-20 bg-dark-card-hover rounded-full flex items-center justify-center border-2 border-primary animate-float relative z-10">
+                        <i class="fa fa-server text-3xl text-primary"></i>
+                        <div class="absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-sm font-medium text-white">DHCPServer</div>
+                    </div>
+                    
+                    <!-- 箭头 -->
+                    <div class="w-16 h-1 flex justify-center">
+                        <i class="fa fa-long-arrow-right text-success text-2xl animate-pulse-slow"></i>
+                    </div>
+                    
+                    <!-- 确认图标 -->
+                    <div class="mb-6 md:mb-0 w-24 h-24 bg-dark-card-hover rounded-full flex items-center justify-center border-2 border-success/50 relative z-10">
+                        <div class="absolute inset-0 rounded-full border-2 border-dashed border-success/30 animate-pulse-slow"></div>
+                        <i class="fa fa-check-circle text-3xl text-success"></i>
+                        <div class="absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-sm font-medium text-white">ACKnowledgment</div>
+                    </div>
+                    
+                    <!-- 箭头 -->
+                    <div class="w-16 h-1 flex justify-center">
+                        <i class="fa fa-long-arrow-right text-success text-2xl animate-pulse-slow"></i>
+                    </div>
+                    
+                    <!-- 客户端图标 -->
+                    <div class="w-20 h-20 bg-dark-card-hover rounded-full flex items-center justify-center border-2 border-accent animate-float relative z-10" style="animation-delay: 1s">
+                        <i class="fa fa-laptop text-3xl text-accent"></i>
+                        <div class="absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-sm font-medium text-white">Client</div>
+                    </div>
+                </div>
+                
+                <!-- 报文结构 -->
+                <div class="space-y-6">
+                    <!-- 以太网帧头部 -->
+                    <div class="protocol-layer p-4 bg-neutral-dark rounded-lg reveal-element" data-delay="600">
+                        <h3 class="text-white font-semibold mb-4 flex items-center">
+                            <span class="w-3 h-3 bg-accent rounded-full mr-2 animate-pulse-slow"></span>
+                            以太网帧头部
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pl-2">
+                            <div class="bg-dark-card p-3 rounded border-l-2 border-accent hover:bg-dark-card-hover transition-colors">
+                                <div class="text-xs text-gray-400 mb-1">目的MAC地址</div>
+                                <div class="font-mono text-white">AA:BB:CC:DD:EE:FF <span class="text-xs text-accent-light">(客户端MAC)</span></div>
+                            </div>
+                            <div class="bg-dark-card p-3 rounded border-l-2 border-accent hover:bg-dark-card-hover transition-colors">
+                                <div class="text-xs text-gray-400 mb-1">源MAC地址</div>
+                                <div class="font-mono text-white">FF:EE:DD:CC:BB:AA <span class="text-xs text-accent-light">(服务器MAC)</span></div>
+                            </div>
+                            <div class="bg-dark-card p-3 rounded border-l-2 border-accent hover:bg-dark-card-hover transition-colors md:col-span-2">
+                                <div class="text-xs text-gray-400 mb-1">类型</div>
+                                <div class="font-mono text-white">0x0800 <span class="text-xs text-accent-light">(IPv4)</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- IP头部 -->
+                    <div class="protocol-layer p-4 bg-neutral-dark rounded-lg reveal-element" data-delay="1200">
+                        <h3 class="text-white font-semibold mb-4 flex items-center">
+                            <span class="w-3 h-3 bg-primary rounded-full mr-2 animate-pulse-slow"></span>
+                            IP 头部
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pl-2">
+                            <div class="bg-dark-card p-3 rounded border-l-2 border-primary hover:bg-dark-card-hover transition-colors">
+                                <div class="text-xs text-gray-400 mb-1">版本 / 首部长度</div>
+                                <div class="font-mono text-white">IPv4 / 20 字节</div>
+                            </div>
+                            <div class="bg-dark-card p-3 rounded border-l-2 border-primary hover:bg-dark-card-hover transition-colors">
+                                <div class="text-xs text-gray-400 mb-1">总长度</div>
+                                <div class="font-mono text-white">~342 字节</div>
+                            </div>
+                            <div class="bg-dark-card p-3 rounded border-l-2 border-primary hover:bg-dark-card-hover transition-colors">
+                                <div class="text-xs text-gray-400 mb-1">源IP地址</div>
+                                <div class="font-mono text-white">192.168.1.1 <span class="text-xs text-accent-light">(服务器IP)</span></div>
+                            </div>
+                            <div class="bg-dark-card p-3 rounded border-l-2 border-primary hover:bg-dark-card-hover transition-colors">
+                                <div class="text-xs text-gray-400 mb-1">目的IP地址</div>
+                                <div class="font-mono text-white">255.255.255.255 <span class="text-xs text-accent-light">(广播)</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- UDP头部 -->
+                    <div class="protocol-layer p-4 bg-neutral-dark rounded-lg reveal-element" data-delay="1800">
+                        <h3 class="text-white font-semibold mb-4 flex items-center">
+                            <span class="w-3 h-3 bg-secondary rounded-full mr-2 animate-pulse-slow"></span>
+                            UDP 头部
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pl-2">
+                            <div class="bg-dark-card p-3 rounded border-l-2 border-secondary hover:bg-dark-card-hover transition-colors">
+                                <div class="text-xs text-gray-400 mb-1">源端口</div>
+                                <div class="font-mono text-white">67 <span class="text-xs text-accent-light">(服务器)</span></div>
+                            </div>
+                            <div class="bg-dark-card p-3 rounded border-l-2 border-secondary hover:bg-dark-card-hover transition-colors">
+                                <div class="text-xs text-gray-400 mb-1">目的端口</div>
+                                <div class="font-mono text-white">68 <span class="text-xs text-accent-light">(客户端)</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- DHCP消息 -->
+                    <div class="protocol-layer p-4 bg-neutral-dark rounded-lg reveal-element" data-delay="2400">
+                        <h3 class="text-white font-semibold mb-4 flex items-center">
+                            <span class="w-3 h-3 bg-success rounded-full mr-2 animate-pulse-slow"></span>
+                            DHCP 消息
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pl-2">
+                            <div class="bg-dark-card p-3 rounded border-l-2 border-success hover:bg-dark-card-hover transition-colors">
+                                <div class="text-xs text-gray-400 mb-1">操作码</div>
+                                <div class="font-mono text-white">2 <span class="text-xs text-success">(回复)</span></div>
+                            </div>
+                            <div class="bg-dark-card p-3 rounded border-l-2 border-success hover:bg-dark-card-hover transition-colors">
+                                <div class="text-xs text-gray-400 mb-1">硬件类型</div>
+                                <div class="font-mono text-white">1 <span class="text-xs text-success">(以太网)</span></div>
+                            </div>
+                            <div class="bg-dark-card p-3 rounded border-l-2 border-success hover:bg-dark-card-hover transition-colors md:col-span-2">
+                                <div class="text-xs text-gray-400 mb-1">事务ID</div>
+                                <div class="font-mono text-white">0x12345678 <span class="text-xs text-success">(与请求一致)</span></div>
+                            </div>
+                            <div class="bg-dark-card p-3 rounded border-l-2 border-success animate-success-pulse hover:bg-dark-card-hover transition-colors">
+                                <div class="text-xs text-gray-400 mb-1">消息类型</div>
+                                <div class="font-mono text-white">5 <span class="text-xs text-success">(ACK)</span></div>
+                            </div>
+                            <div class="bg-dark-card p-3 rounded border-l-2 border-success animate-success-pulse hover:bg-dark-card-hover transition-colors">
+                                <div class="text-xs text-gray-400 mb-1">你的IP地址</div>
+                                <div class="font-mono text-white">192.168.1.100 <span class="text-xs text-success">(分配的IP)</span></div>
+                            </div>
+                            <div class="bg-dark-card p-3 rounded border-l-2 border-success hover:bg-dark-card-hover transition-colors">
+                                <div class="text-xs text-gray-400 mb-1">服务器IP</div>
+                                <div class="font-mono text-white">192.168.1.1</div>
+                            </div>
+                            <div class="bg-dark-card p-3 rounded border-l-2 border-success hover:bg-dark-card-hover transition-colors">
+                                <div class="text-xs text-gray-400 mb-1">子网掩码</div>
+                                <div class="font-mono text-white">255.255.255.0</div>
+                            </div>
+                            <div class="bg-dark-card p-3 rounded border-l-2 border-success hover:bg-dark-card-hover transition-colors">
+                                <div class="text-xs text-gray-400 mb-1">路由器</div>
+                                <div class="font-mono text-white">192.168.1.1</div>
+                            </div>
+                            <div class="bg-dark-card p-3 rounded border-l-2 border-success hover:bg-dark-card-hover transition-colors">
+                                <div class="text-xs text-gray-400 mb-1">DNS服务器</div>
+                                <div class="font-mono text-white">8.8.8.8, 8.8.4.4</div>
+                            </div>
+                            <div class="bg-dark-card p-3 rounded border-l-2 border-success animate-success-pulse hover:bg-dark-card-hover transition-colors">
+                                <div class="text-xs text-gray-400 mb-1">IP租约期</div>
+                                <div class="font-mono text-white">86400 秒 <span class="text-xs text-success">(24小时)</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 交互按钮 -->
+                <div class="flex justify-center mt-10 gap-4 reveal-element" data-delay="3000">
+                    <button id="replayBtn" class="bg-dark-card hover:bg-dark-card-hover text-white px-4 py-2 rounded-lg flex items-center transition-all border border-accent/30">
+                        <i class="fa fa-refresh mr-2 text-accent"></i>
+                        重播演示
+                    </button>
+                    <button id="highlightBtn" class="bg-dark-card hover:bg-dark-card-hover text-white px-4 py-2 rounded-lg flex items-center transition-all border border-success/30">
+                        <i class="fa fa-magic mr-2 text-success"></i>
+                        高亮关键字段
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 元素出现动画
+        function initAnimations() {
+            const revealElements = document.querySelectorAll('.reveal-element');
+            
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const delay = entry.target.getAttribute('data-delay') || 0;
+                        setTimeout(() => {
+                            entry.target.style.opacity = '1';
+                            entry.target.style.transform = 'translateY(0)';
+                            
+                            // 协议层动画
+                            if (entry.target.classList.contains('protocol-layer')) {
+                                setTimeout(() => {
+                                    entry.target.classList.add('revealed');
+                                }, 300);
+                            }
+                        }, delay);
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, { threshold: 0.1 });
+            
+            // 初始化元素状态
+            revealElements.forEach(el => {
+                el.style.opacity = '0';
+                el.style.transform = 'translateY(20px)';
+                el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+            });
+            
+            // 开始观察
+            revealElements.forEach(el => observer.observe(el));
+        }
+        
+        // 重播动画
+        document.getElementById('replayBtn').addEventListener('click', () => {
+            const protocolLayers = document.querySelectorAll('.protocol-layer');
+            const revealElements = document.querySelectorAll('.reveal-element');
+            
+            // 重置状态
+            protocolLayers.forEach(layer => layer.classList.remove('revealed'));
+            revealElements.forEach(el => {
+                el.style.opacity = '0';
+                el.style.transform = 'translateY(20px)';
+            });
+            
+            // 清除高亮
+            document.querySelectorAll('.bg-dark-card').forEach(card => {
+                card.classList.remove('shine-effect', 'success-shine');
+            });
+            
+            // 延迟后重新触发
+            setTimeout(initAnimations, 600);
+        });
+        
+        // 高亮关键字段
+        document.getElementById('highlightBtn').addEventListener('click', () => {
+            // 清除之前的高亮
+            document.querySelectorAll('.bg-dark-card').forEach(card => {
+                card.classList.remove('shine-effect', 'success-shine');
+            });
+            
+            // 高亮关键字段
+            const keyLabels = [
+                "目的MAC地址", 
+                "源IP地址",
+                "目的IP地址",
+                "消息类型",
+                "你的IP地址",
+                "IP租约期"
+            ];
+            
+            document.querySelectorAll('.bg-dark-card').forEach(card => {
+                const label = card.querySelector('.text-xs').textContent;
+                if (keyLabels.includes(label)) {
+                    card.classList.add('success-shine');
+                }
+            });
+        });
+        
+        // 页面加载完成后初始化动画
+        window.addEventListener('load', initAnimations);
+    </script>
+</body>
+</html>

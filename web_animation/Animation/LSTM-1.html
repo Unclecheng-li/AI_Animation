@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LSTM 三阶段工作流程</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+            background: 
+                radial-gradient(circle at bottom left, #0a1f0a 0%, transparent 50%),
+                radial-gradient(circle at top right, #1a3a1a 0%, transparent 30%),
+                #0a0a0f;
+            min-height: 100vh;
+            overflow: hidden;
+            color: #fff;
+            position: relative;
+        }
+
+        /* 噪点效果 */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            opacity: 0.12;
+            mix-blend-mode: overlay;
+            animation: noiseMove 20s linear infinite;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        @keyframes noiseMove {
+            0% { transform: translate(0, 0) scale(1.1); }
+            25% { transform: translate(-2%, -2%) scale(1.05); }
+            50% { transform: translate(0, 0) scale(1.1); }
+            75% { transform: translate(2%, 2%) scale(1.05); }
+            100% { transform: translate(0, 0) scale(1.1); }
+        }
+
+        /* 粒子画布 */
+        #particlesCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        .container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 60px 80px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .section-title {
+            font-size: 52px;
+            font-weight: 800;
+            margin-bottom: 40px;
+            text-align: center;
+            color: #34d399;
+            text-shadow: 0 0 20px rgba(52, 211, 153, 0.5);
+        }
+
+        /* ========== 精细化动画系统 ========== */
+        
+        /* 所有动画元素初始完全隐藏 */
+        .animate-item {
+            opacity: 0;
+            visibility: hidden;
+            animation: fadeInUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+
+        @keyframes fadeInUp {
+            0% {
+                opacity: 0;
+                visibility: hidden;
+                transform: translateY(20px);
+            }
+            0.01% {
+                opacity: 0;
+                visibility: visible;
+                transform: translateY(20px);
+            }
+            100% {
+                opacity: 1;
+                visibility: visible;
+                transform: translateY(0);
+            }
+        }
+
+        /* ========== 平面UI风格流程图 ========== */
+        .lstm-flow-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            padding: 30px 20px;
+            flex-wrap: wrap;
+            max-width: 1600px;
+        }
+
+        /* 输入/输出层 */
+        .flow-layer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .layer-label {
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 1.5px;
+            color: #34d399;
+            text-transform: uppercase;
+            opacity: 0.8;
+        }
+
+        .layer-box {
+            background: rgba(10, 20, 10, 0.6);
+            border: 1.5px solid rgba(52, 211, 153, 0.4);
+            border-radius: 12px;
+            padding: 20px 24px;
+            min-width: 140px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            backdrop-filter: blur(10px);
+        }
+
+        .input-item, .output-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            color: #ddd;
+        }
+
+        .input-text, .output-text {
+            font-size: 13px;
+            color: #888;
+            text-align: center;
+        }
+
+        .input-text .highlight, .output-text .highlight {
+            color: #34d399;
+            font-weight: 700;
+        }
+
+        /* 流程连接器 */
+        .flow-connector {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .connector-label {
+            font-size: 10px;
+            color: #666;
+            letter-spacing: 0.5px;
+        }
+
+        .connector-line {
+            opacity: 0.7;
+        }
+
+        /* 虚线箭头流动动画 */
+        .connector-line line {
+            animation: dashFlow 1.5s linear infinite;
+        }
+
+        @keyframes dashFlow {
+            0% {
+                stroke-dashoffset: 0;
+            }
+            100% {
+                stroke-dashoffset: -20;
+            }
+        }
+
+        /* 阶段模块 */
+        .flow-stage {
+            background: rgba(10, 20, 10, 0.5);
+            border: 1.5px solid rgba(52, 211, 153, 0.35);
+            border-radius: 16px;
+            padding: 20px 18px;
+            min-width: 160px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        .flow-stage:hover {
+            border-color: rgba(52, 211, 153, 0.6);
+            box-shadow: 0 0 30px rgba(52, 211, 153, 0.15);
+        }
+
+        .stage-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(52, 211, 153, 0.2);
+        }
+
+        .stage-badge {
+            width: 28px;
+            height: 28px;
+            background: rgba(52, 211, 153, 0.15);
+            border: 1.5px solid rgba(52, 211, 153, 0.5);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            color: #34d399;
+        }
+
+        .stage-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: #fff;
+            letter-spacing: 0.5px;
+        }
+
+        .stage-content {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        /* 记忆单元 */
+        .memory-cell {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            padding: 16px;
+            background: rgba(52, 211, 153, 0.08);
+            border: 1px solid rgba(52, 211, 153, 0.25);
+            border-radius: 10px;
+        }
+
+        .cell-icon {
+            opacity: 0.9;
+        }
+
+        .cell-label {
+            font-size: 11px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .cell-data {
+            font-size: 24px;
+            font-weight: 800;
+            color: #34d399;
+            text-shadow: 0 0 15px rgba(52, 211, 153, 0.5);
+        }
+
+        /* 门控行 */
+        .gates-row {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .gate-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 8px;
+            background: rgba(52, 211, 153, 0.06);
+            border: 1px solid rgba(52, 211, 153, 0.2);
+            border-radius: 8px;
+            flex: 1;
+        }
+
+        .gate-box span {
+            font-size: 10px;
+            color: #aaa;
+        }
+
+        .stage-desc-text {
+            font-size: 11px;
+            color: #666;
+            text-align: center;
+            line-height: 1.5;
+        }
+
+        /* 提取流程 */
+        .extract-flow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 12px;
+        }
+
+        .extract-flow svg line {
+            animation: dashFlow 1.5s linear infinite;
+        }
+
+        .extract-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: #888;
+        }
+
+        .extract-result {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            padding: 10px 16px;
+            background: rgba(52, 211, 153, 0.12);
+            border: 1.5px solid rgba(52, 211, 153, 0.4);
+            border-radius: 8px;
+        }
+
+        .result-text {
+            font-size: 22px;
+            font-weight: 800;
+            color: #34d399;
+        }
+
+        .result-label {
+            font-size: 9px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* 底部总结 */
+        .flow-summary {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(52, 211, 153, 0.05);
+            border: 1px solid rgba(52, 211, 153, 0.2);
+            border-radius: 12px;
+            flex-wrap: wrap;
+            width: 100%;
+        }
+
+        .summary-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            color: #bbb;
+        }
+
+        /* 响应式适配 */
+        @media (max-width: 1400px) {
+            .lstm-flow-diagram {
+                gap: 15px;
+                transform: scale(0.9);
+            }
+        }
+
+        @media (max-width: 1200px) {
+            .lstm-flow-diagram {
+                flex-direction: column;
+                gap: 20px;
+            }
+            
+            .flow-connector {
+                transform: rotate(90deg);
+                margin: 10px 0;
+            }
+            
+            .connector-label {
+                transform: rotate(-90deg);
+                white-space: nowrap;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .section-title {
+                font-size: 36px;
+            }
+            
+            .container {
+                padding: 40px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Canvas粒子效果 -->
+    <canvas id="particlesCanvas"></canvas>
+
+    <div class="container">
+        <!-- 标题 - 第1个出现 -->
+        <h2 class="section-title animate-item" style="animation-delay: 0s;">LSTM 三阶段工作流程</h2>
+        
+        <!-- 平面UI风格流程图 -->
+        <div class="lstm-flow-diagram">
+            <!-- 输入层 - 第2个模块 -->
+            <div class="flow-layer input-layer animate-item" style="animation-delay: 1.2s;">
+                <div class="layer-label animate-item" style="animation-delay: 1.2s;">INPUT LAYER</div>
+                <div class="layer-box animate-item" style="animation-delay: 1.35s;">
+                    <div class="input-item animate-item" style="animation-delay: 1.5s;">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+                            <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                        <span>文本输入</span>
+                    </div>
+                    <div class="input-text animate-item" style="animation-delay: 1.65s;">「我住在广西<span class="highlight">桂林</span>...」</div>
+                </div>
+            </div>
+
+            <!-- 阶段1连接器 - 第3个模块 -->
+            <div class="flow-connector animate-item" style="animation-delay: 2.4s;">
+                <span class="connector-label animate-item" style="animation-delay: 2.4s;">关键信息识别</span>
+                <svg class="connector-line animate-item" style="animation-delay: 2.55s;" width="100" height="40" viewBox="0 0 100 40">
+                    <line x1="0" y1="20" x2="90" y2="20" stroke="#34d399" stroke-width="1.5" stroke-dasharray="5,5"/>
+                    <polygon points="90,20 80,15 80,25" fill="#34d399"/>
+                </svg>
+            </div>
+
+            <!-- 阶段1：信息入库 - 第4个模块 -->
+            <div class="flow-stage stage-1 animate-item" style="animation-delay: 3.6s;">
+                <div class="stage-header animate-item" style="animation-delay: 3.6s;">
+                    <div class="stage-badge">01</div>
+                    <div class="stage-name">核心信息入库</div>
+                </div>
+                <div class="stage-content">
+                    <div class="memory-cell animate-item" style="animation-delay: 3.75s;">
+                        <div class="cell-icon animate-item" style="animation-delay: 3.9s;">
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                                <path d="M3 5V19A9 3 0 0 0 21 19V5"/>
+                                <path d="M3 12A9 3 0 0 0 21 12"/>
+                            </svg>
+                        </div>
+                        <div class="cell-label animate-item" style="animation-delay: 4.05s;">长期记忆库</div>
+                        <div class="cell-data animate-item" style="animation-delay: 4.2s;">桂林</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 阶段2连接器 - 第5个模块 -->
+            <div class="flow-connector animate-item" style="animation-delay: 4.8s;">
+                <span class="connector-label animate-item" style="animation-delay: 4.8s;">记忆保护模式</span>
+                <svg class="connector-line animate-item" style="animation-delay: 4.95s;" width="100" height="40" viewBox="0 0 100 40">
+                    <line x1="0" y1="20" x2="90" y2="20" stroke="#34d399" stroke-width="1.5" stroke-dasharray="5,5"/>
+                    <polygon points="90,20 80,15 80,25" fill="#34d399"/>
+                </svg>
+            </div>
+
+            <!-- 阶段2：记忆保护 - 第6个模块 -->
+            <div class="flow-stage stage-2 animate-item" style="animation-delay: 6.0s;">
+                <div class="stage-header animate-item" style="animation-delay: 6.0s;">
+                    <div class="stage-badge">02</div>
+                    <div class="stage-name">记忆保护模式</div>
+                </div>
+                <div class="stage-content">
+                    <div class="gates-row animate-item" style="animation-delay: 6.15s;">
+                        <div class="gate-box animate-item" style="animation-delay: 6.3s;">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M3 21h18"/>
+                                <path d="M5 21V7l8-4 8 4v14"/>
+                                <path d="M14 9v6"/>
+                            </svg>
+                            <span>遗忘门</span>
+                        </div>
+                        <div class="gate-box animate-item" style="animation-delay: 6.45s;">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 20h9"/>
+                                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                            </svg>
+                            <span>输入门</span>
+                        </div>
+                        <div class="gate-box animate-item" style="animation-delay: 6.6s;">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                            </svg>
+                            <span>输出门</span>
+                        </div>
+                    </div>
+                    <div class="stage-desc-text animate-item" style="animation-delay: 6.75s;">过滤无关内容，保护已存关键信息</div>
+                </div>
+            </div>
+
+            <!-- 阶段3连接器 - 第7个模块 -->
+            <div class="flow-connector animate-item" style="animation-delay: 7.2s;">
+                <span class="connector-label animate-item" style="animation-delay: 7.2s;">精准提取</span>
+                <svg class="connector-line animate-item" style="animation-delay: 7.35s;" width="100" height="40" viewBox="0 0 100 40">
+                    <line x1="0" y1="20" x2="90" y2="20" stroke="#34d399" stroke-width="1.5" stroke-dasharray="5,5"/>
+                    <polygon points="90,20 80,15 80,25" fill="#34d399"/>
+                </svg>
+            </div>
+
+            <!-- 阶段3：精准提取 - 第8个模块 -->
+            <div class="flow-stage stage-3 animate-item" style="animation-delay: 8.4s;">
+                <div class="stage-header animate-item" style="animation-delay: 8.4s;">
+                    <div class="stage-badge">03</div>
+                    <div class="stage-name">精准调取答案</div>
+                </div>
+                <div class="stage-content">
+                    <div class="extract-flow animate-item" style="animation-delay: 8.55s;">
+                        <div class="extract-item animate-item" style="animation-delay: 8.7s;">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"/>
+                                <circle cx="12" cy="12" r="6"/>
+                                <circle cx="12" cy="12" r="2"/>
+                            </svg>
+                            <span>查询</span>
+                        </div>
+                        <svg class="animate-item" style="animation-delay: 8.85s;" width="40" height="20" viewBox="0 0 40 20">
+                            <line x1="0" y1="10" x2="35" y2="10" stroke="#34d399" stroke-width="1.5" stroke-dasharray="3,3"/>
+                            <polygon points="35,10 28,6 28,14" fill="#34d399"/>
+                        </svg>
+                        <div class="extract-result animate-item" style="animation-delay: 9.0s;">
+                            <span class="result-text">桂林</span>
+                            <span class="result-label">答案</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 输出层连接器 - 第9个模块 -->
+            <div class="flow-connector animate-item" style="animation-delay: 9.6s;">
+                <span class="connector-label animate-item" style="animation-delay: 9.6s;">输出</span>
+                <svg class="connector-line animate-item" style="animation-delay: 9.75s;" width="100" height="40" viewBox="0 0 100 40">
+                    <line x1="0" y1="20" x2="90" y2="20" stroke="#34d399" stroke-width="1.5" stroke-dasharray="5,5"/>
+                    <polygon points="90,20 80,15 80,25" fill="#34d399"/>
+                </svg>
+            </div>
+
+            <!-- 输出层 - 第10个模块 -->
+            <div class="flow-layer output-layer animate-item" style="animation-delay: 10.8s;">
+                <div class="layer-label animate-item" style="animation-delay: 10.8s;">OUTPUT LAYER</div>
+                <div class="layer-box animate-item" style="animation-delay: 10.95s;">
+                    <div class="output-item animate-item" style="animation-delay: 11.1s;">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                        <span>正确答案</span>
+                    </div>
+                    <div class="output-text animate-item" style="animation-delay: 11.25s;">「我的故乡在<span class="highlight">桂林</span>」</div>
+                </div>
+            </div>
+
+            <!-- 底部说明 - 第11个模块（最后出现） -->
+            <div class="flow-summary animate-item" style="animation-delay: 12.0s; width: 100%; margin-top: 20px;">
+                <div class="summary-item animate-item" style="animation-delay: 12.0s;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                    <span>关键信息第一时间入库</span>
+                </div>
+                <div class="summary-item animate-item" style="animation-delay: 12.15s;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    </svg>
+                    <span>全程记忆保护不被覆盖</span>
+                </div>
+                <div class="summary-item animate-item" style="animation-delay: 12.3s;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <circle cx="12" cy="12" r="6"/>
+                    </svg>
+                    <span>长距离精准提取答案</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 粒子效果
+        const canvas = document.getElementById('particlesCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        const particles = [];
+        const particleCount = 100;
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 2 + 0.5;
+                this.speedX = (Math.random() - 0.5) * 0.5;
+                this.speedY = (Math.random() - 0.5) * 0.5;
+                this.opacity = Math.random() * 0.5 + 0.1;
+                this.color = `rgba(52, 211, 153, ${this.opacity})`;
+            }
+
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
+                    this.reset();
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        for (let i = 0; i < particleCount; i++) {
+            particles.push(new Particle());
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(particle => {
+                particle.update();
+                particle.draw();
+            });
+            requestAnimationFrame(animateParticles);
+        }
+
+        animateParticles();
+    </script>
+</body>
+</html>

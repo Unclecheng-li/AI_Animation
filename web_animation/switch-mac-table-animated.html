@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>交换机MAC地址表演示</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    
+    <!-- 配置Tailwind自定义颜色 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#12192c',
+                        darker: '#0a0f1c',
+                        'dark-card': '#1e293b',
+                        accent: '#ff2d95', // 粉红色点缀
+                        'accent-light': '#ff66b2',
+                        'port-color': '#38bdf8',
+                        'vlan-color': '#818cf8'
+                    },
+                    fontFamily: {
+                        cyber: ['Orbitron', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .glow {
+                box-shadow: 0 0 15px theme('colors.accent');
+            }
+            .glow-port {
+                box-shadow: 0 0 8px theme('colors.port-color');
+            }
+            .text-glow {
+                text-shadow: 0 0 8px theme('colors.accent-light');
+            }
+            .hex-grid {
+                background-image: 
+                    radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px);
+                background-size: 30px 30px;
+            }
+            .pulse {
+                animation: pulse 2s infinite;
+            }
+            @keyframes pulse {
+                0% { transform: scale(1); }
+                50% { transform: scale(1.05); }
+                100% { transform: scale(1); }
+            }
+            
+            /* 动画相关样式 */
+            .fade-in {
+                opacity: 0;
+                animation: fadeIn 0.8s forwards;
+            }
+            .slide-up {
+                opacity: 0;
+                transform: translateY(20px);
+                animation: slideUp 0.8s forwards;
+            }
+            .slide-in-left {
+                opacity: 0;
+                transform: translateX(-20px);
+                animation: slideInLeft 0.8s forwards;
+            }
+            .slide-in-right {
+                opacity: 0;
+                transform: translateX(20px);
+                animation: slideInRight 0.8s forwards;
+            }
+            .scale-in {
+                opacity: 0;
+                transform: scale(0.95);
+                animation: scaleIn 0.8s forwards;
+            }
+            
+            @keyframes fadeIn {
+                to { opacity: 1; }
+            }
+            @keyframes slideUp {
+                to { 
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+            @keyframes slideInLeft {
+                to { 
+                    opacity: 1;
+                    transform: translateX(0);
+                }
+            }
+            @keyframes slideInRight {
+                to { 
+                    opacity: 1;
+                    transform: translateX(0);
+                }
+            }
+            @keyframes scaleIn {
+                to { 
+                    opacity: 1;
+                    transform: scale(1);
+                }
+            }
+        }
+    </style>
+    
+    <!-- 添加Google字体 -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-darker text-gray-200 min-h-screen hex-grid font-sans">
+    <!-- 页面标题 - 淡入效果 -->
+    <header class="py-6 px-4 md:px-8 border-b border-gray-800 fade-in" style="animation-delay: 0.1s;">
+        <div class="container mx-auto">
+            <h1 class="text-[clamp(1.5rem,3vw,2.5rem)] font-cyber font-bold text-white">
+                <i class="fa fa-exchange mr-3 text-accent"></i>交换机
+                <span class="text-accent text-glow">MAC地址表</span>
+            </h1>
+            <p class="text-gray-400 mt-2">网络设备物理地址映射与转发可视化</p>
+        </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="container mx-auto px-4 md:px-8 py-8">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- 左侧：MAC地址表 - 从左侧滑入 -->
+            <div class="lg:col-span-2 slide-in-left" style="animation-delay: 0.3s;">
+                <div class="bg-dark-card rounded-lg p-5 border border-gray-700 transform transition-all duration-300 hover:border-accent/50 scale-in" style="animation-delay: 0.4s;">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-cyber font-semibold">
+                            <i class="fa fa-table mr-2 text-accent"></i>MAC地址表信息
+                        </h2>
+                        <span class="px-3 py-1 bg-accent/20 text-accent text-sm rounded-full flex items-center">
+                            <span class="inline-block w-2 h-2 bg-accent rounded-full mr-2 pulse"></span>
+                            实时更新
+                        </span>
+                    </div>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-gray-700">
+                                    <th class="py-3 px-4 text-left font-semibold text-gray-300">MAC地址</th>
+                                    <th class="py-3 px-4 text-left font-semibold text-gray-300">VLAN</th>
+                                    <th class="py-3 px-4 text-left font-semibold text-gray-300">端口</th>
+                                    <th class="py-3 px-4 text-left font-semibold text-gray-300">类型</th>
+                                    <th class="py-3 px-4 text-left font-semibold text-gray-300">老化时间</th>
+                                    <th class="py-3 px-4 text-left font-semibold text-gray-300">状态</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr class="border-b border-gray-800 hover:bg-gray-800/30 transition-colors">
+                                    <td class="py-3 px-4 font-mono">00:1A:2B:3C:4D:5E</td>
+                                    <td class="py-3 px-4 text-vlan-color">10</td>
+                                    <td class="py-3 px-4 text-port-color">Gi1/0/1</td>
+                                    <td class="py-3 px-4">动态</td>
+                                    <td class="py-3 px-4">300秒</td>
+                                    <td class="py-3 px-4"><span class="px-2 py-1 bg-green-500/20 text-green-400 rounded-full text-xs">活跃</span></td>
+                                </tr>
+                                <tr class="border-b border-gray-800 hover:bg-gray-800/30 transition-colors">
+                                    <td class="py-3 px-4 font-mono">AA:BB:CC:DD:EE:FF</td>
+                                    <td class="py-3 px-4 text-vlan-color">10</td>
+                                    <td class="py-3 px-4 text-port-color">Gi1/0/2</td>
+                                    <td class="py-3 px-4">动态</td>
+                                    <td class="py-3 px-4">285秒</td>
+                                    <td class="py-3 px-4"><span class="px-2 py-1 bg-green-500/20 text-green-400 rounded-full text-xs">活跃</span></td>
+                                </tr>
+                                <tr class="border-b border-gray-800 hover:bg-gray-800/30 transition-colors">
+                                    <td class="py-3 px-4 font-mono">11:22:33:44:55:66</td>
+                                    <td class="py-3 px-4 text-vlan-color">20</td>
+                                    <td class="py-3 px-4 text-port-color">Gi1/0/3</td>
+                                    <td class="py-3 px-4">动态</td>
+                                    <td class="py-3 px-4">120秒</td>
+                                    <td class="py-3 px-4"><span class="px-2 py-1 bg-green-500/20 text-green-400 rounded-full text-xs">活跃</span></td>
+                                </tr>
+                                <tr class="border-b border-gray-800 hover:bg-gray-800/30 transition-colors">
+                                    <td class="py-3 px-4 font-mono">FF:EE:DD:CC:BB:AA</td>
+                                    <td class="py-3 px-4 text-vlan-color">10</td>
+                                    <td class="py-3 px-4 text-port-color">Gi1/0/4</td>
+                                    <td class="py-3 px-4">静态</td>
+                                    <td class="py-3 px-4">-</td>
+                                    <td class="py-3 px-4"><span class="px-2 py-1 bg-accent/20 text-accent rounded-full text-xs">永久</span></td>
+                                </tr>
+                                <tr class="hover:bg-gray-800/30 transition-colors">
+                                    <td class="py-3 px-4 font-mono">AB:CD:EF:12:34:56</td>
+                                    <td class="py-3 px-4 text-vlan-color">30</td>
+                                    <td class="py-3 px-4 text-port-color">Gi1/0/5</td>
+                                    <td class="py-3 px-4">动态</td>
+                                    <td class="py-3 px-4">5秒</td>
+                                    <td class="py-3 px-4"><span class="px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded-full text-xs">即将老化</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 右侧：交换机端口与连接可视化 - 从右侧滑入 -->
+            <div class="lg:col-span-1 slide-in-right" style="animation-delay: 0.5s;">
+                <div class="bg-dark-card rounded-lg p-5 border border-gray-700 h-full transform transition-all duration-300 hover:border-accent/50 scale-in" style="animation-delay: 0.6s;">
+                    <h2 class="text-xl font-cyber font-semibold mb-6">
+                        <i class="fa fa-sitemap mr-2 text-accent"></i>交换机端口映射
+                    </h2>
+                    
+                    <!-- 交换机与设备连接SVG图 -->
+                    <div class="w-full h-[350px] relative opacity-0" id="switch-svg-container">
+                        <svg class="w-full h-full" viewBox="0 0 400 350">
+                            <!-- 背景网格 -->
+                            <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                                <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#374151" stroke-width="0.5"/>
+                            </pattern>
+                            <rect width="100%" height="100%" fill="url(#grid)" />
+                            
+                            <!-- 连接线 -->
+                            <path d="M 200,150 L 100,250" stroke="#64748b" stroke-width="2" />
+                            <path d="M 200,170 L 100,250" stroke="#64748b" stroke-width="2" />
+                            <path d="M 200,190 L 300,250" stroke="#64748b" stroke-width="2" />
+                            <path d="M 200,210 L 300,250" stroke="#64748b" stroke-width="2" />
+                            <path d="M 200,230 L 200,300" stroke="#64748b" stroke-width="2" />
+                            
+                            <!-- 数据流动画 -->
+                            <circle id="packet1" cx="200" cy="150" r="3" fill="#ff2d95">
+                                <animate attributeName="cx" from="200" to="100" dur="2.5s" repeatCount="indefinite" />
+                                <animate attributeName="cy" from="150" to="250" dur="2.5s" repeatCount="indefinite" />
+                            </circle>
+                            <circle id="packet2" cx="100" cy="250" r="3" fill="#38bdf8">
+                                <animate attributeName="cx" from="100" to="200" dur="3s" begin="1s" repeatCount="indefinite" />
+                                <animate attributeName="cy" from="250" to="170" dur="3s" begin="1s" repeatCount="indefinite" />
+                            </circle>
+                            <circle id="packet3" cx="300" cy="250" r="3" fill="#38bdf8">
+                                <animate attributeName="cx" from="300" to="200" dur="4s" begin="0.5s" repeatCount="indefinite" />
+                                <animate attributeName="cy" from="250" to="190" dur="4s" begin="0.5s" repeatCount="indefinite" />
+                            </circle>
+                            
+                            <!-- 交换机 -->
+                            <g transform="translate(200, 200)">
+                                <rect x="-100" y="-80" width="200" height="120" rx="5" fill="#1e293b" stroke="#ff2d95" stroke-width="2" class="glow" />
+                                <text x="0" y="-50" text-anchor="middle" fill="white" font-size="14" font-family="Orbitron">Switch</text>
+                                <text x="0" y="-30" text-anchor="middle" fill="#ff2d95" font-size="12">SW-01</text>
+                                
+                                <!-- 交换机端口 -->
+                                <g class="port-labels">
+                                    <text x="-100" y="-10" text-anchor="end" fill="#38bdf8" font-size="10">Gi1/0/1</text>
+                                    <text x="-100" y="10" text-anchor="end" fill="#38bdf8" font-size="10">Gi1/0/2</text>
+                                    <text x="-100" y="30" text-anchor="end" fill="#38bdf8" font-size="10">Gi1/0/3</text>
+                                    <text x="-100" y="50" text-anchor="end" fill="#38bdf8" font-size="10">Gi1/0/4</text>
+                                    
+                                    <!-- 端口指示点 -->
+                                    <circle cx="-105" cy="-10" r="3" fill="#38bdf8" class="glow-port" />
+                                    <circle cx="-105" cy="10" r="3" fill="#38bdf8" class="glow-port" />
+                                    <circle cx="-105" cy="30" r="3" fill="#38bdf8" class="glow-port" />
+                                    <circle cx="-105" cy="50" r="3" fill="#38bdf8" class="glow-port" />
+                                </g>
+                            </g>
+                            
+                            <!-- 连接的设备1 -->
+                            <g transform="translate(100, 250)">
+                                <rect x="-40" y="-25" width="80" height="50" rx="5" fill="#1e293b" stroke="#38bdf8" stroke-width="2" />
+                                <text x="0" y="0" text-anchor="middle" fill="white" font-size="10">PC Workstation</text>
+                                <text x="0" y="18" text-anchor="middle" fill="#ff2d95" font-size="8">00:1A:2B:3C:4D:5E</text>
+                            </g>
+                            
+                            <!-- 连接的设备2 -->
+                            <g transform="translate(300, 250)">
+                                <rect x="-40" y="-25" width="80" height="50" rx="5" fill="#1e293b" stroke="#38bdf8" stroke-width="2" />
+                                <text x="0" y="0" text-anchor="middle" fill="white" font-size="10">Server</text>
+                                <text x="0" y="18" text-anchor="middle" fill="#ff2d95" font-size="8">AA:BB:CC:DD:EE:FF</text>
+                            </g>
+                            
+                            <!-- 连接的设备3 -->
+                            <g transform="translate(200, 300)">
+                                <rect x="-40" y="-20" width="80" height="40" rx="5" fill="#1e293b" stroke="#38bdf8" stroke-width="2" />
+                                <text x="0" y="0" text-anchor="middle" fill="white" font-size="10">IP Phone</text>
+                                <text x="0" y="15" text-anchor="middle" fill="#ff2d95" font-size="8">AB:CD:EF:12:34:56</text>
+                            </g>
+                        </svg>
+                    </div>
+                    
+                    <div class="mt-4 text-sm text-gray-400 opacity-0" id="svg-legend">
+                        <p><i class="fa fa-circle text-accent text-xs mr-2"></i>数据帧流动动画</p>
+                        <p class="mt-1"><i class="fa fa-circle text-port-color text-xs mr-2"></i>交换机端口</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+
+
+    <script>
+        // 初始化图表并添加动画
+        document.addEventListener('DOMContentLoaded', function() {
+            // 表格行逐一出现动画
+            const tableRows = document.querySelectorAll('tbody tr');
+            tableRows.forEach((row, index) => {
+                row.style.opacity = '0';
+                row.style.transform = 'translateX(-10px)';
+                row.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                
+                setTimeout(() => {
+                    row.style.opacity = '1';
+                    row.style.transform = 'translateX(0)';
+                }, 600 + (index * 150));
+            });
+            
+            // SVG容器动画
+            setTimeout(() => {
+                const svgContainer = document.getElementById('switch-svg-container');
+                svgContainer.style.transition = 'opacity 1s ease';
+                svgContainer.style.opacity = '1';
+                
+                // 图例动画
+                setTimeout(() => {
+                    const legend = document.getElementById('svg-legend');
+                    legend.style.transition = 'opacity 0.5s ease';
+                    legend.style.opacity = '1';
+                }, 500);
+            }, 800);
+            
+            // 图表容器动画
+            setTimeout(() => {
+                const vlanChartContainer = document.getElementById('vlan-chart-container');
+                vlanChartContainer.style.transition = 'opacity 0.8s ease';
+                vlanChartContainer.style.opacity = '1';
+                
+                // 初始化VLAN分布图表
+                const vlanCtx = document.getElementById('vlanChart').getContext('2d');
+                new Chart(vlanCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['VLAN 10', 'VLAN 20', 'VLAN 30'],
+                        datasets: [{
+                            data: [12, 5, 3],
+                            backgroundColor: [
+                                '#818cf8',  // VLAN颜色
+                                '#60a5fa',
+                                '#38bdf8'
+                            ],
+                            borderColor: '#1e293b',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: {
+                            animateScale: true,
+                            animateRotate: true,
+                            duration: 2000
+                        },
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    color: '#e2e8f0',
+                                    font: {
+                                        family: 'Orbitron'
+                                    }
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: 'MAC地址按VLAN分布',
+                                color: '#e2e8f0',
+                                font: {
+                                    family: 'Orbitron'
+                                }
+                            }
+                        }
+                    }
+                });
+                
+                // 类型图表容器动画
+                setTimeout(() => {
+                    const typeChartContainer = document.getElementById('type-chart-container');
+                    typeChartContainer.style.transition = 'opacity 0.8s ease';
+                    typeChartContainer.style.opacity = '1';
+                    
+                    // 初始化类型分布图表
+                    const typeCtx = document.getElementById('typeChart').getContext('2d');
+                    new Chart(typeCtx, {
+                        type: 'bar',
+                        data: {
+                            labels: ['动态地址', '静态地址'],
+                            datasets: [{
+                                label: '数量',
+                                data: [18, 4],
+                                backgroundColor: [
+                                    '#38bdf8',
+                                    '#ff2d95'
+                                ],
+                                borderColor: '#1e293b',
+                                borderWidth: 2
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            animation: {
+                                duration: 2000
+                            },
+                            plugins: {
+                                legend: {
+                                    display: false
+                                },
+                                title: {
+                                    display: true,
+                                    text: 'MAC地址类型分布',
+                                    color: '#e2e8f0',
+                                    font: {
+                                        family: 'Orbitron'
+                                    }
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    grid: {
+                                        color: 'rgba(255, 255, 255, 0.1)'
+                                    },
+                                    ticks: {
+                                        color: '#94a3b8'
+                                    }
+                                },
+                                x: {
+                                    grid: {
+                                        display: false
+                                    },
+                                    ticks: {
+                                        color: '#94a3b8'
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }, 500);
+            }, 1000);
+            
+            // 老化时间倒计时效果
+            setInterval(() => {
+                const timerCells = document.querySelectorAll('tbody tr td:nth-child(5)');
+                timerCells.forEach((cell, index) => {
+                    // 只处理动态地址的老化时间
+                    if (index !== 3) {
+                        let time = parseInt(cell.textContent);
+                        if (time > 0) {
+                            cell.textContent = `${time - 1}秒`;
+                            
+                            // 最后10秒添加警告效果
+                            if (time <= 10) {
+                                cell.classList.add('text-yellow-400');
+                            } else {
+                                cell.classList.remove('text-yellow-400');
+                            }
+                        } else if (time === 0) {
+                            // 时间到，移除该行
+                            const row = cell.closest('tr');
+                            row.style.opacity = '0';
+                            row.style.transform = 'translateX(-10px)';
+                            setTimeout(() => row.remove(), 300);
+                        }
+                    }
+                });
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
+    

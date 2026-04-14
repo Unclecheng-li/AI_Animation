@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>护栏四：熵管理 Entropy Management</title>
+<link href="https://cdn.jsdelivr.net/npm/remixicon@4.1.0/fonts/remixicon.css" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap');
+
+  body {
+    font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+    background: #0F0E17;
+    color: #FFFFFE;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+  }
+
+  :root {
+    --accent: #06B6D4;
+    --accent2: #22D3EE;
+    --accent3: #67E8F9;
+    --accent-glow: rgba(6, 182, 212, 0.3);
+    --green: #10B981;
+    --red: #EF4444;
+    --dark: #0F0E17;
+    --dark2: #1A1932;
+    --gray: #A7A9BE;
+    --light: #FFFFFE;
+  }
+
+  .slide-container { width: 100vw; height: 100vh; position: relative; }
+
+  .slide {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    padding: 60px 80px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.6s ease;
+    overflow: hidden;
+  }
+  .slide.active { opacity: 1; pointer-events: auto; }
+
+  /* Animations */
+  .slide .anim {
+    opacity: 0; transform: translateY(40px);
+    transition: opacity 0.7s cubic-bezier(.23,1,.32,1), transform 0.7s cubic-bezier(.23,1,.32,1);
+  }
+  .slide.active .anim.show { opacity: 1; transform: translateY(0); }
+
+  /* ===== 浮动粒子 ===== */
+  .particle {
+    position: absolute; border-radius: 50%; pointer-events: none; opacity: 0;
+    animation: particleFloat 7s ease-in-out infinite;
+  }
+  @keyframes particleFloat {
+    0%,100%{opacity:0;transform:translateY(0) scale(0.5);}
+    25%{opacity:0.5;} 50%{opacity:0.25;transform:translateY(-50px) scale(1);} 75%{opacity:0.4;}
+  }
+
+  /* ===== 装饰圆 ===== */
+  .deco-circle { position: absolute; border-radius: 50%; opacity: 0.06; pointer-events: none; }
+  .dc1 { width: 400px; height: 400px; background: #06B6D4; top: -100px; right: -100px; }
+  .dc2 { width: 300px; height: 300px; background: #22D3EE; bottom: -80px; left: -80px; }
+  .dc3 { width: 200px; height: 200px; background: #06B6D4; top: 50%; left: -60px; }
+
+  /* ===== 浮动图标 ===== */
+  .float-icon {
+    position: absolute; opacity: 0.05; pointer-events: none;
+    font-size: 100px; color: #06B6D4;
+    animation: floatY 8s ease-in-out infinite;
+  }
+  @keyframes floatY { 0%,100%{transform:translateY(0);}50%{transform:translateY(-20px);} }
+
+  /* ===== 闪光文字 ===== */
+  @keyframes shimmer { 0%{background-position:-200% center;}100%{background-position:200% center;} }
+  .shimmer-text {
+    background: linear-gradient(90deg, #06B6D4, #22D3EE, #06B6D4, #0EA5E9, #06B6D4);
+    background-size: 200% auto;
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text; animation: shimmer 4s linear infinite;
+  }
+
+  /* ===== 脉冲环 ===== */
+  @keyframes pulseRing {
+    0%,100%{transform:scale(1);opacity:0.5;} 50%{transform:scale(1.3);opacity:0;}
+  }
+
+  /* ===== 通用样式 ===== */
+  .hl { font-weight: 700; color: #06B6D4; }
+  .ul { text-decoration: underline; text-decoration-color: #06B6D4; text-underline-offset: 4px; text-decoration-thickness: 3px; }
+  .bold { font-weight: 800; }
+  .bg-pink { background: linear-gradient(transparent 55%, rgba(6,182,212,0.2) 55%); padding: 0 4px; }
+
+  /* ===================== SLIDE 1 — 封面 ===================== */
+  .slide-1 {
+    background: radial-gradient(ellipse at 50% 30%, #1A1932 0%, #0F0E17 100%);
+    text-align: center;
+  }
+
+  .s1-tag-row {
+    display: flex; gap: 16px; margin-bottom: 24px;
+  }
+  .s1-tag {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(6,182,212,0.08); border: 2px solid rgba(6,182,212,0.2); border-radius: 40px;
+    padding: 8px 20px; font-size: 16px; font-weight: 700; color: #22D3EE;
+    transition: transform 0.3s, box-shadow 0.3s;
+  }
+  .s1-tag:hover { transform: translateY(-3px); box-shadow: 0 6px 18px rgba(6,182,212,0.12); }
+
+  .slide-1 .badge {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: linear-gradient(135deg, #06B6D4, #0EA5E9);
+    color: #fff; padding: 10px 28px; border-radius: 30px;
+    font-size: 22px; font-weight: 700; margin-bottom: 24px;
+    letter-spacing: 2px;
+    box-shadow: 0 4px 20px rgba(6,182,212,0.3);
+    animation: badgePulse 3s ease-in-out infinite;
+  }
+  @keyframes badgePulse {
+    0%,100%{box-shadow:0 4px 20px rgba(6,182,212,0.3);}
+    50%{box-shadow:0 6px 36px rgba(6,182,212,0.5);}
+  }
+  .slide-1 .badge i { font-size: 26px; }
+
+  .slide-1 .main-title {
+    font-size: 78px; font-weight: 900; color: #FFFFFE;
+    margin-bottom: 12px; text-align: center; line-height: 1.2;
+  }
+  .slide-1 .main-title span.highlight {
+    color: #06B6D4; text-decoration: underline;
+    text-decoration-color: rgba(6,182,212,0.3); text-underline-offset: 8px; text-decoration-thickness: 4px;
+  }
+  .slide-1 .en-title {
+    font-size: 36px; color: #A7A9BE; font-weight: 700; margin-bottom: 12px;
+    letter-spacing: 4px;
+  }
+  .slide-1 .subtitle {
+    font-size: 28px; color: #A7A9BE; margin-bottom: 30px;
+  }
+  .slide-1 .deco-line {
+    width: 120px; height: 5px;
+    background: linear-gradient(90deg, #06B6D4, #22D3EE);
+    border-radius: 3px; margin: 0 auto 30px;
+  }
+
+  .slide-1 .icon-row {
+    display: flex; gap: 36px; margin-top: 16px;
+  }
+  .slide-1 .icon-item {
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    transition: transform 0.3s;
+  }
+  .slide-1 .icon-item:hover { transform: translateY(-6px); }
+  .slide-1 .icon-circle {
+    width: 80px; height: 80px; border-radius: 50%;
+    background: rgba(255,255,255,0.04); display: flex; align-items: center; justify-content: center;
+    font-size: 36px; color: #06B6D4;
+    box-shadow: 0 4px 16px rgba(6,182,212,0.15);
+    border: 2px solid rgba(6,182,212,0.2); position: relative;
+  }
+  .slide-1 .icon-circle::after {
+    content: ''; position: absolute; width: 100%; height: 100%;
+    border-radius: 50%; border: 2px solid #06B6D4; opacity: 0;
+    animation: iconPulse 3s ease-in-out infinite;
+  }
+  .slide-1 .icon-item:nth-child(1) .icon-circle::after { animation-delay: 0s; }
+  .slide-1 .icon-item:nth-child(2) .icon-circle::after { animation-delay: 0.7s; }
+  .slide-1 .icon-item:nth-child(3) .icon-circle::after { animation-delay: 1.4s; }
+  .slide-1 .icon-item:nth-child(4) .icon-circle::after { animation-delay: 2.1s; }
+  @keyframes iconPulse {
+    0%,100%{transform:scale(1);opacity:0;}20%{opacity:0.4;}50%{transform:scale(1.4);opacity:0;}
+  }
+  .slide-1 .icon-label { font-size: 18px; color: #A7A9BE; font-weight: 700; }
+
+  /* 封面装饰SVG */
+  .s1-deco-svg {
+    position: absolute; opacity: 0.07; pointer-events: none;
+  }
+  .s1-deco-left { left: 40px; top: 50%; transform: translateY(-50%); }
+  .s1-deco-right { right: 40px; top: 50%; transform: translateY(-50%); }
+
+  /* ===================== SLIDE 2 — 问题 ===================== */
+  .slide-2 {
+    background: radial-gradient(ellipse at 30% 60%, #1A1932 0%, #0F0E17 100%);
+    padding: 50px 80px;
+  }
+  .slide-2 h2 {
+    font-size: 48px; font-weight: 900; color: #FFFFFE;
+    margin-bottom: 40px; display: flex; align-items: center; gap: 16px;
+  }
+  .slide-2 h2 i { font-size: 44px; color: #06B6D4; }
+  .slide-2 h2 .hl { color: #06B6D4; text-decoration: underline; text-underline-offset: 6px; }
+
+  .s2-layout {
+    display: flex; gap: 50px; align-items: center; width: 100%; max-width: 1200px;
+  }
+
+  /* 熵可视化 - 增强版 */
+  .entropy-visual-enhanced {
+    flex: 1; display: flex; justify-content: center; align-items: center;
+    position: relative; min-height: 380px;
+  }
+
+  /* 带动画的SVG熵图 */
+  .entropy-svg-wrap { position: relative; }
+  .entropy-growth-bar {
+    position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: flex-end; gap: 8px; height: 80px;
+  }
+  .entropy-bar-item {
+    width: 28px; border-radius: 6px 6px 0 0;
+    transition: height 1.5s cubic-bezier(.23,1,.32,1);
+    position: relative;
+  }
+  .entropy-bar-item span {
+    position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
+    font-size: 11px; font-weight: 700; color: #06B6D4; white-space: nowrap;
+  }
+
+  .s2-text-panel {
+    flex: 1; display: flex; flex-direction: column; gap: 16px;
+  }
+
+  .problem-card {
+    display: flex; align-items: center; gap: 16px;
+    font-size: 26px; font-weight: 700; color: #FFFFFE;
+    padding: 18px 24px; border-radius: 18px;
+    background: rgba(255,255,255,0.04); box-shadow: 0 3px 16px rgba(6,182,212,0.06);
+    border-left: 5px solid #06B6D4;
+    transition: transform 0.3s, box-shadow 0.3s;
+  }
+  .problem-card:hover { transform: translateX(6px); box-shadow: 0 6px 24px rgba(6,182,212,0.1); }
+  .problem-card i { color: #06B6D4; font-size: 28px; flex-shrink: 0; }
+  .problem-card .em-text { color: #06B6D4; font-weight: 900; text-decoration: underline; text-underline-offset: 4px; }
+
+  .problem-card.accent {
+    border-left-color: #22D3EE; background: rgba(6,182,212,0.08);
+    border: 2px solid rgba(6,182,212,0.15); border-left: 5px solid #22D3EE;
+  }
+
+  /* 熵增长趋势线 */
+  .entropy-trend {
+    margin-top: 16px; background: rgba(255,255,255,0.04); border-radius: 16px;
+    padding: 16px 20px; box-shadow: 0 2px 12px rgba(6,182,212,0.06);
+    border: 1px solid rgba(6,182,212,0.1);
+  }
+  .entropy-trend-label {
+    font-size: 14px; font-weight: 700; color: #A7A9BE; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .entropy-trend-label i { font-size: 16px; color: #06B6D4; }
+
+  /* ===================== SLIDE 3 — 垃圾回收 ===================== */
+  .slide-3 {
+    background: radial-gradient(ellipse at 70% 40%, #1A1932 0%, #0F0E17 100%);
+    padding: 50px 70px;
+  }
+  .slide-3 h2 {
+    font-size: 46px; font-weight: 900; color: #FFFFFE;
+    margin-bottom: 10px; display: flex; align-items: center; gap: 16px;
+  }
+  .slide-3 h2 i { color: #06B6D4; }
+  .slide-3 h2 .brand { color: #06B6D4; }
+  .slide-3 .section-sub {
+    font-size: 24px; color: #A7A9BE; margin-bottom: 40px; text-align: center;
+  }
+
+  /* 增强版流程 */
+  .flow-pipeline {
+    display: flex; align-items: center; gap: 0; width: 100%; max-width: 1200px;
+    justify-content: center; position: relative; margin-bottom: 36px;
+  }
+  /* 连接管道 */
+  .flow-pipeline::before {
+    content: ''; position: absolute; top: 55px;
+    left: 100px; right: 100px; height: 4px;
+    background: linear-gradient(90deg, #06B6D4, #22D3EE, #67E8F9, #06B6D4);
+    border-radius: 2px; z-index: 0; opacity: 0.2;
+  }
+
+  .flow-card {
+    flex: 1; max-width: 220px; background: rgba(255,255,255,0.04); border-radius: 22px;
+    padding: 28px 20px 24px; text-align: center; position: relative; z-index: 1;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    border: 2px solid transparent;
+    transition: border-color 0.3s, transform 0.3s, box-shadow 0.3s;
+  }
+  .flow-card:hover { border-color: #06B6D4; transform: translateY(-8px); box-shadow: 0 10px 30px rgba(6,182,212,0.12); }
+
+  .flow-card .fc-num {
+    position: absolute; top: -16px; left: 50%; transform: translateX(-50%);
+    width: 36px; height: 36px; border-radius: 50%;
+    font-size: 18px; font-weight: 900; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+  }
+  .flow-card:nth-child(1) .fc-num { background: #06B6D4; }
+  .flow-card:nth-child(3) .fc-num { background: #0EA5E9; }
+  .flow-card:nth-child(5) .fc-num { background: #22D3EE; }
+  .flow-card:nth-child(7) .fc-num { background: #67E8F9; }
+
+  .flow-card .fc-icon {
+    width: 76px; height: 76px; border-radius: 50%;
+    margin: 10px auto 14px; display: flex; align-items: center;
+    justify-content: center; font-size: 36px; position: relative;
+  }
+  .flow-card:nth-child(1) .fc-icon { background: linear-gradient(135deg, rgba(6,182,212,0.1), rgba(14,165,233,0.08)); color: #06B6D4; }
+  .flow-card:nth-child(3) .fc-icon { background: linear-gradient(135deg, rgba(14,165,233,0.1), rgba(34,211,238,0.08)); color: #0EA5E9; }
+  .flow-card:nth-child(5) .fc-icon { background: linear-gradient(135deg, rgba(34,211,238,0.1), rgba(103,232,249,0.08)); color: #22D3EE; }
+  .flow-card:nth-child(7) .fc-icon { background: linear-gradient(135deg, rgba(16,185,129,0.1), rgba(52,211,153,0.08)); color: #10B981; }
+
+  .flow-card .fc-icon::after {
+    content: ''; position: absolute; width: 100%; height: 100%;
+    border-radius: 50%; border: 2px solid currentColor; opacity: 0;
+    animation: stepPulse 3s ease-in-out infinite;
+  }
+  .flow-card:nth-child(1) .fc-icon::after { animation-delay: 0s; }
+  .flow-card:nth-child(3) .fc-icon::after { animation-delay: 0.7s; }
+  .flow-card:nth-child(5) .fc-icon::after { animation-delay: 1.4s; }
+  .flow-card:nth-child(7) .fc-icon::after { animation-delay: 2.1s; }
+  @keyframes stepPulse {
+    0%,100%{transform:scale(1);opacity:0;}20%{opacity:0.4;}50%{transform:scale(1.35);opacity:0;}
+  }
+
+  .flow-card h4 { font-size: 24px; font-weight: 800; color: #06B6D4; margin-bottom: 4px; }
+  .flow-card:nth-child(7) h4 { color: #10B981; }
+  .flow-card p { font-size: 16px; color: #A7A9BE; line-height: 1.5; }
+
+  .flow-arrow {
+    font-size: 30px; color: rgba(6,182,212,0.3); flex-shrink: 0; margin: 0 4px; z-index: 1;
+    animation: arrowPulse 2s ease-in-out infinite;
+  }
+  @keyframes arrowPulse {
+    0%,100%{opacity:0.4;transform:translateX(0);}50%{opacity:1;transform:translateX(4px);}
+  }
+
+  /* 数据包沿管道移动 */
+  .pipeline-packet {
+    position: absolute; top: 51px; width: 12px; height: 12px;
+    border-radius: 50%; background: #06B6D4; z-index: 3;
+    animation: packetMove 4.5s ease-in-out infinite;
+    box-shadow: 0 0 10px rgba(6,182,212,0.5);
+  }
+  @keyframes packetMove {
+    0%{left:100px;opacity:0;} 10%{opacity:1;} 90%{opacity:1;} 100%{left:calc(100% - 100px);opacity:0;}
+  }
+
+  .highlight-box {
+    display: flex; align-items: center; gap: 16px;
+    background: linear-gradient(90deg, rgba(6,182,212,0.08), rgba(34,211,238,0.04));
+    border: 2px solid rgba(6,182,212,0.2); border-radius: 20px;
+    padding: 22px 36px; font-size: 28px; font-weight: 700; color: #FFFFFE;
+    box-shadow: 0 4px 16px rgba(6,182,212,0.06);
+  }
+  .highlight-box i { font-size: 32px; color: #06B6D4; }
+  .highlight-box .time-tag {
+    background: #06B6D4; color: #fff;
+    padding: 4px 16px; border-radius: 8px;
+    font-size: 24px; font-weight: 900; margin: 0 4px;
+  }
+
+  /* 对比小图 */
+  .s3-before-after {
+    display: flex; gap: 30px; margin-top: 24px; justify-content: center;
+  }
+  .ba-card {
+    background: rgba(255,255,255,0.04); border-radius: 16px; padding: 16px 24px;
+    border: 2px solid rgba(6,182,212,0.15); min-width: 200px; text-align: center;
+    transition: transform 0.3s;
+  }
+  .ba-card:hover { transform: translateY(-4px); }
+  .ba-card.after { border-color: #10B981; background: rgba(16,185,129,0.08); }
+  .ba-card .ba-label { font-size: 14px; color: #A7A9BE; font-weight: 700; margin-bottom: 8px; }
+  .ba-card .ba-icon { font-size: 40px; margin-bottom: 6px; }
+  .ba-card .ba-text { font-size: 18px; font-weight: 800; }
+  .ba-card .ba-text.red { color: #EF4444; }
+  .ba-card .ba-text.green { color: #10B981; }
+  .ba-arrow { display: flex; align-items: center; font-size: 32px; color: #06B6D4; }
+
+  /* ===================== SLIDE 4 — Doc-gardening ===================== */
+  .slide-4 {
+    background: radial-gradient(ellipse at 40% 70%, #1A1932 0%, #0F0E17 100%);
+    padding: 50px 70px;
+  }
+  .slide-4 h2 {
+    font-size: 46px; font-weight: 900; color: #FFFFFE;
+    margin-bottom: 8px; display: flex; align-items: center; gap: 16px;
+  }
+  .slide-4 h2 i { color: #06B6D4; }
+  .slide-4 h2 .accent { color: #06B6D4; }
+  .slide-4 .section-sub {
+    font-size: 22px; color: #A7A9BE; margin-bottom: 36px; text-align: center;
+  }
+
+  .s4-layout {
+    display: flex; gap: 50px; align-items: center; width: 100%; max-width: 1200px;
+  }
+  .s4-left { flex: 1.1; display: flex; justify-content: center; }
+  .s4-right { flex: 0.9; display: flex; flex-direction: column; gap: 16px; }
+
+  /* Agent 扫描可视化 SVG */
+  .garden-svg-wrap { width: 380px; height: 380px; }
+
+  .garden-step {
+    display: flex; align-items: center; gap: 16px;
+    padding: 18px 22px; background: rgba(6,182,212,0.06); border-radius: 16px;
+    border-left: 5px solid #06B6D4; font-size: 24px; font-weight: 700; color: #FFFFFE;
+    transition: transform 0.3s, box-shadow 0.3s;
+  }
+  .garden-step:hover { transform: translateX(6px); box-shadow: 0 4px 16px rgba(6,182,212,0.08); }
+  .garden-step .step-num {
+    width: 40px; height: 40px; background: #06B6D4; color: #fff;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 20px; font-weight: 900; flex-shrink: 0;
+  }
+  .garden-step .em { color: #06B6D4; font-weight: 900; }
+
+  /* ===================== SLIDE 5 — 总结 ===================== */
+  .slide-5 {
+    background: radial-gradient(ellipse at 50% 50%, #1A1932 0%, #0F0E17 100%);
+    padding: 50px 80px; text-align: center;
+  }
+
+  .slide-5 .final-icon {
+    width: 120px; height: 120px;
+    background: linear-gradient(135deg, #06B6D4, #22D3EE);
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 56px; color: #fff; margin: 0 auto 28px;
+    box-shadow: 0 10px 40px rgba(6,182,212,0.3);
+    position: relative;
+  }
+  .slide-5 .final-icon::after {
+    content: ''; position: absolute; width: calc(100% + 20px); height: calc(100% + 20px);
+    border-radius: 50%; border: 3px dashed rgba(6,182,212,0.2);
+    animation: ringRotate 15s linear infinite;
+  }
+  @keyframes ringRotate { 0%{transform:rotate(0deg);}100%{transform:rotate(360deg);} }
+
+  .slide-5 .final-title {
+    font-size: 56px; font-weight: 900; color: #FFFFFE;
+    margin-bottom: 16px; line-height: 1.3;
+  }
+  .slide-5 .final-title .pink { color: #06B6D4; }
+
+  .slide-5 .final-quote {
+    font-size: 32px; font-weight: 700; color: #06B6D4;
+    margin-bottom: 40px; padding: 18px 40px;
+    background: rgba(255,255,255,0.04); border-radius: 20px;
+    display: inline-block; border: 2px solid rgba(6,182,212,0.2);
+  }
+
+  /* 增强版循环图 */
+  .loop-flow-enhanced {
+    display: flex; align-items: center; justify-content: center;
+    gap: 6px; position: relative; flex-wrap: wrap;
+  }
+  .loop-node {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    padding: 18px 24px; background: rgba(255,255,255,0.04); border-radius: 20px;
+    box-shadow: 0 4px 20px rgba(6,182,212,0.08);
+    border: 2px solid rgba(6,182,212,0.15); min-width: 140px;
+    transition: transform 0.3s, box-shadow 0.3s;
+  }
+  .loop-node:hover { transform: translateY(-6px); box-shadow: 0 8px 28px rgba(6,182,212,0.14); }
+  .loop-node i { font-size: 40px; color: #06B6D4; }
+  .loop-node span { font-size: 20px; font-weight: 900; color: #FFFFFE; }
+  .loop-node.special {
+    border-color: #06B6D4; background: linear-gradient(135deg, rgba(6,182,212,0.1), rgba(34,211,238,0.06));
+    box-shadow: 0 4px 20px rgba(6,182,212,0.15);
+  }
+  .loop-node.special span { color: #06B6D4; }
+
+  .loop-connector {
+    font-size: 32px; color: #06B6D4; flex-shrink: 0;
+    animation: connectorPulse 2s ease-in-out infinite;
+  }
+  @keyframes connectorPulse {
+    0%,100%{opacity:0.4;transform:translateX(0);}50%{opacity:1;transform:translateX(3px);}
+  }
+
+  .loop-return-label {
+    margin-top: 20px; display: inline-flex; align-items: center; gap: 10px;
+    background: rgba(6,182,212,0.08); border: 2px dashed #06B6D4; border-radius: 40px;
+    padding: 10px 28px; font-size: 20px; font-weight: 700; color: #06B6D4;
+  }
+  .loop-return-label i { font-size: 24px; }
+
+  /* 底部三个关键词 */
+  .summary-pills {
+    display: flex; gap: 24px; justify-content: center; margin-top: 24px;
+  }
+  .summary-pill {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: rgba(255,255,255,0.04); border: 2px solid rgba(6,182,212,0.2); border-radius: 50px;
+    padding: 10px 28px; font-size: 18px; font-weight: 700; color: #06B6D4;
+    transition: transform 0.3s, box-shadow 0.3s;
+  }
+  .summary-pill:hover { transform: translateY(-4px); box-shadow: 0 6px 20px rgba(6,182,212,0.12); }
+  .summary-pill i { font-size: 20px; }
+
+  /* ========== 二次元颜文字样式 ========== */
+  .kaomoji {
+    display: inline-block;
+    font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+    font-weight: 700;
+    letter-spacing: 1px;
+    vertical-align: middle;
+  }
+  .kmo-small { font-size: 1.1rem; }
+  .kmo-mid { font-size: 1.5rem; }
+  .kmo-big { font-size: 2rem; }
+  .kmo-huge { font-size: 2.8rem; }
+
+  /* 颜色 - 与页面青绿主题协调 */
+  .kmo-pink { color: #06B6D4; }
+  .kmo-rose { color: #0EA5E9; }
+  .kmo-light { color: #22D3EE; }
+  .kmo-green { color: #10B981; }
+  .kmo-purple { color: #8B5CF6; }
+  .kmo-orange { color: #F59E0B; }
+
+  /* 动画效果 */
+  .kmo-bounce { animation: kmoBounce 2s ease-in-out infinite; }
+  .kmo-float { animation: kmoFloat 3s ease-in-out infinite; }
+  .kmo-wiggle { animation: kmoWiggle 1.2s ease-in-out infinite; }
+  .kmo-pulse { animation: kmoPulse 1.5s ease-in-out infinite; }
+  .kmo-shake { animation: kmoShake 0.8s ease-in-out infinite; }
+
+  @keyframes kmoBounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+  }
+  @keyframes kmoFloat {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-6px) rotate(3deg); }
+  }
+  @keyframes kmoWiggle {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-5deg); }
+    75% { transform: rotate(5deg); }
+  }
+  @keyframes kmoPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+  }
+  @keyframes kmoShake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-3px); }
+    75% { transform: translateX(3px); }
+  }
+</style>
+</head>
+<body>
+
+
+
+<div class="slide-container">
+
+  <!-- ===================== SLIDE 1: 封面 ===================== -->
+  <div class="slide slide-1 active" data-slide="0">
+
+    <div class="deco-circle dc1"></div>
+    <div class="deco-circle dc2"></div>
+    <div class="deco-circle dc3"></div>
+
+    <!-- 浮动粒子 -->
+    <div class="particle" style="width:8px;height:8px;background:#06B6D4;top:18%;left:12%;animation-delay:0s;"></div>
+    <div class="particle" style="width:6px;height:6px;background:#22D3EE;top:35%;right:18%;animation-delay:1.5s;"></div>
+    <div class="particle" style="width:10px;height:10px;background:#0EA5E9;bottom:25%;left:22%;animation-delay:3s;"></div>
+    <div class="particle" style="width:7px;height:7px;background:#67E8F9;top:65%;right:28%;animation-delay:4.5s;"></div>
+
+    <!-- 左侧装饰SVG - 熵增可视化 -->
+    <div class="s1-deco-svg s1-deco-left">
+      <svg width="160" height="200" viewBox="0 0 100 130" fill="none">
+        <rect x="10" y="10" width="80" height="110" rx="12" fill="#06B6D4" opacity="0.3"/>
+        <!-- 柱状图表示熵增长 -->
+        <rect x="20" y="85" width="12" height="25" rx="3" fill="#06B6D4" opacity="0.5"/>
+        <rect x="36" y="70" width="12" height="40" rx="3" fill="#06B6D4" opacity="0.5"/>
+        <rect x="52" y="50" width="12" height="60" rx="3" fill="#06B6D4" opacity="0.6"/>
+        <rect x="68" y="30" width="12" height="80" rx="3" fill="#06B6D4" opacity="0.7"/>
+        <!-- 趋势线 -->
+        <path d="M26 82 L42 68 L58 48 L74 28" stroke="#06B6D4" stroke-width="2" fill="none" opacity="0.6" stroke-linecap="round"/>
+        <!-- 箭头 -->
+        <polygon points="72,24 78,28 74,32" fill="#06B6D4" opacity="0.6"/>
+        <text x="50" y="22" text-anchor="middle" fill="#06B6D4" font-size="10" font-weight="700" opacity="0.5">Entropy ↑</text>
+      </svg>
+    </div>
+
+    <!-- 右侧装饰SVG - Agent清扫 -->
+    <div class="s1-deco-svg s1-deco-right">
+      <svg width="160" height="200" viewBox="0 0 100 130" fill="none">
+        <circle cx="50" cy="65" r="45" fill="none" stroke="#06B6D4" stroke-width="2" opacity="0.3" stroke-dasharray="6,4"/>
+        <!-- Agent中心 -->
+        <circle cx="50" cy="50" r="18" fill="#06B6D4" opacity="0.3"/>
+        <text x="50" y="55" text-anchor="middle" fill="#fff" font-size="16" opacity="0.8">⚙</text>
+        <!-- 清扫动作线 -->
+        <path d="M50 68L30 90" stroke="#06B6D4" stroke-width="2" opacity="0.4" stroke-dasharray="4,3"/>
+        <path d="M50 68L70 90" stroke="#06B6D4" stroke-width="2" opacity="0.4" stroke-dasharray="4,3"/>
+        <path d="M50 68L50 100" stroke="#06B6D4" stroke-width="2" opacity="0.4" stroke-dasharray="4,3"/>
+        <!-- 被清扫的项 -->
+        <circle cx="30" cy="94" r="6" fill="#06B6D4" opacity="0.2"/>
+        <circle cx="70" cy="94" r="6" fill="#06B6D4" opacity="0.2"/>
+        <circle cx="50" cy="104" r="6" fill="#06B6D4" opacity="0.2"/>
+        <text x="50" y="125" text-anchor="middle" fill="#06B6D4" font-size="9" font-weight="700" opacity="0.4">Sweep</text>
+      </svg>
+    </div>
+
+    <div class="anim s1-tag-row">
+      <div class="s1-tag"><i class="ri-file-damage-line"></i> 文档过时</div>
+      <div class="s1-tag"><i class="ri-building-line"></i> 架构漂移</div>
+      <div class="s1-tag"><i class="ri-paint-brush-line"></i> 风格走样</div>
+      <div class="s1-tag"><i class="ri-recycle-line"></i> 自动清扫</div>
+    </div>
+
+    <div class="anim badge"><i class="ri-shield-check-line"></i> 护栏 GUARDRAIL 4</div>
+    <div class="anim main-title"><span class="highlight shimmer-text">熵管理</span> <span class="kaomoji kmo-mid kmo-pink kmo-wiggle">(｀・ω・´)</span></div>
+    <div class="anim en-title">Entropy Management</div>
+    <div class="anim deco-line"></div>
+    <div class="anim subtitle">用 Agent 对抗代码世界的"热力学第二定律"</div>
+
+    <!-- 颜文字装饰 -->
+    <div class="anim kaomoji kmo-small kmo-light kmo-float" style="position:absolute;top:10%;right:8%">(ﾉ◕ヮ◕)ﾉ</div>
+    <div class="anim kaomoji kmo-small kmo-rose" style="position:absolute;bottom:12%;left:6%">(´-ω-`)</div>
+
+    <div class="anim icon-row">
+      <div class="icon-item">
+        <div class="icon-circle"><i class="ri-file-damage-line"></i></div>
+        <div class="icon-label">文档过时</div>
+      </div>
+      <div class="icon-item">
+        <div class="icon-circle"><i class="ri-building-line"></i></div>
+        <div class="icon-label">架构漂移</div>
+      </div>
+      <div class="icon-item">
+        <div class="icon-circle"><i class="ri-paint-brush-line"></i></div>
+        <div class="icon-label">风格走样</div>
+      </div>
+      <div class="icon-item">
+          <div class="icon-circle"><i class="ri-recycle-line"></i></div>
+          <div class="icon-label">垃圾回收</div>
+        </div>
+      </div>
+
+      <!-- 底部颜文字 -->
+      <div class="anim kaomoji kmo-small kmo-pink kmo-bounce" style="position:absolute;bottom:8%;right:12%">(｡♥‿♥｡)</div>
+    </div>
+
+  <!-- ===================== SLIDE 2: 问题 ===================== -->
+  <div class="slide slide-2" data-slide="1">
+
+    <div class="deco-circle dc1"></div>
+    <div class="float-icon" style="right:20px;bottom:40px;font-size:80px;animation-delay:1s;">
+      <i class="ri-error-warning-line"></i>
+    </div>
+
+    <!-- 颜文字装饰 -->
+    <div class="anim kaomoji kmo-small kmo-rose kmo-float" style="position:absolute;top:10%;left:5%">(；´Д｀)</div>
+    <div class="anim kaomoji kmo-small kmo-pink" style="position:absolute;top:8%;right:8%">(｡ŏ_ŏ)</div>
+
+    <h2 class="anim">
+      <i class="ri-alarm-warning-line"></i> 问题：代码熵在<span class="hl">持续增长</span> <span class="kaomoji kmo-mid kmo-rose kmo-wiggle">(；一_一)</span>
+    </h2>
+
+    <div class="s2-layout">
+      <div class="entropy-visual-enhanced anim">
+        <div class="entropy-svg-wrap">
+          <svg viewBox="0 0 340 340" width="340" height="340">
+            <!-- 背景环 -->
+            <circle cx="170" cy="170" r="150" fill="none" stroke="rgba(6,182,212,0.1)" stroke-width="2" stroke-dasharray="8,6" opacity="0.4"/>
+            <circle cx="170" cy="170" r="120" fill="none" stroke="rgba(34,211,238,0.1)" stroke-width="2" stroke-dasharray="6,4" opacity="0.3">
+              <animateTransform attributeName="transform" type="rotate" from="0 170 170" to="360 170 170" dur="25s" repeatCount="indefinite"/>
+            </circle>
+            <circle cx="170" cy="170" r="90" fill="none" stroke="rgba(6,182,212,0.1)" stroke-width="2" stroke-dasharray="4,4" opacity="0.3">
+              <animateTransform attributeName="transform" type="rotate" from="360 170 170" to="0 170 170" dur="18s" repeatCount="indefinite"/>
+            </circle>
+
+            <!-- 中心代码图标 -->
+            <circle cx="170" cy="170" r="50" fill="url(#centerGrad)" opacity="0.9"/>
+            <foreignObject x="150" y="145" width="40" height="40"><div xmlns="http://www.w3.org/1999/xhtml" style="display:flex;justify-content:center;align-items:center;height:100%;"><i class="ri-computer-line" style="font-size:28px;color:white;"></i></div></foreignObject>
+            <text x="170" y="188" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="11" font-weight="700">代码库</text>
+
+            <!-- 四个问题节点 -->
+            <!-- 文档过时 - 上 -->
+            <g transform="translate(170,30)">
+              <rect x="-32" y="-16" width="64" height="42" rx="12" fill="rgba(255,255,255,0.04)" stroke="#06B6D4" stroke-width="2"/>
+              <text x="0" y="1" text-anchor="middle" font-size="18">☰</text>
+              <text x="0" y="18" text-anchor="middle" fill="#06B6D4" font-size="9" font-weight="700">过时</text>
+            </g>
+            <!-- 架构漂移 - 右 -->
+            <g transform="translate(310,170)">
+              <rect x="-32" y="-16" width="64" height="42" rx="12" fill="rgba(255,255,255,0.04)" stroke="#06B6D4" stroke-width="2"/>
+              <text x="0" y="1" text-anchor="middle" font-size="18">◇</text>
+              <text x="0" y="18" text-anchor="middle" fill="#06B6D4" font-size="9" font-weight="700">漂移</text>
+            </g>
+            <!-- 风格走样 - 下 -->
+            <g transform="translate(170,310)">
+              <rect x="-32" y="-16" width="64" height="42" rx="12" fill="rgba(255,255,255,0.04)" stroke="#06B6D4" stroke-width="2"/>
+              <text x="0" y="1" text-anchor="middle" font-size="18">◆</text>
+              <text x="0" y="18" text-anchor="middle" fill="#06B6D4" font-size="9" font-weight="700">走样</text>
+            </g>
+            <!-- Bug累积 - 左 -->
+            <g transform="translate(30,170)">
+              <rect x="-32" y="-16" width="64" height="42" rx="12" fill="rgba(255,255,255,0.04)" stroke="#06B6D4" stroke-width="2"/>
+              <text x="0" y="1" text-anchor="middle" font-size="18">✖</text>
+              <text x="0" y="18" text-anchor="middle" fill="#06B6D4" font-size="9" font-weight="700">Bug</text>
+            </g>
+
+            <!-- 连接线 -->
+            <line x1="170" y1="56" x2="170" y2="120" stroke="#06B6D4" stroke-width="1.5" opacity="0.3" stroke-dasharray="4,3"/>
+            <line x1="278" y1="170" x2="220" y2="170" stroke="#06B6D4" stroke-width="1.5" opacity="0.3" stroke-dasharray="4,3"/>
+            <line x1="170" y1="284" x2="170" y2="220" stroke="#06B6D4" stroke-width="1.5" opacity="0.3" stroke-dasharray="4,3"/>
+            <line x1="62" y1="170" x2="120" y2="170" stroke="#06B6D4" stroke-width="1.5" opacity="0.3" stroke-dasharray="4,3"/>
+
+            <!-- 移动粒子 -->
+            <circle r="4" fill="#06B6D4" opacity="0.7">
+              <animateMotion dur="3s" repeatCount="indefinite" path="M170,120 L170,56"/>
+            </circle>
+            <circle r="4" fill="#06B6D4" opacity="0.7">
+              <animateMotion dur="3s" repeatCount="indefinite" path="M220,170 L278,170" begin="0.8s"/>
+            </circle>
+            <circle r="4" fill="#06B6D4" opacity="0.7">
+              <animateMotion dur="3s" repeatCount="indefinite" path="M170,220 L170,284" begin="1.6s"/>
+            </circle>
+            <circle r="4" fill="#06B6D4" opacity="0.7">
+              <animateMotion dur="3s" repeatCount="indefinite" path="M120,170 L62,170" begin="2.4s"/>
+            </circle>
+
+            <defs>
+              <radialGradient id="centerGrad" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#22D3EE"/>
+                <stop offset="100%" stop-color="#06B6D4"/>
+              </radialGradient>
+            </defs>
+          </svg>
+
+          <!-- 熵增长条形图 -->
+          <div class="entropy-growth-bar">
+            <div class="entropy-bar-item" style="height:0;background:linear-gradient(to top,#67E8F9,#22D3EE);" data-height="20px">
+              <span>Q1</span>
+            </div>
+            <div class="entropy-bar-item" style="height:0;background:linear-gradient(to top,#22D3EE,#0EA5E9);" data-height="35px">
+              <span>Q2</span>
+            </div>
+            <div class="entropy-bar-item" style="height:0;background:linear-gradient(to top,#0EA5E9,#06B6D4);" data-height="52px">
+              <span>Q3</span>
+            </div>
+            <div class="entropy-bar-item" style="height:0;background:linear-gradient(to top,#06B6D4,#0891B2);" data-height="72px">
+              <span>Q4</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="s2-text-panel">
+        <div class="anim problem-card">
+          <i class="ri-file-damage-line"></i>
+          <div><span class="em-text">文档过时</span> — 与代码脱节</div>
+        </div>
+        <div class="anim problem-card">
+          <i class="ri-building-line"></i>
+          <div><span class="em-text">架构漂移</span> — 偏离设计规范</div>
+        </div>
+        <div class="anim problem-card">
+          <i class="ri-paint-brush-line"></i>
+          <div><span class="em-text">风格走样</span> — 代码一致性下降</div>
+        </div>
+        <div class="anim problem-card accent">
+          <i class="ri-time-line"></i>
+          <div>随时间推移 <b style="color:#06B6D4;">问题不断积累</b></div>
+        </div>
+
+        <div class="anim entropy-trend">
+          <div class="entropy-trend-label"><i class="ri-line-chart-line"></i> 熵增长趋势</div>
+          <svg viewBox="0 0 300 60" width="100%" height="50">
+            <path d="M10 50 Q60 45 100 38 T180 22 T260 8 L290 4" fill="none" stroke="#06B6D4" stroke-width="2.5" stroke-linecap="round"/>
+            <path d="M10 50 Q60 45 100 38 T180 22 T260 8 L290 4 L290 55 L10 55 Z" fill="url(#trendFill)" opacity="0.15"/>
+            <!-- 数据点 -->
+            <circle cx="10" cy="50" r="3" fill="#67E8F9"/>
+            <circle cx="100" cy="38" r="3" fill="#06B6D4"/>
+            <circle cx="180" cy="22" r="3" fill="#0EA5E9"/>
+            <circle cx="260" cy="8" r="3.5" fill="#0891B2"/>
+            <!-- 标签 -->
+            <text x="260" y="24" fill="#0891B2" font-size="9" font-weight="700">危险!</text>
+            <defs>
+              <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#06B6D4"/>
+                <stop offset="100%" stop-color="#0F0E17"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+
+        <!-- 底部颜文字 -->
+        <div class="anim kaomoji kmo-small kmo-light kmo-bounce" style="position:absolute;bottom:10%;right:10%">(；へ：)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== SLIDE 3: 垃圾回收 ===================== -->
+  <div class="slide slide-3" data-slide="2">
+
+    <div class="deco-circle dc2"></div>
+    <div class="particle" style="width:8px;height:8px;background:#06B6D4;top:12%;right:20%;animation-delay:0.5s;"></div>
+    <div class="particle" style="width:6px;height:6px;background:#22D3EE;bottom:20%;left:15%;animation-delay:2s;"></div>
+
+    <!-- 颜文字装饰 -->
+    <div class="anim kaomoji kmo-small kmo-green kmo-float" style="position:absolute;top:10%;left:6%">(｡♥‿♥｡)</div>
+    <div class="anim kaomoji kmo-small kmo-pink" style="position:absolute;top:8%;right:8%">(｀・ω・´)</div>
+
+    <h2 class="anim">
+      <i class="ri-delete-bin-4-line"></i>
+      OpenAI 的方案：<span class="brand">"垃圾回收"</span> <span class="kaomoji kmo-mid kmo-pink kmo-wiggle">(ﾉ◕ヮ◕)ﾉ</span>
+    </h2>
+    <div class="anim section-sub">定期启动专门 Agent，扫描 → 修复 → 合并</div>
+
+    <div class="flow-pipeline anim">
+      <div class="pipeline-packet"></div>
+
+      <div class="flow-card">
+        <div class="fc-num">1</div>
+        <div class="fc-icon"><i class="ri-robot-2-line"></i></div>
+        <h4>启动 Agent</h4>
+        <p>定期自动运行<br>无需人工触发</p>
+      </div>
+
+      <div class="flow-arrow"><i class="ri-arrow-right-line"></i></div>
+
+      <div class="flow-card">
+        <div class="fc-num">2</div>
+        <div class="fc-icon"><i class="ri-search-eye-line"></i></div>
+        <h4>扫描问题</h4>
+        <p>文档 / 架构<br>/ 代码风格</p>
+      </div>
+
+      <div class="flow-arrow"><i class="ri-arrow-right-line"></i></div>
+
+      <div class="flow-card">
+        <div class="fc-num">3</div>
+        <div class="fc-icon"><i class="ri-git-pull-request-line"></i></div>
+        <h4>提交 PR</h4>
+        <p>自动修复<br>并提交变更</p>
+      </div>
+
+      <div class="flow-arrow"><i class="ri-arrow-right-line"></i></div>
+
+      <div class="flow-card">
+        <div class="fc-num">4</div>
+        <div class="fc-icon"><i class="ri-check-double-line"></i></div>
+        <h4>审查合并</h4>
+        <p>快速完成<br>持续保鲜</p>
+      </div>
+    </div>
+
+    <div class="anim highlight-box">
+      <i class="ri-timer-flash-line"></i>
+      大多数修复 PR 在 <span class="time-tag">1 分钟内</span> 审查并合并
+    </div>
+
+    <div class="anim s3-before-after">
+      <div class="ba-card">
+        <div class="ba-label">✗ 没有清扫 Agent</div>
+        <svg viewBox="0 0 120 60" width="120" height="60">
+          <rect x="5" y="10" width="25" height="8" rx="3" fill="#06B6D4" opacity="0.3"/>
+          <rect x="35" y="10" width="25" height="8" rx="3" fill="#06B6D4" opacity="0.5"/>
+          <rect x="65" y="10" width="25" height="8" rx="3" fill="#06B6D4" opacity="0.7"/>
+          <rect x="95" y="10" width="20" height="8" rx="3" fill="#0891B2" opacity="0.9"/>
+          <path d="M5 28 L18 25 L38 22 L58 18 L78 13 L98 8 L115 5" stroke="#0891B2" stroke-width="2" fill="none" stroke-dasharray="4,2"/>
+          <text x="60" y="50" text-anchor="middle" fill="#0891B2" font-size="10" font-weight="700">熵持续增长 📈</text>
+        </svg>
+        <div class="ba-text red">混乱加剧</div>
+      </div>
+
+      <div class="ba-arrow"><i class="ri-arrow-right-line"></i></div>
+
+      <div class="ba-card after">
+        <div class="ba-label">✓ 有清扫 Agent</div>
+        <svg viewBox="0 0 120 60" width="120" height="60">
+          <rect x="5" y="10" width="25" height="8" rx="3" fill="#10B981" opacity="0.3"/>
+          <rect x="35" y="10" width="25" height="8" rx="3" fill="#10B981" opacity="0.4"/>
+          <rect x="65" y="10" width="25" height="8" rx="3" fill="#10B981" opacity="0.3"/>
+          <rect x="95" y="10" width="20" height="8" rx="3" fill="#10B981" opacity="0.3"/>
+          <path d="M5 25 L18 23 L38 26 L58 22 L78 24 L98 21 L115 23" stroke="#10B981" stroke-width="2" fill="none"/>
+          <text x="60" y="50" text-anchor="middle" fill="#10B981" font-size="10" font-weight="700">熵保持稳定 📉</text>
+        </svg>
+        <div class="ba-text green">整洁有序</div>
+      </div>
+    </div>
+
+    <!-- 底部颜文字 -->
+    <div class="anim kaomoji kmo-small kmo-green kmo-bounce" style="position:absolute;bottom:8%;right:12%">(｡♥‿♥｡)</div>
+  </div>
+
+  <!-- ===================== SLIDE 4: Doc-gardening Agent ===================== -->
+  <div class="slide slide-4" data-slide="3">
+
+    <div class="deco-circle dc1"></div>
+    <div class="deco-circle dc3"></div>
+    <div class="float-icon" style="left:20px;top:50px;font-size:90px;animation-delay:2s;">
+      <i class="ri-plant-line"></i>
+    </div>
+
+    <!-- 颜文字装饰 -->
+    <div class="anim kaomoji kmo-small kmo-green kmo-float" style="position:absolute;top:10%;left:5%">(｡♥‿♥｡)</div>
+    <div class="anim kaomoji kmo-small kmo-pink" style="position:absolute;top:8%;right:6%">(｀・ω・´)</div>
+
+    <h2 class="anim">
+      <i class="ri-plant-line"></i>
+      <span class="accent">Doc-gardening</span> Agent <span class="kaomoji kmo-mid kmo-pink kmo-wiggle">(｡♥‿♥｡)</span>
+    </h2>
+    <div class="anim section-sub">专职文档园丁 — 自动修剪代码与文档的不一致</div>
+
+    <div class="s4-layout">
+      <div class="s4-left anim">
+        <div class="garden-svg-wrap">
+          <svg viewBox="0 0 380 380" width="380" height="380">
+            <!-- 背景虚线圆 -->
+            <circle cx="190" cy="190" r="160" fill="none" stroke="rgba(6,182,212,0.2)" stroke-width="2" stroke-dasharray="8,6" opacity="0.3">
+              <animateTransform attributeName="transform" type="rotate" from="0 190 190" to="360 190 190" dur="30s" repeatCount="indefinite"/>
+            </circle>
+            <circle cx="190" cy="190" r="120" fill="none" stroke="rgba(6,182,212,0.15)" stroke-width="1.5" stroke-dasharray="5,5" opacity="0.25">
+              <animateTransform attributeName="transform" type="rotate" from="360 190 190" to="0 190 190" dur="22s" repeatCount="indefinite"/>
+            </circle>
+
+            <!-- 中心 Agent -->
+            <rect x="140" y="140" width="100" height="100" rx="24" fill="url(#agentGrad)" opacity="0.95"/>
+            <text x="190" y="182" text-anchor="middle" fill="white" font-size="36">⚙</text>
+            <text x="190" y="225" text-anchor="middle" fill="white" font-size="12" font-weight="700" opacity="0.9">Doc Agent</text>
+
+            <!-- 文档A - 左上 -->
+            <g transform="translate(40,50)">
+              <rect x="0" y="0" width="80" height="60" rx="12" fill="rgba(255,255,255,0.04)" stroke="#06B6D4" stroke-width="2"/>
+              <text x="40" y="26" text-anchor="middle" font-size="20">☰</text>
+              <text x="40" y="46" text-anchor="middle" fill="#06B6D4" font-size="10" font-weight="700">文档A</text>
+              <!-- 标记：过时 -->
+              <circle cx="72" cy="8" r="8" fill="#EF4444"/>
+              <text x="72" y="12" text-anchor="middle" fill="white" font-size="8" font-weight="900">!</text>
+            </g>
+
+            <!-- 代码A - 右上 -->
+            <g transform="translate(260,50)">
+              <rect x="0" y="0" width="80" height="60" rx="12" fill="rgba(255,255,255,0.04)" stroke="#22D3EE" stroke-width="2"/>
+              <foreignObject x="10" y="5" width="60" height="30"><div xmlns="http://www.w3.org/1999/xhtml" style="display:flex;justify-content:center;align-items:center;height:100%;"><i class="ri-code-box-line" style="font-size:22px;color:#22D3EE;"></i></div></foreignObject>
+              <text x="40" y="46" text-anchor="middle" fill="#A7A9BE" font-size="10" font-weight="700">代码A</text>
+            </g>
+
+            <!-- 文档B - 左下 -->
+            <g transform="translate(40,270)">
+              <rect x="0" y="0" width="80" height="60" rx="12" fill="rgba(255,255,255,0.04)" stroke="#06B6D4" stroke-width="2"/>
+              <text x="40" y="26" text-anchor="middle" font-size="20">📄</text>
+              <text x="40" y="46" text-anchor="middle" fill="#06B6D4" font-size="10" font-weight="700">文档B</text>
+              <circle cx="72" cy="8" r="8" fill="#EF4444"/>
+              <text x="72" y="12" text-anchor="middle" fill="white" font-size="8" font-weight="900">!</text>
+            </g>
+
+            <!-- 代码B - 右下 -->
+            <g transform="translate(260,270)">
+              <rect x="0" y="0" width="80" height="60" rx="12" fill="rgba(255,255,255,0.04)" stroke="#22D3EE" stroke-width="2"/>
+              <foreignObject x="10" y="5" width="60" height="30"><div xmlns="http://www.w3.org/1999/xhtml" style="display:flex;justify-content:center;align-items:center;height:100%;"><i class="ri-code-box-line" style="font-size:22px;color:#22D3EE;"></i></div></foreignObject>
+              <text x="40" y="46" text-anchor="middle" fill="#A7A9BE" font-size="10" font-weight="700">代码B</text>
+            </g>
+
+            <!-- 连接线 - Agent到各节点 -->
+            <line x1="150" y1="165" x2="115" y2="100" stroke="#06B6D4" stroke-width="2" opacity="0.3" stroke-dasharray="4,3"/>
+            <line x1="230" y1="165" x2="265" y2="100" stroke="#22D3EE" stroke-width="2" opacity="0.3" stroke-dasharray="4,3"/>
+            <line x1="150" y1="225" x2="115" y2="278" stroke="#06B6D4" stroke-width="2" opacity="0.3" stroke-dasharray="4,3"/>
+            <line x1="230" y1="225" x2="265" y2="278" stroke="#22D3EE" stroke-width="2" opacity="0.3" stroke-dasharray="4,3"/>
+
+            <!-- 文档与代码对比线 -->
+            <line x1="120" y1="80" x2="260" y2="80" stroke="#EF4444" stroke-width="1.5" opacity="0.4" stroke-dasharray="6,4"/>
+            <text x="190" y="74" text-anchor="middle" fill="#EF4444" font-size="9" font-weight="700" opacity="0.6">对比检查</text>
+            <line x1="120" y1="300" x2="260" y2="300" stroke="#EF4444" stroke-width="1.5" opacity="0.4" stroke-dasharray="6,4"/>
+            <text x="190" y="294" text-anchor="middle" fill="#EF4444" font-size="9" font-weight="700" opacity="0.6">对比检查</text>
+
+            <!-- Agent扫描动画 - 移动点 -->
+            <circle r="5" fill="#06B6D4" opacity="0.8">
+              <animateMotion dur="3s" repeatCount="indefinite" path="M190,165 L115,100" begin="0s"/>
+            </circle>
+            <circle r="5" fill="#06B6D4" opacity="0.8">
+              <animateMotion dur="3s" repeatCount="indefinite" path="M190,165 L265,100" begin="0.8s"/>
+            </circle>
+            <circle r="5" fill="#06B6D4" opacity="0.8">
+              <animateMotion dur="3s" repeatCount="indefinite" path="M190,225 L115,278" begin="1.6s"/>
+            </circle>
+            <circle r="5" fill="#06B6D4" opacity="0.8">
+              <animateMotion dur="3s" repeatCount="indefinite" path="M190,225 L265,278" begin="2.4s"/>
+            </circle>
+
+            <!-- 修复结果标记 -->
+            <g transform="translate(75,120)" opacity="0.7">
+              <circle cx="0" cy="0" r="10" fill="#10B981" opacity="0.9"/>
+              <path d="M-4 0L-1 3L5 -3" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/>
+            </g>
+            <g transform="translate(75,340)" opacity="0.7">
+              <circle cx="0" cy="0" r="10" fill="#10B981" opacity="0.9"/>
+              <path d="M-4 0L-1 3L5 -3" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/>
+            </g>
+
+            <defs>
+              <linearGradient id="agentGrad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#06B6D4"/>
+                <stop offset="100%" stop-color="#22D3EE"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+      </div>
+
+      <div class="s4-right">
+        <div class="anim garden-step">
+          <div class="step-num">1</div>
+          <div><span class="em">扫描</span>文档与代码的对应关系</div>
+        </div>
+        <div class="anim garden-step">
+          <div class="step-num">2</div>
+          <div><span class="em">发现</span>过时或不一致的内容</div>
+        </div>
+        <div class="anim garden-step">
+          <div class="step-num">3</div>
+          <div>自动<span class="em">提交 PR</span> 修复文档</div>
+        </div>
+        <div class="anim garden-step">
+          <div class="step-num">4</div>
+          <div>持续保持<span class="em">文档新鲜度</span></div>
+        </div>
+
+        <!-- 效果可视化 -->
+        <div class="anim" style="margin-top:10px;background:rgba(16,185,129,0.08);border:2px solid rgba(16,185,129,0.2);border-radius:16px;padding:16px 20px;display:flex;align-items:center;gap:12px;">
+          <svg viewBox="0 0 50 50" width="50" height="50">
+            <circle cx="25" cy="25" r="22" fill="none" stroke="#10B981" stroke-width="3"/>
+            <circle cx="25" cy="25" r="22" fill="none" stroke="#10B981" stroke-width="3" stroke-dasharray="138" stroke-dashoffset="14" stroke-linecap="round" transform="rotate(-90 25 25)">
+              <animate attributeName="stroke-dashoffset" from="138" to="14" dur="2s" begin="0.5s" fill="freeze"/>
+            </circle>
+            <text x="25" y="30" text-anchor="middle" fill="#10B981" font-size="12" font-weight="900">90%</text>
+          </svg>
+          <div style="font-size:20px;font-weight:700;color:#34D399;">
+            文档保鲜率从 <b style="color:#EF4444;text-decoration:line-through;">~40%</b> 提升至 <b style="color:#10B981;">~90%</b>
+          </div>
+        </div>
+
+        <!-- 底部颜文字 -->
+        <div class="anim kaomoji kmo-small kmo-green kmo-pulse" style="position:absolute;bottom:10%;right:8%">(｡♥‿♥｡)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== SLIDE 5: 总结 ===================== -->
+  <div class="slide slide-5" data-slide="4">
+
+    <div class="deco-circle dc1"></div>
+    <div class="deco-circle dc2"></div>
+    <div class="particle" style="width:9px;height:9px;background:#06B6D4;top:15%;right:18%;animation-delay:0s;"></div>
+    <div class="particle" style="width:7px;height:7px;background:#22D3EE;bottom:20%;left:15%;animation-delay:2.5s;"></div>
+    <div class="particle" style="width:8px;height:8px;background:#0EA5E9;top:60%;right:10%;animation-delay:4s;"></div>
+
+    <!-- 颜文字装饰 -->
+    <div class="anim kaomoji kmo-small kmo-pink kmo-float" style="position:absolute;top:8%;left:6%">(｡♥‿♥｡)</div>
+    <div class="anim kaomoji kmo-small kmo-light" style="position:absolute;top:12%;right:8%">(ﾉ◕ヮ◕)ﾉ</div>
+
+    <div class="anim final-icon"><i class="ri-lightbulb-flash-line"></i></div>
+    <div class="anim final-title">
+      用 <span class="pink">Agent</span> 为 <span class="pink">Agent</span>
+      <span class="pink" style="text-decoration:underline;text-underline-offset:8px;">维护文档</span>
+      <span class="kaomoji kmo-mid kmo-pink kmo-wiggle">(｡♥‿♥｡)</span>
+    </div>
+    <div class="anim final-quote">
+      <i class="ri-double-quotes-l" style="font-size:24px;vertical-align:top;margin-right:4px;"></i>
+      让机器自己清扫机器产生的熵
+      <i class="ri-double-quotes-r" style="font-size:24px;vertical-align:top;margin-left:4px;"></i>
+    </div>
+
+    <div class="anim loop-flow-enhanced">
+      <div class="loop-node">
+        <i class="ri-robot-2-line"></i>
+        <span>代码 Agent</span>
+      </div>
+      <div class="loop-connector"><i class="ri-arrow-right-line"></i></div>
+      <div class="loop-node">
+        <i class="ri-code-box-line"></i>
+        <span>生成代码</span>
+      </div>
+      <div class="loop-connector"><i class="ri-arrow-right-line"></i></div>
+      <div class="loop-node">
+        <i class="ri-error-warning-line"></i>
+        <span>产生熵</span>
+      </div>
+      <div class="loop-connector"><i class="ri-arrow-right-line"></i></div>
+      <div class="loop-node special">
+        <i class="ri-plant-line"></i>
+        <span>清扫 Agent</span>
+      </div>
+    </div>
+
+    <div class="anim loop-return-label">
+      <i class="ri-refresh-line"></i>
+      持续循环 · 自动清扫 · 保持整洁
+      <i class="ri-loop-left-line"></i>
+    </div>
+
+    <div class="anim summary-pills">
+      <div class="summary-pill"><i class="ri-recycle-line"></i> 垃圾回收</div>
+      <div class="summary-pill"><i class="ri-plant-line"></i> 文档园丁</div>
+      <div class="summary-pill"><i class="ri-robot-2-line"></i> Agent清扫Agent</div>
+    </div>
+
+    <!-- 底部颜文字 -->
+    <div class="anim kaomoji kmo-small kmo-green kmo-bounce" style="position:absolute;bottom:8%;right:15%">(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧</div>
+    <div class="anim kaomoji kmo-small kmo-pink kmo-float" style="position:absolute;bottom:12%;left:10%">(´-ω-`)</div>
+  </div>
+
+</div>
+
+<script>
+(function() {
+  const slides = document.querySelectorAll('.slide');
+  const total  = slides.length;
+  let current  = 0;
+  let isTransitioning = false;
+
+  function showSlide(idx) {
+    if (idx < 0 || idx >= total || isTransitioning || idx === current) return;
+    isTransitioning = true;
+
+    slides[current].querySelectorAll('.anim').forEach(el => el.classList.remove('show'));
+    slides[current].classList.remove('active');
+
+    current = idx;
+    slides[current].classList.add('active');
+
+    const anims = slides[current].querySelectorAll('.anim');
+    anims.forEach((el, i) => {
+      el.classList.remove('show');
+      setTimeout(() => el.classList.add('show'), 120 + i * 150);
+    });
+
+    // 触发熵增长条动画
+    setTimeout(() => {
+      slides[current].querySelectorAll('.entropy-bar-item').forEach(bar => {
+        bar.style.height = bar.dataset.height;
+      });
+    }, 600);
+
+    setTimeout(() => { isTransitioning = false; }, 800);
+  }
+
+  // 初始化
+  setTimeout(() => {
+    const anims = slides[0].querySelectorAll('.anim');
+    anims.forEach((el, i) => {
+      setTimeout(() => el.classList.add('show'), 120 + i * 150);
+    });
+  }, 300);
+
+  // 键盘
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') { e.preventDefault(); showSlide(current + 1); }
+    else if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp') { e.preventDefault(); showSlide(current - 1); }
+  });
+
+  // 点击
+  document.addEventListener('click', e => {
+    if (e.clientX > window.innerWidth / 2) showSlide(current + 1);
+    else showSlide(current - 1);
+  });
+
+  // 滚轮
+  let wheelLock = false;
+  document.addEventListener('wheel', e => {
+    if (wheelLock) return;
+    wheelLock = true;
+    if (e.deltaY > 0) showSlide(current + 1);
+    else showSlide(current - 1);
+    setTimeout(() => wheelLock = false, 600);
+  }, { passive: true });
+
+  // 触摸
+  let touchStartX = 0;
+  document.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; });
+  document.addEventListener('touchend', e => {
+    const diff = touchStartX - e.changedTouches[0].clientX;
+    if (Math.abs(diff) > 50) {
+      if (diff > 0) showSlide(current + 1);
+      else showSlide(current - 1);
+    }
+  });
+})();
+</script>
+
+</body>
+</html>

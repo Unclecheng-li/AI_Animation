@@ -1,0 +1,1098 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Harness Engineering — 行业共识</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Noto Sans SC', sans-serif;
+    background: #0F0E17;
+    color: #FFFFFE;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+  }
+
+  :root {
+    --bg: #0F0E17;
+    --bg-warm: #1A1932;
+    --text-dark: #FFFFFE;
+    --text-mid: #A7A9BE;
+    --accent-orange: #06B6D4;
+    --accent-coral: #22D3EE;
+    --accent-amber: #67E8F9;
+    --accent-teal: #2DD4BF;
+    --accent-peach: rgba(6,182,212,0.3);
+    --accent-light: rgba(6,182,212,0.15);
+    --accent-green: #10B981;
+    --accent-purple: #8B5CF6;
+    --accent-blue: #3B82F6;
+  }
+
+  /* ===== Slides ===== */
+  .slides-container { width: 100vw; height: 100vh; position: relative; }
+  .slides-container::before,
+  .slides-container::after {
+    content: "";
+    position: absolute;
+    border-radius: 50%;
+    z-index: 0;
+    filter: blur(1px);
+    pointer-events: none;
+  }
+  .slides-container::before {
+    width: 460px;
+    height: 460px;
+    top: -180px;
+    right: -120px;
+    background: radial-gradient(circle, rgba(6,182,212,0.15), rgba(6,182,212,0.02) 70%);
+  }
+  .slides-container::after {
+    width: 520px;
+    height: 520px;
+    left: -220px;
+    bottom: -250px;
+    background: radial-gradient(circle, rgba(139,92,246,0.12), rgba(139,92,246,0.01) 72%);
+  }
+
+  .slide {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 60px 80px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.6s ease;
+    z-index: 1;
+  }
+
+  .slide.active { opacity: 1; pointer-events: all; }
+
+  /* ===== Anim ===== */
+  .slide .anim {
+    opacity: 0;
+    transform: translateY(40px);
+    transition: opacity 0.7s cubic-bezier(.23,1,.32,1), transform 0.7s cubic-bezier(.23,1,.32,1);
+  }
+
+  .slide.active .anim.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ===== Common ===== */
+  .section-label {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 16px; font-weight: 700; color: var(--accent-orange);
+    text-transform: uppercase; letter-spacing: 2px; margin-bottom: 16px;
+  }
+
+  .section-label i { font-size: 14px; }
+
+  .deck-hud {
+    position: fixed;
+    top: 18px;
+    left: 40px;
+    right: 40px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 20px;
+    z-index: 20;
+    pointer-events: none;
+  }
+
+  .hud-left {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-mid);
+    letter-spacing: 0.5px;
+    background: rgba(255,255,255,0.08);
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(6,182,212,0.2);
+    backdrop-filter: blur(6px);
+  }
+
+  .hud-progress {
+    height: 10px;
+    border-radius: 999px;
+    background: rgba(167,169,190,0.16);
+    overflow: hidden;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1);
+  }
+
+  .hud-progress-fill {
+    width: 20%;
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-orange), var(--accent-coral));
+    border-radius: inherit;
+    transition: width 0.45s ease;
+  }
+
+  .hud-page {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--text-mid);
+    background: rgba(255,255,255,0.08);
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(6,182,212,0.2);
+    min-width: 78px;
+    text-align: center;
+  }
+
+  .deck-dots {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 16px;
+    display: flex;
+    gap: 10px;
+    z-index: 20;
+  }
+
+  .dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(167,169,190,0.35);
+    cursor: pointer;
+    transition: transform 0.25s ease, background-color 0.25s ease;
+    padding: 0;
+  }
+
+  .dot.active {
+    background: linear-gradient(135deg, var(--accent-orange), var(--accent-coral));
+    transform: scale(1.28);
+  }
+
+  /* ===== SLIDE 1: Title ===== */
+  .slide-1 {
+    background: radial-gradient(ellipse at 50% 30%, #1A1932 0%, #0F0E17 100%);
+    text-align: center;
+  }
+
+  .slide-1 .top-badge {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: var(--accent-coral); color: #fff;
+    padding: 12px 32px; border-radius: 30px;
+    font-size: 20px; font-weight: 700; margin-bottom: 36px;
+    box-shadow: 0 4px 20px rgba(242,92,84,0.3);
+  }
+
+  .slide-1 .main-title {
+    font-size: 72px; font-weight: 900; line-height: 1.3;
+    margin-bottom: 20px; color: var(--text-dark);
+  }
+
+  .slide-1 .main-title .hl {
+    color: var(--accent-coral);
+    text-decoration: underline;
+    text-decoration-color: var(--accent-amber);
+    text-underline-offset: 8px; text-decoration-thickness: 4px;
+  }
+
+  .slide-1 .main-title .hl2 {
+    color: var(--accent-orange);
+  }
+
+  .slide-1 .subtitle {
+    font-size: 30px; color: var(--text-mid); font-weight: 500;
+    line-height: 1.6; max-width: 800px;
+  }
+
+  .slide-1 .subtitle em {
+    color: var(--accent-orange); font-style: italic; font-weight: 700;
+  }
+
+  .slide-1 .icon-row {
+    display: flex; gap: 20px; margin-top: 44px; justify-content: center;
+  }
+
+  .slide-1 .icon-box {
+    width: 64px; height: 64px; border-radius: 18px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; color: #fff;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+  }
+
+  .slide-1 .trend-strip {
+    margin-top: 26px;
+    display: flex;
+    gap: 14px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .kaomoji {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Noto Sans SC', sans-serif;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+
+  .kaomoji-lg { font-size: 28px; }
+  .kaomoji-md { font-size: 22px; }
+  .kaomoji-sm { font-size: 16px; }
+
+  .kaomoji-orange { color: var(--accent-orange); }
+  .kaomoji-coral { color: var(--accent-coral); }
+  .kaomoji-amber { color: var(--accent-amber); }
+  .kaomoji-teal { color: var(--accent-teal); }
+  .kaomoji-purple { color: var(--accent-purple); }
+
+  .slide-1 .trend-pill {
+    min-width: 200px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(6,182,212,0.25);
+    border-radius: 16px;
+    padding: 12px 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-align: left;
+    backdrop-filter: blur(8px);
+  }
+
+  .slide-1 .tp-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent-orange), var(--accent-coral));
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+
+  .slide-1 .tp-value {
+    font-size: 24px;
+    font-weight: 900;
+    color: var(--accent-coral);
+    line-height: 1;
+  }
+
+  .slide-1 .tp-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-mid);
+    margin-top: 4px;
+  }
+
+  /* ===== SLIDE 2: Mapping ===== */
+  .slide-2 {
+    background: radial-gradient(ellipse at 30% 60%, #1A1932 0%, #0F0E17 100%);
+    padding: 50px 80px;
+  }
+
+  .slide-2 .layout {
+    width: 100%; max-width: 1100px; text-align: center;
+  }
+
+  .slide-2 .title {
+    font-size: 44px; font-weight: 900; margin-bottom: 8px;
+  }
+
+  .slide-2 .title .hl { color: var(--accent-coral); }
+
+  .slide-2 .sub {
+    font-size: 20px; color: var(--text-mid); margin-bottom: 36px; font-weight: 500;
+  }
+
+  .mapping-grid {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 14px 20px;
+    align-items: center;
+    max-width: 960px;
+      margin: 0 auto;
+  }
+
+  .process-ribbon {
+    margin: 28px auto 0 auto;
+    max-width: 960px;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr auto 1fr;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .process-step {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(6,182,212,0.25);
+    border-radius: 14px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-mid);
+  }
+
+  .process-step i {
+    color: var(--accent-coral);
+  }
+
+  .process-arrow {
+    font-size: 18px;
+    color: var(--accent-amber);
+  }
+
+  .map-left, .map-right {
+    display: flex; align-items: center; gap: 14px;
+    padding: 16px 24px; border-radius: 16px;
+    font-size: 20px; font-weight: 700;
+  }
+
+  .map-left {
+    background: rgba(255,255,255,0.06); color: var(--text-mid);
+    justify-content: flex-end; text-align: right;
+    border: 1px solid rgba(167,169,190,0.2);
+  }
+
+  .map-left i { font-size: 22px; color: #6B7280; order: -1; }
+
+  .map-right {
+    background: linear-gradient(135deg, rgba(6,182,212,0.15), rgba(34,211,238,0.08));
+    color: var(--accent-coral); justify-content: flex-start;
+    border: 2px solid rgba(6,182,212,0.3);
+  }
+
+  .map-right i { font-size: 22px; color: var(--accent-orange); }
+
+  .map-arrow {
+    font-size: 22px; color: var(--accent-amber);
+  }
+
+  /* ===== SLIDE 3: Analogy ===== */
+  .slide-3 {
+    background: radial-gradient(ellipse at 70% 40%, #1A1932 0%, #0F0E17 100%);
+    text-align: center; padding: 50px 80px;
+  }
+
+  .slide-3 .title {
+    font-size: 48px; font-weight: 900; margin-bottom: 12px;
+  }
+
+  .slide-3 .title .hl { color: var(--accent-orange); }
+
+  .slide-3 .sub {
+    font-size: 22px; color: var(--text-mid); margin-bottom: 40px; font-weight: 500;
+  }
+
+  .agent-card {
+    display: flex; align-items: center; gap: 48px;
+    max-width: 1000px; margin: 0 auto;
+  }
+
+  .agent-visual {
+    position: relative; flex-shrink: 0;
+  }
+
+  .agent-avatar {
+    width: 200px; height: 200px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent-orange), var(--accent-coral));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 80px; color: #fff;
+    box-shadow: 0 8px 40px rgba(255,122,61,0.3);
+    position: relative;
+  }
+
+  .agent-badge {
+    position: absolute; bottom: 0; right: -8px;
+    background: var(--accent-amber); color: #fff;
+    width: 56px; height: 56px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px; border: 4px solid #1A1932;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  }
+
+  .agent-traits {
+    text-align: left;
+  }
+
+  .trait-line {
+    display: flex; align-items: center; gap: 16px;
+    font-size: 26px; font-weight: 700; margin-bottom: 18px;
+    line-height: 1.4;
+  }
+
+  .trait-icon {
+    width: 48px; height: 48px; border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; flex-shrink: 0;
+  }
+
+  .trait-line .t-hl { color: #22D3EE; }
+  .trait-line .t-hl2 { color: #06B6D4; font-weight: 900; }
+
+  .equals-bar {
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    margin-top: 36px; padding: 16px 36px;
+    background: linear-gradient(90deg, var(--accent-orange), var(--accent-amber));
+    border-radius: 16px; color: #fff;
+    font-size: 24px; font-weight: 900;
+    box-shadow: 0 6px 24px rgba(255,122,61,0.25);
+    max-width: 700px; margin-left: auto; margin-right: auto;
+  }
+
+  .loop-track {
+    margin-top: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .loop-node {
+    min-width: 170px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(6,182,212,0.25);
+    padding: 10px 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-mid);
+  }
+
+  .loop-node i { color: var(--accent-orange); }
+  .loop-arrow {
+    font-size: 18px;
+    color: var(--accent-amber);
+  }
+
+  /* ===== SLIDE 4: Comparison ===== */
+  .slide-4 {
+    background: radial-gradient(ellipse at 40% 70%, #1A1932 0%, #0F0E17 100%); padding: 40px 72px; text-align: center;
+  }
+
+  .slide-4 .title {
+    font-size: 38px; font-weight: 900; margin-bottom: 24px; line-height: 1.35;
+  }
+
+  .slide-4 .title .hl { color: var(--accent-coral); }
+
+  .compare-row {
+    display: flex; gap: 40px; justify-content: center; max-width: 1050px; margin: 0 auto;
+  }
+
+  .compare-card {
+    flex: 1; padding: 26px 24px; border-radius: 24px;
+    text-align: center; position: relative;
+  }
+
+  .compare-bad {
+    background: rgba(255,255,255,0.04); border: 2px solid rgba(167,169,190,0.2);
+  }
+
+  .compare-good {
+    background: linear-gradient(135deg, rgba(6,182,212,0.12), rgba(34,211,238,0.06));
+    border: 2px solid rgba(6,182,212,0.4);
+    box-shadow: 0 8px 32px rgba(6,182,212,0.15);
+  }
+
+  .compare-card .cc-icon {
+    width: 72px; height: 72px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 12px auto; font-size: 31px;
+  }
+
+  .compare-bad .cc-icon { background: rgba(167,169,190,0.2); color: #6B7280; }
+  .compare-good .cc-icon {
+    background: linear-gradient(135deg, #06B6D4, #22D3EE);
+    color: #fff; box-shadow: 0 4px 16px rgba(6,182,212,0.3);
+  }
+
+  .compare-card .cc-title {
+    font-size: 23px; font-weight: 900; margin-bottom: 12px;
+  }
+
+  .compare-bad .cc-title { color: #6B7280; }
+  .compare-good .cc-title { color: #22D3EE; }
+
+  .compare-list {
+    list-style: none; text-align: left; padding: 0;
+  }
+
+  .compare-list li {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 18px; font-weight: 600; margin-bottom: 8px;
+    padding: 7px 11px; border-radius: 10px;
+  }
+
+  .compare-bad .compare-list li {
+    color: #6B7280; background: rgba(255,255,255,0.04);
+  }
+
+  .compare-bad .compare-list li i { color: #9CA3AF; }
+
+  .compare-good .compare-list li {
+    color: var(--text-dark); background: rgba(6,182,212,0.1);
+  }
+
+  .compare-good .compare-list li i { color: #06B6D4; }
+
+  .compare-vs {
+    font-size: 56px; color: var(--accent-amber);
+    display: flex; align-items: center; font-weight: 900;
+    text-shadow: 0 2px 8px rgba(244,166,34,0.2);
+  }
+
+  .compare-card .stamp-bad {
+    position: absolute; top: 16px; right: 16px;
+    background: #ddd; color: #999; font-size: 12px;
+    font-weight: 700; padding: 4px 12px; border-radius: 12px;
+  }
+
+  .compare-card .stamp-good {
+    position: absolute; top: 16px; right: 16px;
+    background: var(--accent-green); color: #fff; font-size: 12px;
+    font-weight: 700; padding: 4px 12px; border-radius: 12px;
+  }
+
+  .slide-4 .bottom-text {
+    margin-top: 14px; font-size: 23px; font-weight: 700; color: var(--text-mid);
+    line-height: 1.5;
+  }
+
+  .slide-4 .bottom-text .hl {
+    color: var(--accent-coral); font-weight: 900;
+    text-decoration: underline; text-decoration-color: var(--accent-amber);
+    text-underline-offset: 5px; text-decoration-thickness: 3px;
+  }
+
+  .impact-panel {
+    margin: 16px auto 0 auto;
+    max-width: 1050px;
+    border-radius: 18px;
+    padding: 14px 18px 12px 18px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(6,182,212,0.2);
+  }
+
+  .impact-title {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--text-mid);
+    margin-bottom: 10px;
+    text-align: left;
+    letter-spacing: 0.8px;
+  }
+
+  .impact-row {
+    display: grid;
+    grid-template-columns: 88px 1fr 1fr;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .impact-label {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-mid);
+    text-align: left;
+  }
+
+  .impact-bar {
+    height: 18px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    font-size: 11px;
+    font-weight: 800;
+    color: #fff;
+    padding-right: 8px;
+    letter-spacing: 0.4px;
+  }
+
+  .impact-bad { background: linear-gradient(90deg, rgba(167,169,190,0.5), rgba(107,114,128,0.4)); }
+  .impact-good { background: linear-gradient(90deg, #06B6D4, #22D3EE); }
+
+  /* ===== SLIDE 5: Conclusion ===== */
+  .slide-5 {
+    background: radial-gradient(ellipse at 50% 50%, #1A1932 0%, #0F0E17 100%);
+    text-align: center; color: #fff;
+  }
+
+  .slide-5 .final-icon {
+    width: 110px; height: 110px; border-radius: 50%;
+    background: linear-gradient(135deg, #06B6D4, #22D3EE);
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 32px auto; font-size: 48px;
+    border: 2px solid rgba(6,182,212,0.5);
+    box-shadow: 0 8px 32px rgba(6,182,212,0.3);
+  }
+
+  .slide-5 .final-title {
+    font-size: 52px; font-weight: 900; line-height: 1.35;
+    margin-bottom: 20px;
+    text-shadow: 0 2px 20px rgba(0,0,0,0.1);
+  }
+
+  .slide-5 .final-title .cross {
+    text-decoration: line-through;
+    text-decoration-color: rgba(255,255,255,0.6);
+    opacity: 0.7;
+  }
+
+  .slide-5 .final-title .gold {
+    color: #67E8F9;
+    text-decoration: underline;
+    text-underline-offset: 6px;
+    text-decoration-thickness: 3px;
+  }
+
+  .slide-5 .final-sub {
+    font-size: 28px; font-weight: 500; opacity: 0.95;
+    line-height: 1.6; max-width: 750px; margin: 0 auto;
+  }
+
+  .slide-5 .final-sub b {
+    font-weight: 900; text-decoration: underline; text-underline-offset: 4px;
+  }
+
+  .slide-5 .final-cards {
+    display: flex; gap: 14px; justify-content: center; margin-top: 24px;
+  }
+
+  .slide-5 .fc {
+    background: rgba(6,182,212,0.15);
+    padding: 14px 24px; border-radius: 20px;
+    font-size: 18px; font-weight: 700;
+    border: 1px solid rgba(6,182,212,0.3);
+    display: flex; align-items: center; gap: 10px;
+  }
+
+  .slide-5 .fc i { font-size: 20px; }
+
+  .roadmap {
+    margin-top: 22px;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr auto 1fr;
+    gap: 8px;
+    align-items: center;
+    max-width: 980px;
+  }
+
+  .road-step {
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: rgba(6,182,212,0.12);
+    border: 1px solid rgba(6,182,212,0.3);
+    text-align: left;
+  }
+
+  .road-kicker {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    opacity: 0.8;
+    margin-bottom: 3px;
+  }
+
+  .road-title {
+    font-size: 17px;
+    font-weight: 800;
+  }
+
+  .road-arrow {
+    font-size: 19px;
+    opacity: 0.9;
+  }
+
+  @keyframes drift {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+  }
+
+  .floating {
+    animation: drift 3.2s ease-in-out infinite;
+  }
+
+  @media (max-width: 1280px) {
+    .slide { padding: 52px 56px; }
+    .slide-1 .main-title { font-size: 64px; }
+    .slide-1 .subtitle { font-size: 27px; }
+    .slide-3 .title { font-size: 42px; }
+    .slide-4 .title { font-size: 34px; }
+    .slide-5 .final-title { font-size: 46px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="slides-container">
+
+<!-- ===== SLIDE 1: Title ===== -->
+<div class="slide slide-1 active" data-index="0">
+  <div class="top-badge anim" data-delay="0">
+    <i class="fa-solid fa-fire"></i>
+    行业大趋势
+  </div>
+  <div class="main-title anim" data-delay="200">
+    <span class="hl2">Harness Engineering</span>
+  </div>
+  <div class="main-title anim" data-delay="350" style="font-size:52px;margin-top:-10px;">
+    不是小众尝试，是<span class="hl">行业共识</span>
+  </div>
+  <div class="subtitle anim" data-delay="550">
+    从上到下，<em>整个 AI 行业</em>都在跟进的底层变革
+  </div>
+  <div class="kaomoji kaomoji-lg kaomoji-coral anim" data-delay="650" style="margin-top: 10px;">
+    (｡♥‿♥｡)
+  </div>
+  <div class="icon-row anim" data-delay="750">
+    <div class="icon-box" style="background:var(--accent-orange)"><i class="fa-solid fa-building"></i></div>
+    <div class="icon-box" style="background:var(--accent-coral)"><i class="fa-solid fa-users-gear"></i></div>
+    <div class="icon-box floating" style="background:var(--accent-teal)"><i class="fa-solid fa-robot"></i></div>
+    <div class="icon-box" style="background:var(--accent-amber)"><i class="fa-solid fa-compass-drafting"></i></div>
+    <div class="icon-box" style="background:var(--accent-purple)"><i class="fa-solid fa-diagram-project"></i></div>
+  </div>
+  <div class="trend-strip anim" data-delay="960">
+    <div class="trend-pill">
+      <div class="tp-icon"><i class="fa-solid fa-building-columns"></i></div>
+      <div>
+        <div class="tp-value">Top 公司</div>
+        <div class="tp-label">都在补齐 Agent 工程体系</div>
+      </div>
+    </div>
+    <div class="trend-pill">
+      <div class="tp-icon"><i class="fa-solid fa-gauge-high"></i></div>
+      <div>
+        <div class="tp-value">提效 x2+</div>
+        <div class="tp-label">来自流程稳定而非模型偶然发挥</div>
+      </div>
+    </div>
+    <div class="trend-pill">
+      <div class="tp-icon"><i class="fa-solid fa-shield-halved"></i></div>
+      <div>
+        <div class="tp-value">风险可控</div>
+        <div class="tp-label">规范、校验、反馈形成闭环</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SLIDE 2: Mapping ===== -->
+<div class="slide slide-2" data-index="1">
+  <div class="layout">
+    <div class="section-label anim" data-delay="0">
+      <i class="fa-solid fa-arrows-left-right"></i> 一一对应
+    </div>
+    <div class="title anim" data-delay="100">
+      传统工程实践 <span class="hl">→</span> AI Harness
+    </div>
+    <div class="sub anim" data-delay="200">你已经在做的事，就是 Harness 的原型</div>
+    <div class="kaomoji kaomoji-md kaomoji-orange anim" data-delay="280" style="margin-bottom: 16px;">
+      ヾ(≧▽≦*)o
+    </div>
+
+    <div class="mapping-grid">
+      <div class="map-left anim" data-delay="300">
+        <i class="fa-solid fa-book-open"></i> Onboarding 文档
+      </div>
+      <div class="map-arrow anim" data-delay="350"><i class="fa-solid fa-arrow-right"></i></div>
+      <div class="map-right anim" data-delay="400">
+        <i class="fa-solid fa-file-code"></i> AGENTS.md
+      </div>
+
+      <div class="map-left anim" data-delay="450">
+        <i class="fa-solid fa-ruler-combined"></i> 代码规范
+      </div>
+      <div class="map-arrow anim" data-delay="500"><i class="fa-solid fa-arrow-right"></i></div>
+      <div class="map-right anim" data-delay="550">
+        <i class="fa-solid fa-spell-check"></i> Linter + 结构测试
+      </div>
+
+      <div class="map-left anim" data-delay="600">
+        <i class="fa-solid fa-magnifying-glass"></i> Code Review
+      </div>
+      <div class="map-arrow anim" data-delay="650"><i class="fa-solid fa-arrow-right"></i></div>
+      <div class="map-right anim" data-delay="700">
+        <i class="fa-solid fa-circle-check"></i> CI/CD 检查
+      </div>
+
+      <div class="map-left anim" data-delay="750">
+        <i class="fa-solid fa-broom"></i> 技术债清理
+      </div>
+      <div class="map-arrow anim" data-delay="800"><i class="fa-solid fa-arrow-right"></i></div>
+      <div class="map-right anim" data-delay="850">
+        <i class="fa-solid fa-recycle"></i> 垃圾回收
+      </div>
+
+      <div class="map-left anim" data-delay="900">
+        <i class="fa-solid fa-toolbox"></i> 工具选型
+      </div>
+      <div class="map-arrow anim" data-delay="950"><i class="fa-solid fa-arrow-right"></i></div>
+      <div class="map-right anim" data-delay="1000">
+        <i class="fa-solid fa-link"></i> 工具链管理
+      </div>
+
+      <div class="map-left anim" data-delay="1050">
+        <i class="fa-solid fa-pen-to-square"></i> Wiki 问题记录
+      </div>
+      <div class="map-arrow anim" data-delay="1100"><i class="fa-solid fa-arrow-right"></i></div>
+      <div class="map-right anim" data-delay="1150">
+        <i class="fa-solid fa-rotate"></i> 反馈循环
+      </div>
+    </div>
+
+    <div class="process-ribbon">
+      <div class="process-step anim" data-delay="1220">
+        <i class="fa-solid fa-file-circle-plus"></i> 规则注入
+      </div>
+      <div class="process-arrow anim" data-delay="1260"><i class="fa-solid fa-chevron-right"></i></div>
+      <div class="process-step anim" data-delay="1320">
+        <i class="fa-solid fa-gears"></i> 执行约束
+      </div>
+      <div class="process-arrow anim" data-delay="1360"><i class="fa-solid fa-chevron-right"></i></div>
+      <div class="process-step anim" data-delay="1420">
+        <i class="fa-solid fa-wave-square"></i> 反馈迭代
+      </div>
+    </div>
+    <div class="kaomoji kaomoji-sm kaomoji-teal anim" data-delay="1500" style="margin-top: 14px;">
+      (๑•̀ㅂ•́)و✧
+    </div>
+  </div>
+</div>
+
+<!-- ===== SLIDE 3: Analogy ===== -->
+<div class="slide slide-3" data-index="2">
+  <div class="section-label anim" data-delay="0">
+    <i class="fa-solid fa-lightbulb"></i> 核心类比
+  </div>
+  <div class="title anim" data-delay="150">
+    AI Agent = <span class="hl">需要管理</span>的天才员工
+  </div>
+  <div class="sub anim" data-delay="300">
+    能力越强，越需要好的<em style="color:var(--accent-orange);font-weight:700;">管理体系</em>
+  </div>
+  <div class="kaomoji kaomoji-md kaomoji-amber anim" data-delay="380" style="margin-bottom: 20px;">
+    (｡◕‿◕｡)
+  </div>
+
+  <div class="agent-card">
+    <div class="agent-visual anim" data-delay="400">
+      <div class="agent-avatar">
+        <i class="fa-solid fa-robot"></i>
+      </div>
+      <div class="agent-badge">
+        <i class="fa-solid fa-bolt"></i>
+      </div>
+    </div>
+    <div class="agent-traits">
+      <div class="trait-line anim" data-delay="550">
+        <div class="trait-icon" style="background:rgba(45,212,191,0.15);border:1px solid rgba(45,212,191,0.3);">
+          <i class="fa-solid fa-brain" style="color:var(--accent-teal)"></i>
+        </div>
+        <span><span class="t-hl2">能力极强</span>，学什么会什么</span>
+      </div>
+      <div class="trait-line anim" data-delay="700">
+        <div class="trait-icon" style="background:rgba(34,211,238,0.15);border:1px solid rgba(34,211,238,0.3);">
+          <i class="fa-solid fa-triangle-exclamation" style="color:var(--accent-coral)"></i>
+        </div>
+        <span>但<span class="t-hl">没有规范就会跑偏</span></span>
+      </div>
+      <div class="trait-line anim" data-delay="850">
+        <div class="trait-icon" style="background:rgba(6,182,212,0.15);border:1px solid rgba(6,182,212,0.3);">
+          <i class="fa-solid fa-clipboard-list" style="color:var(--accent-orange)"></i>
+        </div>
+        <span>需要<span class="t-hl2">文档、流程、反馈</span></span>
+      </div>
+      <div class="trait-line anim" data-delay="1000">
+        <div class="trait-icon" style="background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.3);">
+          <i class="fa-solid fa-compass-drafting" style="color:var(--accent-purple)"></i>
+        </div>
+        <span>需要<span class="t-hl2">好的系统设计</span>来发挥价值</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="equals-bar anim" data-delay="1150">
+    <i class="fa-solid fa-equals"></i>
+    Agent 越强，Harness 越重要
+  </div>
+  <div class="kaomoji kaomoji-sm kaomoji-purple anim" data-delay="1220" style="margin-top: 12px;">
+    ✧*｡٩(ˊᗜˋ*)و✧*｡
+  </div>
+  <div class="loop-track">
+    <div class="loop-node anim" data-delay="1240"><i class="fa-solid fa-book"></i> 文档定义边界</div>
+    <div class="loop-arrow anim" data-delay="1290"><i class="fa-solid fa-arrow-right"></i></div>
+    <div class="loop-node anim" data-delay="1340"><i class="fa-solid fa-vial-circle-check"></i> 过程自动校验</div>
+    <div class="loop-arrow anim" data-delay="1390"><i class="fa-solid fa-arrow-right"></i></div>
+    <div class="loop-node anim" data-delay="1440"><i class="fa-solid fa-arrows-rotate"></i> 结果反哺规则</div>
+  </div>
+</div>
+
+<!-- ===== SLIDE 4: Comparison ===== -->
+<div class="slide slide-4" data-index="3">
+  <div class="section-label anim" data-delay="0">
+    <i class="fa-solid fa-scale-balanced"></i> 同理可得
+  </div>
+  <div class="title anim" data-delay="150">
+    别指望<span class="hl">没有管理体系</span>还能出好结果
+  </div>
+  <div class="kaomoji kaomoji-md kaomoji-coral anim" data-delay="230" style="margin-bottom: 16px;">
+    (；′⌒`)
+  </div>
+
+  <div class="compare-row">
+    <div class="compare-card compare-bad anim" data-delay="300">
+      <div class="stamp-bad">✗ 失败</div>
+      <div class="cc-icon"><i class="fa-solid fa-user-xmark"></i></div>
+      <div class="cc-title">天才工程师 × 混乱项目</div>
+      <ul class="compare-list">
+        <li><i class="fa-solid fa-xmark"></i> 没有文档</li>
+        <li><i class="fa-solid fa-xmark"></i> 没有规范</li>
+        <li><i class="fa-solid fa-xmark"></i> 没有 CI</li>
+        <li><i class="fa-solid fa-xmark"></i> 产出不可预期</li>
+      </ul>
+    </div>
+
+    <div class="compare-vs anim" data-delay="500">VS</div>
+
+    <div class="compare-card compare-good anim" data-delay="650">
+      <div class="stamp-good"><i class="fa-solid fa-check"></i> 成功</div>
+      <div class="cc-icon"><i class="fa-solid fa-robot"></i></div>
+      <div class="cc-title">强大 AI × Harness 环境</div>
+      <ul class="compare-list">
+        <li><i class="fa-solid fa-check"></i> AGENTS.md 引导</li>
+        <li><i class="fa-solid fa-check"></i> CI/CD 守护</li>
+        <li><i class="fa-solid fa-check"></i> 反馈循环</li>
+        <li><i class="fa-solid fa-check"></i> 可靠高质量产出</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="bottom-text anim" data-delay="850">
+    道理一样：别把强大 AI 扔进<span class="hl">没有 Harness 的环境</span>
+  </div>
+  <div class="kaomoji kaomoji-sm kaomoji-orange anim" data-delay="920" style="margin-top: 8px;">
+    (｡･ω･｡)ﾉ♡
+  </div>
+</div>
+
+<!-- ===== SLIDE 5: Conclusion ===== -->
+<div class="slide slide-5" data-index="4">
+  <div class="final-icon anim" data-delay="0">
+    <i class="fa-solid fa-crown"></i>
+  </div>
+  <div class="final-title anim" data-delay="200">
+    <span class="cross">只会写代码</span> → 一定被取代
+  </div>
+  <div class="final-title anim" data-delay="400" style="font-size:48px;">
+    会驾驭 AI → <span class="gold">黄金时代</span>
+  </div>
+  <div class="final-sub anim" data-delay="650">
+    会设计 Harness 的工程师<br><b>将迎来前所未有的机遇</b>
+  </div>
+  <div class="kaomoji kaomoji-lg anim" data-delay="780" style="margin-top: 16px; color: #FFE082;">
+    ☆*:.｡.o(≧▽≦)o.｡.:*☆
+  </div>
+  <div class="final-cards anim" data-delay="900">
+    <div class="fc"><i class="fa-solid fa-file-code"></i> 设计 Harness</div>
+    <div class="fc"><i class="fa-solid fa-gears"></i> 驾驭 AI</div>
+    <div class="fc"><i class="fa-solid fa-trophy"></i> 黄金时代</div>
+  </div>
+  <div class="roadmap">
+    <div class="road-step anim" data-delay="1020">
+      <div class="road-kicker">STEP 1</div>
+      <div class="road-title">搭建规则骨架</div>
+    </div>
+    <div class="road-arrow anim" data-delay="1080"><i class="fa-solid fa-arrow-right"></i></div>
+    <div class="road-step anim" data-delay="1140">
+      <div class="road-kicker">STEP 2</div>
+      <div class="road-title">打通校验反馈</div>
+    </div>
+    <div class="road-arrow anim" data-delay="1200"><i class="fa-solid fa-arrow-right"></i></div>
+    <div class="road-step anim" data-delay="1260">
+      <div class="road-kicker">STEP 3</div>
+      <div class="road-title">放大人机产能</div>
+    </div>
+  </div>
+  <div class="kaomoji kaomoji-md anim" data-delay="1380" style="margin-top: 18px; color: rgba(255,255,255,0.9);">
+    (ﾉ◕ヮ◕)ﾉ*:･ﾟ✧
+  </div>
+</div>
+
+</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  const totalSlides = slides.length;
+  let current = 0;
+  let animating = false;
+
+  function showSlide(index) {
+    if (animating || index === current || index < 0 || index >= totalSlides) return;
+    animating = true;
+
+    slides[current].querySelectorAll('.anim').forEach(el => el.classList.remove('show'));
+    slides[current].classList.remove('active');
+
+    current = index;
+    slides[current].classList.add('active');
+
+    const anims = slides[current].querySelectorAll('.anim');
+    anims.forEach((el, i) => {
+      const delay = parseInt(el.getAttribute('data-delay')) || (i * 150);
+      setTimeout(() => el.classList.add('show'), delay);
+    });
+
+    setTimeout(() => { animating = false; }, 1500);
+  }
+
+  function initFirstSlide() {
+    slides[0].querySelectorAll('.anim').forEach((el, i) => {
+      const delay = parseInt(el.getAttribute('data-delay')) || (i * 150);
+      setTimeout(() => el.classList.add('show'), delay + 300);
+    });
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') {
+      e.preventDefault(); showSlide(current + 1);
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault(); showSlide(current - 1);
+    }
+  });
+
+  let touchStartX = 0;
+  document.addEventListener('touchstart', (e) => { touchStartX = e.touches[0].clientX; });
+  document.addEventListener('touchend', (e) => {
+    const diff = touchStartX - e.changedTouches[0].clientX;
+    if (Math.abs(diff) > 50) diff > 0 ? showSlide(current + 1) : showSlide(current - 1);
+  });
+
+  initFirstSlide();
+</script>
+</body>
+</html>

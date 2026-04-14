@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>失败模式③ · 过早标记功能完成</title>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#0F0E17;color:#FFFFFE;overflow:hidden;width:100vw;height:100vh}
+
+:root {
+  --accent: #8B5CF6;
+  --accent2: #A78BFA;
+  --accent3: #C4B5FD;
+  --accent-glow: rgba(139, 92, 246, 0.3);
+  --green: #10B981;
+  --red: #EF4444;
+  --dark: #0F0E17;
+  --dark2: #1A1932;
+  --gray: #A7A9BE;
+  --light: #FFFFFE;
+}
+
+.lc{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle}
+.lc-96 svg{width:96px;height:96px}.lc-80 svg{width:80px;height:80px}.lc-64 svg{width:64px;height:64px}
+.lc-48 svg{width:48px;height:48px}.lc-40 svg{width:40px;height:40px}.lc-36 svg{width:36px;height:36px}
+.lc-32 svg{width:32px;height:32px}.lc-28 svg{width:28px;height:28px}.lc-24 svg{width:24px;height:24px}
+.lc-20 svg{width:20px;height:20px}.lc-18 svg{width:18px;height:18px}
+
+.slide-container{width:100vw;height:100vh;position:relative}
+.slide{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:50px 80px;opacity:0;pointer-events:none;transition:opacity .6s ease;overflow:hidden}
+.slide.active{opacity:1;pointer-events:auto}
+.slide .anim{opacity:0;transform:translateY(45px);transition:none}
+.slide.active .anim.show{opacity:1;transform:translateY(0);transition:opacity .7s cubic-bezier(.25,.46,.45,.94),transform .7s cubic-bezier(.25,.46,.45,.94)}
+
+.deco{position:absolute;border-radius:50%;pointer-events:none}
+.deco-violet{background:radial-gradient(circle,rgba(139,92,246,.15),transparent)}
+.deco-purple{background:radial-gradient(circle,rgba(124,58,237,.12),transparent)}
+.deco-lav{background:radial-gradient(circle,rgba(167,139,250,.1),transparent)}
+.deco-rose{background:radial-gradient(circle,rgba(244,63,94,.1),transparent)}
+.deco-emerald{background:radial-gradient(circle,rgba(16,185,129,.08),transparent)}
+.deco-pink{background:radial-gradient(circle,rgba(232,121,249,.08),transparent)}
+
+.float-p{position:absolute;border-radius:50%;pointer-events:none;animation:floatP 5s ease-in-out infinite}
+@keyframes floatP{0%,100%{transform:translateY(0) scale(1);opacity:.12}50%{transform:translateY(-18px) scale(1.15);opacity:.22}}
+
+.t-hero{font-size:5.5rem;font-weight:900;line-height:1.15;text-align:center}
+.t-huge{font-size:4rem;font-weight:900;line-height:1.2;text-align:center}
+.t-big{font-size:3rem;font-weight:800;line-height:1.3;text-align:center}
+.t-mid{font-size:2.2rem;font-weight:700;line-height:1.4;text-align:center}
+.t-body{font-size:1.7rem;font-weight:400;line-height:1.6;text-align:center}
+.t-sm{font-size:1.2rem;font-weight:400;line-height:1.5;text-align:center}
+
+.c-pink{color:#E879F9}.c-rose{color:#F43F5E}.c-orange{color:#F97316}
+.c-purple{color:#A78BFA}.c-violet{color:#8B5CF6}.c-teal{color:#14B8A6}.c-dark{color:#FFFFFE}
+.c-gray{color:#A7A9BE}.c-white{color:#fff}.c-amber{color:#F59E0B}.c-indigo{color:#6366F1}
+.c-emerald{color:#10B981}.c-red{color:#EF4444}.c-slate{color:#94A3B8}
+
+.bg-pink{background:rgba(232,121,249,.12);padding:6px 20px;border-radius:10px}
+.bg-rose{background:rgba(244,63,94,.12);padding:6px 20px;border-radius:10px}
+.bg-peach{background:rgba(251,146,60,.12);padding:6px 20px;border-radius:10px}
+.bg-teal{background:rgba(20,184,166,.12);padding:6px 20px;border-radius:10px}
+.bg-purple{background:rgba(139,92,246,.12);padding:6px 20px;border-radius:10px}
+.bg-violet{background:rgba(124,58,237,.12);padding:6px 20px;border-radius:10px}
+.bg-red{background:rgba(239,68,68,.1);padding:6px 20px;border-radius:10px}
+.bg-emerald{background:rgba(16,185,129,.1);padding:6px 20px;border-radius:10px}
+
+.ul-rose{text-decoration:underline;text-decoration-color:#F43F5E;text-decoration-thickness:4px;text-underline-offset:8px}
+.ul-pink{text-decoration:underline;text-decoration-color:#E879F9;text-decoration-thickness:4px;text-underline-offset:8px}
+.ul-violet{text-decoration:underline;text-decoration-color:#8B5CF6;text-decoration-thickness:4px;text-underline-offset:8px}
+.bold{font-weight:900}.italic{font-style:italic}
+.line{width:70px;height:4px;border-radius:2px;background:linear-gradient(90deg,#8B5CF6,#A78BFA);margin:18px auto}
+
+/* 二次元颜文字样式 */
+.kaomoji{display:inline-block;font-family:'Microsoft YaHei','PingFang SC',sans-serif;font-weight:700;letter-spacing:1px}
+.kmo-small{font-size:1.2rem}
+.kmo-mid{font-size:1.6rem}
+.kmo-big{font-size:2.2rem}
+.kmo-huge{font-size:3rem}
+.kmo-pink{color:#E879F9}
+.kmo-rose{color:#F43F5E}
+.kmo-purple{color:#A78BFA}
+.kmo-violet{color:#8B5CF6}
+.kmo-teal{color:#14B8A6}
+.kmo-amber{color:#F59E0B}
+.kmo-indigo{color:#6366F1}
+.kmo-bounce{animation:bounce 2s ease-in-out infinite}
+.kmo-float{animation:float 3s ease-in-out infinite}
+.kmo-wiggle{animation:wiggle 1s ease-in-out infinite}
+.kmo-pulse{animation:pulse 1.5s ease-in-out infinite}
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+@keyframes float{0%,100%{transform:translateY(0)rotate(0deg)}50%{transform:translateY(-6px)rotate(3deg)}}
+@keyframes wiggle{0%,100%{transform:rotate(0deg)}25%{transform:rotate(-5deg)}75%{transform:rotate(5deg)}}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
+
+.bg-s1{background:radial-gradient(ellipse at 50% 30%, #1A1932 0%, #0F0E17 100%)}
+.bg-s2{background:radial-gradient(ellipse at 30% 60%, #1A1932 0%, #0F0E17 100%)}
+.bg-s3{background:radial-gradient(ellipse at 70% 40%, #1A1932 0%, #0F0E17 100%)}
+.bg-s4{background:radial-gradient(ellipse at 40% 70%, #1A1932 0%, #0F0E17 100%)}
+.bg-s5{background:radial-gradient(ellipse at 50% 50%, #1A1932 0%, #0F0E17 100%)}
+.bg-s6{background:radial-gradient(ellipse at 60% 30%, #1A1932 0%, #0F0E17 100%)}
+
+.fail-badge{display:inline-flex;align-items:center;gap:10px;padding:12px 32px;border-radius:40px;font-size:2rem;font-weight:900;background:rgba(244,63,94,.1);color:#F43F5E;border:2.5px solid rgba(244,63,94,.25)}
+
+.concept-word{font-size:4.5rem;font-weight:900;letter-spacing:4px;background:linear-gradient(135deg,#8B5CF6,#A78BFA,#C4B5FD);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+
+.code-block{background:#1e1e3e;border-radius:16px;padding:28px 36px;max-width:700px;width:80%;font-family:'Cascadia Code','Fira Code',monospace;position:relative;overflow:hidden}
+.code-line{display:flex;align-items:center;gap:12px;font-size:1.3rem;line-height:2;color:rgba(255,255,255,.7)}
+.code-keyword{color:#c792ea}.code-fn{color:#82aaff}.code-str{color:#c3e88d}.code-comment{color:rgba(255,255,255,.3);font-style:italic}
+.code-badge{position:absolute;top:12px;right:16px;padding:4px 14px;border-radius:20px;font-size:.85rem;font-weight:800}
+.code-badge-done{background:rgba(16,185,129,.15);color:#34d399}
+
+.test-list{display:flex;flex-direction:column;gap:12px;width:85%;max-width:700px}
+.test-item{display:flex;align-items:center;gap:16px;padding:18px 28px;border-radius:16px;font-size:1.6rem;font-weight:700}
+.test-skip{background:rgba(244,63,94,.06);border:2px solid rgba(244,63,94,.15);color:#F43F5E}
+.test-skip .lc svg{color:#F43F5E}
+
+.bug-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;max-width:500px;width:70%}
+.bug-cell{width:100%;aspect-ratio:1;border-radius:12px;display:flex;align-items:center;justify-content:center;transition:all .6s ease}
+.bug-clean{background:rgba(16,185,129,.08);border:2px solid rgba(16,185,129,.15)}
+.bug-infected{background:rgba(244,63,94,.1);border:2px solid rgba(244,63,94,.25)}
+
+.time-compare{display:flex;gap:50px;align-items:flex-end;justify-content:center}
+.time-bar{display:flex;flex-direction:column;align-items:center;gap:8px}
+.time-bar-fill{width:100px;border-radius:12px 12px 0 0;transition:height 1s cubic-bezier(.25,.46,.45,.94)}
+.time-bar-write{background:linear-gradient(180deg,rgba(16,185,129,.15),rgba(16,185,129,.06));border:2px solid rgba(16,185,129,.2)}
+.time-bar-debug{background:linear-gradient(180deg,rgba(244,63,94,.15),rgba(244,63,94,.06));border:2px solid rgba(244,63,94,.25)}
+
+@keyframes pulse-ring{0%{transform:scale(1);opacity:.4}100%{transform:scale(1.6);opacity:0}}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+</style>
+</head>
+<body>
+
+<div class="slide-container">
+
+<!-- ====== Slide 1: 标题 ====== -->
+<div class="slide bg-s6 active" id="s0">
+  <div class="deco deco-rose" style="width:500px;height:500px;top:-200px;right:-150px"></div>
+  <div class="deco deco-violet" style="width:400px;height:400px;bottom:-120px;left:-120px"></div>
+  <div class="float-p" style="width:14px;height:14px;background:#F43F5E;top:12%;left:10%;animation-delay:0s"></div>
+  <div class="float-p" style="width:10px;height:10px;background:#8B5CF6;bottom:18%;right:8%;animation-delay:1.5s"></div>
+  <div class="float-p" style="width:8px;height:8px;background:#A78BFA;top:30%;right:20%;animation-delay:2.5s"></div>
+
+  <div class="anim fail-badge">
+    <span class="lc lc-28 c-rose"><i data-lucide="shield-x"></i></span>
+    失败模式 ③
+  </div>
+
+  <!-- 颜文字装饰 -->
+  <div class="anim kaomoji kmo-mid kmo-rose kmo-float" style="position:absolute;top:8%;right:12%">(｡•́︿•̀｡)</div>
+  <div class="anim kaomoji kmo-small kmo-violet kmo-bounce" style="position:absolute;bottom:15%;left:8%">(´；ω；`)</div>
+
+  <!-- Title Visual: Document with fake checkmark and hidden X -->
+  <div class="anim" style="margin-top:24px">
+    <svg width="340" height="220" viewBox="0 0 340 220">
+      <!-- Document body -->
+      <rect x="70" y="10" width="200" height="200" rx="18" fill="rgba(244,63,94,.06)" stroke="#F43F5E" stroke-width="2.5"/>
+      <!-- Fold corner -->
+      <path d="M230,10 L270,10 L270,50 Z" fill="rgba(244,63,94,.1)" stroke="#F43F5E" stroke-width="1.5"/>
+      <path d="M230,10 L230,50 L270,50" fill="none" stroke="#F43F5E" stroke-width="1.5"/>
+      <!-- Code lines -->
+      <rect x="95" y="45" width="130" height="8" rx="4" fill="rgba(16,185,129,.15)"/>
+      <rect x="95" y="62" width="100" height="8" rx="4" fill="rgba(16,185,129,.12)"/>
+      <rect x="95" y="79" width="115" height="8" rx="4" fill="rgba(16,185,129,.1)"/>
+      <!-- Separator line -->
+      <line x1="95" y1="100" x2="245" y2="100" stroke="rgba(255,255,255,.1)" stroke-width="1.5" stroke-dasharray="4,3"/>
+      <!-- Missing lines (dashed, red) -->
+      <rect x="95" y="112" width="120" height="8" rx="4" fill="none" stroke="#F43F5E" stroke-width="1.5" stroke-dasharray="4,3" opacity=".4"/>
+      <rect x="95" y="129" width="90" height="8" rx="4" fill="none" stroke="#F43F5E" stroke-width="1.5" stroke-dasharray="4,3" opacity=".4"/>
+      <rect x="95" y="146" width="110" height="8" rx="4" fill="none" stroke="#F43F5E" stroke-width="1.5" stroke-dasharray="4,3" opacity=".4"/>
+      <rect x="95" y="163" width="80" height="8" rx="4" fill="none" stroke="#F43F5E" stroke-width="1.5" stroke-dasharray="4,3" opacity=".4"/>
+      <!-- Big "DONE" stamp overlaid -->
+      <g transform="translate(170,115) rotate(-18)">
+        <rect x="-65" y="-28" width="130" height="56" rx="10" fill="none" stroke="#10B981" stroke-width="4" opacity=".5"/>
+        <text x="0" y="10" text-anchor="middle" fill="#10B981" font-size="32" font-weight="900" opacity=".5">DONE</text>
+      </g>
+      <!-- Warning pulse circle -->
+      <circle cx="265" cy="185" r="18" fill="rgba(244,63,94,.1)" stroke="#F43F5E" stroke-width="2">
+        <animate attributeName="r" values="16;22;16" dur="2s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="1;.5;1" dur="2s" repeatCount="indefinite"/>
+      </circle>
+      <text x="265" y="191" text-anchor="middle" fill="#F43F5E" font-size="18" font-weight="900">!</text>
+    </svg>
+  </div>
+
+  <div class="anim">
+    <span class="concept-word" style="font-size:5rem">过早标记功能完成</span>
+    <span class="kaomoji kmo-mid kmo-rose kmo-wiggle" style="margin-left:15px">(；一_一)</span>
+  </div>
+
+  <div class="anim line" style="background:linear-gradient(90deg,#F43F5E,#E879F9)"></div>
+  <div class="anim t-big c-gray italic">False Completion</div>
+
+  <!-- 底部颜文字 -->
+  <div class="anim kaomoji kmo-small kmo-purple kmo-float" style="position:absolute;bottom:8%;right:18%">(｀・ω・´)</div>
+</div>
+
+<!-- ====== Slide 2: 行为描述 ====== -->
+<div class="slide bg-s4" id="s1">
+  <div class="deco deco-amber" style="width:450px;height:450px;top:-150px;left:-120px"></div>
+
+  <div class="anim t-huge c-dark">
+    代码<span class="c-emerald bold">写完了</span>
+    <span class="kaomoji kmo-mid kmo-teal kmo-bounce" style="margin-left:10px">(｡♥‿♥｡)</span>
+  </div>
+  <div class="anim line" style="background:linear-gradient(90deg,#10B981,#F43F5E)"></div>
+
+  <!-- 颜文字装饰 -->
+  <div class="anim kaomoji kmo-small kmo-amber kmo-float" style="position:absolute;top:10%;left:5%">(ﾉ◕ヮ◕)ﾉ</div>
+  <div class="anim kaomoji kmo-small kmo-rose" style="position:absolute;bottom:12%;right:6%">(╯°□°）╯</div>
+
+  <!-- Visual: Side-by-side comparison - what Agent did vs what it should have done -->
+  <div class="anim" style="margin-top:16px">
+    <svg width="850" height="280" viewBox="0 0 850 280">
+      <!-- Left: What Agent did -->
+      <rect x="15" y="10" width="380" height="260" rx="20" fill="rgba(16,185,129,.05)" stroke="#10B981" stroke-width="2"/>
+      <text x="205" y="42" text-anchor="middle" fill="#10B981" font-size="18" font-weight="900">Agent 做了什么</text>
+      <line x1="45" y1="55" x2="365" y2="55" stroke="rgba(16,185,129,.15)" stroke-width="1.5"/>
+
+      <!-- Code writing icon -->
+      <rect x="40" y="70" width="140" height="85" rx="14" fill="rgba(16,185,129,.1)" stroke="#10B981" stroke-width="1.5"/>
+      <rect x="58" y="85" width="50" height="6" rx="3" fill="rgba(16,185,129,.3)"/>
+      <rect x="58" y="97" width="70" height="6" rx="3" fill="rgba(16,185,129,.25)"/>
+      <rect x="58" y="109" width="40" height="6" rx="3" fill="rgba(16,185,129,.2)"/>
+      <rect x="58" y="121" width="60" height="6" rx="3" fill="rgba(16,185,129,.25)"/>
+      <text x="110" y="148" text-anchor="middle" fill="#10B981" font-size="13" font-weight="700">写代码 ✓</text>
+
+      <!-- Arrow to "DONE" -->
+      <line x1="190" y1="112" x2="220" y2="112" stroke="#10B981" stroke-width="2"/>
+      <polygon points="218,106 232,112 218,118" fill="#10B981"/>
+
+      <!-- Stamp DONE directly -->
+      <rect x="240" y="75" width="140" height="80" rx="16" fill="rgba(16,185,129,.1)" stroke="#10B981" stroke-width="2"/>
+      <g transform="translate(310,115) rotate(-10)">
+        <rect x="-45" y="-18" width="90" height="36" rx="8" fill="none" stroke="#10B981" stroke-width="3"/>
+        <text x="0" y="8" text-anchor="middle" fill="#10B981" font-size="22" font-weight="900">DONE</text>
+      </g>
+
+      <!-- Fast forward icon -->
+      <text x="205" y="200" text-anchor="middle" fill="#10B981" font-size="14" font-weight="800">写完 → 直接标完成</text>
+      <!-- Speed lines -->
+      <line x1="120" y1="215" x2="290" y2="215" stroke="rgba(16,185,129,.2)" stroke-width="2" stroke-dasharray="12,6"/>
+
+      <!-- Skipped section (grayed out) -->
+      <rect x="45" y="225" width="330" height="35" rx="10" fill="rgba(244,63,94,.06)" stroke="rgba(244,63,94,.15)" stroke-width="1.5" stroke-dasharray="6,4"/>
+      <text x="210" y="248" text-anchor="middle" fill="#F43F5E" font-size="13" font-weight="700" opacity=".6">测试？验证？—— 全跳过</text>
+
+      <!-- Right: What should have been done -->
+      <rect x="455" y="10" width="380" height="260" rx="20" fill="rgba(99,102,241,.05)" stroke="#6366F1" stroke-width="2"/>
+      <text x="645" y="42" text-anchor="middle" fill="#818CF8" font-size="18" font-weight="900">正确流程</text>
+      <line x1="485" y1="55" x2="805" y2="55" stroke="rgba(99,102,241,.15)" stroke-width="1.5"/>
+
+      <!-- Step 1: Write -->
+      <rect x="475" y="70" width="100" height="44" rx="10" fill="rgba(16,185,129,.08)" stroke="#10B981" stroke-width="1.5"/>
+      <text x="525" y="97" text-anchor="middle" fill="#10B981" font-size="13" font-weight="700">写代码</text>
+      <line x1="580" y1="92" x2="600" y2="92" stroke="#6366F1" stroke-width="1.5"/>
+      <polygon points="598,88 608,92 598,96" fill="#6366F1"/>
+
+      <!-- Step 2: Test -->
+      <rect x="612" y="70" width="100" height="44" rx="10" fill="rgba(99,102,241,.08)" stroke="#6366F1" stroke-width="1.5"/>
+      <text x="662" y="97" text-anchor="middle" fill="#818CF8" font-size="13" font-weight="700">测试验证</text>
+      <line x1="717" y1="92" x2="737" y2="92" stroke="#6366F1" stroke-width="1.5"/>
+      <polygon points="735,88 745,92 735,96" fill="#6366F1"/>
+
+      <!-- Step 3: Done -->
+      <rect x="749" y="70" width="72" height="44" rx="10" fill="rgba(16,185,129,.08)" stroke="#10B981" stroke-width="1.5"/>
+      <text x="785" y="97" text-anchor="middle" fill="#10B981" font-size="13" font-weight="900">完成</text>
+
+      <!-- Detail cards below -->
+      <rect x="475" y="130" width="170" height="55" rx="12" fill="rgba(99,102,241,.06)" stroke="rgba(99,102,241,.15)" stroke-width="1.5"/>
+      <text x="560" y="152" text-anchor="middle" fill="#818CF8" font-size="12" font-weight="700">端到端测试</text>
+      <text x="560" y="172" text-anchor="middle" fill="#818CF8" font-size="11" font-weight="600" opacity=".7">完整功能链路验证</text>
+
+      <rect x="660" y="130" width="170" height="55" rx="12" fill="rgba(99,102,241,.06)" stroke="rgba(99,102,241,.15)" stroke-width="1.5"/>
+      <text x="745" y="152" text-anchor="middle" fill="#818CF8" font-size="12" font-weight="700">真实环境运行</text>
+      <text x="745" y="172" text-anchor="middle" fill="#818CF8" font-size="11" font-weight="600" opacity=".7">非假设条件验证</text>
+
+      <rect x="475" y="198" width="170" height="55" rx="12" fill="rgba(99,102,241,.06)" stroke="rgba(99,102,241,.15)" stroke-width="1.5"/>
+      <text x="560" y="220" text-anchor="middle" fill="#818CF8" font-size="12" font-weight="700">边界条件</text>
+      <text x="560" y="240" text-anchor="middle" fill="#818CF8" font-size="11" font-weight="600" opacity=".7">异常和极端情况</text>
+
+      <rect x="660" y="198" width="170" height="55" rx="12" fill="rgba(99,102,241,.06)" stroke="rgba(99,102,241,.15)" stroke-width="1.5"/>
+      <text x="745" y="220" text-anchor="middle" fill="#818CF8" font-size="12" font-weight="700">需求满足度</text>
+      <text x="745" y="240" text-anchor="middle" fill="#818CF8" font-size="11" font-weight="600" opacity=".7">逐项对照检查</text>
+
+      <!-- VS divider -->
+      <text x="425" y="145" text-anchor="middle" fill="#6B7280" font-size="28" font-weight="900">VS</text>
+    </svg>
+  </div>
+
+  <div class="anim t-huge c-rose" style="margin-top:16px">
+    <span class="bold ul-rose" style="font-size:3.8rem">不测试 · 不验证</span>
+    <span class="kaomoji kmo-mid kmo-rose kmo-wiggle" style="margin-left:15px">(；￣Д￣)</span>
+  </div>
+</div>
+
+<!-- ====== Slide 3: 跳过了什么（图形化） ====== -->
+<div class="slide bg-s3" id="s2">
+  <div class="deco deco-lav" style="width:500px;height:500px;bottom:-180px;right:-150px"></div>
+
+  <div class="anim t-huge c-dark">Agent 跳过了什么 <span class="kaomoji kmo-mid kmo-purple kmo-float">(・・ ) ?</span></div>
+  <div class="anim line" style="background:linear-gradient(90deg,#6366F1,#F43F5E)"></div>
+
+  <!-- 颜文字装饰 -->
+  <div class="anim kaomoji kmo-small kmo-indigo kmo-bounce" style="position:absolute;top:8%;left:8%">(¬‿¬)</div>
+  <div class="anim kaomoji kmo-small kmo-rose" style="position:absolute;top:12%;right:10%">(；一_一)</div>
+
+  <!-- Visual: Pipeline with skipped stages -->
+  <div class="anim" style="margin-top:16px">
+    <svg width="900" height="240" viewBox="0 0 900 240">
+      <defs>
+        <marker id="pipeArrow" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#6B7280"/></marker>
+      </defs>
+
+      <!-- Stage 1: Code (DONE) -->
+      <rect x="20" y="50" width="160" height="140" rx="20" fill="rgba(16,185,129,.06)" stroke="#10B981" stroke-width="2.5"/>
+      <!-- Code icon -->
+      <rect x="50" y="70" width="100" height="60" rx="10" fill="rgba(16,185,129,.1)"/>
+      <rect x="62" y="82" width="40" height="5" rx="2.5" fill="rgba(16,185,129,.3)"/>
+      <rect x="62" y="93" width="60" height="5" rx="2.5" fill="rgba(16,185,129,.25)"/>
+      <rect x="62" y="104" width="35" height="5" rx="2.5" fill="rgba(16,185,129,.2)"/>
+      <rect x="62" y="115" width="55" height="5" rx="2.5" fill="rgba(16,185,129,.25)"/>
+      <!-- Check badge -->
+      <circle cx="140" cy="75" r="14" fill="#10B981"/>
+      <path d="M133,75 L138,80 L147,71" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="100" y="162" text-anchor="middle" fill="#10B981" font-size="16" font-weight="900">写代码</text>
+      <text x="100" y="180" text-anchor="middle" fill="#10B981" font-size="13" font-weight="700">✓ 完成</text>
+
+      <!-- Arrow -->
+      <line x1="186" y1="120" x2="220" y2="120" stroke="#6B7280" stroke-width="2.5" marker-end="url(#pipeArrow)"/>
+
+      <!-- Stage 2: E2E Test (SKIPPED) -->
+      <rect x="228" y="50" width="148" height="140" rx="20" fill="rgba(244,63,94,.05)" stroke="#F43F5E" stroke-width="2" stroke-dasharray="8,5"/>
+      <!-- Skipped X overlay -->
+      <line x1="258" y1="75" x2="346" y2="145" stroke="#F43F5E" stroke-width="2.5" opacity=".3"/>
+      <line x1="346" y1="75" x2="258" y2="145" stroke="#F43F5E" stroke-width="2.5" opacity=".3"/>
+      <!-- Test beaker icon outline -->
+      <path d="M290,78 L290,105 L275,135 L325,135 L310,105 L310,78" fill="none" stroke="#F43F5E" stroke-width="1.5" opacity=".4"/>
+      <line x1="285" y1="78" x2="315" y2="78" stroke="#F43F5E" stroke-width="1.5" opacity=".4"/>
+      <text x="302" y="162" text-anchor="middle" fill="#F43F5E" font-size="14" font-weight="900">端到端测试</text>
+      <text x="302" y="180" text-anchor="middle" fill="#F43F5E" font-size="13" font-weight="700">✕ 跳过</text>
+
+      <!-- Arrow -->
+      <line x1="382" y1="120" x2="416" y2="120" stroke="#6B7280" stroke-width="2.5" marker-end="url(#pipeArrow)"/>
+
+      <!-- Stage 3: Real Env (SKIPPED) -->
+      <rect x="424" y="50" width="148" height="140" rx="20" fill="rgba(244,63,94,.05)" stroke="#F43F5E" stroke-width="2" stroke-dasharray="8,5"/>
+      <line x1="454" y1="75" x2="542" y2="145" stroke="#F43F5E" stroke-width="2.5" opacity=".3"/>
+      <line x1="542" y1="75" x2="454" y2="145" stroke="#F43F5E" stroke-width="2.5" opacity=".3"/>
+      <!-- Server icon outline -->
+      <rect x="478" y="78" width="40" height="50" rx="6" fill="none" stroke="#F43F5E" stroke-width="1.5" opacity=".4"/>
+      <circle cx="498" cy="88" r="3" fill="none" stroke="#F43F5E" stroke-width="1.5" opacity=".4"/>
+      <circle cx="498" cy="100" r="3" fill="none" stroke="#F43F5E" stroke-width="1.5" opacity=".4"/>
+      <line x1="483" y1="112" x2="513" y2="112" stroke="#F43F5E" stroke-width="1" opacity=".3"/>
+      <text x="498" y="162" text-anchor="middle" fill="#F43F5E" font-size="14" font-weight="900">环境验证</text>
+      <text x="498" y="180" text-anchor="middle" fill="#F43F5E" font-size="13" font-weight="700">✕ 跳过</text>
+
+      <!-- Arrow -->
+      <line x1="578" y1="120" x2="612" y2="120" stroke="#6B7280" stroke-width="2.5" marker-end="url(#pipeArrow)"/>
+
+      <!-- Stage 4: Edge Cases (SKIPPED) -->
+      <rect x="620" y="50" width="148" height="140" rx="20" fill="rgba(244,63,94,.05)" stroke="#F43F5E" stroke-width="2" stroke-dasharray="8,5"/>
+      <line x1="650" y1="75" x2="738" y2="145" stroke="#F43F5E" stroke-width="2.5" opacity=".3"/>
+      <line x1="738" y1="75" x2="650" y2="145" stroke="#F43F5E" stroke-width="2.5" opacity=".3"/>
+      <!-- Shield icon outline -->
+      <path d="M694,78 L714,86 L714,108 C714,122 694,132 694,132 C694,132 674,122 674,108 L674,86 Z" fill="none" stroke="#F43F5E" stroke-width="1.5" opacity=".4"/>
+      <text x="694" y="162" text-anchor="middle" fill="#F43F5E" font-size="14" font-weight="900">边界覆盖</text>
+      <text x="694" y="180" text-anchor="middle" fill="#F43F5E" font-size="13" font-weight="700">✕ 跳过</text>
+
+      <!-- Big skip arrow -->
+      <path d="M180,30 Q450,0 780,30" fill="none" stroke="#F59E0B" stroke-width="2.5" stroke-dasharray="10,6" opacity=".5"/>
+      <polygon points="776,24 790,30 776,36" fill="#F59E0B" opacity=".5"/>
+      <text x="450" y="35" text-anchor="middle" fill="#F59E0B" font-size="14" font-weight="900" opacity=".6">Agent 跳过了全部验证环节</text>
+
+      <!-- Result: False DONE -->
+      <rect x="800" y="65" width="85" height="110" rx="16" fill="rgba(245,158,11,.06)" stroke="#F59E0B" stroke-width="2.5"/>
+      <g transform="translate(842,110) rotate(-12)">
+        <rect x="-28" y="-14" width="56" height="28" rx="6" fill="none" stroke="#F59E0B" stroke-width="2.5"/>
+        <text x="0" y="6" text-anchor="middle" fill="#F59E0B" font-size="16" font-weight="900">DONE</text>
+      </g>
+      <text x="842" y="160" text-anchor="middle" fill="#F59E0B" font-size="11" font-weight="800">假完成</text>
+
+      <!-- Bottom label -->
+      <rect x="228" y="200" width="540" height="32" rx="12" fill="rgba(244,63,94,.06)" stroke="rgba(244,63,94,.15)" stroke-width="1.5"/>
+      <text x="498" y="222" text-anchor="middle" fill="#F43F5E" font-size="14" font-weight="800">三个关键验证阶段 — 全部被跳过</text>
+    </svg>
+  </div>
+
+  <div class="anim t-huge c-dark" style="margin-top:16px">
+    写完 <span style="color:#6B7280">≠</span> <span class="c-rose bold ul-rose" style="font-size:4.5rem">做完</span>
+    <span class="kaomoji kmo-mid kmo-rose kmo-pulse" style="margin-left:15px">(；へ：)</span>
+  </div>
+
+  <!-- 底部颜文字 -->
+  <div class="anim kaomoji kmo-small kmo-amber kmo-float" style="position:absolute;bottom:10%;right:8%">(｡ŏ_ŏ)</div>
+</div>
+
+<!-- ====== Slide 4: 表面 vs 真相（代码可视化） ====== -->
+<div class="slide bg-s1" id="s3">
+  <div class="deco deco-violet" style="width:500px;height:500px;top:-200px;right:-200px"></div>
+
+  <div class="anim t-huge c-dark">表面 vs 真相 <span class="kaomoji kmo-mid kmo-amber kmo-wiggle">(⊙_⊙)</span></div>
+  <div class="anim line"></div>
+
+  <!-- 颜文字装饰 -->
+  <div class="anim kaomoji kmo-small kmo-violet kmo-float" style="position:absolute;top:10%;left:6%">(・o・)</div>
+  <div class="anim kaomoji kmo-small kmo-rose" style="position:absolute;top:15%;right:8%">(｡ŏ﹏ŏ)</div>
+
+  <!-- Enhanced code visual with iceberg metaphor -->
+  <div class="anim" style="margin-top:12px">
+    <svg width="800" height="340" viewBox="0 0 800 340">
+      <!-- Left side: code block -->
+      <rect x="20" y="10" width="340" height="320" rx="16" fill="#1e1e3e"/>
+      <!-- Window dots -->
+      <circle cx="42" cy="30" r="6" fill="#ff5f57"/>
+      <circle cx="62" cy="30" r="6" fill="#febc2e"/>
+      <circle cx="82" cy="30" r="6" fill="#28c840"/>
+      <text x="200" y="32" text-anchor="middle" fill="rgba(255,255,255,.3)" font-size="11" font-weight="600">processOrder.js</text>
+      <!-- DONE badge -->
+      <rect x="280" y="18" width="65" height="24" rx="12" fill="rgba(16,185,129,.2)"/>
+      <text x="312" y="35" text-anchor="middle" fill="#34d399" font-size="11" font-weight="900">DONE ✓</text>
+
+      <line x1="20" y1="45" x2="360" y2="45" stroke="rgba(255,255,255,.06)" stroke-width="1"/>
+
+      <!-- Code lines - done -->
+      <text x="40" y="70" fill="rgba(255,255,255,.2)" font-size="12" font-family="monospace">1</text>
+      <text x="60" y="70" fill="#c792ea" font-size="13" font-family="monospace" font-weight="700">function</text>
+      <text x="130" y="70" fill="#82aaff" font-size="13" font-family="monospace">processOrder</text>
+      <text x="265" y="70" fill="rgba(255,255,255,.5)" font-size="13" font-family="monospace">() {</text>
+
+      <text x="40" y="94" fill="rgba(255,255,255,.2)" font-size="12" font-family="monospace">2</text>
+      <rect x="60" y="83" width="200" height="16" rx="4" fill="rgba(16,185,129,.1)"/>
+      <text x="68" y="95" fill="rgba(255,255,255,.35)" font-size="12" font-family="monospace" font-style="italic">// 核心逻辑 ✓ 已写</text>
+
+      <text x="40" y="118" fill="rgba(255,255,255,.2)" font-size="12" font-family="monospace">3</text>
+      <rect x="60" y="107" width="120" height="16" rx="4" fill="rgba(16,185,129,.08)"/>
+      <text x="68" y="119" fill="#c3e88d" font-size="12" font-family="monospace">  getData();</text>
+
+      <text x="40" y="142" fill="rgba(255,255,255,.2)" font-size="12" font-family="monospace">4</text>
+      <rect x="60" y="131" width="150" height="16" rx="4" fill="rgba(16,185,129,.08)"/>
+      <text x="68" y="143" fill="#c3e88d" font-size="12" font-family="monospace">  transform();</text>
+
+      <!-- Separator -->
+      <line x1="40" y1="160" x2="340" y2="160" stroke="rgba(244,63,94,.3)" stroke-width="1.5" stroke-dasharray="6,4"/>
+      <text x="200" y="175" text-anchor="middle" fill="#F43F5E" font-size="10" font-weight="700" opacity=".6">↓ 以下全部缺失 ↓</text>
+
+      <!-- Code lines - missing -->
+      <text x="40" y="198" fill="rgba(255,255,255,.15)" font-size="12" font-family="monospace">5</text>
+      <rect x="60" y="187" width="240" height="16" rx="4" fill="rgba(244,63,94,.06)" stroke="rgba(244,63,94,.15)" stroke-width="1" stroke-dasharray="3,2"/>
+      <text x="68" y="199" fill="rgba(244,63,94,.5)" font-size="12" font-family="monospace" font-style="italic">// 错误处理 ✗ 没写</text>
+
+      <text x="40" y="222" fill="rgba(255,255,255,.15)" font-size="12" font-family="monospace">6</text>
+      <rect x="60" y="211" width="240" height="16" rx="4" fill="rgba(244,63,94,.06)" stroke="rgba(244,63,94,.15)" stroke-width="1" stroke-dasharray="3,2"/>
+      <text x="68" y="223" fill="rgba(244,63,94,.5)" font-size="12" font-family="monospace" font-style="italic">// 边界条件 ✗ 没写</text>
+
+      <text x="40" y="246" fill="rgba(255,255,255,.15)" font-size="12" font-family="monospace">7</text>
+      <rect x="60" y="235" width="240" height="16" rx="4" fill="rgba(244,63,94,.06)" stroke="rgba(244,63,94,.15)" stroke-width="1" stroke-dasharray="3,2"/>
+      <text x="68" y="247" fill="rgba(244,63,94,.5)" font-size="12" font-family="monospace" font-style="italic">// 并发安全 ✗ 没写</text>
+
+      <text x="40" y="270" fill="rgba(255,255,255,.15)" font-size="12" font-family="monospace">8</text>
+      <rect x="60" y="259" width="240" height="16" rx="4" fill="rgba(244,63,94,.06)" stroke="rgba(244,63,94,.15)" stroke-width="1" stroke-dasharray="3,2"/>
+      <text x="68" y="271" fill="rgba(244,63,94,.5)" font-size="12" font-family="monospace" font-style="italic">// 输入校验 ✗ 没写</text>
+
+      <text x="40" y="294" fill="rgba(255,255,255,.15)" font-size="12" font-family="monospace">9</text>
+      <text x="60" y="294" fill="rgba(255,255,255,.4)" font-size="13" font-family="monospace">}</text>
+
+      <!-- Count labels -->
+      <rect x="40" y="305" width="100" height="22" rx="8" fill="rgba(16,185,129,.15)"/>
+      <text x="90" y="320" text-anchor="middle" fill="#10B981" font-size="11" font-weight="800">已写 3 行</text>
+      <rect x="160" y="305" width="100" height="22" rx="8" fill="rgba(244,63,94,.12)"/>
+      <text x="210" y="320" text-anchor="middle" fill="#F43F5E" font-size="11" font-weight="800">缺失 4 项</text>
+
+      <!-- Right side: Iceberg metaphor -->
+      <!-- Water surface -->
+      <line x1="420" y1="130" x2="790" y2="130" stroke="rgba(99,102,241,.2)" stroke-width="2" stroke-dasharray="10,5"/>
+      <text x="770" y="123" text-anchor="end" fill="#818CF8" font-size="11" font-weight="700" opacity=".5">表面</text>
+
+      <!-- Above water: tip -->
+      <polygon points="600,20 660,125 540,125" fill="rgba(16,185,129,.1)" stroke="#10B981" stroke-width="2"/>
+      <text x="600" y="70" text-anchor="middle" fill="#10B981" font-size="15" font-weight="900">能跑</text>
+      <text x="600" y="90" text-anchor="middle" fill="#10B981" font-size="12" font-weight="700">核心逻辑 ✓</text>
+      <!-- Flag -->
+      <line x1="600" y1="20" x2="600" y2="5" stroke="#10B981" stroke-width="2"/>
+      <polygon points="600,5 625,12 600,19" fill="#10B981" opacity=".6"/>
+
+      <!-- Below water: massive -->
+      <polygon points="540,138 660,138 730,310 470,310" fill="rgba(244,63,94,.06)" stroke="#F43F5E" stroke-width="2"/>
+      <text x="600" y="175" text-anchor="middle" fill="#F43F5E" font-size="16" font-weight="900">隐藏问题</text>
+      <text x="600" y="200" text-anchor="middle" fill="#F43F5E" font-size="13" font-weight="700">错误处理缺失</text>
+      <text x="600" y="222" text-anchor="middle" fill="#F43F5E" font-size="13" font-weight="700">边界条件遗漏</text>
+      <text x="600" y="244" text-anchor="middle" fill="#F43F5E" font-size="13" font-weight="700">并发安全隐患</text>
+      <text x="600" y="266" text-anchor="middle" fill="#F43F5E" font-size="13" font-weight="700">输入校验缺失</text>
+      <text x="600" y="295" text-anchor="middle" fill="#F43F5E" font-size="12" font-weight="600" opacity=".5">全部被忽略</text>
+
+      <!-- Size labels -->
+      <text x="720" y="80" fill="#10B981" font-size="13" font-weight="800">≈ 30%</text>
+      <line x1="665" y1="80" x2="712" y2="80" stroke="rgba(16,185,129,.2)" stroke-width="1"/>
+      <text x="750" y="230" fill="#F43F5E" font-size="13" font-weight="800">≈ 70%</text>
+      <line x1="665" y1="225" x2="742" y2="225" stroke="rgba(244,63,94,.2)" stroke-width="1"/>
+
+      <!-- Water waves -->
+      <path d="M420,130 Q450,122 480,130 Q510,138 540,130 Q570,122 600,130 Q630,138 660,130 Q690,122 720,130 Q750,138 780,130" fill="none" stroke="rgba(99,102,241,.15)" stroke-width="2">
+        <animate attributeName="d" values="M420,130 Q450,122 480,130 Q510,138 540,130 Q570,122 600,130 Q630,138 660,130 Q690,122 720,130 Q750,138 780,130;M420,130 Q450,138 480,130 Q510,122 540,130 Q570,138 600,130 Q630,122 660,130 Q690,138 720,130 Q750,122 780,130;M420,130 Q450,122 480,130 Q510,138 540,130 Q570,122 600,130 Q630,138 660,130 Q690,122 720,130 Q750,138 780,130" dur="3s" repeatCount="indefinite"/>
+      </path>
+    </svg>
+  </div>
+
+  <div class="anim t-big c-dark" style="margin-top:12px">
+    <span class="c-emerald">看起来能跑</span>
+    <span style="margin:0 12px;color:#6B7280;font-size:2.4rem">→</span>
+    <span class="c-rose bold" style="font-size:3.4rem">到处是隐藏 Bug</span>
+    <span class="kaomoji kmo-mid kmo-rose kmo-pulse" style="margin-left:10px">(；´Д｀)</span>
+  </div>
+
+  <!-- 底部颜文字 -->
+  <div class="anim kaomoji kmo-small kmo-purple kmo-bounce" style="position:absolute;bottom:8%;right:12%">(´-ω-`)</div>
+</div>
+
+<!-- ====== Slide 5: Bug 蔓延可视化 ====== -->
+<div class="slide bg-s2" id="s4">
+  <div class="deco deco-violet" style="width:500px;height:500px;top:-180px;left:-180px"></div>
+
+  <div class="anim">
+    <span class="lc lc-64 c-rose"><i data-lucide="bug"></i></span>
+  </div>
+  <div class="anim t-huge c-dark" style="margin-top:12px">隐藏 Bug 蔓延 <span class="kaomoji kmo-mid kmo-rose kmo-wiggle">(；一_一)</span></div>
+  <div class="anim line" style="background:linear-gradient(90deg,#F43F5E,#E879F9)"></div>
+
+  <!-- 颜文字装饰 -->
+  <div class="anim kaomoji kmo-small kmo-rose kmo-float" style="position:absolute;top:8%;left:8%">(╯°□°）╯︵</div>
+  <div class="anim kaomoji kmo-small kmo-amber" style="position:absolute;top:12%;right:6%">(｡ŏ_ŏ)</div>
+
+  <!-- Enhanced: Bug spread visualization with network graph -->
+  <div class="anim" style="margin-top:16px">
+    <svg width="700" height="280" viewBox="0 0 700 280">
+      <!-- Network connections (background) -->
+      <line x1="150" y1="70" x2="350" y2="70" stroke="rgba(255,255,255,.04)" stroke-width="1.5"/>
+      <line x1="150" y1="70" x2="150" y2="210" stroke="rgba(255,255,255,.04)" stroke-width="1.5"/>
+      <line x1="150" y1="70" x2="350" y2="210" stroke="rgba(255,255,255,.04)" stroke-width="1.5"/>
+      <line x1="350" y1="70" x2="550" y2="70" stroke="rgba(255,255,255,.04)" stroke-width="1.5"/>
+      <line x1="350" y1="70" x2="350" y2="210" stroke="rgba(255,255,255,.04)" stroke-width="1.5"/>
+      <line x1="350" y1="70" x2="550" y2="210" stroke="rgba(255,255,255,.04)" stroke-width="1.5"/>
+      <line x1="550" y1="70" x2="550" y2="210" stroke="rgba(255,255,255,.04)" stroke-width="1.5"/>
+      <line x1="150" y1="210" x2="350" y2="210" stroke="rgba(255,255,255,.04)" stroke-width="1.5"/>
+      <line x1="350" y1="210" x2="550" y2="210" stroke="rgba(255,255,255,.04)" stroke-width="1.5"/>
+      <line x1="150" y1="210" x2="550" y2="70" stroke="rgba(255,255,255,.04)" stroke-width="1.5"/>
+
+      <!-- Infection spread lines (animated) -->
+      <line x1="350" y1="70" x2="150" y2="70" stroke="#F43F5E" stroke-width="2" opacity="0">
+        <animate attributeName="opacity" values="0;.4" dur=".5s" fill="freeze" begin="2s"/>
+      </line>
+      <line x1="350" y1="70" x2="350" y2="210" stroke="#F43F5E" stroke-width="2" opacity="0">
+        <animate attributeName="opacity" values="0;.3" dur=".5s" fill="freeze" begin="2.5s"/>
+      </line>
+      <line x1="350" y1="210" x2="550" y2="210" stroke="#F43F5E" stroke-width="2" opacity="0">
+        <animate attributeName="opacity" values="0;.3" dur=".5s" fill="freeze" begin="3s"/>
+      </line>
+      <line x1="550" y1="210" x2="550" y2="70" stroke="#F43F5E" stroke-width="2" opacity="0">
+        <animate attributeName="opacity" values="0;.25" dur=".5s" fill="freeze" begin="3.5s"/>
+      </line>
+
+      <!-- Module A (clean) -->
+      <rect x="100" y="35" width="100" height="70" rx="14" fill="rgba(16,185,129,.08)" stroke="#10B981" stroke-width="2"/>
+      <text x="150" y="65" text-anchor="middle" fill="#10B981" font-size="13" font-weight="700">模块 A</text>
+      <text x="150" y="85" text-anchor="middle" fill="#10B981" font-size="20" font-weight="900">✓</text>
+
+      <!-- Module B (infected - initial bug source) -->
+      <rect x="300" y="35" width="100" height="70" rx="14" fill="rgba(244,63,94,.1)" stroke="#F43F5E" stroke-width="2.5">
+        <animate attributeName="stroke-width" values="2;4;2" dur="2s" repeatCount="indefinite"/>
+      </rect>
+      <!-- Pulse ring -->
+      <rect x="300" y="35" width="100" height="70" rx="14" fill="none" stroke="#F43F5E" stroke-width="1" opacity="0">
+        <animate attributeName="opacity" values=".4;0" dur="2s" repeatCount="indefinite"/>
+        <animate attributeName="x" values="300;290" dur="2s" repeatCount="indefinite"/>
+        <animate attributeName="y" values="35;25" dur="2s" repeatCount="indefinite"/>
+        <animate attributeName="width" values="100;120" dur="2s" repeatCount="indefinite"/>
+        <animate attributeName="height" values="70;90" dur="2s" repeatCount="indefinite"/>
+      </rect>
+      <text x="350" y="65" text-anchor="middle" fill="#F43F5E" font-size="13" font-weight="700">模块 B</text>
+      <text x="350" y="88" text-anchor="middle" fill="#F43F5E" font-size="18" font-weight="900">BUG</text>
+
+      <!-- Module C (clean then infected) -->
+      <rect x="500" y="35" width="100" height="70" rx="14" fill="rgba(16,185,129,.08)" stroke="#10B981" stroke-width="2">
+        <animate attributeName="fill" values="rgba(16,185,129,.08);rgba(244,63,94,.1)" dur=".5s" fill="freeze" begin="3.5s"/>
+        <animate attributeName="stroke" values="#10B981;#F43F5E" dur=".5s" fill="freeze" begin="3.5s"/>
+      </rect>
+      <text x="550" y="65" text-anchor="middle" fill="#10B981" font-size="13" font-weight="700">模块 C</text>
+      <text x="550" y="85" text-anchor="middle" fill="#10B981" font-size="20" font-weight="900">✓</text>
+
+      <!-- Module D (infected) -->
+      <rect x="100" y="175" width="100" height="70" rx="14" fill="rgba(16,185,129,.08)" stroke="#10B981" stroke-width="2">
+        <animate attributeName="fill" values="rgba(16,185,129,.08);rgba(244,63,94,.1)" dur=".5s" fill="freeze" begin="2s"/>
+        <animate attributeName="stroke" values="#10B981;#F43F5E" dur=".5s" fill="freeze" begin="2s"/>
+      </rect>
+      <text x="150" y="205" text-anchor="middle" fill="#10B981" font-size="13" font-weight="700">模块 D</text>
+      <text x="150" y="225" text-anchor="middle" fill="#10B981" font-size="20" font-weight="900">✓</text>
+
+      <!-- Module E (infected) -->
+      <rect x="300" y="175" width="100" height="70" rx="14" fill="rgba(16,185,129,.08)" stroke="#10B981" stroke-width="2">
+        <animate attributeName="fill" values="rgba(16,185,129,.08);rgba(244,63,94,.1)" dur=".5s" fill="freeze" begin="2.5s"/>
+        <animate attributeName="stroke" values="#10B981;#F43F5E" dur=".5s" fill="freeze" begin="2.5s"/>
+      </rect>
+      <text x="350" y="205" text-anchor="middle" fill="#10B981" font-size="13" font-weight="700">模块 E</text>
+      <text x="350" y="225" text-anchor="middle" fill="#10B981" font-size="20" font-weight="900">✓</text>
+
+      <!-- Module F (infected later) -->
+      <rect x="500" y="175" width="100" height="70" rx="14" fill="rgba(16,185,129,.08)" stroke="#10B981" stroke-width="2">
+        <animate attributeName="fill" values="rgba(16,185,129,.08);rgba(244,63,94,.1)" dur=".5s" fill="freeze" begin="3s"/>
+        <animate attributeName="stroke" values="#10B981;#F43F5E" dur=".5s" fill="freeze" begin="3s"/>
+      </rect>
+      <text x="550" y="205" text-anchor="middle" fill="#10B981" font-size="13" font-weight="700">模块 F</text>
+      <text x="550" y="225" text-anchor="middle" fill="#10B981" font-size="20" font-weight="900">✓</text>
+
+      <!-- Timeline at bottom -->
+      <line x1="50" y1="268" x2="650" y2="268" stroke="rgba(255,255,255,.1)" stroke-width="2"/>
+      <circle cx="100" cy="268" r="5" fill="#10B981"/>
+      <text x="100" y="260" text-anchor="middle" fill="#10B981" font-size="10" font-weight="700">部署</text>
+      <circle cx="250" cy="268" r="5" fill="#F43F5E"/>
+      <text x="250" y="260" text-anchor="middle" fill="#F43F5E" font-size="10" font-weight="700">Bug 出现</text>
+      <circle cx="400" cy="268" r="5" fill="#F43F5E"/>
+      <text x="400" y="260" text-anchor="middle" fill="#F43F5E" font-size="10" font-weight="700">蔓延</text>
+      <circle cx="550" cy="268" r="5" fill="#DC2626"/>
+      <text x="550" y="260" text-anchor="middle" fill="#DC2626" font-size="10" font-weight="700">全面爆发</text>
+    </svg>
+  </div>
+
+  <div class="anim t-mid c-gray italic" style="margin-top:16px">一个未测试的 Bug，<span class="c-rose bold">感染整个系统</span> <span class="kaomoji kmo-mid kmo-rose kmo-pulse">(；´Д｀)</span></div>
+
+  <!-- 底部颜文字 -->
+  <div class="anim kaomoji kmo-small kmo-purple kmo-bounce" style="position:absolute;bottom:10%;right:10%">(´；ω；`)</div>
+</div>
+
+<!-- ====== Slide 6: 时间代价 ====== -->
+<div class="slide bg-s4" id="s5">
+  <div class="deco deco-amber" style="width:500px;height:500px;bottom:-200px;right:-150px"></div>
+
+  <div class="anim t-huge c-dark">时间代价 <span class="kaomoji kmo-mid kmo-amber kmo-float">(´-ω-`)</span></div>
+  <div class="anim line" style="background:linear-gradient(90deg,#F59E0B,#F43F5E)"></div>
+
+  <!-- 颜文字装饰 -->
+  <div class="anim kaomoji kmo-small kmo-rose kmo-wiggle" style="position:absolute;top:10%;left:6%">(；へ：)</div>
+  <div class="anim kaomoji kmo-small kmo-amber" style="position:absolute;top:8%;right:8%">(｡ŏ_ŏ)</div>
+
+  <!-- Enhanced: Visual time comparison with hourglass -->
+  <div class="anim" style="margin-top:16px">
+    <svg width="750" height="300" viewBox="0 0 750 300">
+      <!-- Left: Agent's time bar -->
+      <text x="150" y="25" text-anchor="middle" fill="#10B981" font-size="18" font-weight="900">Agent 花的时间</text>
+      <rect x="80" y="40" width="140" height="220" rx="16" fill="rgba(16,185,129,.04)" stroke="#10B981" stroke-width="2"/>
+      <!-- Small filled bar -->
+      <rect x="95" y="190" width="110" height="60" rx="10" fill="rgba(16,185,129,.12)" stroke="#10B981" stroke-width="1.5">
+        <animate attributeName="height" values="0;60" dur="1s" fill="freeze" begin="0.5s"/>
+        <animate attributeName="y" values="250;190" dur="1s" fill="freeze" begin="0.5s"/>
+      </rect>
+      <text x="150" y="228" text-anchor="middle" fill="#10B981" font-size="16" font-weight="900">写代码</text>
+      <!-- Time label -->
+      <text x="150" y="285" text-anchor="middle" fill="#10B981" font-size="22" font-weight="900">1x</text>
+
+      <!-- Middle: VS -->
+      <text x="305" y="160" text-anchor="middle" fill="#6B7280" font-size="36" font-weight="900">VS</text>
+
+      <!-- Right: User's debug time bar -->
+      <text x="500" y="25" text-anchor="middle" fill="#F43F5E" font-size="18" font-weight="900">用户修复时间</text>
+      <rect x="430" y="40" width="140" height="220" rx="16" fill="rgba(244,63,94,.04)" stroke="#F43F5E" stroke-width="2"/>
+      <!-- Large filled bar -->
+      <rect x="445" y="60" width="110" height="190" rx="10" fill="rgba(244,63,94,.1)" stroke="#F43F5E" stroke-width="1.5">
+        <animate attributeName="height" values="0;190" dur="1.5s" fill="freeze" begin="0.8s"/>
+        <animate attributeName="y" values="250;60" dur="1.5s" fill="freeze" begin="0.8s"/>
+      </rect>
+      <!-- Breakdown sections inside -->
+      <text x="500" y="100" text-anchor="middle" fill="#F43F5E" font-size="12" font-weight="700" opacity="0">
+        定位问题
+        <animate attributeName="opacity" values="0;.8" dur=".3s" fill="freeze" begin="1.5s"/>
+      </text>
+      <text x="500" y="130" text-anchor="middle" fill="#F43F5E" font-size="12" font-weight="700" opacity="0">
+        理解代码
+        <animate attributeName="opacity" values="0;.8" dur=".3s" fill="freeze" begin="1.8s"/>
+      </text>
+      <text x="500" y="160" text-anchor="middle" fill="#F43F5E" font-size="12" font-weight="700" opacity="0">
+        修复 Bug
+        <animate attributeName="opacity" values="0;.8" dur=".3s" fill="freeze" begin="2.1s"/>
+      </text>
+      <text x="500" y="190" text-anchor="middle" fill="#F43F5E" font-size="12" font-weight="700" opacity="0">
+        回归测试
+        <animate attributeName="opacity" values="0;.8" dur=".3s" fill="freeze" begin="2.4s"/>
+      </text>
+      <text x="500" y="220" text-anchor="middle" fill="#F43F5E" font-size="12" font-weight="700" opacity="0">
+        补写缺失
+        <animate attributeName="opacity" values="0;.8" dur=".3s" fill="freeze" begin="2.7s"/>
+      </text>
+
+      <!-- Time label -->
+      <text x="500" y="285" text-anchor="middle" fill="#F43F5E" font-size="22" font-weight="900">3~5x</text>
+
+      <!-- Right side: multiplier callout -->
+      <rect x="620" y="100" width="120" height="100" rx="20" fill="rgba(244,63,94,.08)" stroke="#F43F5E" stroke-width="2">
+        <animate attributeName="stroke-width" values="2;4;2" dur="2s" repeatCount="indefinite"/>
+      </rect>
+      <text x="680" y="140" text-anchor="middle" fill="#F43F5E" font-size="42" font-weight="900">N倍</text>
+      <text x="680" y="170" text-anchor="middle" fill="#F43F5E" font-size="14" font-weight="700">时间成本</text>
+      <!-- Arrow pointing to it -->
+      <line x1="575" y1="150" x2="615" y2="150" stroke="#F43F5E" stroke-width="2" stroke-dasharray="4,3"/>
+      <polygon points="613,145 623,150 613,155" fill="#F43F5E"/>
+    </svg>
+  </div>
+
+  <div class="anim t-huge c-dark" style="margin-top:16px">
+    用户花<span class="bg-rose c-rose bold" style="font-size:4.5rem">几倍时间</span>自己修
+    <span class="kaomoji kmo-mid kmo-rose kmo-pulse" style="margin-left:15px">(；´Д｀)</span>
+  </div>
+
+  <!-- 底部颜文字 -->
+  <div class="anim kaomoji kmo-small kmo-purple kmo-float" style="position:absolute;bottom:8%;right:12%">(´；ω；`)</div>
+</div>
+
+<!-- ====== Slide 7: 总结 ====== -->
+<div class="slide bg-s5" id="s6">
+  <div class="deco deco-lav" style="width:600px;height:600px;top:50%;left:50%;margin-top:-300px;margin-left:-300px"></div>
+
+  <div class="anim">
+    <span class="lc lc-64 c-rose"><i data-lucide="alert-triangle"></i></span>
+  </div>
+
+  <div class="anim t-mid c-gray" style="margin-top:12px">失败模式 ③ 一句话总结 <span class="kaomoji kmo-mid kmo-rose kmo-wiggle">(；一_一)</span></div>
+  <div class="anim line" style="background:linear-gradient(90deg,#F43F5E,#E879F9)"></div>
+
+  <!-- 颜文字装饰 -->
+  <div class="anim kaomoji kmo-small kmo-violet kmo-float" style="position:absolute;top:10%;left:8%">(｡•́︿•̀｡)</div>
+  <div class="anim kaomoji kmo-small kmo-amber" style="position:absolute;top:12%;right:6%">(｀・ω・´)</div>
+
+  <!-- Enhanced flow summary -->
+  <div class="anim" style="margin-top:16px">
+    <svg width="800" height="140" viewBox="0 0 800 140">
+      <defs><marker id="ar4" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#E879F9"/></marker></defs>
+
+      <!-- Step 1 -->
+      <rect x="10" y="20" width="200" height="100" rx="18" fill="rgba(16,185,129,.06)" stroke="#10B981" stroke-width="2"/>
+      <!-- Code icon -->
+      <rect x="30" y="38" width="50" height="35" rx="8" fill="rgba(16,185,129,.12)"/>
+      <rect x="38" y="46" width="20" height="4" rx="2" fill="rgba(16,185,129,.3)"/>
+      <rect x="38" y="54" width="30" height="4" rx="2" fill="rgba(16,185,129,.25)"/>
+      <rect x="38" y="62" width="15" height="4" rx="2" fill="rgba(16,185,129,.2)"/>
+      <text x="140" y="55" text-anchor="middle" fill="#10B981" font-size="16" font-weight="900">代码写完</text>
+      <text x="140" y="78" text-anchor="middle" fill="#10B981" font-size="13" font-weight="700">标记 "完成"</text>
+      <!-- Check stamp -->
+      <circle cx="180" cy="40" r="12" fill="#10B981"/>
+      <path d="M174,40 L178,44 L186,36" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+
+      <line x1="216" y1="70" x2="285" y2="70" stroke="#E879F9" stroke-width="2.5" marker-end="url(#ar4)"/>
+
+      <!-- Step 2 -->
+      <rect x="295" y="20" width="210" height="100" rx="18" fill="rgba(244,63,94,.06)" stroke="#F43F5E" stroke-width="2"/>
+      <!-- Bug icon -->
+      <circle cx="335" cy="60" r="18" fill="rgba(244,63,94,.1)"/>
+      <text x="335" y="66" text-anchor="middle" fill="#F43F5E" font-size="20">🐛</text>
+      <text x="430" y="55" text-anchor="middle" fill="#F43F5E" font-size="15" font-weight="900">跳过测试验证</text>
+      <text x="430" y="78" text-anchor="middle" fill="#F43F5E" font-size="13" font-weight="700">隐藏 Bug 遍布</text>
+
+      <line x1="511" y1="70" x2="580" y2="70" stroke="#E879F9" stroke-width="2.5" marker-end="url(#ar4)"/>
+
+      <!-- Step 3 -->
+      <rect x="590" y="20" width="200" height="100" rx="18" fill="rgba(245,158,11,.06)" stroke="#F59E0B" stroke-width="2"/>
+      <!-- Sad user -->
+      <circle cx="630" cy="58" r="18" fill="rgba(245,158,11,.1)"/>
+      <circle cx="624" cy="53" r="2.5" fill="#F59E0B"/>
+      <circle cx="636" cy="53" r="2.5" fill="#F59E0B"/>
+      <path d="M622,66 Q630,60 638,66" fill="none" stroke="#F59E0B" stroke-width="2" stroke-linecap="round"/>
+      <text x="730" y="55" text-anchor="middle" fill="#F59E0B" font-size="15" font-weight="900">用户被迫</text>
+      <text x="730" y="78" text-anchor="middle" fill="#F59E0B" font-size="13" font-weight="700">花 N 倍时间修</text>
+    </svg>
+  </div>
+
+  <div class="anim t-huge c-dark" style="margin-top:24px">
+    <span class="c-emerald">能跑</span>
+    <span style="margin:0 14px;color:#6B7280;font-size:2.4rem">≠</span>
+    <span class="c-rose bold ul-rose" style="font-size:4.5rem">能用</span>
+    <span class="kaomoji kmo-mid kmo-violet kmo-pulse" style="margin-left:15px">(｡♥‿♥｡)</span>
+  </div>
+
+  <div class="anim t-mid c-gray italic" style="margin-top:16px">
+    写完代码只是开始，<span class="c-rose bold">验证通过才是完成</span>
+  </div>
+
+  <!-- 底部颜文字 -->
+  <div class="anim kaomoji kmo-small kmo-purple kmo-bounce" style="position:absolute;bottom:8%;right:15%">(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧</div>
+  <div class="anim kaomoji kmo-small kmo-teal kmo-float" style="position:absolute;bottom:12%;left:10%">(´-ω-`)</div>
+</div>
+
+</div>
+
+<script>
+lucide.createIcons();
+
+const slides=document.querySelectorAll('.slide'),
+      total=slides.length;
+let cur=0;
+
+function go(n){
+  if(n<0||n>=total||n===cur)return;
+  slides[cur].classList.remove('active');
+  slides[cur].querySelectorAll('.anim').forEach(e=>e.classList.remove('show'));
+  cur=n;
+  slides[cur].classList.add('active');
+  slides[cur].querySelectorAll('.anim').forEach((e,i)=>{
+    e.classList.remove('show');
+    setTimeout(()=>e.classList.add('show'),200+i*300);
+  });
+}
+
+slides[0].querySelectorAll('.anim').forEach((e,i)=>setTimeout(()=>e.classList.add('show'),400+i*350));
+
+document.addEventListener('keydown',e=>{
+  if(['ArrowRight','ArrowDown',' ','PageDown'].includes(e.key)){e.preventDefault();go(cur+1)}
+  else if(['ArrowLeft','ArrowUp','PageUp'].includes(e.key)){e.preventDefault();go(cur-1)}
+  else if(e.key==='Home'){e.preventDefault();go(0)}
+  else if(e.key==='End'){e.preventDefault();go(total-1)}
+});
+
+let tx=0,ty=0;
+document.addEventListener('touchstart',e=>{tx=e.changedTouches[0].screenX;ty=e.changedTouches[0].screenY});
+document.addEventListener('touchend',e=>{
+  const dx=e.changedTouches[0].screenX-tx,dy=e.changedTouches[0].screenY-ty;
+  if(Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>50){dx<0?go(cur+1):go(cur-1)}
+});
+
+let wc=false;
+document.addEventListener('wheel',e=>{
+  if(wc)return;wc=true;setTimeout(()=>wc=false,800);
+  e.deltaY>0?go(cur+1):go(cur-1);
+});
+</script>
+
+</body>
+</html>

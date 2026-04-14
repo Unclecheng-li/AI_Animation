@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>抖站 - 短视频与长视频的融合平台</title>
+  <!-- 引入外部资源 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <!-- Tailwind 自定义配置 -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#00a1d6', // 抖站主色（融合抖音蓝+B站蓝）
+            secondary: '#f43c3c', // 强调色（抖音红）
+            bilibili: '#fb7299', // B站粉
+            dark: '#18191c', // 深色模式主色
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+        },
+      }
+    }
+  </script>
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .content-auto { content-visibility: auto; }
+      .scrollbar-hide { scrollbar-width: none; -ms-overflow-style: none; }
+      .scrollbar-hide::-webkit-scrollbar { display: none; }
+      .video-mask { background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 50%); }
+      .danmu { position: absolute; left: 0; top: 0; color: white; text-shadow: 0 0 2px black; pointer-events: none; }
+      .loader-fade-out { animation: fadeOut 0.5s ease-out forwards; }
+      .content-fade-in { animation: fadeIn 0.5s ease-in forwards; }
+      .video-hover-overlay { background-color: rgba(0,0,0,0.3); transition: all 0.3s ease; }
+      .play-button-pulse { animation: playButtonPulse 2s ease-in-out infinite; }
+    }
+    
+    @keyframes fadeOut {
+      from { opacity: 1; }
+      to { opacity: 0; visibility: hidden; }
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    
+    @keyframes pulse {
+      0%, 100% {
+        transform: scale(1);
+      }
+      50% {
+        transform: scale(1.05);
+      }
+    }
+    
+    @keyframes playButtonPulse {
+      0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(255,255,255,0.7);
+      }
+      70% {
+        transform: scale(1.1);
+        box-shadow: 0 0 0 10px rgba(255,255,255,0);
+      }
+    }
+    
+    .animate-pulse {
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    
+    #loader {
+      transition: opacity 0.5s ease-out;
+    }
+    
+    body.loaded > *:not(#loader) {
+      opacity: 0;
+      transition: opacity 0.5s ease-in;
+    }
+    
+    body.loaded #loader {
+      opacity: 1;
+    }
+    
+    body.loaded-content #loader {
+      opacity: 0;
+      visibility: hidden;
+    }
+    
+    body.loaded-content > *:not(#loader) {
+      opacity: 1;
+    }
+    
+    /* 长视频卡片悬停效果 */
+    #long-video-container > div {
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+    
+    #long-video-container > div:hover {
+      transform: translateY(-4px);
+      border: 2px solid theme('colors.primary');
+      box-shadow: 0 8px 25px rgba(0, 161, 214, 0.2);
+    }
+    
+    /* 视频封面悬停效果 */
+    #long-video-container .relative.aspect-video {
+      overflow: hidden;
+    }
+    
+    #long-video-container .relative.aspect-video:hover img {
+      transform: scale(1.05);
+      filter: brightness(0.7);
+    }
+    
+    #long-video-container .relative.aspect-video img {
+      transition: all 0.3s ease;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 dark:bg-dark text-gray-900 dark:text-white transition-colors duration-300">
+  <!-- 加载画面 -->
+  <div id="loader" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white dark:bg-dark">
+    <div class="w-20 h-20 rounded-lg bg-gradient-to-r from-primary to-secondary flex items-center justify-center mb-6 animate-pulse">
+      <i class="fa fa-play-circle text-white text-4xl"></i>
+    </div>
+    <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-bilibili mb-4">抖站</h1>
+    <div class="w-64 h-2 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
+      <div id="progress-bar" class="h-full bg-primary rounded-full w-0 transition-all duration-300"></div>
+    </div>
+    <p class="text-sm text-gray-500 dark:text-gray-400 mt-4">正在加载精彩内容...</p>
+  </div>
+  <!-- 顶部导航栏 -->
+  <header class="fixed top-0 left-0 right-0 z-50 bg-white/90 dark:bg-dark/90 backdrop-blur-md border-b border-gray-200 dark:border-gray-800">
+    <div class="container mx-auto px-4 flex items-center justify-between h-16">
+      <!-- Logo -->
+      <a href="#" class="flex items-center gap-2">
+        <div class="w-10 h-10 rounded-lg bg-gradient-to-r from-primary to-secondary flex items-center justify-center">
+          <i class="fa fa-play-circle text-white text-xl"></i>
+        </div>
+        <span class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-bilibili">抖站</span>
+      </a>
+
+      <!-- 搜索栏 -->
+      <div class="hidden md:flex items-center flex-1 max-w-2xl mx-8">
+        <div class="relative w-full">
+          <input type="text" placeholder="搜索视频、UP主、话题" class="w-full py-2 px-4 pl-10 rounded-full border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary/50">
+          <i class="fa fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+        </div>
+      </div>
+
+      <!-- 功能导航 -->
+      <nav class="flex items-center gap-1 md:gap-4">
+        <a href="#" class="flex flex-col items-center justify-center px-2 py-1 text-sm hover:text-primary transition-colors">
+          <i class="fa fa-fire text-xl"></i>
+          <span class="hidden md:inline">热门</span>
+        </a>
+        <a href="#" class="flex flex-col items-center justify-center px-2 py-1 text-sm hover:text-primary transition-colors">
+          <i class="fa fa-compass text-xl"></i>
+          <span class="hidden md:inline">发现</span>
+        </a>
+        <a href="#" class="flex flex-col items-center justify-center px-2 py-1 text-sm hover:text-primary transition-colors">
+          <i class="fa fa-play-square text-xl"></i>
+          <span class="hidden md:inline">番剧</span>
+        </a>
+        <a href="#" class="flex flex-col items-center justify-center px-2 py-1 text-sm hover:text-bilibili transition-colors">
+          <i class="fa fa-tv text-xl"></i>
+          <span class="hidden md:inline">直播</span>
+        </a>
+        <button class="ml-2 md:ml-4 w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+          <img src="https://picsum.photos/200/200?random=1" alt="用户头像" class="w-full h-full object-cover">
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- 移动端搜索栏 -->
+  <div class="md:hidden fixed top-16 left-0 right-0 z-40 bg-white dark:bg-dark border-b border-gray-200 dark:border-gray-800 px-4 py-2">
+    <div class="relative">
+      <input type="text" placeholder="搜索视频、UP主、话题" class="w-full py-2 px-4 pl-10 rounded-full border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary/50">
+      <i class="fa fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+    </div>
+  </div>
+
+  <!-- 主内容区 -->
+  <main class="container mx-auto pt-24 md:pt-20 pb-16 flex flex-col md:flex-row">
+    <!-- 左侧分区导航（仅PC显示） -->
+    <aside class="hidden md:block w-64 fixed left-0 top-20 bottom-0 overflow-y-auto scrollbar-hide p-4 bg-white/90 dark:bg-dark/90 backdrop-blur-md border-r border-gray-200 dark:border-gray-800">
+      <div class="space-y-6">
+        <!-- 分区导航 -->
+        <div>
+          <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-3 px-2">视频分区</h3>
+          <ul class="space-y-1">
+            <li><a href="#" class="flex items-center gap-3 px-2 py-2 rounded-lg bg-primary/10 text-primary font-medium">
+              <i class="fa fa-music w-6 text-center"></i> 音乐
+            </a></li>
+            <li><a href="#" class="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+              <i class="fa fa-gamepad w-6 text-center"></i> 游戏
+            </a></li>
+            <li><a href="#" class="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+              <i class="fa fa-film w-6 text-center"></i> 影视
+            </a></li>
+            <li><a href="#" class="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+              <i class="fa fa-graduation-cap w-6 text-center"></i> 知识
+            </a></li>
+            <li><a href="#" class="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+              <i class="fa fa-cutlery w-6 text-center"></i> 美食
+            </a></li>
+            <li><a href="#" class="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+              <i class="fa fa-futbol-o w-6 text-center"></i> 运动
+            </a></li>
+            <li><a href="#" class="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+              <i class="fa fa-car w-6 text-center"></i> 汽车
+            </a></li>
+            <li><a href="#" class="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+              <i class="fa fa-ellipsis-h w-6 text-center"></i> 更多
+            </a></li>
+          </ul>
+        </div>
+
+        <!-- 关注UP主 -->
+        <div>
+          <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-3 px-2">关注的UP主</h3>
+          <ul class="space-y-3">
+            <li class="flex items-center gap-3 px-2 py-1 hover:bg-gray-100 dark:hover:bg-gray-800 p-2 rounded-lg transition-colors">
+              <img src="icon/bochii.jpg" alt="UP主" class="w-10 h-10 rounded-full object-cover">
+              <div>
+                <p class="text-sm font-medium">guitarhero</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">12.3万粉丝</p>
+              </div>
+            </li>
+            <li class="flex items-center gap-3 px-2 py-1 hover:bg-gray-100 dark:hover:bg-gray-800 p-2 rounded-lg transition-colors">
+              <img src="icon/小兆.jpg" alt="UP主" class="w-10 h-10 rounded-full object-cover">
+              <div>
+                <p class="text-sm font-medium">游戏解说小兆</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">8.7万粉丝</p>
+              </div>
+            </li>
+            <li class="flex items-center gap-3 px-2 py-1 hover:bg-gray-100 dark:hover:bg-gray-800 p-2 rounded-lg transition-colors">
+              <img src="icon/kita.png" alt="UP主" class="w-10 h-10 rounded-full object-cover">
+              <div>
+                <p class="text-sm font-medium">美食探店Kita</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">5.2万粉丝</p>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 中间内容区（短视频+长视频） -->
+    <div class="md:ml-64 flex-1 px-2 md:px-4">
+      <!-- 模式切换 -->
+      <div class="flex items-center justify-center gap-4 py-4 border-b border-gray-200 dark:border-gray-800">
+        <button id="short-video-mode" class="px-6 py-2 rounded-full bg-gray-200 dark:bg-gray-800 font-medium hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors">短视频</button>
+        <button id="long-video-mode" class="px-6 py-2 rounded-full bg-primary text-white font-medium">长视频</button>
+      </div>
+
+      <!-- 短视频模式（默认隐藏） -->
+      <div id="short-video-container" class="space-y-4 md:space-y-8 hidden">
+        <!-- 短视频1 -->
+        <div class="short-video bg-black rounded-xl overflow-hidden relative aspect-[9/16] md:aspect-[3/4] group">
+          <video src="https://assets.mixkit.co/videos/preview/mixkit-rain-falling-on-water-of-a-lake-or-sea-1246-large.mp4" class="w-full h-full object-cover" controlsList="nodownload" preload="metadata" loop></video>
+          <!-- 视频遮罩（hover显示进度条） -->
+          <div class="absolute inset-0 video-mask opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end">
+            <div class="px-4 pb-20">
+              <div class="w-full h-1 bg-gray-500/50 rounded-full overflow-hidden">
+                <div class="h-full bg-white w-3/4 rounded-full"></div>
+              </div>
+            </div>
+          </div>
+          <!-- 右侧互动栏 -->
+          <div class="absolute right-4 bottom-20 flex flex-col gap-6 items-center">
+            <div class="flex flex-col items-center gap-1">
+              <button class="w-12 h-12 flex items-center justify-center rounded-full bg-black/30 backdrop-blur-sm text-white hover:bg-black/50 transition-colors">
+                <i class="fa fa-heart text-xl"></i>
+              </button>
+              <span class="text-white text-sm font-medium">2.3万</span>
+            </div>
+            <div class="flex flex-col items-center gap-1">
+              <button class="w-12 h-12 flex items-center justify-center rounded-full bg-black/30 backdrop-blur-sm text-white hover:bg-black/50 transition-colors">
+                <i class="fa fa-comment text-xl"></i>
+              </button>
+              <span class="text-white text-sm font-medium">1286</span>
+            </div>
+            <div class="flex flex-col items-center gap-1">
+              <button class="w-12 h-12 flex items-center justify-center rounded-full bg-black/30 backdrop-blur-sm text-white hover:bg-black/50 transition-colors">
+                <i class="fa fa-share text-xl"></i>
+              </button>
+              <span class="text-white text-sm font-medium">3.5万</span>
+            </div>
+            <div class="flex flex-col items-center gap-1">
+              <button class="w-12 h-12 flex items-center justify-center rounded-full bg-black/30 backdrop-blur-sm text-white hover:bg-black/50 transition-colors">
+                <i class="fa fa-star text-xl"></i>
+              </button>
+              <span class="text-white text-sm font-medium">收藏</span>
+            </div>
+          </div>
+          <!-- 视频信息 -->
+          <div class="absolute bottom-4 left-4 right-4 text-white">
+            <div class="flex items-center gap-3 mb-2">
+              <img src="https://picsum.photos/200/200?random=2" alt="UP主" class="w-10 h-10 rounded-full border-2 border-white">
+              <div>
+                <p class="font-medium">guitarhero</p>
+                <button class="text-xs bg-white text-black px-2 py-0.5 rounded-full">关注</button>
+              </div>
+            </div>
+            <p class="text-sm mb-2">这首《晴天》翻唱也太好听了吧！谁的DNA动了？#音乐 #翻唱 #周杰伦</p>
+            <div class="flex items-center gap-2 text-xs">
+              <span><i class="fa fa-music mr-1"></i> 背景音乐：晴天 - 周杰伦</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 短视频2 -->
+        <div class="short-video bg-black rounded-xl overflow-hidden relative aspect-[9/16] md:aspect-[3/4] group">
+          <video src="https://assets.mixkit.co/videos/preview/mixkit-aerial-view-of-city-traffic-at-night-1248-large.mp4" class="w-full h-full object-cover" controlsList="nodownload" preload="metadata" loop></video>
+          <div class="absolute inset-0 video-mask opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end">
+            <div class="px-4 pb-20">
+              <div class="w-full h-1 bg-gray-500/50 rounded-full overflow-hidden">
+                <div class="h-full bg-white w-1/2 rounded-full"></div>
+              </div>
+            </div>
+          </div>
+          <div class="absolute right-4 bottom-20 flex flex-col gap-6 items-center">
+            <div class="flex flex-col items-center gap-1">
+              <button class="w-12 h-12 flex items-center justify-center rounded-full bg-black/30 backdrop-blur-sm text-white hover:bg-black/50 transition-colors">
+                <i class="fa fa-heart text-xl"></i>
+              </button>
+              <span class="text-white text-sm font-medium">5.7万</span>
+            </div>
+            <div class="flex flex-col items-center gap-1">
+              <button class="w-12 h-12 flex items-center justify-center rounded-full bg-black/30 backdrop-blur-sm text-white hover:bg-black/50 transition-colors">
+                <i class="fa fa-comment text-xl"></i>
+              </button>
+              <span class="text-white text-sm font-medium">2345</span>
+            </div>
+            <div class="flex flex-col items-center gap-1">
+              <button class="w-12 h-12 flex items-center justify-center rounded-full bg-black/30 backdrop-blur-sm text-white hover:bg-black/50 transition-colors">
+                <i class="fa fa-share text-xl"></i>
+              </button>
+              <span class="text-white text-sm font-medium">8.9万</span>
+            </div>
+            <div class="flex flex-col items-center gap-1">
+              <button class="w-12 h-12 flex items-center justify-center rounded-full bg-black/30 backdrop-blur-sm text-white hover:bg-black/50 transition-colors">
+                <i class="fa fa-star text-xl"></i>
+              </button>
+              <span class="text-white text-sm font-medium">收藏</span>
+            </div>
+          </div>
+          <div class="absolute bottom-4 left-4 right-4 text-white">
+            <div class="flex items-center gap-3 mb-2">
+              <img src="https://picsum.photos/200/200?random=5" alt="UP主" class="w-10 h-10 rounded-full border-2 border-white">
+              <div>
+                <p class="font-medium">城市旅行家</p>
+                <button class="text-xs bg-white text-black px-2 py-0.5 rounded-full">关注</button>
+              </div>
+            </div>
+            <p class="text-sm mb-2">深夜的城市车流，像不像我们忙碌的人生？#城市 #旅行 #治愈</p>
+            <div class="flex items-center gap-2 text-xs">
+              <span><i class="fa fa-location-arrow mr-1"></i> 拍摄地：上海外滩</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 短视频3 -->
+        <div class="short-video bg-black rounded-xl overflow-hidden relative aspect-[9/16] md:aspect-[3/4] group">
+          <video src="https://assets.mixkit.co/videos/preview/mixkit-forest-stream-in-the-sunlight-529-large.mp4" class="w-full h-full object-cover" controlsList="nodownload" preload="metadata" loop></video>
+          <div class="absolute inset-0 video-mask opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end">
+            <div class="px-4 pb-20">
+              <div class="w-full h-1 bg-gray-500/50 rounded-full overflow-hidden">
+                <div class="h-full bg-white w-2/3 rounded-full"></div>
+              </div>
+            </div>
+          </div>
+          <div class="absolute right-4 bottom-20 flex flex-col gap-6 items-center">
+            <div class="flex flex-col items-center gap-1">
+              <button class="w-12 h-12 flex items-center justify-center rounded-full bg-black/30 backdrop-blur-sm text-white hover:bg-black/50 transition-colors">
+                <i class="fa fa-heart text-xl"></i>
+              </button>
+              <span class="text-white text-sm font-medium">3.1万</span>
+            </div>
+            <div class="flex flex-col items-center gap-1">
+              <button class="w-12 h-12 flex items-center justify-center rounded-full bg-black/30 backdrop-blur-sm text-white hover:bg-black/50 transition-colors">
+                <i class="fa fa-comment text-xl"></i>
+              </button>
+              <span class="text-white text-sm font-medium">987</span>
+            </div>
+            <div class="flex flex-col items-center gap-1">
+              <button class="w-12 h-12 flex items-center justify-center rounded-full bg-black/30 backdrop-blur-sm text-white hover:bg-black/50 transition-colors">
+                <i class="fa fa-share text-xl"></i>
+              </button>
+              <span class="text-white text-sm font-medium">4.2万</span>
+            </div>
+            <div class="flex flex-col items-center gap-1">
+              <button class="w-12 h-12 flex items-center justify-center rounded-full bg-black/30 backdrop-blur-sm text-white hover:bg-black/50 transition-colors">
+                <i class="fa fa-star text-xl"></i>
+              </button>
+              <span class="text-white text-sm font-medium">收藏</span>
+            </div>
+          </div>
+          <div class="absolute bottom-4 left-4 right-4 text-white">
+            <div class="flex items-center gap-3 mb-2">
+              <img src="https://picsum.photos/200/200?random=6" alt="UP主" class="w-10 h-10 rounded-full border-2 border-white">
+              <div>
+                <p class="font-medium">自然纪录片</p>
+                <button class="text-xs bg-white text-black px-2 py-0.5 rounded-full">关注</button>
+              </div>
+            </div>
+            <p class="text-sm mb-2">森林里的小溪，治愈所有不开心～#自然 #治愈 #风景</p>
+            <div class="flex items-center gap-2 text-xs">
+              <span><i class="fa fa-camera mr-1"></i> 拍摄设备：Sony A7M4</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 长视频模式（默认显示） -->
+      <div id="long-video-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+        <!-- 长视频1 -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+          <div class="relative aspect-video">
+          <img src="icon/genshin.jpg" alt="视频封面" class="w-full h-full object-cover">
+          <div class="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity duration-300">
+            <div class="w-16 h-16 rounded-full bg-primary/90 flex items-center justify-center play-button-pulse">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+              </svg>
+            </div>
+          </div>
+          <div class="absolute top-2 right-2 bg-black/80 text-white text-xs px-1 py-0.5 rounded">15:23</div>
+          <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-2">
+            <div class="w-full h-0.5 bg-white/30 rounded-full overflow-hidden">
+              <div class="h-full bg-white w-3/5 rounded-full"></div>
+            </div>
+          </div>
+          <div class="absolute top-2 left-2 bg-secondary text-white text-xs px-2 py-0.5 rounded-full">热门</div>
+        </div>
+          <div class="p-3">
+            <h3 class="font-medium text-lg mb-2 line-clamp-2">【游戏攻略】原神3.8版本新地图全收集指南，零氪玩家也能轻松毕业！</h3>
+            <div class="flex items-center gap-2 mb-3">
+              <img src="icon/小兆.jpg" alt="UP主" class="w-8 h-8 rounded-full object-cover">
+              <span class="text-sm text-gray-600 dark:text-gray-300">游戏解说小兆</span>
+            </div>
+            <div class="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
+              <div class="flex items-center gap-4">
+                <span><i class="fa fa-eye mr-1"></i> 12.5万</span>
+                <span><i class="fa fa-comment mr-1"></i> 896</span>
+              </div>
+              <span>3天前</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 长视频2 -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+          <div class="relative aspect-video">
+          <img src="icon/fanju.png" alt="视频封面" class="w-full h-full object-cover">
+          <div class="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity duration-300">
+            <div class="w-16 h-16 rounded-full bg-primary/90 flex items-center justify-center play-button-pulse">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+              </svg>
+            </div>
+          </div>
+          <div class="absolute top-2 right-2 bg-black/80 text-white text-xs px-1 py-0.5 rounded">23:45</div>
+          <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-2">
+            <div class="w-full h-0.5 bg-white/30 rounded-full overflow-hidden">
+              <div class="h-full bg-white w-2/3 rounded-full"></div>
+            </div>
+          </div>
+          <div class="absolute top-2 left-2 bg-bilibili text-white text-xs px-2 py-0.5 rounded-full">番剧</div>
+        </div>
+          <div class="p-3">
+            <h3 class="font-medium text-lg mb-2 line-clamp-2">【番剧推荐】2024年7月新番盘点，这5部冷门佳作值得一看！</h3>
+            <div class="flex items-center gap-2 mb-3">
+              <img src="icon/naiai.png" alt="UP主" class="w-8 h-8 rounded-full object-cover">
+              <span class="text-sm text-gray-600 dark:text-gray-300">动漫杂谈君</span>
+            </div>
+            <div class="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
+              <div class="flex items-center gap-4">
+                <span><i class="fa fa-eye mr-1"></i> 8.7万</span>
+                <span><i class="fa fa-comment mr-1"></i> 1243</span>
+              </div>
+              <span>1周前</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 长视频3 -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+          <div class="relative aspect-video">
+          <img src="icon/pachong.png" alt="视频封面" class="w-full h-full object-cover">
+          <div class="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity duration-300">
+            <div class="w-16 h-16 rounded-full bg-primary/90 flex items-center justify-center play-button-pulse">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+              </svg>
+            </div>
+          </div>
+          <div class="absolute top-2 right-2 bg-black/80 text-white text-xs px-1 py-0.5 rounded">11:45</div>
+          <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-2">
+            <div class="w-full h-0.5 bg-white/30 rounded-full overflow-hidden">
+              <div class="h-full bg-white w-1/2 rounded-full"></div>
+            </div>
+          </div>
+          <div class="absolute top-2 left-2 bg-primary text-white text-xs px-2 py-0.5 rounded-full">知识</div>
+        </div>
+          <div class="p-3">
+            <h3 class="font-medium text-lg mb-2 line-clamp-2">【编程教学】Python爬虫从入门到精通，爬取B站视频数据实战教程</h3>
+            <div class="flex items-center gap-2 mb-3">
+              <img src="icon/hacker.png" alt="UP主" class="w-8 h-8 rounded-full object-cover">
+              <span class="text-sm text-gray-600 dark:text-gray-300">黑掉的迪克</span>
+            </div>
+            <div class="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
+              <div class="flex items-center gap-4">
+                <span><i class="fa fa-eye mr-1"></i> 15.3万</span>
+                <span><i class="fa fa-comment mr-1"></i> 2156</span>
+              </div>
+              <span>2周前</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 长视频4 -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+          <div class="relative aspect-video">
+          <img src="icon/hxxd.jpg" alt="视频封面" class="w-full h-full object-cover">
+          <div class="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity duration-300">
+            <div class="w-16 h-16 rounded-full bg-primary/90 flex items-center justify-center play-button-pulse">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+              </svg>
+            </div>
+          </div>
+          <div class="absolute top-2 right-2 bg-black/80 text-white text-xs px-1 py-0.5 rounded">10:08</div>
+          <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-2">
+            <div class="w-full h-0.5 bg-white/30 rounded-full overflow-hidden">
+              <div class="h-full bg-white w-4/5 rounded-full"></div>
+            </div>
+          </div>
+          <div class="absolute top-2 left-2 bg-secondary text-white text-xs px-2 py-0.5 rounded-full">美食</div>
+        </div>
+          <div class="p-3">
+            <h3 class="font-medium text-lg mb-2 line-clamp-2">【美食教程】3分钟做好一碗番茄鸡蛋面，简单又美味，上班族必备！</h3>
+            <div class="flex items-center gap-2 mb-3">
+              <img src="icon/kita.png" alt="UP主" class="w-8 h-8 rounded-full object-cover">
+              <span class="text-sm text-gray-600 dark:text-gray-300">美食探店Kita</span>
+            </div>
+            <div class="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
+              <div class="flex items-center gap-4">
+                <span><i class="fa fa-eye mr-1"></i> 9.2万</span>
+                <span><i class="fa fa-comment mr-1"></i> 768</span>
+              </div>
+              <span>1个月前</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 底部导航（仅移动端显示） -->
+  <footer class="fixed bottom-0 left-0 right-0 md:hidden z-40 bg-white dark:bg-dark border-t border-gray-200 dark:border-gray-800">
+    <div class="flex justify-around items-center h-16">
+      <a href="#" class="flex flex-col items-center justify-center text-primary">
+        <i class="fa fa-home text-xl"></i>
+        <span class="text-xs mt-1">首页</span>
+      </a>
+      <a href="#" class="flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 hover:text-primary transition-colors">
+        <i class="fa fa-search text-xl"></i>
+        <span class="text-xs mt-1">搜索</span>
+      </a>
+      <button class="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center -mt-6 shadow-lg">
+        <i class="fa fa-plus text-xl"></i>
+      </button>
+      <a href="#" class="flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 hover:text-primary transition-colors">
+        <i class="fa fa-bell text-xl"></i>
+        <span class="text-xs mt-1">通知</span>
+      </a>
+      <a href="#" class="flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 hover:text-primary transition-colors">
+        <i class="fa fa-user text-xl"></i>
+        <span class="text-xs mt-1">我的</span>
+      </a>
+    </div>
+  </footer>
+
+  <!-- 弹幕脚本 -->
+  <script>
+    // 模式切换功能
+    const shortVideoMode = document.getElementById('short-video-mode');
+    const longVideoMode = document.getElementById('long-video-mode');
+    const shortVideoContainer = document.getElementById('short-video-container');
+    const longVideoContainer = document.getElementById('long-video-container');
+
+    shortVideoMode.addEventListener('click', () => {
+      shortVideoMode.classList.add('bg-gray-200', 'dark:bg-gray-800');
+      shortVideoMode.classList.remove('bg-primary', 'text-white');
+      longVideoMode.classList.add('bg-primary', 'text-white');
+      longVideoMode.classList.remove('bg-gray-200', 'dark:bg-gray-800');
+      shortVideoContainer.classList.remove('hidden');
+      longVideoContainer.classList.add('hidden');
+    });
+
+    longVideoMode.addEventListener('click', () => {
+      longVideoMode.classList.add('bg-gray-200', 'dark:bg-gray-800');
+      longVideoMode.classList.remove('bg-primary', 'text-white');
+      shortVideoMode.classList.add('bg-primary', 'text-white');
+      shortVideoMode.classList.remove('bg-gray-200', 'dark:bg-gray-800');
+      longVideoContainer.classList.remove('hidden');
+      shortVideoContainer.classList.add('hidden');
+    });
+
+    // 短视频上下滑动切换（模拟）
+    const shortVideos = document.querySelectorAll('.short-video');
+    let currentVideoIndex = 0;
+
+    // 移动端触摸滑动
+    let touchStartY = 0;
+    let touchEndY = 0;
+
+    document.addEventListener('touchstart', (e) => {
+      touchStartY = e.touches[0].clientY;
+    }, false);
+
+    document.addEventListener('touchend', (e) => {
+      touchEndY = e.changedTouches[0].clientY;
+      handleSwipe();
+    }, false);
+
+    function handleSwipe() {
+      const swipeThreshold = 50;
+      if (touchEndY - touchStartY > swipeThreshold) {
+        // 上滑切换到上一个视频
+        currentVideoIndex = (currentVideoIndex - 1 + shortVideos.length) % shortVideos.length;
+        scrollToVideo(currentVideoIndex);
+      } else if (touchStartY - touchEndY > swipeThreshold) {
+        // 下滑切换到下一个视频
+        currentVideoIndex = (currentVideoIndex + 1) % shortVideos.length;
+        scrollToVideo(currentVideoIndex);
+      }
+    }
+
+    function scrollToVideo(index) {
+      shortVideos[index].scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // 暂停其他视频，播放当前视频
+      shortVideos.forEach((video, i) => {
+        const videoElement = video.querySelector('video');
+        if (i === index) {
+          videoElement.play();
+        } else {
+          videoElement.pause();
+        }
+      });
+    }
+
+    // PC端滚轮切换
+    document.addEventListener('wheel', (e) => {
+      if (shortVideoContainer.classList.contains('hidden')) return;
+      if (e.deltaY > 0) {
+        // 向下滚动切换到下一个视频
+        currentVideoIndex = (currentVideoIndex + 1) % shortVideos.length;
+        scrollToVideo(currentVideoIndex);
+      } else {
+        // 向上滚动切换到上一个视频
+        currentVideoIndex = (currentVideoIndex - 1 + shortVideos.length) % shortVideos.length;
+        scrollToVideo(currentVideoIndex);
+      }
+    }, { passive: true });
+
+    // 初始化播放第一个视频
+    if (shortVideos.length > 0) {
+      shortVideos[0].querySelector('video').play();
+    }
+
+    // 模拟弹幕功能（长视频页面）
+    function createDanmu(videoContainer, text) {
+      const danmu = document.createElement('div');
+      danmu.className = 'danmu';
+      danmu.textContent = text;
+      danmu.style.left = '100%';
+      danmu.style.top = `${Math.random() * 80 + 10}%`;
+      danmu.style.fontSize = `${Math.random() * 8 + 12}px`;
+      danmu.style.animation = `danmuScroll 8s linear infinite`;
+      videoContainer.appendChild(danmu);
+
+      // 弹幕动画结束后移除
+      setTimeout(() => {
+        danmu.remove();
+      }, 8000);
+    }
+
+    // 添加弹幕样式
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes danmuScroll {
+        from { transform: translateX(0); }
+        to { transform: translateX(-100%); }
+      }
+    `;
+    document.head.appendChild(style);
+
+    // 为长视频添加弹幕（点击视频时触发）
+    const longVideos = document.querySelectorAll('#long-video-container > div');
+    longVideos.forEach(videoCard => {
+      videoCard.addEventListener('click', () => {
+        const danmuTexts = [
+          '前方高能！', '太精彩了吧！', 'UP主辛苦了！', '学到了学到了',
+          '求BGM！', '666666', '打卡打卡', '这个教程太实用了'
+        ];
+        const randomText = danmuTexts[Math.floor(Math.random() * danmuTexts.length)];
+        createDanmu(videoCard.querySelector('.relative'), randomText);
+      });
+    });
+  </script>
+  
+  <!-- 加载画面控制脚本 -->
+  <script>
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', () => {
+      // 设置body为loaded状态，确保初始加载画面可见
+      document.body.classList.add('loaded');
+      
+      const loader = document.getElementById('loader');
+      const progressBar = document.getElementById('progress-bar');
+      
+      // 随机设置加载时间为2-4秒
+      const loadingTime = Math.floor(Math.random() * 2000) + 2000; // 2000-4000ms
+      
+      // 模拟进度条加载
+      let progress = 0;
+      const progressInterval = setInterval(() => {
+        // 非线性进度增长，前半段慢，后半段快
+        const increment = Math.random() * 5 + (progress > 50 ? Math.random() * 10 : 1);
+        progress += increment;
+        
+        if (progress >= 100) {
+          progress = 100;
+          clearInterval(progressInterval);
+        }
+        
+        progressBar.style.width = `${progress}%`;
+      }, 50);
+      
+      // 设置定时器，在指定时间后隐藏加载画面
+      setTimeout(() => {
+        // 隐藏加载画面，显示页面内容
+        document.body.classList.add('loaded-content');
+        
+        // 彻底移除加载元素（可选）
+        setTimeout(() => {
+          if (loader && loader.parentNode) {
+            loader.parentNode.removeChild(loader);
+          }
+        }, 1000);
+        
+        // 页面加载完成后的其他操作（如果需要）
+        console.log('页面加载完成');
+      }, loadingTime);
+    });
+  </script>
+</body>
+</html>

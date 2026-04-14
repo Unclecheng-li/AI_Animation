@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OSI七层模型 - 数据封装与传输流程</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+            background: 
+                radial-gradient(circle at 20% 80%, #0d2818 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, #1a3d25 0%, transparent 40%),
+                #0a0f0d;
+            min-height: 100vh;
+            overflow: hidden;
+            color: #fff;
+            position: relative;
+        }
+
+        /* 噪点效果 */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            opacity: 0.08;
+            mix-blend-mode: overlay;
+            animation: noiseMove 20s linear infinite;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        @keyframes noiseMove {
+            0% { transform: translate(0, 0) scale(1.1); }
+            25% { transform: translate(-2%, -2%) scale(1.05); }
+            50% { transform: translate(0, 0) scale(1.1); }
+            75% { transform: translate(2%, 2%) scale(1.05); }
+            100% { transform: translate(0, 0) scale(1.1); }
+        }
+
+        /* 粒子画布 */
+        #particlesCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        .container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 40px 60px;
+            position: relative;
+            z-index: 10;
+        }
+
+        /* 页面标题 */
+        .page-header {
+            text-align: center;
+            margin-bottom: 30px;
+            opacity: 0;
+            animation: fadeInDown 0.8s ease forwards;
+            animation-delay: 0s;
+        }
+
+        .page-title {
+            font-size: 42px;
+            font-weight: 700;
+            color: #00d2d3;
+            margin-bottom: 8px;
+            text-shadow: 0 0 20px rgba(0, 210, 211, 0.4);
+        }
+
+        .page-subtitle {
+            font-size: 18px;
+            color: #6b8a6b;
+            font-weight: 400;
+        }
+
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 通用动画元素 */
+        .animate-item {
+            opacity: 0;
+            animation: fadeInUp 0.5s ease forwards;
+        }
+
+        /* ========== 主架构图容器 ========== */
+        .architecture-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            width: 100%;
+            max-width: 1600px;
+            position: relative;
+            opacity: 0;
+            animation: fadeIn 1s ease forwards;
+            animation-delay: 0.5s;
+        }
+
+        /* ========== 输入模块 ========== */
+        .input-module {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            opacity: 0;
+            animation: fadeInUp 0.6s ease forwards;
+            animation-delay: 1.0s;
+        }
+
+        .input-icon {
+            width: 56px;
+            height: 56px;
+            border: 2px solid rgba(96, 165, 250, 0.5);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(96, 165, 250, 0.1);
+        }
+
+        .input-icon svg {
+            width: 28px;
+            height: 28px;
+            color: #60a5fa;
+        }
+
+        .input-label {
+            font-size: 13px;
+            color: #60a5fa;
+            text-align: center;
+            line-height: 1.4;
+        }
+
+        /* ========== 连接线样式 ========== */
+        .connector {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            opacity: 0;
+            animation: fadeIn 0.5s ease forwards;
+        }
+
+        .connector:nth-of-type(2) { animation-delay: 1.5s; }
+        .connector:nth-of-type(4) { animation-delay: 3.0s; }
+
+        .connector-line {
+            width: 80px;
+            height: 2px;
+            background: repeating-linear-gradient(
+                90deg,
+                rgba(107, 138, 107, 0.6) 0px,
+                rgba(107, 138, 107, 0.6) 6px,
+                transparent 6px,
+                transparent 10px
+            );
+            position: relative;
+        }
+
+        .connector-line::after {
+            content: '';
+            position: absolute;
+            right: -6px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border-left: 8px solid rgba(107, 138, 107, 0.6);
+            border-top: 5px solid transparent;
+            border-bottom: 5px solid transparent;
+        }
+
+        .connector-label {
+            font-size: 11px;
+            color: #6b8a6b;
+            margin-top: 8px;
+            white-space: nowrap;
+        }
+
+        /* ========== 核心封装模块 ========== */
+        .core-module {
+            width: 150px;
+            height: 150px;
+            border: 2px solid rgba(0, 210, 211, 0.5);
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 210, 211, 0.08);
+            position: relative;
+            opacity: 0;
+            animation: fadeInUp 0.6s ease forwards;
+            animation-delay: 2.0s;
+        }
+
+        .core-module::before {
+            content: '';
+            position: absolute;
+            inset: 8px;
+            border: 1px solid rgba(0, 210, 211, 0.3);
+            border-radius: 50%;
+        }
+
+        .core-icon {
+            width: 44px;
+            height: 44px;
+            margin-bottom: 8px;
+        }
+
+        .core-icon svg {
+            width: 100%;
+            height: 100%;
+            color: #00d2d3;
+        }
+
+        .core-label {
+            font-size: 12px;
+            color: #00d2d3;
+            font-weight: 600;
+            text-align: center;
+            line-height: 1.3;
+        }
+
+        /* ========== 分组容器样式 ========== */
+        .layer-group {
+            border: 1.5px dashed rgba(107, 138, 107, 0.4);
+            border-radius: 16px;
+            padding: 50px 25px 25px;
+            position: relative;
+            margin: 0 10px;
+            opacity: 0;
+            animation: fadeIn 0.8s ease forwards;
+        }
+
+        .layer-group.user-layers {
+            animation-delay: 3.5s;
+        }
+
+        .layer-group.transport-layers {
+            animation-delay: 4.5s;
+        }
+
+        .layer-header {
+            position: absolute;
+            top: -12px;
+            left: 15px;
+            background: #0a0f0d;
+            padding: 0 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .layer-icon {
+            width: 18px;
+            height: 18px;
+            color: #00d2d3;
+        }
+
+        .layer-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #00d2d3;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .layer-content {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        /* ========== 层卡片 ========== */
+        .state-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1.5px solid rgba(0, 210, 211, 0.3);
+            border-radius: 12px;
+            padding: 16px 20px;
+            min-width: 160px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .state-card:hover {
+            border-color: rgba(0, 210, 211, 0.6);
+            background: rgba(0, 210, 211, 0.08);
+        }
+
+        .state-card-icon {
+            width: 28px;
+            height: 28px;
+            margin: 0 auto 8px;
+            color: #00d2d3;
+        }
+
+        .state-card-icon svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .state-card-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #00d2d3;
+            margin-bottom: 4px;
+        }
+
+        .state-card-desc {
+            font-size: 11px;
+            color: #aaa;
+            margin-bottom: 8px;
+        }
+
+        .state-memory {
+            font-size: 12px;
+            color: #feca57;
+            font-weight: 600;
+            padding: 4px 10px;
+            background: rgba(254, 202, 87, 0.1);
+            border-radius: 6px;
+            border: 1px solid rgba(254, 202, 87, 0.2);
+        }
+
+        /* ========== 处理流程可视化 ========== */
+        .process-flow-viz {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(0, 210, 211, 0.2);
+        }
+
+        .process-flow-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+        }
+
+        .flow-icon {
+            width: 16px;
+            height: 16px;
+            color: #34d399;
+            flex-shrink: 0;
+        }
+
+        .flow-icon svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .flow-text {
+            color: #aaa;
+            line-height: 1.4;
+        }
+
+        .flow-highlight {
+            color: #00d2d3;
+            font-weight: 600;
+        }
+
+        /* ========== 协议对比 ========== */
+        .compare-section {
+            margin-top: 30px;
+            display: flex;
+            gap: 20px;
+            max-width: 1200px;
+            width: 100%;
+            justify-content: center;
+        }
+
+        .compare-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(107, 138, 107, 0.2);
+            border-radius: 12px;
+            padding: 24px 30px;
+            flex: 1;
+            max-width: 350px;
+            opacity: 0;
+            animation: fadeInUp 0.6s ease forwards;
+        }
+
+        .compare-card:nth-child(1) { animation-delay: 5.5s; }
+        .compare-card:nth-child(2) { animation-delay: 6.0s; }
+
+        .compare-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .compare-icon-box {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            background: rgba(0, 210, 211, 0.15);
+            border: 1px solid rgba(0, 210, 211, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .compare-icon-box svg {
+            width: 20px;
+            height: 20px;
+            color: #00d2d3;
+        }
+
+        .compare-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #00d2d3;
+        }
+
+        .compare-content {
+            font-size: 13px;
+            color: #aaa;
+            line-height: 1.8;
+        }
+
+        .compare-highlight {
+            color: #feca57;
+            font-weight: 600;
+            background: rgba(254, 202, 87, 0.1);
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        .compare-cyan {
+            color: #00d2d3;
+            font-weight: 600;
+        }
+
+        .compare-green {
+            color: #34d399;
+            font-weight: 600;
+        }
+
+        /* ========== 流动指示 ========== */
+        .flow-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 25px;
+            gap: 15px;
+            opacity: 0;
+            animation: fadeIn 0.6s ease forwards;
+            animation-delay: 6.5s;
+        }
+
+        .flow-text-label {
+            font-size: 14px;
+            color: #6b8a6b;
+            font-weight: 500;
+        }
+
+        .flow-arrow-icon {
+            width: 40px;
+            height: 40px;
+            color: #00d2d3;
+        }
+
+        .flow-arrow-icon svg {
+            width: 100%;
+            height: 100%;
+            animation: rotate 4s linear infinite;
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* ========== 协议标签 ========== */
+        .protocol-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+
+        .protocol-badge.app {
+            background: rgba(255, 107, 107, 0.15);
+            color: #ff6b6b;
+            border: 1px solid rgba(255, 107, 107, 0.3);
+        }
+
+        .protocol-badge.transport {
+            background: rgba(0, 210, 211, 0.15);
+            color: #00d2d3;
+            border: 1px solid rgba(0, 210, 211, 0.3);
+        }
+
+        .protocol-badge.network {
+            background: rgba(15, 152, 255, 0.15);
+            color: #0f98ff;
+            border: 1px solid rgba(15, 152, 255, 0.3);
+        }
+
+        .protocol-badge.link {
+            background: rgba(108, 92, 231, 0.15);
+            color: #6c5ce7;
+            border: 1px solid rgba(108, 92, 231, 0.3);
+        }
+
+        .protocol-badge.physical {
+            background: rgba(255, 159, 243, 0.15);
+            color: #ff9ff3;
+            border: 1px solid rgba(255, 159, 243, 0.3);
+        }
+
+        /* ========== 响应式设计 ========== */
+        @media (max-width: 1400px) {
+            .container {
+                padding: 30px 40px;
+                overflow-y: auto;
+            }
+
+            .architecture-diagram {
+                flex-wrap: wrap;
+                gap: 15px;
+                justify-content: center;
+            }
+
+            .layer-group {
+                margin: 10px;
+            }
+
+            .connector {
+                transform: rotate(90deg);
+                margin: 10px 0;
+            }
+
+            .connector-label {
+                transform: rotate(-90deg);
+                margin-top: 0;
+                margin-left: 8px;
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .page-title {
+                font-size: 32px;
+            }
+
+            .compare-section {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .compare-card {
+                max-width: 100%;
+                width: 100%;
+            }
+
+            .layer-group {
+                padding: 45px 20px 20px;
+            }
+
+            .state-card {
+                min-width: 140px;
+                padding: 14px 16px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+
+            .page-title {
+                font-size: 26px;
+            }
+
+            .page-subtitle {
+                font-size: 14px;
+            }
+
+            .core-module {
+                width: 120px;
+                height: 120px;
+            }
+
+            .layer-content {
+                gap: 12px;
+            }
+
+            .architecture-diagram {
+                flex-direction: column;
+            }
+
+            .connector {
+                transform: rotate(90deg);
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="particlesCanvas"></canvas>
+
+    <div class="container">
+        <!-- 页面标题 -->
+        <div class="page-header">
+            <h1 class="page-title">OSI 七层模型</h1>
+            <p class="page-subtitle">数据封装与传输流程 · ISO 1978</p>
+        </div>
+
+        <!-- 主架构图 -->
+        <div class="architecture-diagram">
+            <!-- 应用层 -->
+            <div class="layer-group user-layers">
+                <div class="layer-header">
+                    <svg class="layer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                        <path d="M2 17l10 5 10-5"/>
+                        <path d="M2 12l10 5 10-5"/>
+                    </svg>
+                    <span class="layer-title">User Layers</span>
+                </div>
+                <div class="layer-content">
+                    <div class="state-card">
+                        <div class="state-card-icon animate-item" style="animation-delay: 3.8s;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M12 6v6l4 2"/>
+                            </svg>
+                        </div>
+                        <div class="state-card-title animate-item" style="animation-delay: 4.0s;">应用层 L7</div>
+                        <div class="state-card-desc animate-item" style="animation-delay: 4.2s;">HTTP, FTP, SMTP</div>
+                        <span class="protocol-badge app animate-item" style="animation-delay: 4.4s;">Network Services</span>
+                    </div>
+
+                    <div class="state-card">
+                        <div class="state-card-icon animate-item" style="animation-delay: 4.8s;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                <path d="M2 17l10 5 10-5"/>
+                            </svg>
+                        </div>
+                        <div class="state-card-title animate-item" style="animation-delay: 5.0s;">表示层 L6</div>
+                        <div class="state-card-desc animate-item" style="animation-delay: 5.2s;">TLS, SSL · 加密解密</div>
+                        <span class="protocol-badge app animate-item" style="animation-delay: 5.4s;">Data Format</span>
+                    </div>
+
+                    <div class="state-card">
+                        <div class="state-card-icon animate-item" style="animation-delay: 5.8s;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M8 12h8M12 8v8"/>
+                            </svg>
+                        </div>
+                        <div class="state-card-title animate-item" style="animation-delay: 6.0s;">会话层 L5</div>
+                        <div class="state-card-desc animate-item" style="animation-delay: 6.2s;">NetBIOS, RPC</div>
+                        <span class="protocol-badge app animate-item" style="animation-delay: 6.4s;">Session Mgmt</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 连接线 -->
+            <div class="connector">
+                <div class="connector-line"></div>
+                <span class="connector-label">封装</span>
+            </div>
+
+            <!-- 传输层 -->
+            <div class="layer-group transport-layers">
+                <div class="layer-header">
+                    <svg class="layer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <rect x="3" y="3" width="18" height="18" rx="2"/>
+                        <path d="M3 9h18M9 21V9"/>
+                    </svg>
+                    <span class="layer-title">Transport</span>
+                </div>
+                <div class="layer-content">
+                    <div class="state-card">
+                        <div class="state-card-icon animate-item" style="animation-delay: 5.5s;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                            </svg>
+                        </div>
+                        <div class="state-card-title animate-item" style="animation-delay: 5.7s;">传输层 L4</div>
+                        <div class="state-card-desc animate-item" style="animation-delay: 5.9s;">TCP · UDP</div>
+                        <div class="state-memory animate-item" style="animation-delay: 6.1s;">数据段 Segment</div>
+                        <span class="protocol-badge transport animate-item" style="animation-delay: 6.3s;">Reliable Delivery</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 连接线 -->
+            <div class="connector">
+                <div class="connector-line"></div>
+                <span class="connector-label">封装</span>
+            </div>
+
+            <!-- 网络层 -->
+            <div class="layer-group">
+                <div class="layer-header">
+                    <svg class="layer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>
+                    </svg>
+                    <span class="layer-title">Network</span>
+                </div>
+                <div class="layer-content">
+                    <div class="state-card">
+                        <div class="state-card-icon animate-item" style="animation-delay: 6.0s;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5"/>
+                            </svg>
+                        </div>
+                        <div class="state-card-title animate-item" style="animation-delay: 6.2s;">网络层 L3</div>
+                        <div class="state-card-desc animate-item" style="animation-delay: 6.4s;">IP · ICMP</div>
+                        <div class="state-memory animate-item" style="animation-delay: 6.6s;">数据包 Packet</div>
+                        <span class="protocol-badge network animate-item" style="animation-delay: 6.8s;">Routing</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 连接线 -->
+            <div class="connector">
+                <div class="connector-line"></div>
+                <span class="connector-label">封装</span>
+            </div>
+
+            <!-- 物理层 -->
+            <div class="layer-group">
+                <div class="layer-header">
+                    <svg class="layer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                    </svg>
+                    <span class="layer-title">Physical</span>
+                </div>
+                <div class="layer-content">
+                    <div class="state-card">
+                        <div class="state-card-icon animate-item" style="animation-delay: 6.5s;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
+                            </svg>
+                        </div>
+                        <div class="state-card-title animate-item" style="animation-delay: 6.7s;">数据链路 L2</div>
+                        <div class="state-card-desc animate-item" style="animation-delay: 6.9s;">Ethernet, PPP</div>
+                        <div class="state-memory animate-item" style="animation-delay: 7.1s;">帧 Frame</div>
+                        <span class="protocol-badge link animate-item" style="animation-delay: 7.3s;">MAC Address</span>
+                    </div>
+
+                    <div class="state-card">
+                        <div class="state-card-icon animate-item" style="animation-delay: 7.5s;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                            </svg>
+                        </div>
+                        <div class="state-card-title animate-item" style="animation-delay: 7.7s;">物理层 L1</div>
+                        <div class="state-card-desc animate-item" style="animation-delay: 7.9s;">RJ45, 光纤</div>
+                        <div class="state-memory animate-item" style="animation-delay: 8.1s;">比特流 Bits</div>
+                        <span class="protocol-badge physical animate-item" style="animation-delay: 8.3s;">Electrical Signals</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 流动指示 -->
+        <div class="flow-indicator">
+            <span class="flow-text-label">Data Encapsulation Flow</span>
+            <div class="flow-arrow-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+            </div>
+            <span class="flow-text-label">OSI Communication</span>
+        </div>
+
+        <!-- 协议对比 -->
+        <div class="compare-section">
+            <div class="compare-card">
+                <div class="compare-header">
+                    <div class="compare-icon-box">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <rect x="2" y="3" width="20" height="14" rx="2"/>
+                            <path d="M8 21h8M12 17v4"/>
+                        </svg>
+                    </div>
+                    <span class="compare-title">TCP/IP 五层协议</span>
+                </div>
+                <div class="compare-content">
+                    <p>与 OSI 七层对应的简化模型：</p>
+                    <p style="margin-top: 8px;">
+                        <span class="compare-highlight">应用层</span> = L7+L6+L5
+                    </p>
+                    <p style="margin-top: 4px;">
+                        <span class="compare-cyan">传输层</span> = L4
+                    </p>
+                    <p style="margin-top: 4px;">
+                        <span class="compare-green">网络层</span> = L3
+                    </p>
+                    <p style="margin-top: 4px;">
+                        <span class="compare-highlight">网络接口层</span> = L2+L1
+                    </p>
+                </div>
+            </div>
+
+            <div class="compare-card">
+                <div class="compare-header">
+                    <div class="compare-icon-box">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                            <path d="M2 17l10 5 10-5"/>
+                            <path d="M2 12l10 5 10-5"/>
+                        </svg>
+                    </div>
+                    <span class="compare-title">核心职责</span>
+                </div>
+                <div class="compare-content">
+                    <p><span class="compare-highlight">上面三层</span>：面向用户提供服务</p>
+                    <p style="margin-top: 8px;"><span class="compare-cyan">传输层</span>：完成数据传送服务</p>
+                    <p style="margin-top: 8px;"><span class="compare-green">下面四层</span>：面向数据传输</p>
+                    <p style="margin-top: 12px; color: #00d2d3; font-weight: 600;">
+                        标准化架构 · 分层解耦 · 互联互通
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 粒子效果
+        const canvas = document.getElementById('particlesCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        const particles = [];
+        const particleCount = 80;
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 1.5 + 0.5;
+                this.speedX = (Math.random() - 0.5) * 0.3;
+                this.speedY = (Math.random() - 0.5) * 0.3;
+                this.opacity = Math.random() * 0.4 + 0.1;
+                this.color = `rgba(0, 210, 211, ${this.opacity})`;
+            }
+
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
+                    this.reset();
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        for (let i = 0; i < particleCount; i++) {
+            particles.push(new Particle());
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(particle => {
+                particle.update();
+                particle.draw();
+            });
+            requestAnimationFrame(animateParticles);
+        }
+
+        animateParticles();
+    </script>
+</body>
+</html>

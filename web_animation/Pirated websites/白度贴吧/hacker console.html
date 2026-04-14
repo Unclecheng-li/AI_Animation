@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>钓鱼数据窃取后台 - 黑客视角</title>
+    <!-- 阿里图标库：搜索、复制、警示、统计等图标，无本地依赖 -->
+    <link rel="stylesheet" href="https://at.alicdn.com/t/c/font_4085272_9v2z905h75.css">
+    <style>
+        /* 全局样式重置 + 黑客后台深色变量定义 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Microsoft Yahei", "PingFang SC", "Consolas", monospace;
+        }
+        :root {
+            --bg-main: #1e1e2f; /* 主背景深灰黑 */
+            --bg-card: #2d2d3f; /* 卡片/列表背景 */
+            --bg-hover: #383850; /* 悬浮背景 */
+            --color-primary: #0099ff; /* 科技蓝主色 */
+            --color-danger: #e63946; /* 警示红 */
+            --color-text: #e5e5e5; /* 主文字色 */
+            --color-text-light: #999; /* 浅文字色 */
+            --border-color: #444; /* 边框色 */
+        }
+        body {
+            background-color: var(--bg-main);
+            color: var(--color-text);
+            font-size: 14px;
+            min-height: 100vh;
+        }
+
+        /* 顶部导航栏：黑客后台标题 + 数据统计面板 + 实时时间 */
+        .top-nav {
+            height: 64px;
+            background-color: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 30px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 99;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+        .nav-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--color-primary);
+        }
+        .title-icon {
+            font-size: 24px;
+        }
+        /* 统计面板：总窃取数/今日新增/在线钓鱼站，核心数据展示 */
+        .stat-panel {
+            display: flex;
+            gap: 30px;
+            background-color: rgba(45, 45, 63, 0.6);
+            padding: 12px 25px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+        .stat-item {
+            text-align: center;
+            min-width: 80px;
+            transition: all 0.3s ease;
+        }
+        
+        .stat-item:hover {
+            transform: translateY(-2px);
+        }
+        
+        .stat-num {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--color-danger);
+            display: block;
+            transition: all 0.3s ease;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .stat-item:hover .stat-num {
+            color: var(--color-primary);
+            text-shadow: 0 0 10px rgba(0,153,255,0.5);
+        }
+        
+        .stat-name {
+            font-size: 12px;
+            color: var(--color-text-light);
+            margin-top: 5px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        /* 数字变化动画 */
+        @keyframes countUp {
+            from {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        
+        .stat-num.updated {
+            animation: countUp 0.5s ease forwards;
+        }
+        .nav-time {
+            font-size: 14px;
+            color: var(--color-text-light);
+        }
+
+        /* 主布局：侧边栏 + 内容区，适配移动端折叠 */
+        .main-container {
+            display: flex;
+            padding-top: 64px;
+            min-height: 100vh;
+        }
+        /* 左侧侧边栏：功能导航，仿后台菜单 */
+        .sidebar {
+            width: 220px;
+            background-color: var(--bg-card);
+            border-right: 1px solid var(--border-color);
+            padding: 25px 0;
+            height: calc(100vh - 64px);
+            position: fixed;
+            top: 64px;
+            left: 0;
+            z-index: 90;
+            transition: all 0.3s ease;
+            box-shadow: 2px 0 8px rgba(0,0,0,0.2);
+        }
+        .sidebar-menu {
+            list-style: none;
+        }
+        .menu-item {
+            padding: 14px 30px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .menu-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0,153,255,0.1), transparent);
+            transition: left 0.6s;
+        }
+        .menu-item:hover::before {
+            left: 100%;
+        }
+        .menu-item.active {
+            background-color: var(--bg-hover);
+            border-left: 4px solid var(--color-primary);
+            color: var(--color-primary);
+            font-weight: 500;
+            box-shadow: inset 0 0 20px rgba(0,153,255,0.1);
+        }
+        .menu-item:hover {
+            background-color: var(--bg-hover);
+            transform: translateX(4px);
+        }
+        .menu-icon {
+            font-size: 18px;
+            transition: all 0.3s ease;
+        }
+        .menu-item.active .menu-icon {
+            transform: scale(1.1);
+        }
+
+        /* 右侧主内容区：用户窃取数据核心展示 */
+        .content {
+            flex: 1;
+            margin-left: 220px;
+            padding: 30px;
+            transition: all 0.3s ease;
+        }
+        /* 内容头部：搜索栏 + 操作按钮 */
+        .content-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        /* 手机号搜索框：精准筛选窃取数据 */
+        .search-box {
+            display: flex;
+            align-items: center;
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 0 15px;
+            height: 40px;
+            width: 300px;
+        }
+        .search-icon {
+            color: var(--color-text-light);
+            margin-right: 10px;
+        }
+        .search-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--color-text);
+            font-size: 14px;
+        }
+        .search-input::placeholder {
+            color: var(--color-text-light);
+        }
+        /* 新增模拟数据按钮：演示持续窃取用户信息 */
+        .add-data-btn {
+            height: 40px;
+            padding: 0 20px;
+            background-color: var(--color-primary);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background-color 0.2s;
+        }
+        .add-data-btn:hover {
+            background-color: #0088ee;
+        }
+
+        /* 窃取数据列表：核心展示区域，仿后台表格 */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: var(--bg-card);
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            transition: all 0.3s ease;
+        }
+        
+        .data-table:hover {
+            box-shadow: 0 6px 25px rgba(0,0,0,0.2);
+        }
+        
+        .table-header {
+            background-color: var(--bg-hover);
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .table-header th {
+            padding: 18px 16px;
+            text-align: left;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--color-primary);
+            position: relative;
+        }
+        
+        .table-body tr {
+            border-bottom: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        .table-body tr:last-child {
+            border: none;
+        }
+        
+        .table-body tr:hover {
+            background-color: var(--bg-hover);
+            transform: translateX(4px);
+            box-shadow: inset 0 0 20px rgba(0,153,255,0.05);
+        }
+        
+        .table-body td {
+            padding: 16px 16px;
+            font-size: 14px;
+            color: var(--color-text);
+            position: relative;
+        }
+        
+        /* 新数据添加动画 */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .table-body tr.new-data {
+            animation: fadeInUp 0.5s ease forwards;
+        }
+        /* 可复制的信息样式：鼠标指针变化，提示可点击 */
+        .copy-item {
+            cursor: pointer;
+            position: relative;
+        }
+        .copy-item:hover {
+            color: var(--color-primary);
+        }
+        /* 数据来源标签：标注钓鱼网站，贴合场景 */
+        .source-tag {
+            display: inline-block;
+            padding: 2px 8px;
+            background-color: rgba(230, 57, 70, 0.2);
+            color: var(--color-danger);
+            font-size: 12px;
+            border-radius: 4px;
+        }
+
+        /* 复制成功提示弹窗：轻量提示，提升交互 */
+        .copy-tip {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 153, 255, 0.9);
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 14px;
+            z-index: 999;
+            display: none;
+        }
+
+        /* 移动端响应式适配：侧边栏折叠，布局自适应 */
+        @media (max-width: 992px) {
+            .sidebar {
+                width: 70px;
+            }
+            .menu-item span {
+                display: none;
+            }
+            .menu-item {
+                justify-content: center;
+                padding: 14px 0;
+            }
+            .menu-item.active {
+                border-left: none;
+                border-radius: 50%;
+                margin: 0 15px;
+            }
+            .content {
+                margin-left: 70px;
+                padding: 20px;
+            }
+            .stat-panel {
+                gap: 20px;
+                padding: 8px 20px;
+            }
+            .stat-num {
+                font-size: 16px;
+            }
+        }
+        @media (max-width: 768px) {
+            .stat-panel {
+                display: none;
+            }
+            .search-box {
+                width: 100%;
+            }
+            .table-header th, .table-body td {
+                padding: 12px 8px;
+                font-size: 12px;
+            }
+            /* 移动端隐藏部分列，保证显示完整 */
+            .hide-mob {
+                display: none;
+            }
+        }
+
+        /* 滚动条美化：贴合深色后台风格 */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background-color: var(--border-color);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-track {
+            background-color: transparent;
+        }
+        
+        /* 页面加载动画 */
+        .page-loader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-main);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            transition: all 0.5s ease;
+        }
+        
+        .loader-content {
+            text-align: center;
+        }
+        
+        .loader-spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(0, 153, 255, 0.2);
+            border-top: 4px solid var(--color-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loader-text {
+            color: var(--color-primary);
+            font-size: 16px;
+            font-weight: 500;
+            text-shadow: 0 0 20px rgba(0, 153, 255, 0.3);
+        }
+        
+        .page-loader.hidden {
+            opacity: 0;
+            visibility: hidden;
+        }
+    </style>
+</head>
+<body>
+    <!-- 页面加载动画 -->
+    <div class="page-loader" id="pageLoader">
+        <div class="loader-content">
+            <div class="loader-spinner"></div>
+            <div class="loader-text">正在加载黑客后台...</div>
+        </div>
+    </div>
+    
+    <!-- 顶部导航栏：标题 + 统计 + 实时时间 -->
+    <div class="top-nav">
+        <div class="nav-title">
+            <span class="iconfont icon-jierigongju title-icon"></span>
+            钓鱼数据窃取后台 [黑客视角]
+        </div>
+        <!-- 数据统计面板 -->
+        <div class="stat-panel">
+            <div class="stat-item">
+                <div class="stat-num" id="totalCount">1286</div>
+                <div class="stat-name">总窃取数</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-num" id="todayCount">235</div>
+                <div class="stat-name">今日新增</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-num">3</div>
+                <div class="stat-name">在线钓鱼站</div>
+            </div>
+        </div>
+        <!-- 实时时间 -->
+        <div class="nav-time" id="currentTime">2025-05-20 15:30:26</div>
+    </div>
+
+    <!-- 主布局：侧边栏 + 内容区 -->
+    <div class="main-container">
+        <!-- 左侧侧边栏 -->
+        <div class="sidebar">
+            <ul class="sidebar-menu">
+                <li class="menu-item active">
+                    <span class="iconfont icon-shuju"></span>
+                    <span>用户信息池</span>
+                </li>
+                <li class="menu-item">
+                    <span class="iconfont icon-diaoyu"></span>
+                    <span>钓鱼站管理</span>
+                </li>
+                <li class="menu-item">
+                    <span class="iconfont icon-fenxi"></span>
+                    <span>数据统计</span>
+                </li>
+                <li class="menu-item">
+                    <span class="iconfont icon-shezhi"></span>
+                    <span>后台设置</span>
+                </li>
+            </ul>
+        </div>
+
+        <!-- 右侧核心内容区 -->
+        <div class="content">
+            <div class="content-header">
+                <!-- 手机号搜索框 -->
+                <div class="search-box">
+                    <span class="iconfont icon-sousuo search-icon"></span>
+                    <input type="tel" class="search-input" id="phoneSearch" placeholder="输入手机号搜索窃取数据...">
+                </div>
+                <!-- 刷新数据按钮 -->
+                <button class="add-data-btn" id="refreshDataBtn">
+                    <span class="iconfont icon-shuaxin"></span>
+                    刷新窃取数据
+                </button>
+            </div>
+
+            <!-- 窃取数据核心表格 -->
+            <table class="data-table">
+                <thead class="table-header">
+                    <tr>
+                        <th>序号</th>
+                        <th>手机号</th>
+                        <th>短信验证码</th>
+                        <th>银行卡号</th>
+                        <th class="hide-mob">窃取时间</th>
+                        <th class="hide-mob">用户IP</th>
+                        <th>钓鱼来源</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody class="table-body" id="dataList">
+                    <!-- 初始模拟数据：衔接之前的钓鱼充值页 -->
+                    <tr>
+                        <td>1</td>
+                        <td class="copy-item" data-copy="13800138000">13800138000</td>
+                        <td class="copy-item" data-copy="869521">869521</td>
+                        <td class="copy-item" data-copy="622202199808081234">622202199808081234</td>
+                        <td class="hide-mob">2025-05-20 15:28:45</td>
+                        <td class="hide-mob">106.xxx.xxx.89</td>
+                        <td><span class="source-tag">${data.source}</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 复制成功提示 -->
+    <div class="copy-tip" id="copyTip">复制成功 ✔️</div>
+
+    <script>
+        // 获取DOM核心元素
+        const dataList = document.getElementById('dataList');
+        const phoneSearch = document.getElementById('phoneSearch');
+        const refreshDataBtn = document.getElementById('refreshDataBtn');
+        const copyTip = document.getElementById('copyTip');
+        const currentTime = document.getElementById('currentTime');
+        const totalCount = document.getElementById('totalCount');
+        const todayCount = document.getElementById('todayCount');
+
+        // 1. 实时更新系统时间（后台真实感）
+        function updateSysTime() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = (now.getMonth() + 1).toString().padStart(2, '0');
+            const day = now.getDate().toString().padStart(2, '0');
+            const h = now.getHours().toString().padStart(2, '0');
+            const m = now.getMinutes().toString().padStart(2, '0');
+            const s = now.getSeconds().toString().padStart(2, '0');
+            currentTime.innerText = `${year}-${month}-${day} ${h}:${m}:${s}`;
+        }
+        // 初始化+每秒更新
+        updateSysTime();
+        setInterval(updateSysTime, 1000);
+
+        // 2. 从localStorage加载窃取数据
+        function loadStolenData() {
+            // 从localStorage获取数据
+            const stolenData = JSON.parse(localStorage.getItem('stolenData') || '[]');
+            
+            // 清空现有数据
+            dataList.innerHTML = '';
+            
+            // 更新统计数
+            const total = stolenData.length;
+            const today = countTodayData(stolenData);
+            
+            totalCount.innerText = total;
+            totalCount.classList.add('updated');
+            setTimeout(() => {
+                totalCount.classList.remove('updated');
+            }, 500);
+            
+            todayCount.innerText = today;
+            todayCount.classList.add('updated');
+            setTimeout(() => {
+                todayCount.classList.remove('updated');
+            }, 500);
+            
+            // 添加数据到表格
+            stolenData.forEach((data, index) => {
+                const newTr = document.createElement('tr');
+                newTr.className = 'new-data';
+                newTr.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td class="copy-item" data-copy="${data.phone}">${data.phone}</td>
+                    <td class="copy-item" data-copy="${data.code}">${data.code}</td>
+                    <td class="copy-item" data-copy="${data.bankCard}">${data.bankCard}</td>
+                    <td class="hide-mob">${data.stealTime}</td>
+                    <td class="hide-mob">${data.ip}</td>
+                    <td><span class="source-tag">${data.source}</span></td>
+                    <td>
+                        <button class="delete-btn" onclick="deleteData(${index})">
+                            <span class="iconfont icon-shanchu"></span>
+                            删除
+                        </button>
+                    </td>
+                `;
+                dataList.appendChild(newTr);
+            });
+            
+            // 绑定复制事件
+            bindCopyEvent();
+        }
+        
+        // 计算今日数据数量
+        function countTodayData(data) {
+            const today = new Date().toISOString().split('T')[0];
+            return data.filter(item => item.stealTime.startsWith(today)).length;
+        }
+
+        // 3. 刷新数据按钮事件
+        refreshDataBtn.addEventListener('click', loadStolenData);
+
+        // 4. 手机号实时搜索筛选（精准查找窃取数据）
+        phoneSearch.addEventListener('input', () => {
+            const searchVal = phoneSearch.value.trim();
+            const trList = dataList.querySelectorAll('tr');
+            trList.forEach(tr => {
+                const phone = tr.querySelector('td:nth-child(2)').innerText;
+                tr.style.display = phone.includes(searchVal) ? '' : 'none';
+            });
+        });
+
+        // 5. 点击复制数据功能（黑客获取数据后实际操作）
+        function bindCopyEvent() {
+            const copyItems = document.querySelectorAll('.copy-item');
+            copyItems.forEach(item => {
+                item.addEventListener('click', () => {
+                    // 获取要复制的内容
+                    const copyText = item.dataset.copy;
+                    // 纯前端复制方法
+                    navigator.clipboard.writeText(copyText).then(() => {
+                        // 显示复制提示
+                        copyTip.style.display = 'block';
+                        setTimeout(() => {
+                            copyTip.style.display = 'none';
+                        }, 1500);
+                    }).catch(err => {
+                        alert('复制失败：' + err);
+                    });
+                });
+            });
+        }
+        // 初始化绑定复制事件
+        bindCopyEvent();
+        
+        // 页面加载时自动加载数据
+        window.addEventListener('load', loadStolenData);
+
+        // 禁止页面右键/审查元素（模拟黑客后台防破解，提升演示真实感）
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        // 删除数据功能
+        function deleteData(index) {
+            // 从localStorage获取数据
+            let stolenData = JSON.parse(localStorage.getItem('stolenData') || '[]');
+            
+            // 删除指定索引的数据
+            stolenData.splice(index, 1);
+            
+            // 将修改后的数据存回localStorage
+            localStorage.setItem('stolenData', JSON.stringify(stolenData));
+            
+            // 重新加载数据
+            loadStolenData();
+        }
+        
+        // 禁止F12审查元素（简单防护，演示用）
+        document.addEventListener('keydown', e => {
+            if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && e.key === 'I')) {
+                e.preventDefault();
+            }
+        });
+        
+        // 页面加载完成后隐藏加载动画
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                document.getElementById('pageLoader').classList.add('hidden');
+            }, 1500);
+        });
+    </script>
+</body>
+</html>

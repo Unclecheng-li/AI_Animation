@@ -1,0 +1,1461 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Harness 真的比模型重要吗？</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap');
+
+        :root {
+            --dark-bg: #0D0D14;
+            --dark-secondary: #151520;
+            --dark-tertiary: #1E1E2E;
+            --accent-pink: #FF2E63;
+            --accent-magenta: #E94584;
+            --accent-purple: #B829DD;
+            --accent-violet: #7B2CBF;
+            --accent-cyan: #00D9FF;
+            --text-primary: #F0F0FA;
+            --text-secondary: #A0A0B8;
+            --text-muted: #6B6B85;
+            --glow-pink: rgba(255, 46, 99, 0.4);
+            --glow-purple: rgba(184, 41, 221, 0.35);
+        }
+
+        body {
+            font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+            background: var(--dark-bg);
+            color: var(--text-primary);
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* ===== Slide Container ===== */
+        .slides-wrapper {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        .slide {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 60px 80px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.6s ease;
+            overflow: hidden;
+            background: radial-gradient(ellipse at 50% 30%, var(--dark-secondary) 0%, var(--dark-bg) 100%);
+        }
+
+        .slide.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* ===== Animation ===== */
+        .slide .anim {
+            opacity: 0;
+            transform: translateY(40px);
+            transition: opacity 0.7s cubic-bezier(.23,1,.32,1), transform 0.7s cubic-bezier(.23,1,.32,1);
+        }
+
+        .slide.active .anim.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* ===== Decorations ===== */
+        .deco-circle {
+            position: absolute;
+            border-radius: 50%;
+            opacity: 0.08;
+            pointer-events: none;
+            filter: blur(60px);
+        }
+
+        /* ===== Floating Particles ===== */
+        .particles {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .particle {
+            position: absolute;
+            border-radius: 50%;
+            opacity: 0;
+            animation: floatParticle 8s ease-in-out infinite;
+        }
+
+        @keyframes floatParticle {
+            0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0; }
+            10% { opacity: 0.5; }
+            50% { transform: translateY(-50px) rotate(180deg); opacity: 0.3; }
+            90% { opacity: 0.5; }
+        }
+
+        /* ===== Animated Grid Background ===== */
+        .grid-bg {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-image:
+                linear-gradient(rgba(255,46,99,0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(184,41,221,0.02) 1px, transparent 1px);
+            background-size: 60px 60px;
+            pointer-events: none;
+        }
+
+        /* ===== Pulse Animation ===== */
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 0 0 0 var(--glow-pink); }
+            50% { box-shadow: 0 0 30px 10px rgba(255,46,99,0.2); }
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-12px); }
+        }
+
+        @keyframes rotateScale {
+            0% { transform: rotate(0deg) scale(1); }
+            50% { transform: rotate(180deg) scale(1.1); }
+            100% { transform: rotate(360deg) scale(1); }
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200% center; }
+            100% { background-position: 200% center; }
+        }
+
+        @keyframes slideInLeft {
+            from { transform: translateX(-80px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        @keyframes slideInRight {
+            from { transform: translateX(80px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        @keyframes scaleIn {
+            from { transform: scale(0); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes bounceIn {
+            0% { transform: scale(0.3); opacity: 0; }
+            50% { transform: scale(1.05); }
+            70% { transform: scale(0.9); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes ripple {
+            0% { transform: scale(1); opacity: 0.4; }
+            100% { transform: scale(2.5); opacity: 0; }
+        }
+
+        /* Shimmer text effect */
+        .shimmer-text {
+            background: linear-gradient(90deg, var(--accent-pink), var(--accent-magenta), var(--accent-purple), var(--accent-pink));
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 4s linear infinite;
+        }
+
+        /* ========================================
+           SLIDE 1 — Title
+           ======================================== */
+        .slide-1 {
+            background: radial-gradient(ellipse at 50% 30%, var(--dark-secondary) 0%, var(--dark-bg) 100%);
+        }
+
+        .slide-1 .deco-1 {
+            width: 400px; height: 400px;
+            background: var(--accent-pink);
+            top: -100px; right: -80px;
+            opacity: 0.12;
+            animation: rotateScale 20s linear infinite;
+        }
+
+        .slide-1 .deco-2 {
+            width: 280px; height: 280px;
+            background: var(--accent-purple);
+            bottom: -60px; left: -60px;
+            opacity: 0.12;
+            animation: rotateScale 15s linear infinite reverse;
+        }
+
+        .slide-1 .deco-3 {
+            width: 150px; height: 150px;
+            background: var(--accent-magenta);
+            top: 30%; left: 10%;
+            opacity: 0.08;
+            animation: float 6s ease-in-out infinite;
+        }
+
+        .slide-1 .icon-main-wrapper {
+            position: relative;
+            margin-bottom: 32px;
+        }
+
+        .slide-1 .icon-main-wrapper .ripple-ring {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 120px; height: 120px;
+            margin: -60px 0 0 -60px;
+            border: 3px solid rgba(255,46,99,0.3);
+            border-radius: 50%;
+            animation: ripple 2.5s ease-out infinite;
+        }
+
+        .slide-1 .icon-main-wrapper .ripple-ring:nth-child(2) {
+            animation-delay: 0.8s;
+        }
+
+        .slide-1 .icon-main-wrapper .ripple-ring:nth-child(3) {
+            animation-delay: 1.6s;
+        }
+
+        .slide-1 .icon-main {
+            font-size: 80px;
+            color: var(--accent-pink);
+            position: relative;
+            z-index: 2;
+            filter: drop-shadow(0 6px 20px var(--glow-pink));
+            animation: float 4s ease-in-out infinite;
+        }
+
+        .slide-1 h1 {
+            font-size: 60px;
+            font-weight: 900;
+            color: var(--text-primary);
+            text-align: center;
+            line-height: 1.35;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        .slide-1 h1 .hl {
+            color: var(--accent-pink);
+            text-decoration: underline;
+            text-decoration-color: var(--accent-magenta);
+            text-underline-offset: 10px;
+            text-decoration-thickness: 4px;
+            position: relative;
+        }
+
+        .slide-1 .subtitle {
+            margin-top: 24px;
+            font-size: 28px;
+            color: var(--text-secondary);
+            font-style: italic;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .slide-1 .subtitle::before,
+        .slide-1 .subtitle::after {
+            content: '';
+            display: block;
+            width: 40px;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent-pink));
+        }
+
+        .slide-1 .subtitle::after {
+            background: linear-gradient(90deg, var(--accent-pink), transparent);
+        }
+
+        /* 二次元颜文字样式 */
+        .kaomoji {
+            font-size: 22px;
+            color: var(--accent-pink);
+            letter-spacing: 2px;
+            margin-top: 10px;
+        }
+
+        /* ===== Visual: Scale Illustration ===== */
+        .slide-1 .scale-visual {
+            margin-top: 40px;
+            display: flex;
+            align-items: flex-end;
+            gap: 0;
+            position: relative;
+        }
+
+        .scale-visual .scale-base {
+            width: 220px;
+            height: 6px;
+            background: linear-gradient(90deg, var(--accent-pink), var(--accent-purple));
+            border-radius: 3px;
+            position: relative;
+            animation: scaleRock 3s ease-in-out infinite;
+            transform-origin: center;
+        }
+
+        @keyframes scaleRock {
+            0%, 100% { transform: rotate(-3deg); }
+            50% { transform: rotate(3deg); }
+        }
+
+        .scale-visual .scale-pivot {
+            width: 0; height: 0;
+            border-left: 12px solid transparent;
+            border-right: 12px solid transparent;
+            border-bottom: 16px solid var(--accent-pink);
+            margin-top: 2px;
+        }
+
+        .scale-visual .scale-left,
+        .scale-visual .scale-right {
+            position: absolute;
+            top: -50px;
+            width: 60px;
+            height: 42px;
+            border-radius: 0 0 30px 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: #fff;
+            font-weight: 700;
+        }
+
+        .scale-visual .scale-left {
+            left: 10px;
+            background: var(--accent-pink);
+        }
+
+        .scale-visual .scale-right {
+            right: 10px;
+            background: var(--accent-cyan);
+        }
+
+        /* ========================================
+           SLIDE 2 — Industry Debate
+           ======================================== */
+        .slide-2 {
+            background: radial-gradient(ellipse at 30% 60%, var(--dark-secondary) 0%, var(--dark-bg) 100%);
+        }
+
+        .slide-2 .deco-1 {
+            width: 500px; height: 500px;
+            background: var(--accent-purple);
+            top: -160px; left: -160px;
+            opacity: 0.08;
+        }
+
+        .slide-2 .deco-2 {
+            width: 300px; height: 300px;
+            background: var(--accent-cyan);
+            bottom: -100px; right: -80px;
+            opacity: 0.06;
+        }
+
+        .slide-2 .section-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: linear-gradient(135deg, var(--accent-pink), var(--accent-magenta));
+            color: #fff;
+            font-size: 20px;
+            font-weight: 700;
+            padding: 12px 32px;
+            border-radius: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 20px var(--glow-pink);
+        }
+
+        .slide-2 h2 {
+            font-size: 48px;
+            font-weight: 900;
+            margin-bottom: 44px;
+            text-align: center;
+            color: var(--text-primary);
+        }
+
+        .slide-2 h2 .hl {
+            color: var(--accent-pink);
+            position: relative;
+        }
+
+        .slide-2 h2 .hl::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--accent-pink), var(--accent-magenta));
+            border-radius: 2px;
+        }
+
+        .debate-container {
+            display: flex;
+            gap: 30px;
+            width: 100%;
+            max-width: 1100px;
+            justify-content: center;
+            align-items: stretch;
+        }
+
+        .debate-card {
+            flex: 1;
+            max-width: 460px;
+            border-radius: 28px;
+            padding: 44px 40px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.4s ease;
+        }
+
+        .debate-card::before {
+            content: '';
+            position: absolute;
+            top: -2px; left: -2px;
+            right: -2px; bottom: -2px;
+            border-radius: 30px;
+            z-index: -1;
+        }
+
+        .debate-card.big-model {
+            background: linear-gradient(160deg, rgba(255,46,99,0.08), rgba(233,69,132,0.05));
+            border: 3px solid var(--accent-pink);
+            box-shadow: 0 10px 40px rgba(255,46,99,0.15);
+        }
+
+        .debate-card.harness-camp {
+            background: linear-gradient(160deg, rgba(0,217,255,0.08), rgba(0,217,255,0.03));
+            border: 3px solid var(--accent-cyan);
+            box-shadow: 0 10px 40px rgba(0,217,255,0.12);
+        }
+
+        /* Card corner decoration */
+        .debate-card .corner-deco {
+            position: absolute;
+            width: 80px; height: 80px;
+            border-radius: 50%;
+            opacity: 0.08;
+        }
+
+        .debate-card.big-model .corner-deco {
+            background: var(--accent-pink);
+            top: -20px; right: -20px;
+        }
+
+        .debate-card.harness-camp .corner-deco {
+            background: var(--accent-cyan);
+            top: -20px; right: -20px;
+        }
+
+        .debate-card .card-icon-wrapper {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+
+        .debate-card .card-icon {
+            font-size: 56px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .debate-card .card-icon-bg {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 90px; height: 90px;
+            margin: -45px 0 0 -45px;
+            border-radius: 50%;
+            opacity: 0.15;
+        }
+
+        .debate-card.big-model .card-icon { color: var(--accent-pink); }
+        .debate-card.big-model .card-icon-bg { background: var(--accent-pink); }
+        .debate-card.harness-camp .card-icon { color: var(--accent-cyan); }
+        .debate-card.harness-camp .card-icon-bg { background: var(--accent-cyan); }
+
+        .debate-card h3 {
+            font-size: 30px;
+            font-weight: 900;
+            margin-bottom: 18px;
+        }
+
+        .debate-card.big-model h3 { color: var(--accent-pink); }
+        .debate-card.harness-camp h3 { color: var(--accent-cyan); }
+
+        .debate-card p {
+            font-size: 22px;
+            line-height: 1.8;
+            color: var(--text-secondary);
+        }
+
+        .debate-card .keyword {
+            font-weight: 700;
+        }
+
+        .debate-card.big-model .keyword {
+            background: rgba(255,46,99,0.15);
+            padding: 3px 10px;
+            border-radius: 8px;
+            color: var(--accent-pink);
+        }
+
+        .debate-card.harness-camp .keyword {
+            background: rgba(0,217,255,0.15);
+            padding: 3px 10px;
+            border-radius: 8px;
+            color: var(--accent-cyan);
+        }
+
+        /* Battle Visual */
+        .vs-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            gap: 8px;
+        }
+
+        .vs-badge {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 72px;
+            height: 72px;
+            background: linear-gradient(135deg, var(--accent-pink), var(--accent-magenta));
+            color: #fff;
+            font-size: 28px;
+            font-weight: 900;
+            border-radius: 50%;
+            box-shadow: 0 6px 24px var(--glow-pink);
+            animation: pulseGlow 2s ease-in-out infinite;
+            position: relative;
+        }
+
+        .vs-badge::before,
+        .vs-badge::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 2px solid rgba(255,46,99,0.3);
+            animation: ripple 2s ease-out infinite;
+        }
+
+        .vs-badge::after {
+            animation-delay: 1s;
+        }
+
+        .vs-lightning {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .vs-lightning span {
+            display: block;
+            width: 3px;
+            height: 12px;
+            background: var(--accent-pink);
+            border-radius: 2px;
+            opacity: 0.5;
+        }
+
+        /* ========================================
+           SLIDE 3 — Noam Brown Quote
+           ======================================== */
+        .slide-3 {
+            background: radial-gradient(ellipse at 70% 40%, var(--dark-secondary) 0%, var(--dark-bg) 100%);
+        }
+
+        .slide-3 .deco-1 {
+            width: 300px; height: 300px;
+            background: var(--accent-magenta);
+            bottom: -80px; right: -80px;
+            opacity: 0.1;
+        }
+
+        .slide-3 .deco-2 {
+            width: 200px; height: 200px;
+            background: var(--accent-purple);
+            top: 40px; left: -60px;
+            opacity: 0.08;
+            animation: float 7s ease-in-out infinite;
+        }
+
+        .slide-3 .speaker-info {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            margin-bottom: 36px;
+        }
+
+        .slide-3 .speaker-avatar {
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent-pink), var(--accent-magenta));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 40px;
+            box-shadow: 0 6px 24px var(--glow-pink);
+            position: relative;
+        }
+
+        .slide-3 .speaker-avatar::after {
+            content: '';
+            position: absolute;
+            width: 104px;
+            height: 104px;
+            border-radius: 50%;
+            border: 3px solid rgba(255,46,99,0.2);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .slide-3 .speaker-name {
+            font-size: 30px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .slide-3 .speaker-title {
+            font-size: 20px;
+            color: var(--text-secondary);
+            font-style: italic;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .slide-3 .speaker-title .org-badge {
+            background: rgba(255,46,99,0.15);
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 15px;
+            color: var(--accent-pink);
+            font-weight: 600;
+            font-style: normal;
+        }
+
+        .slide-3 .quote-box {
+            max-width: 920px;
+            position: relative;
+            padding: 54px 64px;
+            background: var(--dark-tertiary);
+            backdrop-filter: blur(10px);
+            border-radius: 28px;
+            border-left: 8px solid var(--accent-pink);
+            box-shadow: 0 12px 48px rgba(0,0,0,0.3);
+        }
+
+        .slide-3 .quote-mark {
+            position: absolute;
+            top: -14px;
+            left: 32px;
+            font-size: 110px;
+            color: var(--accent-magenta);
+            opacity: 0.3;
+            font-family: Georgia, serif;
+            line-height: 1;
+        }
+
+        .slide-3 .quote-text {
+            font-size: 44px;
+            font-weight: 700;
+            line-height: 1.5;
+            color: var(--text-primary);
+            text-align: center;
+        }
+
+        .slide-3 .quote-text .hl-orange {
+            color: var(--accent-pink);
+            text-decoration: underline;
+            text-decoration-color: var(--accent-magenta);
+            text-underline-offset: 6px;
+            text-decoration-thickness: 3px;
+        }
+
+        .slide-3 .quote-text .hl-bg {
+            background: linear-gradient(135deg, rgba(255,46,99,0.15), rgba(233,69,132,0.15));
+            padding: 4px 14px;
+            border-radius: 10px;
+        }
+
+        /* Crutch visual illustration */
+        .slide-3 .crutch-visual {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 40px;
+            margin-top: 36px;
+        }
+
+        .crutch-visual .crutch-icon {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .crutch-visual .crutch-circle {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 34px;
+            color: #fff;
+        }
+
+        .crutch-visual .crutch-icon:first-child .crutch-circle {
+            background: linear-gradient(135deg, var(--accent-magenta), var(--accent-pink));
+            animation: float 3s ease-in-out infinite;
+        }
+
+        .crutch-visual .crutch-icon:last-child .crutch-circle {
+            background: linear-gradient(135deg, var(--accent-cyan), #00B4D8);
+            animation: float 3s ease-in-out infinite 0.5s;
+        }
+
+        .crutch-visual .crutch-label {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-secondary);
+        }
+
+        .crutch-visual .arrow-evolve {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            color: var(--accent-pink);
+        }
+
+        .crutch-visual .arrow-evolve i {
+            font-size: 32px;
+        }
+
+        .crutch-visual .arrow-evolve span {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--accent-pink);
+        }
+
+        .slide-3 .source-ref {
+            margin-top: 18px;
+            font-size: 16px;
+            color: var(--text-muted);
+            text-align: right;
+        }
+
+        /* ========================================
+           SLIDE 4 — The Argument (Diagram)
+           ======================================== */
+        .slide-4 {
+            background: radial-gradient(ellipse at 50% 50%, var(--dark-secondary) 0%, var(--dark-bg) 100%);
+        }
+
+        .slide-4 .grid-bg {
+            opacity: 0.6;
+        }
+
+        .slide-4 h2 {
+            font-size: 46px;
+            font-weight: 900;
+            margin-bottom: 50px;
+            text-align: center;
+            color: var(--text-primary);
+        }
+
+        .slide-4 h2 .hl { color: var(--accent-pink); }
+
+        .timeline {
+            display: flex;
+            align-items: flex-start;
+            gap: 0;
+            max-width: 1100px;
+            width: 100%;
+            position: relative;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            top: 64px;
+            left: 12%;
+            right: 12%;
+            height: 6px;
+            background: linear-gradient(90deg, var(--accent-magenta), var(--accent-pink), var(--accent-cyan));
+            border-radius: 3px;
+            z-index: 0;
+        }
+
+        /* Arrow heads on timeline */
+        .timeline::after {
+            content: '';
+            position: absolute;
+            top: 58px;
+            right: 11%;
+            width: 0;
+            height: 0;
+            border-top: 9px solid transparent;
+            border-bottom: 9px solid transparent;
+            border-left: 14px solid var(--accent-cyan);
+            z-index: 1;
+        }
+
+        .timeline-step {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .timeline-icon {
+            width: 128px;
+            height: 128px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            color: #fff;
+            margin-bottom: 24px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            position: relative;
+        }
+
+        .timeline-icon::after {
+            content: '';
+            position: absolute;
+            width: 144px;
+            height: 144px;
+            border-radius: 50%;
+            border: 3px dashed rgba(255,255,255,0.15);
+            animation: rotateScale 10s linear infinite;
+        }
+
+        .step-before .timeline-icon {
+            background: linear-gradient(135deg, var(--accent-magenta), var(--accent-pink));
+        }
+
+        .step-arrow .timeline-icon {
+            background: linear-gradient(135deg, var(--accent-pink), var(--accent-purple));
+            font-size: 44px;
+        }
+
+        .step-after .timeline-icon {
+            background: linear-gradient(135deg, var(--accent-cyan), #00B4D8);
+        }
+
+        .timeline-step .step-content {
+            background: var(--dark-tertiary);
+            backdrop-filter: blur(6px);
+            border-radius: 20px;
+            padding: 24px 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            text-align: center;
+            max-width: 280px;
+        }
+
+        .timeline-step h3 {
+            font-size: 26px;
+            font-weight: 900;
+            margin-bottom: 12px;
+            text-align: center;
+        }
+
+        .step-before h3 { color: var(--accent-pink); }
+        .step-arrow h3 { color: var(--accent-magenta); }
+        .step-after h3 { color: var(--accent-cyan); }
+
+        .timeline-step p {
+            font-size: 21px;
+            text-align: center;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        .timeline-step p .bold {
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .timeline-step .strike {
+            text-decoration: line-through;
+            color: var(--text-muted);
+        }
+
+        /* Step number badge */
+        .step-number {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 32px;
+            height: 32px;
+            background: var(--dark-bg);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+            font-weight: 900;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            z-index: 3;
+        }
+
+        .step-before .step-number { color: var(--accent-pink); border: 2px solid var(--accent-pink); }
+        .step-arrow .step-number { color: var(--accent-magenta); border: 2px solid var(--accent-magenta); }
+        .step-after .step-number { color: var(--accent-cyan); border: 2px solid var(--accent-cyan); }
+
+        /* ========================================
+           SLIDE 5 — Advice
+           ======================================== */
+        .slide-5 {
+            background: radial-gradient(ellipse at 40% 70%, var(--dark-secondary) 0%, var(--dark-bg) 100%);
+        }
+
+        .slide-5 .deco-1 {
+            width: 350px; height: 350px;
+            background: var(--accent-purple);
+            top: -100px; left: -100px;
+            opacity: 0.08;
+        }
+
+        .slide-5 .deco-2 {
+            width: 250px; height: 250px;
+            background: var(--accent-pink);
+            bottom: -60px; right: -60px;
+            opacity: 0.06;
+        }
+
+        .slide-5 .advice-icon {
+            font-size: 78px;
+            color: var(--accent-pink);
+            margin-bottom: 16px;
+            animation: float 3s ease-in-out infinite;
+            filter: drop-shadow(0 4px 15px var(--glow-pink));
+        }
+
+        .slide-5 h2 {
+            font-size: 36px;
+            font-weight: 700;
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+        }
+
+        .slide-5 .advice-main {
+            max-width: 940px;
+            background: var(--dark-tertiary);
+            backdrop-filter: blur(10px);
+            border-radius: 28px;
+            padding: 50px 64px;
+            box-shadow: 0 12px 50px rgba(0,0,0,0.3);
+            text-align: center;
+            border-top: 6px solid var(--accent-pink);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .slide-5 .advice-main::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: linear-gradient(135deg, rgba(255,46,99,0.05) 0%, transparent 50%, rgba(184,41,221,0.05) 100%);
+            pointer-events: none;
+        }
+
+        .slide-5 .advice-quote {
+            font-size: 44px;
+            font-weight: 900;
+            line-height: 1.55;
+            color: var(--text-primary);
+            position: relative;
+            z-index: 1;
+        }
+
+        .slide-5 .advice-quote .hl-red {
+            color: var(--accent-pink);
+            font-weight: 900;
+        }
+
+        .slide-5 .advice-quote .hl-underline {
+            text-decoration: underline;
+            text-decoration-color: var(--accent-magenta);
+            text-underline-offset: 8px;
+            text-decoration-thickness: 4px;
+        }
+
+        .slide-5 .advice-quote .hl-bg {
+            background: linear-gradient(135deg, rgba(255,46,99,0.15), rgba(233,69,132,0.15));
+            padding: 4px 14px;
+            border-radius: 10px;
+        }
+
+        .slide-5 .time-visual {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 28px;
+            margin-top: 40px;
+        }
+
+        .slide-5 .time-block {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .slide-5 .time-block .time-circle {
+            width: 110px;
+            height: 110px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 34px;
+            font-weight: 900;
+            color: #fff;
+            position: relative;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+        }
+
+        .slide-5 .time-block .time-circle::after {
+            content: '';
+            position: absolute;
+            width: 126px;
+            height: 126px;
+            border-radius: 50%;
+            border: 3px dashed rgba(255,255,255,0.1);
+        }
+
+        .slide-5 .time-block:first-child .time-circle {
+            background: linear-gradient(135deg, var(--accent-pink), var(--accent-magenta));
+        }
+
+        .slide-5 .time-block:last-child .time-circle {
+            background: linear-gradient(135deg, var(--accent-purple), var(--accent-violet));
+        }
+
+        .slide-5 .time-block span {
+            font-size: 21px;
+            font-weight: 700;
+            color: var(--text-secondary);
+        }
+
+        .slide-5 .time-arrow {
+            font-size: 40px;
+            color: var(--accent-pink);
+            animation: pulseArrow 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulseArrow {
+            0%, 100% { transform: translateX(0); opacity: 0.7; }
+            50% { transform: translateX(8px); opacity: 1; }
+        }
+
+        .slide-5 .advice-footer {
+            margin-top: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            font-size: 22px;
+            color: var(--text-secondary);
+            background: rgba(255,46,99,0.08);
+            padding: 12px 28px;
+            border-radius: 16px;
+        }
+
+        .slide-5 .advice-footer i {
+            color: var(--accent-pink);
+            font-size: 24px;
+        }
+
+
+
+        /* ===== Responsive ===== */
+        @media (max-width: 900px) {
+            .slide { padding: 30px 24px; }
+            .slide-1 h1 { font-size: 38px; }
+            .debate-container { flex-direction: column; gap: 20px; }
+            .vs-section { display: none; }
+            .timeline { flex-direction: column; gap: 30px; }
+            .timeline::before { display: none; }
+            .timeline::after { display: none; }
+            .slide-3 .quote-text { font-size: 30px; }
+            .slide-5 .advice-quote { font-size: 32px; }
+        }
+    </style>
+</head>
+<body>
+
+
+
+<div class="slides-wrapper">
+
+    <!-- ======================== SLIDE 1: Title ======================== -->
+    <div class="slide slide-1 active" data-slide="0">
+        <div class="particles">
+            <div class="particle" style="width:16px;height:16px;background:var(--accent-pink);top:15%;left:8%;animation-delay:0s;animation-duration:7s;"></div>
+            <div class="particle" style="width:10px;height:10px;background:var(--accent-magenta);top:70%;left:15%;animation-delay:1s;animation-duration:9s;"></div>
+            <div class="particle" style="width:14px;height:14px;background:var(--accent-purple);top:25%;right:12%;animation-delay:2s;animation-duration:6s;"></div>
+            <div class="particle" style="width:8px;height:8px;background:var(--accent-cyan);top:80%;right:18%;animation-delay:0.5s;animation-duration:8s;"></div>
+            <div class="particle" style="width:12px;height:12px;background:var(--accent-pink);top:50%;left:5%;animation-delay:3s;animation-duration:10s;"></div>
+        </div>
+        <div class="deco-circle deco-1"></div>
+        <div class="deco-circle deco-2"></div>
+        <div class="deco-circle deco-3"></div>
+        <div class="grid-bg"></div>
+
+        <div class="icon-main-wrapper anim">
+            <div class="ripple-ring"></div>
+            <div class="ripple-ring"></div>
+            <div class="ripple-ring"></div>
+            <i class="fa-solid fa-scale-balanced icon-main"></i>
+        </div>
+        <h1 class="anim">
+            <span class="shimmer-text">Harness</span> 真的比<br>模型重要吗？
+        </h1>
+        <p class="subtitle anim">行业正在激烈争论的核心问题</p>
+
+        <div class="scale-visual anim">
+            <div style="display:flex;flex-direction:column;align-items:center;">
+                <div style="position:relative;">
+                    <div class="scale-base">
+                        <div class="scale-left"><i class="fa-solid fa-gears" style="font-size:22px;"></i></div>
+                        <div class="scale-right"><i class="fa-solid fa-brain" style="font-size:22px;"></i></div>
+                    </div>
+                </div>
+                <div class="scale-pivot"></div>
+            </div>
+        </div>
+
+        <div class="kaomoji anim" style="margin-top:30px;">
+            (｡•́︿•̀｡) 到底哪个更重要呢？
+        </div>
+    </div>
+
+    <!-- ======================== SLIDE 2: Debate ======================== -->
+    <div class="slide slide-2" data-slide="1">
+        <div class="deco-circle deco-1"></div>
+        <div class="deco-circle deco-2"></div>
+        <div class="grid-bg"></div>
+
+        <div class="section-tag anim">
+            <i class="fa-solid fa-comments"></i>
+            行业争论
+        </div>
+        <h2 class="anim">两大阵营，<span class="hl">针锋相对</span></h2>
+        <div class="debate-container">
+            <div class="debate-card big-model anim">
+                <div class="corner-deco"></div>
+                <div class="card-icon-wrapper">
+                    <div class="card-icon-bg"></div>
+                    <div class="card-icon"><i class="fa-solid fa-brain"></i></div>
+                </div>
+                <h3>Big Model 阵营</h3>
+                <p>
+                    <span class="keyword">模型能力增长</span>才是主旋律<br>
+                    Harness 只是<span class="keyword">权宜之计</span>
+                </p>
+            </div>
+            <div class="vs-section anim">
+                <div class="vs-lightning">
+                    <span></span><span></span>
+                </div>
+                <div class="vs-badge">VS</div>
+                <div class="vs-lightning">
+                    <span></span><span></span>
+                </div>
+            </div>
+            <div class="debate-card harness-camp anim">
+                <div class="corner-deco"></div>
+                <div class="card-icon-wrapper">
+                    <div class="card-icon-bg"></div>
+                    <div class="card-icon"><i class="fa-solid fa-gears"></i></div>
+                </div>
+                <h3>Harness 阵营</h3>
+                <p>
+                    <span class="keyword">工程能力</span>不可替代<br>
+                    模型需要 Harness 才能<span class="keyword">落地</span>
+                </p>
+            </div>
+        </div>
+
+        <div class="kaomoji anim" style="margin-top:24px;">
+            (⚆_⚆) 争论很激烈啊！
+        </div>
+    </div>
+
+    <!-- ======================== SLIDE 3: Noam Brown Quote ======================== -->
+    <div class="slide slide-3" data-slide="2">
+        <div class="deco-circle deco-1"></div>
+        <div class="deco-circle deco-2"></div>
+        <div class="grid-bg"></div>
+
+        <div class="speaker-info anim">
+            <div class="speaker-avatar">
+                <i class="fa-solid fa-user"></i>
+            </div>
+            <div>
+                <div class="speaker-name">Noam Brown</div>
+                <div class="speaker-title">
+                    <span>OpenAI 研究员</span>
+                    <span class="org-badge">OpenAI</span>
+                </div>
+            </div>
+        </div>
+        <div class="quote-box anim">
+            <div class="quote-mark">"</div>
+            <div class="quote-text anim">
+                Harness 就像一根<span class="hl-orange">拐杖</span>，<br>
+                我们终将能够<span class="hl-bg">超越它</span>。
+            </div>
+            <div class="source-ref anim">[10]</div>
+        </div>
+
+        <div class="crutch-visual anim">
+            <div class="crutch-icon">
+                <div class="crutch-circle">
+                    <i class="fa-solid fa-crutch"></i>
+                </div>
+                <span class="crutch-label">Harness (拐杖)</span>
+            </div>
+            <div class="arrow-evolve">
+                <i class="fa-solid fa-angles-right"></i>
+                <span>终将超越</span>
+            </div>
+            <div class="crutch-icon">
+                <div class="crutch-circle">
+                    <i class="fa-solid fa-person-running"></i>
+                </div>
+                <span class="crutch-label">模型自主能力</span>
+            </div>
+        </div>
+
+        <div class="kaomoji anim" style="margin-top:20px;">
+            (´･_･`) Harness只是暂时的拐杖？
+        </div>
+    </div>
+
+    <!-- ======================== SLIDE 4: Argument ======================== -->
+    <div class="slide slide-4" data-slide="3">
+        <div class="grid-bg"></div>
+
+        <h2 class="anim">他的<span class="hl">论据</span>：推理模型的出现</h2>
+        <div class="timeline">
+            <div class="timeline-step step-before anim">
+                <div class="timeline-icon">
+                    <div class="step-number">1</div>
+                    <i class="fa-solid fa-cubes"></i>
+                </div>
+                <div class="step-content">
+                    <h3>推理模型之前</h3>
+                    <p>
+                        在 GPT-4o 上搭建<br>
+                        <span class="bold">大量复杂 Agentic 系统</span><br>
+                        模拟推理能力
+                    </p>
+                </div>
+            </div>
+            <div class="timeline-step step-arrow anim">
+                <div class="timeline-icon">
+                    <div class="step-number">2</div>
+                    <i class="fa-solid fa-bolt"></i>
+                </div>
+                <div class="step-content">
+                    <h3>推理模型出现</h3>
+                    <p>
+                        模型自身获得<br>
+                        <span class="bold">强大推理能力</span>
+                    </p>
+                </div>
+            </div>
+            <div class="timeline-step step-after anim">
+                <div class="timeline-icon">
+                    <div class="step-number">3</div>
+                    <i class="fa-solid fa-trash-can"></i>
+                </div>
+                <div class="step-content">
+                    <h3>结果</h3>
+                    <p>
+                        很多基础设施<br>
+                        <span class="bold strike">一夜之间不再需要</span>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="kaomoji anim" style="margin-top:24px;">
+            (；´Д｀) 推理模型来了，Harness要失业？
+        </div>
+    </div>
+
+    <!-- ======================== SLIDE 5: Advice ======================== -->
+    <div class="slide slide-5" data-slide="4">
+        <div class="deco-circle deco-1"></div>
+        <div class="deco-circle deco-2"></div>
+        <div class="grid-bg"></div>
+
+        <div class="particles">
+            <div class="particle" style="width:12px;height:12px;background:var(--accent-pink);top:20%;left:10%;animation-delay:0s;animation-duration:8s;"></div>
+            <div class="particle" style="width:8px;height:8px;background:var(--accent-purple);top:60%;right:8%;animation-delay:1.5s;animation-duration:7s;"></div>
+            <div class="particle" style="width:10px;height:10px;background:var(--accent-magenta);top:40%;left:85%;animation-delay:0.8s;animation-duration:9s;"></div>
+        </div>
+
+        <div class="advice-icon anim">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+        </div>
+        <h2 class="anim">Noam Brown 给 AI 开发者的建议</h2>
+        <div class="advice-main anim">
+            <div class="advice-quote anim">
+                别花 <span class="hl-red hl-underline">六个月</span> 搭建一个<br>
+                可能 <span class="hl-bg">六个月后就被淘汰</span> 的东西
+            </div>
+        </div>
+        <div class="time-visual anim">
+            <div class="time-block">
+                <div class="time-circle">
+                    <i class="fa-solid fa-hammer"></i>
+                </div>
+                <span>花 6 个月搭建</span>
+            </div>
+            <div class="time-arrow">
+                <i class="fa-solid fa-arrow-right"></i>
+            </div>
+            <div class="time-block">
+                <div class="time-circle">
+                    <i class="fa-solid fa-xmark"></i>
+                </div>
+                <span>6 个月后淘汰</span>
+            </div>
+        </div>
+        <div class="advice-footer anim">
+            <i class="fa-solid fa-circle-info"></i>
+            <span>这是对 Harness 短期价值的<b>警告</b></span>
+        </div>
+
+        <div class="kaomoji anim" style="margin-top:20px;">
+            (｡◕‿◕｡) 短期投资需谨慎，长期价值更重要~
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const slides = document.querySelectorAll('.slide');
+    const totalSlides = slides.length;
+    let currentSlide = 0;
+
+    function updateUI() {
+    }
+
+    function goToSlide(index) {
+        if (index < 0 || index >= totalSlides || index === currentSlide) return;
+
+        slides[currentSlide].classList.remove('active');
+        resetAnimations(slides[currentSlide]);
+
+        currentSlide = index;
+
+        slides[currentSlide].classList.add('active');
+        triggerAnimations(slides[currentSlide]);
+        updateUI();
+    }
+
+    function changeSlide(dir) {
+        goToSlide(currentSlide + dir);
+    }
+
+    function triggerAnimations(slide) {
+        const anims = slide.querySelectorAll('.anim');
+        anims.forEach((el, i) => {
+            el.classList.remove('show');
+            setTimeout(() => {
+                el.classList.add('show');
+            }, 200 * i);
+        });
+    }
+
+    function resetAnimations(slide) {
+        slide.querySelectorAll('.anim').forEach(el => el.classList.remove('show'));
+    }
+
+    // Initial
+    updateUI();
+    setTimeout(() => triggerAnimations(slides[0]), 200);
+
+    // Keyboard navigation
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') {
+            e.preventDefault();
+            changeSlide(1);
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            changeSlide(-1);
+        }
+    });
+
+    // Touch/swipe support
+    let touchStartX = 0;
+    document.addEventListener('touchstart', (e) => {
+        touchStartX = e.changedTouches[0].screenX;
+    });
+    document.addEventListener('touchend', (e) => {
+        const diff = touchStartX - e.changedTouches[0].screenX;
+        if (Math.abs(diff) > 60) {
+            changeSlide(diff > 0 ? 1 : -1);
+        }
+    });
+
+    // Mouse click navigation (left/right halves)
+    document.addEventListener('click', (e) => {
+        const x = e.clientX;
+        const w = window.innerWidth;
+        if (x > w * 0.65) {
+            changeSlide(1);
+        } else if (x < w * 0.35) {
+            changeSlide(-1);
+        }
+    });
+</script>
+
+</body>
+</html>

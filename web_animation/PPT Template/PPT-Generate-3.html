@@ -1,0 +1,1320 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenClaw 致命安全风险</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+            background: 
+                radial-gradient(circle at bottom left, #001f54 0%, transparent 50%),
+                radial-gradient(circle at top right, #001f54 0%, transparent 30%),
+                #000000;
+            min-height: 100vh;
+            overflow: hidden;
+            color: #fff;
+            position: relative;
+        }
+
+        /* 噪点效果 */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            opacity: 0.15;
+            mix-blend-mode: overlay;
+            animation: noiseMove 20s linear infinite;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        @keyframes noiseMove {
+            0% { transform: translate(0, 0) scale(1.1); }
+            25% { transform: translate(-2%, -2%) scale(1.05); }
+            50% { transform: translate(0, 0) scale(1.1); }
+            75% { transform: translate(2%, 2%) scale(1.05); }
+            100% { transform: translate(0, 0) scale(1.1); }
+        }
+
+        /* 粒子画布 */
+        #particlesCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        /* 右上角Logo */
+        .logo {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            color: #fff;
+            font-family: sans-serif;
+            text-align: right;
+            z-index: 100;
+        }
+        .logo svg {
+            width: 32px;
+            height: 32px;
+            margin-bottom: 4px;
+        }
+        .logo-text {
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(96, 165, 250, 0.5);
+        }
+
+        .ppt-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            z-index: 10;
+        }
+
+        .slide {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 60px 80px;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.6s ease, visibility 0.6s ease;
+        }
+
+        .slide.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* 封面页样式 */
+        .slide-cover {
+            background: radial-gradient(ellipse at center, rgba(233, 69, 96, 0.3) 0%, transparent 70%);
+        }
+
+        .warning-icon {
+            font-size: 120px;
+            margin-bottom: 30px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .main-title {
+            font-size: 72px;
+            font-weight: 900;
+            text-align: center;
+            margin-bottom: 20px;
+            text-shadow: 0 0 30px rgba(233, 69, 96, 0.8);
+            background: linear-gradient(90deg, #ff6b6b, #feca57, #ff6b6b);
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shine 3s linear infinite;
+        }
+
+        @keyframes shine {
+            to { background-position: 200% center; }
+        }
+
+        .subtitle {
+            font-size: 36px;
+            color: #feca57;
+            font-weight: 600;
+            margin-bottom: 40px;
+        }
+
+        /* 内容页通用样式 */
+        .slide-content {
+            max-width: 1400px;
+            width: 100%;
+        }
+
+        .section-title {
+            font-size: 56px;
+            font-weight: 800;
+            margin-bottom: 50px;
+            text-align: center;
+            color: #e94560;
+            text-shadow: 0 0 20px rgba(233, 69, 96, 0.5);
+        }
+
+        .content-box {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 50px;
+            border: 2px solid rgba(233, 69, 96, 0.3);
+            backdrop-filter: blur(10px);
+        }
+
+        .highlight-text {
+            font-size: 42px;
+            line-height: 1.8;
+            margin-bottom: 30px;
+        }
+
+        /* 强调样式 */
+        .emphasis-red {
+            color: #ff4757;
+            font-weight: 800;
+            text-decoration: underline;
+            text-decoration-color: #ff4757;
+            text-decoration-thickness: 4px;
+            text-shadow: 0 0 10px rgba(255, 71, 87, 0.5);
+        }
+
+        .emphasis-yellow {
+            color: #feca57;
+            font-weight: 800;
+            font-style: italic;
+            background: rgba(254, 202, 87, 0.15);
+            padding: 5px 15px;
+            border-radius: 8px;
+        }
+
+        .emphasis-cyan {
+            color: #00d2d3;
+            font-weight: 800;
+            border-bottom: 4px solid #00d2d3;
+        }
+
+        .emphasis-green {
+            color: #5f27cd;
+            font-weight: 800;
+            background: #00d2d3;
+            padding: 5px 15px;
+            border-radius: 8px;
+        }
+
+        .emphasis-white {
+            color: #fff;
+            font-weight: 900;
+            font-size: 1.2em;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.8);
+        }
+
+        /* 特性卡片 */
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 40px;
+            margin-top: 40px;
+        }
+
+        .feature-card {
+            background: linear-gradient(135deg, rgba(233, 69, 96, 0.2), rgba(15, 52, 96, 0.3));
+            border-radius: 16px;
+            padding: 40px;
+            border: 2px solid rgba(233, 69, 96, 0.4);
+        }
+
+        .feature-title {
+            font-size: 36px;
+            font-weight: 700;
+            color: #e94560;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .feature-icon {
+            font-size: 40px;
+        }
+
+        .feature-desc {
+            font-size: 28px;
+            line-height: 1.6;
+            color: #ddd;
+        }
+
+        /* 对比表格 */
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 30px;
+            font-size: 32px;
+        }
+
+        .compare-table th {
+            background: rgba(233, 69, 96, 0.3);
+            padding: 25px;
+            text-align: left;
+            font-weight: 700;
+            color: #feca57;
+        }
+
+        .compare-table td {
+            padding: 25px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .compare-table tr:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        /* 危险等级 */
+        .danger-level {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 40px;
+        }
+
+        .danger-badge {
+            font-size: 48px;
+            font-weight: 900;
+            padding: 20px 50px;
+            border-radius: 15px;
+            background: linear-gradient(135deg, #ff4757, #e94560);
+            box-shadow: 0 0 40px rgba(255, 71, 87, 0.6);
+            animation: danger-pulse 1.5s infinite;
+        }
+
+        @keyframes danger-pulse {
+            0%, 100% { box-shadow: 0 0 40px rgba(255, 71, 87, 0.6); }
+            50% { box-shadow: 0 0 80px rgba(255, 71, 87, 1); }
+        }
+
+        /* 缓入动画 */
+        .animate-item {
+            opacity: 0;
+            transform: translateY(50px);
+            transition: all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .slide.active .animate-item {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .slide.active .animate-item:nth-child(1) { transition-delay: 0.1s; }
+        .slide.active .animate-item:nth-child(2) { transition-delay: 0.25s; }
+        .slide.active .animate-item:nth-child(3) { transition-delay: 0.4s; }
+        .slide.active .animate-item:nth-child(4) { transition-delay: 0.55s; }
+        .slide.active .animate-item:nth-child(5) { transition-delay: 0.7s; }
+        .slide.active .animate-item:nth-child(6) { transition-delay: 0.85s; }
+        .slide.active .animate-item:nth-child(7) { transition-delay: 1s; }
+
+        /* 列表样式 */
+        .risk-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .risk-list li {
+            font-size: 36px;
+            padding: 25px 0;
+            padding-left: 60px;
+            position: relative;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .risk-list li::before {
+            content: '⚠️';
+            position: absolute;
+            left: 0;
+            font-size: 32px;
+        }
+
+        /* 总结页 */
+        .summary-box {
+            background: linear-gradient(135deg, rgba(255, 71, 87, 0.2), rgba(95, 39, 205, 0.2));
+            border: 3px solid #ff4757;
+            border-radius: 20px;
+            padding: 50px;
+            text-align: center;
+        }
+
+        .final-warning {
+            font-size: 64px;
+            font-weight: 900;
+            color: #ff4757;
+            text-shadow: 0 0 30px rgba(255, 71, 87, 0.8);
+            margin-bottom: 30px;
+        }
+
+        /* 进度条 */
+        .progress-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 6px;
+            background: linear-gradient(90deg, #e94560, #feca57);
+            transition: width 0.4s ease;
+            z-index: 200;
+        }
+
+        /* ========== 新增图形化样式 ========== */
+
+        /* 封面页装饰图形 */
+        .cover-graphics {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .orbit-ring {
+            position: absolute;
+            border: 2px solid rgba(233, 69, 96, 0.3);
+            border-radius: 50%;
+            animation: rotate 20s linear infinite;
+        }
+
+        .orbit-ring:nth-child(1) {
+            width: 400px;
+            height: 400px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .orbit-ring:nth-child(2) {
+            width: 600px;
+            height: 600px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation-duration: 30s;
+            animation-direction: reverse;
+            border-color: rgba(254, 202, 87, 0.2);
+        }
+
+        .orbit-ring:nth-child(3) {
+            width: 800px;
+            height: 800px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation-duration: 40s;
+            border-color: rgba(0, 210, 211, 0.15);
+        }
+
+        @keyframes rotate {
+            from { transform: translate(-50%, -50%) rotate(0deg); }
+            to { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+
+        .orbit-dot {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: #e94560;
+            border-radius: 50%;
+            box-shadow: 0 0 20px #e94560;
+        }
+
+        .orbit-ring:nth-child(1) .orbit-dot {
+            top: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .orbit-ring:nth-child(2) .orbit-dot {
+            top: 50%;
+            right: -6px;
+            transform: translateY(-50%);
+            background: #feca57;
+            box-shadow: 0 0 20px #feca57;
+        }
+
+        .orbit-ring:nth-child(3) .orbit-dot {
+            bottom: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #00d2d3;
+            box-shadow: 0 0 20px #00d2d3;
+        }
+
+        /* AI大脑图形 */
+        .ai-brain-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 60px;
+            margin: 40px 0;
+        }
+
+        .ai-brain {
+            width: 200px;
+            height: 200px;
+            position: relative;
+        }
+
+        .brain-svg {
+            width: 100%;
+            height: 100%;
+            animation: brain-pulse 3s ease-in-out infinite;
+        }
+
+        @keyframes brain-pulse {
+            0%, 100% { filter: drop-shadow(0 0 20px rgba(233, 69, 96, 0.5)); }
+            50% { filter: drop-shadow(0 0 40px rgba(233, 69, 96, 0.8)); }
+        }
+
+        .brain-path {
+            fill: none;
+            stroke: #e94560;
+            stroke-width: 3;
+            stroke-linecap: round;
+            stroke-dasharray: 300;
+            stroke-dashoffset: 300;
+            animation: draw-brain 2s ease forwards;
+        }
+
+        .slide.active .brain-path {
+            animation: draw-brain 2s ease forwards;
+        }
+
+        @keyframes draw-brain {
+            to { stroke-dashoffset: 0; }
+        }
+
+        .brain-node {
+            fill: #e94560;
+            animation: node-blink 1.5s ease-in-out infinite;
+        }
+
+        .brain-node:nth-child(2n) {
+            animation-delay: 0.3s;
+        }
+
+        .brain-node:nth-child(3n) {
+            animation-delay: 0.6s;
+        }
+
+        @keyframes node-blink {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 1; }
+        }
+
+        /* 特征图标 */
+        .feature-visual {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .feature-icon-large {
+            font-size: 80px;
+            animation: icon-float 3s ease-in-out infinite;
+        }
+
+        @keyframes icon-float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        /* 对比可视化 */
+        .compare-visual {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 40px;
+            margin: 40px 0;
+        }
+
+        .compare-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .compare-icon-box {
+            width: 120px;
+            height: 120px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 60px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .compare-icon-box.traditional {
+            background: linear-gradient(135deg, rgba(96, 165, 250, 0.3), rgba(59, 130, 246, 0.2));
+            border: 3px solid rgba(96, 165, 250, 0.5);
+            animation: traditional-pulse 2s ease-in-out infinite;
+        }
+
+        .compare-icon-box.openclaw {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.3), rgba(220, 38, 38, 0.2));
+            border: 3px solid rgba(239, 68, 68, 0.5);
+            animation: openclaw-pulse 1s ease-in-out infinite;
+        }
+
+        @keyframes traditional-pulse {
+            0%, 100% { box-shadow: 0 0 20px rgba(96, 165, 250, 0.3); }
+            50% { box-shadow: 0 0 40px rgba(96, 165, 250, 0.5); }
+        }
+
+        @keyframes openclaw-pulse {
+            0%, 100% { box-shadow: 0 0 30px rgba(239, 68, 68, 0.5); }
+            50% { box-shadow: 0 0 60px rgba(239, 68, 68, 0.8); }
+        }
+
+        .vs-badge {
+            font-size: 36px;
+            font-weight: 900;
+            color: #606060;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px 25px;
+            border-radius: 50%;
+        }
+
+        .compare-label {
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .compare-label.traditional {
+            color: #60a5fa;
+        }
+
+        .compare-label.openclaw {
+            color: #ef4444;
+        }
+
+        /* 风险流程图 */
+        .risk-flow {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            margin: 40px 0;
+            flex-wrap: wrap;
+        }
+
+        .risk-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            padding: 30px;
+            background: rgba(255, 71, 87, 0.1);
+            border: 2px solid rgba(255, 71, 87, 0.3);
+            border-radius: 16px;
+            min-width: 180px;
+        }
+
+        .risk-step-icon {
+            font-size: 50px;
+        }
+
+        .risk-step-text {
+            font-size: 20px;
+            text-align: center;
+            color: #ddd;
+        }
+
+        .risk-arrow {
+            font-size: 40px;
+            color: #ff4757;
+            animation: arrow-bounce 1s ease-in-out infinite;
+        }
+
+        @keyframes arrow-bounce {
+            0%, 100% { transform: translateX(0); }
+            50% { transform: translateX(10px); }
+        }
+
+        /* 后门化网格 */
+        .backdoor-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 30px;
+            margin: 40px 0;
+        }
+
+        .backdoor-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            padding: 30px;
+            background: linear-gradient(135deg, rgba(233, 69, 96, 0.15), rgba(15, 52, 96, 0.2));
+            border: 2px solid rgba(233, 69, 96, 0.3);
+            border-radius: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .backdoor-item:hover {
+            transform: translateY(-5px);
+            border-color: rgba(233, 69, 96, 0.6);
+            box-shadow: 0 10px 30px rgba(233, 69, 96, 0.3);
+        }
+
+        .backdoor-icon {
+            width: 100px;
+            height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 60px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 50%;
+            animation: icon-glow 2s ease-in-out infinite;
+        }
+
+        @keyframes icon-glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(233, 69, 96, 0.3); }
+            50% { box-shadow: 0 0 40px rgba(233, 69, 96, 0.6); }
+        }
+
+        .backdoor-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #e94560;
+            text-align: center;
+        }
+
+        .backdoor-desc {
+            font-size: 18px;
+            color: #aaa;
+            text-align: center;
+            line-height: 1.5;
+        }
+
+        /* 攻击门槛可视化 */
+        .threshold-visual {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 40px;
+            margin: 40px 0;
+        }
+
+        .threshold-meter {
+            width: 600px;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 30px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .threshold-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #34d399, #feca57, #ff4757);
+            border-radius: 30px;
+            width: 0;
+            transition: width 2s ease;
+            position: relative;
+        }
+
+        .slide.active .threshold-fill {
+            width: 95%;
+        }
+
+        .threshold-marker {
+            position: absolute;
+            top: -20px;
+            transform: translateX(-50%);
+            font-size: 16px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .threshold-labels {
+            display: flex;
+            justify-content: space-between;
+            width: 600px;
+            font-size: 20px;
+            color: #aaa;
+        }
+
+        .threshold-alert {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 30px 50px;
+            background: linear-gradient(135deg, rgba(255, 71, 87, 0.2), rgba(220, 38, 38, 0.1));
+            border: 3px solid rgba(255, 71, 87, 0.5);
+            border-radius: 20px;
+            animation: alert-pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes alert-pulse {
+            0%, 100% { box-shadow: 0 0 30px rgba(255, 71, 87, 0.3); }
+            50% { box-shadow: 0 0 60px rgba(255, 71, 87, 0.6); }
+        }
+
+        .threshold-alert-icon {
+            font-size: 60px;
+        }
+
+        .threshold-alert-text {
+            font-size: 32px;
+            font-weight: 800;
+            color: #ff4757;
+        }
+
+        /* 总结图标组 */
+        .summary-icons {
+            display: flex;
+            justify-content: center;
+            gap: 60px;
+            margin: 40px 0;
+        }
+
+        .summary-icon-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .summary-icon-circle {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 50px;
+            animation: summary-icon-float 3s ease-in-out infinite;
+        }
+
+        .summary-icon-circle.danger {
+            background: linear-gradient(135deg, rgba(255, 71, 87, 0.3), rgba(220, 38, 38, 0.2));
+            border: 3px solid rgba(255, 71, 87, 0.5);
+            animation-delay: 0s;
+        }
+
+        .summary-icon-circle.speed {
+            background: linear-gradient(135deg, rgba(0, 210, 211, 0.3), rgba(0, 180, 181, 0.2));
+            border: 3px solid rgba(0, 210, 211, 0.5);
+            animation-delay: 0.5s;
+        }
+
+        .summary-icon-circle.learn {
+            background: linear-gradient(135deg, rgba(254, 202, 87, 0.3), rgba(251, 191, 36, 0.2));
+            border: 3px solid rgba(254, 202, 87, 0.5);
+            animation-delay: 1s;
+        }
+
+        @keyframes summary-icon-float {
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-15px) scale(1.05); }
+        }
+
+        .summary-icon-label {
+            font-size: 20px;
+            font-weight: 600;
+            color: #ddd;
+        }
+
+        /* 网络拓扑图 */
+        .network-topology {
+            position: relative;
+            width: 500px;
+            height: 300px;
+            margin: 30px auto;
+        }
+
+        .topology-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100px;
+            height: 100px;
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.4), rgba(220, 38, 38, 0.3));
+            border: 3px solid rgba(239, 68, 68, 0.6);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 50px;
+            animation: center-pulse 2s ease-in-out infinite;
+            z-index: 10;
+        }
+
+        @keyframes center-pulse {
+            0%, 100% { box-shadow: 0 0 30px rgba(239, 68, 68, 0.5); }
+            50% { box-shadow: 0 0 60px rgba(239, 68, 68, 0.8); }
+        }
+
+        .topology-node {
+            position: absolute;
+            width: 70px;
+            height: 70px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(96, 165, 250, 0.5);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+            animation: node-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes node-pulse {
+            0%, 100% { opacity: 0.6; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.1); }
+        }
+
+        .topology-node:nth-child(2) { top: 10%; left: 20%; animation-delay: 0.2s; }
+        .topology-node:nth-child(3) { top: 10%; right: 20%; animation-delay: 0.4s; }
+        .topology-node:nth-child(4) { bottom: 10%; left: 20%; animation-delay: 0.6s; }
+        .topology-node:nth-child(5) { bottom: 10%; right: 20%; animation-delay: 0.8s; }
+        .topology-node:nth-child(6) { top: 50%; left: 5%; transform: translateY(-50%); animation-delay: 1s; }
+        .topology-node:nth-child(7) { top: 50%; right: 5%; transform: translateY(-50%); animation-delay: 1.2s; }
+
+        .topology-line {
+            position: absolute;
+            background: linear-gradient(90deg, transparent, rgba(239, 68, 68, 0.5), transparent);
+            height: 2px;
+            transform-origin: left center;
+            animation: line-flow 2s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body>
+    <!-- 右上角logo -->
+    <div class="logo">
+        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="30" r="12" fill="#60a5fa"/>
+            <path d="M35 45 Q50 70 65 45" stroke="#60a5fa" stroke-width="4" fill="none"/>
+            <path d="M30 60 Q50 90 70 60" stroke="#60a5fa" stroke-width="4" fill="none"/>
+        </svg>
+        <div class="logo-text">NetworkNoob</div>
+    </div>
+
+    <!-- Canvas粒子效果 -->
+    <canvas id="particlesCanvas"></canvas>
+
+    <div class="progress-bar" id="progressBar"></div>
+    
+    <div class="ppt-container">
+        <!-- 第1页：封面 -->
+        <div class="slide slide-cover active" data-index="0">
+            <div class="cover-graphics">
+                <div class="orbit-ring">
+                    <div class="orbit-dot"></div>
+                </div>
+                <div class="orbit-ring">
+                    <div class="orbit-dot"></div>
+                </div>
+                <div class="orbit-ring">
+                    <div class="orbit-dot"></div>
+                </div>
+            </div>
+            <div class="animate-item warning-icon">🚨</div>
+            <h1 class="animate-item main-title">OpenClaw 致命安全风险</h1>
+            <p class="animate-item subtitle">AI Agent 时代的隐形威胁</p>
+            <div class="animate-item danger-level">
+                <span class="danger-badge">⚡ 高危警告</span>
+            </div>
+        </div>
+
+        <!-- 第2页：什么是OpenClaw -->
+        <div class="slide" data-index="1">
+            <div class="slide-content">
+                <h2 class="animate-item section-title">什么是 OpenClaw？</h2>
+                <div class="animate-item content-box">
+                    <div class="ai-brain-container">
+                        <div class="ai-brain">
+                            <svg class="brain-svg" viewBox="0 0 100 100">
+                                <path class="brain-path" d="M30 50 Q30 20 50 20 Q70 20 70 50 Q70 80 50 80 Q30 80 30 50"/>
+                                <path class="brain-path" d="M35 40 Q50 30 65 40"/>
+                                <path class="brain-path" d="M35 60 Q50 70 65 60"/>
+                                <circle class="brain-node" cx="30" cy="50" r="4"/>
+                                <circle class="brain-node" cx="70" cy="50" r="4"/>
+                                <circle class="brain-node" cx="50" cy="20" r="4"/>
+                                <circle class="brain-node" cx="50" cy="80" r="4"/>
+                                <circle class="brain-node" cx="50" cy="50" r="6"/>
+                            </svg>
+                        </div>
+                        <div class="feature-visual">
+                            <div class="feature-icon-large">🤖</div>
+                            <p style="font-size: 28px; color: #e94560; font-weight: 700;">AI Agent</p>
+                        </div>
+                    </div>
+                    <p class="highlight-text" style="text-align: center; margin-top: 30px;">
+                        OpenClaw 是一个 <span class="emphasis-red">AI Agent（智能体）</span>，
+                        而 AI Agent 的核心特征是
+                    </p>
+                    <div class="feature-grid">
+                        <div class="animate-item feature-card">
+                            <div class="feature-title">
+                                <span class="feature-icon">🎯</span>
+                                自主决策
+                            </div>
+                            <p class="feature-desc">能够独立分析情况并做出执行决定</p>
+                        </div>
+                        <div class="animate-item feature-card">
+                            <div class="feature-title">
+                                <span class="feature-icon">⚙️</span>
+                                后台持续运行
+                            </div>
+                            <p class="feature-desc">无需人工干预，24小时不间断工作</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 第3页：与传统木马对比 -->
+        <div class="slide" data-index="2">
+            <div class="slide-content">
+                <h2 class="animate-item section-title">传统木马 vs OpenClaw</h2>
+                <div class="animate-item content-box">
+                    <div class="compare-visual">
+                        <div class="compare-item">
+                            <div class="compare-icon-box traditional">🐴</div>
+                            <span class="compare-label traditional">传统木马</span>
+                        </div>
+                        <div class="vs-badge">VS</div>
+                        <div class="compare-item">
+                            <div class="compare-icon-box openclaw">🦞</div>
+                            <span class="compare-label openclaw">OpenClaw</span>
+                        </div>
+                    </div>
+                    <table class="compare-table">
+                        <tr>
+                            <th>特性</th>
+                            <th>传统木马</th>
+                            <th>OpenClaw</th>
+                        </tr>
+                        <tr>
+                            <td>执行方式</td>
+                            <td>单次指令执行</td>
+                            <td><span class="emphasis-red">自动拆解步骤并循环执行</span></td>
+                        </tr>
+                        <tr>
+                            <td>触发机制</td>
+                            <td>被动等待命令</td>
+                            <td><span class="emphasis-yellow">主动持续运行</span></td>
+                        </tr>
+                        <tr>
+                            <td>执行速度</td>
+                            <td>人工控制</td>
+                            <td><span class="emphasis-cyan">毫秒级响应</span></td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 第4页：风险一：无法及时叫停 -->
+        <div class="slide" data-index="3">
+            <div class="slide-content">
+                <h2 class="animate-item section-title">风险一：无法及时叫停</h2>
+                <div class="animate-item content-box">
+                    <div class="risk-flow">
+                        <div class="risk-step">
+                            <div class="risk-step-icon">👤</div>
+                            <div class="risk-step-text">用户/黑客<br>下达指令</div>
+                        </div>
+                        <div class="risk-arrow">➜</div>
+                        <div class="risk-step">
+                            <div class="risk-step-icon">🤖</div>
+                            <div class="risk-step-text">OpenClaw<br>自动拆解</div>
+                        </div>
+                        <div class="risk-arrow">➜</div>
+                        <div class="risk-step">
+                            <div class="risk-step-icon">⚡</div>
+                            <div class="risk-step-text">毫秒级<br>执行</div>
+                        </div>
+                        <div class="risk-arrow">➜</div>
+                        <div class="risk-step">
+                            <div class="risk-step-icon">💥</div>
+                            <div class="risk-step-text">数据<br>毁灭</div>
+                        </div>
+                    </div>
+                    <ul class="risk-list">
+                        <li class="animate-item">
+                            一旦触发任务目标，OpenClaw 会<span class="emphasis-red">自动拆解步骤并循环执行</span>
+                        </li>
+                        <li class="animate-item">
+                            如果用户下达了<span class="emphasis-yellow">错误的指令</span>，
+                            或者黑客下达了<span class="emphasis-yellow">破坏指令</span>
+                        </li>
+                        <li class="animate-item">
+                            AI 会以<span class="emphasis-cyan">毫秒级的速度</span>完成文件覆盖或数据擦除
+                        </li>
+                        <li class="animate-item">
+                            等你察觉到异常时，底层数据往往已经过<span class="emphasis-red">多次覆写</span>，
+                            <span class="emphasis-white">无法通过常规手段恢复</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- 第5页：风险二：永久后门化 -->
+        <div class="slide" data-index="4">
+            <div class="slide-content">
+                <h2 class="animate-item section-title">风险二：永久后门化</h2>
+                <div class="animate-item content-box">
+                    <div class="network-topology">
+                        <div class="topology-center">🦞</div>
+                        <div class="topology-node">💻</div>
+                        <div class="topology-node">🖥️</div>
+                        <div class="topology-node">📱</div>
+                        <div class="topology-node">💾</div>
+                        <div class="topology-node">🌐</div>
+                        <div class="topology-node">🔒</div>
+                    </div>
+                    <p class="highlight-text animate-item" style="text-align: center;">
+                        这种<span class="emphasis-yellow">自主执行特性</span>，
+                        一旦被黑客盯上，危害会呈<span class="emphasis-red">指数级放大</span>
+                    </p>
+                    <div class="backdoor-grid">
+                        <div class="animate-item backdoor-item">
+                            <div class="backdoor-icon">🚪</div>
+                            <div class="backdoor-title">永久驻留</div>
+                            <div class="backdoor-desc">成为永久后门</div>
+                        </div>
+                        <div class="animate-item backdoor-item">
+                            <div class="backdoor-icon">🔍</div>
+                            <div class="backdoor-title">自动扫描</div>
+                            <div class="backdoor-desc">扫描局域网设备</div>
+                        </div>
+                        <div class="animate-item backdoor-item">
+                            <div class="backdoor-icon">🎭</div>
+                            <div class="backdoor-title">身份伪装</div>
+                            <div class="backdoor-desc">利用合法身份</div>
+                        </div>
+                        <div class="animate-item backdoor-item">
+                            <div class="backdoor-icon">👻</div>
+                            <div class="backdoor-title">超强隐蔽</div>
+                            <div class="backdoor-desc">远超传统木马</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 第6页：攻击门槛 -->
+        <div class="slide" data-index="5">
+            <div class="slide-content">
+                <h2 class="animate-item section-title">更低的攻击门槛</h2>
+                <div class="animate-item content-box" style="text-align: center;">
+                    <p class="highlight-text animate-item" style="font-size: 42px;">
+                        这种能<span class="emphasis-red">轻松击穿整个内网</span>的攻击
+                    </p>
+                    <div class="threshold-visual">
+                        <div class="threshold-meter">
+                            <div class="threshold-fill"></div>
+                        </div>
+                        <div class="threshold-labels">
+                            <span>高门槛</span>
+                            <span>传统攻击</span>
+                            <span style="color: #ff4757; font-weight: 700;">OpenClaw</span>
+                        </div>
+                        <div class="threshold-alert">
+                            <div class="threshold-alert-icon">⚠️</div>
+                            <div class="threshold-alert-text">门槛低到超乎想象！</div>
+                        </div>
+                    </div>
+                    <div class="animate-item" style="margin-top: 30px;">
+                        <span style="font-size: 80px;">😱</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 第7页：总结 -->
+        <div class="slide" data-index="6">
+            <div class="slide-content">
+                <h2 class="animate-item section-title">⚠️ 安全警示</h2>
+                <div class="animate-item summary-box">
+                    <div class="summary-icons">
+                        <div class="summary-icon-item">
+                            <div class="summary-icon-circle danger">🎯</div>
+                            <div class="summary-icon-label">自主决策</div>
+                        </div>
+                        <div class="summary-icon-item">
+                            <div class="summary-icon-circle speed">⚡</div>
+                            <div class="summary-icon-label">毫秒级执行</div>
+                        </div>
+                        <div class="summary-icon-item">
+                            <div class="summary-icon-circle learn">🧠</div>
+                            <div class="summary-icon-label">自主学习</div>
+                        </div>
+                    </div>
+                    <p class="final-warning animate-item">OpenClaw = 高危威胁</p>
+                    <div class="animate-item" style="font-size: 36px; line-height: 2;">
+                        <p><span class="emphasis-red">自主决策</span> + <span class="emphasis-yellow">持续运行</span> = 无法及时阻止</p>
+                        <p><span class="emphasis-cyan">毫秒级执行</span> = 数据瞬间毁灭</p>
+                        <p><span class="emphasis-green">学习能力</span> = 自动渗透内网</p>
+                        <p style="margin-top: 30px; font-size: 42px; color: #ff4757; font-weight: 900;">
+                            警惕 AI Agent 的安全风险！
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentSlide = 0;
+        const slides = document.querySelectorAll('.slide');
+        const totalSlides = slides.length;
+        const progressBar = document.getElementById('progressBar');
+
+        function updateSlide() {
+            slides.forEach((slide, index) => {
+                slide.classList.toggle('active', index === currentSlide);
+            });
+            progressBar.style.width = ((currentSlide + 1) / totalSlides * 100) + '%';
+        }
+
+        function nextSlide() {
+            if (currentSlide < totalSlides - 1) {
+                currentSlide++;
+                updateSlide();
+            }
+        }
+
+        function prevSlide() {
+            if (currentSlide > 0) {
+                currentSlide--;
+                updateSlide();
+            }
+        }
+
+        function goToSlide(index) {
+            currentSlide = index;
+            updateSlide();
+        }
+
+        // 键盘导航
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === ' ') {
+                e.preventDefault();
+                nextSlide();
+            } else if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                prevSlide();
+            } else if (e.key === 'Home') {
+                e.preventDefault();
+                goToSlide(0);
+            } else if (e.key === 'End') {
+                e.preventDefault();
+                goToSlide(totalSlides - 1);
+            }
+        });
+
+        // 触摸滑动支持
+        let touchStartX = 0;
+        let touchEndX = 0;
+
+        document.addEventListener('touchstart', (e) => {
+            touchStartX = e.changedTouches[0].screenX;
+        });
+
+        document.addEventListener('touchend', (e) => {
+            touchEndX = e.changedTouches[0].screenX;
+            handleSwipe();
+        });
+
+        function handleSwipe() {
+            const swipeThreshold = 50;
+            const diff = touchStartX - touchEndX;
+            if (Math.abs(diff) > swipeThreshold) {
+                if (diff > 0) {
+                    nextSlide();
+                } else {
+                    prevSlide();
+                }
+            }
+        }
+
+        // 初始化
+        updateSlide();
+
+        // 粒子效果
+        const canvas = document.getElementById('particlesCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        const particles = [];
+        const particleCount = 100;
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 2 + 0.5;
+                this.speedX = (Math.random() - 0.5) * 0.5;
+                this.speedY = (Math.random() - 0.5) * 0.5;
+                this.opacity = Math.random() * 0.5 + 0.1;
+                this.color = `rgba(96, 165, 250, ${this.opacity})`;
+            }
+
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
+                    this.reset();
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        for (let i = 0; i < particleCount; i++) {
+            particles.push(new Particle());
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(particle => {
+                particle.update();
+                particle.draw();
+            });
+            requestAnimationFrame(animateParticles);
+        }
+
+        animateParticles();
+    </script>
+</body>
+</html>

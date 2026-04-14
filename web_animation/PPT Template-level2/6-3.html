@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第三个护栏 - 反馈循环 Feedback Loop</title>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.1.0/fonts/remixicon.css" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap');
+
+        :root {
+            --dark-bg: #0A0A12;
+            --dark-secondary: #12121C;
+            --dark-tertiary: #1A1A28;
+            --accent-blue: #00D4FF;
+            --accent-cyan: #00E5CC;
+            --accent-purple: #B14EFF;
+            --accent-violet: #8B5CF6;
+            --text-primary: #F0F0FA;
+            --text-secondary: #A1A1B5;
+            --text-muted: #6B6B85;
+            --glow-blue: rgba(0, 212, 255, 0.35);
+            --glow-purple: rgba(177, 78, 255, 0.3);
+        }
+
+        body {
+            font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+            background: var(--dark-bg);
+            color: var(--text-primary);
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* Background effects */
+        .bg-grid {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-image: 
+                linear-gradient(rgba(0,212,255,0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(177,78,255,0.02) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+        }
+
+        /* ===== 幻灯片容器 ===== */
+        .slides-container { width: 100vw; height: 100vh; position: relative; }
+
+        .slide {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 60px 80px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.6s ease;
+            background: radial-gradient(ellipse at 50% 30%, var(--dark-secondary) 0%, var(--dark-bg) 100%);
+            overflow: hidden;
+        }
+        .slide.active { opacity: 1; pointer-events: auto; }
+
+        /* ===== 动画 ===== */
+        .slide .anim {
+            opacity: 0;
+            transform: translateY(40px);
+            transition: opacity 0.7s cubic-bezier(0.23,1,0.32,1), transform 0.7s cubic-bezier(0.23,1,0.32,1);
+        }
+        .slide.active .anim.visible { opacity: 1; transform: translateY(0); }
+
+        /* ===== 浮动粒子 ===== */
+        .particle {
+            position: absolute; border-radius: 50%; pointer-events: none; opacity: 0;
+            animation: particleFloat 7s ease-in-out infinite;
+        }
+        @keyframes particleFloat {
+            0%,100%{opacity:0;transform:translateY(0) scale(0.5);}
+            25%{opacity:0.5;} 50%{opacity:0.25;transform:translateY(-50px) scale(1);} 75%{opacity:0.4;}
+        }
+
+        /* ===== 浮动图标 ===== */
+        .float-icon {
+            position: absolute; opacity: 0.06; pointer-events: none;
+            font-size: 100px; color: var(--accent-blue);
+            animation: floatY 8s ease-in-out infinite;
+        }
+        @keyframes floatY { 0%,100%{transform:translateY(0);}50%{transform:translateY(-20px);} }
+
+        /* ===== 装饰圆 ===== */
+        .deco-circle { position: absolute; border-radius: 50%; opacity: 0.08; pointer-events: none; filter: blur(60px); }
+        .dc1 { width: 400px; height: 400px; background: var(--accent-blue); top: -100px; right: -100px; }
+        .dc2 { width: 300px; height: 300px; background: var(--accent-purple); bottom: -80px; left: -80px; }
+        .dc3 { width: 200px; height: 200px; background: var(--accent-cyan); top: 50%; left: -60px; }
+
+        /* ===== 闪光文字 ===== */
+        @keyframes shimmer { 0%{background-position:-200% center;}100%{background-position:200% center;} }
+        .shimmer-text {
+            background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan), var(--accent-blue), var(--accent-purple), var(--accent-blue));
+            background-size: 200% auto;
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text; animation: shimmer 4s linear infinite;
+        }
+
+        /* ===== 脉冲环 ===== */
+        @keyframes pulseRing {
+            0%,100%{transform:scale(1);opacity:0.5;} 50%{transform:scale(1.3);opacity:0;}
+        }
+
+        /* ===== 通用样式 ===== */
+        .hl { font-weight: 700; color: var(--accent-blue); }
+        .ul { text-decoration: underline; text-decoration-color: var(--accent-blue); text-underline-offset: 4px; text-decoration-thickness: 3px; }
+        .bold { font-weight: 800; }
+        .bg-warm { background: linear-gradient(transparent 55%, rgba(0,212,255,0.2) 55%); padding: 0 4px; }
+        .bg-blue { background: rgba(0,212,255,0.15); padding: 2px 8px; border-radius: 6px; }
+        .text-blue { color: var(--accent-blue); }
+        .text-purple { color: var(--accent-purple); }
+        .text-cyan { color: var(--accent-cyan); }
+
+        /* ===================== SLIDE 1 — 封面 ===================== */
+        .slide-1 {
+            text-align: center;
+        }
+
+        .s1-icon-grid {
+            display: flex; gap: 16px; margin-bottom: 24px;
+        }
+        .s1-icon-pill {
+            display: inline-flex; align-items: center; gap: 8px;
+            background: var(--dark-tertiary); border: 2px solid rgba(0,212,255,0.2); border-radius: 40px;
+            padding: 8px 20px; font-size: 16px; font-weight: 700; color: var(--accent-blue);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .s1-icon-pill:hover { transform: translateY(-3px); box-shadow: 0 6px 18px var(--glow-blue); }
+
+        .slide-1 .badge {
+            display: inline-flex; align-items: center; gap: 10px;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            color: #fff; padding: 10px 28px; border-radius: 30px;
+            font-size: 22px; font-weight: 700; margin-bottom: 30px;
+            box-shadow: 0 4px 20px var(--glow-blue);
+            animation: badgePulse 3s ease-in-out infinite;
+        }
+        @keyframes badgePulse {
+            0%,100%{box-shadow:0 4px 20px var(--glow-blue);}
+            50%{box-shadow:0 6px 36px var(--glow-blue);}
+        }
+        .slide-1 .badge i { font-size: 26px; }
+        .slide-1 h1 { font-size: 72px; font-weight: 900; color: var(--text-primary); line-height: 1.2; margin-bottom: 16px; }
+        .slide-1 h1 span { color: var(--accent-blue); }
+        .slide-1 .subtitle { font-size: 32px; color: var(--text-secondary); font-weight: 500; letter-spacing: 4px; }
+        .slide-1 .deco-line { width: 120px; height: 5px; background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple)); border-radius: 3px; margin: 28px auto 0; }
+
+        .s1-core-badge {
+            margin-top: 28px; display: inline-flex; align-items: center; gap: 12px;
+            background: rgba(0,212,255,0.1); border: 2px solid var(--accent-blue);
+            padding: 14px 36px; border-radius: 16px;
+            font-size: 26px; font-weight: 700; color: var(--accent-blue);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .s1-core-badge:hover { transform: translateY(-4px); box-shadow: 0 8px 24px var(--glow-blue); }
+
+        /* 二次元颜文字样式 */
+        .kaomoji {
+            font-size: 22px;
+            color: var(--accent-blue);
+            letter-spacing: 2px;
+            margin-top: 10px;
+        }
+
+        /* 封面循环图形 */
+        .s1-loop-graphic {
+            position: absolute; opacity: 0.08; pointer-events: none;
+        }
+        .s1-loop-left { left: 50px; top: 50%; transform: translateY(-50%); }
+        .s1-loop-right { right: 50px; top: 50%; transform: translateY(-50%); }
+
+        /* ===================== SLIDE 2 — 传统 vs Harness ===================== */
+        .slide-2 { padding: 50px 70px; }
+        .slide-2 h2 { font-size: 48px; font-weight: 900; text-align: center; margin-bottom: 40px; color: var(--text-primary); }
+        .slide-2 h2 span { color: var(--accent-blue); }
+
+        .compare-wrapper {
+            display: flex; gap: 40px; width: 100%; max-width: 1200px; align-items: stretch;
+        }
+        .compare-card {
+            flex: 1; border-radius: 24px; padding: 40px 36px; position: relative; overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .compare-card:hover { transform: translateY(-6px); }
+        .compare-card.old { background: var(--dark-tertiary); border: 2px solid rgba(255,255,255,0.08); }
+        .compare-card.old:hover { box-shadow: 0 8px 28px rgba(0,0,0,0.3); }
+        .compare-card.new {
+            background: linear-gradient(135deg, rgba(0,212,255,0.08), rgba(177,78,255,0.05));
+            border: 2px solid var(--accent-blue);
+            box-shadow: 0 8px 30px var(--glow-blue);
+        }
+        .compare-card.new:hover { box-shadow: 0 12px 40px var(--glow-blue); }
+
+        .compare-card .card-icon {
+            width: 72px; height: 72px; border-radius: 20px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 36px; margin-bottom: 20px;
+        }
+        .compare-card.old .card-icon { background: rgba(255,255,255,0.05); color: var(--text-muted); }
+        .compare-card.new .card-icon { background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple)); color: #fff; }
+
+        .compare-card h3 { font-size: 34px; font-weight: 800; margin-bottom: 20px; }
+        .compare-card.old h3 { color: var(--text-muted); }
+        .compare-card.new h3 { color: var(--accent-blue); }
+
+        .compare-card .desc-line {
+            font-size: 24px; line-height: 1.8; display: flex; align-items: center; gap: 14px; margin-bottom: 8px;
+        }
+        .compare-card .desc-line i { font-size: 24px; flex-shrink: 0; }
+        .compare-card.old .desc-line i { color: var(--text-muted); }
+        .compare-card.new .desc-line i { color: var(--accent-blue); }
+
+        /* 对比卡片内的可视化图 */
+        .compare-visual {
+            margin-top: 20px; padding: 16px; border-radius: 16px;
+            display: flex; align-items: center; justify-content: center; gap: 12px;
+        }
+        .compare-card.old .compare-visual { background: rgba(255,255,255,0.03); }
+        .compare-card.new .compare-visual { background: rgba(0,212,255,0.05); }
+
+        .compare-avatar {
+            width: 48px; height: 48px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px; color: white;
+        }
+        .avatar-human { background: var(--text-muted); }
+        .avatar-agent { background: var(--accent-blue); }
+        .avatar-agent2 { background: var(--accent-purple); }
+
+        .compare-flow-arrow { font-size: 24px; color: var(--text-muted); }
+        .compare-card.new .compare-flow-arrow { color: var(--accent-blue); }
+
+        /* 可靠度条 */
+        .reliability-bar {
+            margin-top: 16px; width: 100%; height: 10px;
+            background: rgba(255,255,255,0.05); border-radius: 5px; overflow: hidden;
+            position: relative;
+        }
+        .reliability-fill {
+            height: 100%; border-radius: 5px; transition: width 1.5s ease;
+        }
+        .compare-card.old .reliability-fill { background: linear-gradient(90deg, var(--text-muted), #4B5563); width: 0; }
+        .compare-card.new .reliability-fill { background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple)); width: 0; }
+        .reliability-label {
+            display: flex; justify-content: space-between; font-size: 13px; margin-top: 6px; font-weight: 700;
+        }
+        .compare-card.old .reliability-label { color: var(--text-muted); }
+        .compare-card.new .reliability-label { color: var(--accent-blue); }
+
+        .vs-circle {
+            width: 64px; height: 64px; border-radius: 50%;
+            background: var(--accent-blue); color: #fff; font-size: 26px; font-weight: 900;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0; box-shadow: 0 4px 15px var(--glow-blue);
+            position: relative;
+        }
+        .vs-circle::after {
+            content: ''; position: absolute; width: 100%; height: 100%;
+            border-radius: 50%; border: 3px solid var(--accent-blue);
+            animation: pulseRing 2.5s ease-in-out infinite;
+        }
+
+        /* ===================== SLIDE 3 — PreCompletionChecklist ===================== */
+        .slide-3 { padding: 50px 80px; }
+        .slide-3 h2 { font-size: 44px; font-weight: 900; text-align: center; margin-bottom: 14px; color: var(--text-primary); }
+        .slide-3 .sub-title { font-size: 24px; color: var(--text-secondary); text-align: center; margin-bottom: 36px; }
+
+        .s3-layout { display: flex; gap: 50px; align-items: flex-start; max-width: 1200px; width: 100%; }
+        .s3-left { flex: 1.2; }
+        .s3-right { flex: 0.8; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+
+        .checklist-box {
+            width: 100%; background: var(--dark-tertiary); border-radius: 24px;
+            padding: 36px 44px; box-shadow: 0 6px 30px rgba(0,0,0,0.3);
+            border: 2px solid rgba(0,212,255,0.15);
+        }
+        .checklist-header {
+            display: flex; align-items: center; gap: 16px;
+            margin-bottom: 24px; padding-bottom: 18px; border-bottom: 2px dashed rgba(0,212,255,0.2);
+        }
+        .checklist-header i { font-size: 36px; color: var(--accent-blue); }
+        .checklist-header .ch-title { font-size: 26px; font-weight: 800; color: var(--accent-blue); }
+
+        .checklist-item {
+            display: flex; align-items: flex-start; gap: 14px;
+            font-size: 24px; line-height: 1.7; margin-bottom: 10px;
+        }
+        .checklist-item i {
+            color: var(--accent-blue); font-size: 24px; margin-top: 6px; flex-shrink: 0;
+        }
+        .checklist-item .key { font-weight: 700; color: var(--accent-blue); }
+
+        .mechanism-note {
+            margin-top: 24px;
+            background: linear-gradient(135deg, rgba(0,212,255,0.08), rgba(177,78,255,0.05));
+            border-left: 5px solid var(--accent-blue);
+            border-radius: 0 16px 16px 0;
+            padding: 20px 26px; font-size: 22px; line-height: 1.7; color: var(--text-secondary);
+        }
+        .mechanism-note .bold { font-weight: 800; color: var(--accent-purple); }
+
+        /* 右侧拦截图解 */
+        .intercept-svg-wrap {
+            width: 320px; height: 380px;
+        }
+
+        /* ===================== SLIDE 4 — 四步流程 ===================== */
+        .slide-4 { padding: 40px 60px; }
+        .slide-4 h2 { font-size: 46px; font-weight: 900; text-align: center; margin-bottom: 10px; }
+        .slide-4 h2 span { color: var(--accent-blue); }
+        .slide-4 .tag-line { text-align: center; font-size: 22px; color: var(--text-secondary); margin-bottom: 36px; font-weight: 500; }
+
+        .steps-flow {
+            display: flex; align-items: center; gap: 0;
+            width: 100%; max-width: 1300px; justify-content: center;
+            position: relative;
+        }
+        /* 底部连线 */
+        .steps-flow::before {
+            content: ''; position: absolute; top: 62px;
+            left: 80px; right: 80px; height: 4px;
+            background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan), var(--accent-purple), var(--accent-violet));
+            border-radius: 2px; z-index: 0; opacity: 0.2;
+        }
+
+        .step-card {
+            flex: 1; max-width: 260px;
+            background: var(--dark-tertiary); border-radius: 24px;
+            padding: 30px 24px 28px; text-align: center;
+            position: relative; z-index: 1;
+            box-shadow: 0 6px 25px rgba(0,0,0,0.3);
+            border: 2px solid transparent;
+            transition: border-color 0.3s, transform 0.3s, box-shadow 0.3s;
+        }
+        .step-card:hover { border-color: var(--accent-blue); transform: translateY(-8px); box-shadow: 0 12px 36px var(--glow-blue); }
+
+        .step-num {
+            position: absolute; top: -18px; left: 50%; transform: translateX(-50%);
+            width: 40px; height: 40px; border-radius: 50%;
+            font-size: 20px; font-weight: 900; color: #fff;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 3px 12px rgba(0,0,0,0.3);
+        }
+        .step-card:nth-child(1) .step-num { background: var(--accent-blue); }
+        .step-card:nth-child(3) .step-num { background: var(--accent-cyan); }
+        .step-card:nth-child(5) .step-num { background: var(--accent-purple); }
+        .step-card:nth-child(7) .step-num { background: var(--accent-violet); }
+
+        .step-icon {
+            width: 80px; height: 80px; border-radius: 50%;
+            margin: 14px auto 16px; display: flex; align-items: center;
+            justify-content: center; font-size: 38px; position: relative;
+        }
+        .step-card:nth-child(1) .step-icon { background: linear-gradient(135deg, rgba(0,212,255,0.15), rgba(0,229,204,0.1)); color: var(--accent-blue); }
+        .step-card:nth-child(3) .step-icon { background: linear-gradient(135deg, rgba(0,229,204,0.15), rgba(0,212,255,0.1)); color: var(--accent-cyan); }
+        .step-card:nth-child(5) .step-icon { background: linear-gradient(135deg, rgba(177,78,255,0.15), rgba(139,92,246,0.1)); color: var(--accent-purple); }
+        .step-card:nth-child(7) .step-icon { background: linear-gradient(135deg, rgba(139,92,246,0.15), rgba(177,78,255,0.1)); color: var(--accent-violet); }
+
+        /* 步骤卡片活动指示 */
+        .step-card .step-icon::after {
+            content: ''; position: absolute; width: 100%; height: 100%;
+            border-radius: 50%; border: 2px solid currentColor; opacity: 0;
+            animation: stepPulse 3s ease-in-out infinite;
+        }
+        .step-card:nth-child(1) .step-icon::after { animation-delay: 0s; }
+        .step-card:nth-child(3) .step-icon::after { animation-delay: 0.8s; }
+        .step-card:nth-child(5) .step-icon::after { animation-delay: 1.6s; }
+        .step-card:nth-child(7) .step-icon::after { animation-delay: 2.4s; }
+        @keyframes stepPulse {
+            0%,100%{transform:scale(1);opacity:0;} 20%{opacity:0.5;} 50%{transform:scale(1.35);opacity:0;}
+        }
+
+        .step-card h4 { font-size: 26px; font-weight: 800; margin-bottom: 6px; }
+        .step-card:nth-child(1) h4 { color: var(--accent-blue); }
+        .step-card:nth-child(3) h4 { color: var(--accent-cyan); }
+        .step-card:nth-child(5) h4 { color: var(--accent-purple); }
+        .step-card:nth-child(7) h4 { color: var(--accent-violet); }
+
+        .step-card .en-name { font-size: 16px; color: var(--text-muted); margin-bottom: 12px; font-weight: 500; }
+        .step-card p { font-size: 18px; color: var(--text-secondary); line-height: 1.6; }
+
+        .step-arrow {
+            font-size: 34px; color: var(--text-muted); flex-shrink: 0; margin: 0 6px; z-index: 1;
+            animation: stepArrowPulse 2s ease-in-out infinite;
+        }
+        @keyframes stepArrowPulse {
+            0%,100%{opacity:0.4;transform:translateX(0);}50%{opacity:1;transform:translateX(5px);}
+        }
+
+        .loop-back {
+            width: 100%; max-width: 1100px; margin-top: 20px;
+            display: flex; justify-content: center; align-items: center;
+        }
+        .loop-back-line {
+            display: flex; align-items: center; gap: 10px;
+            background: linear-gradient(90deg, rgba(0,212,255,0.1), transparent, rgba(0,212,255,0.1));
+            border: 2px dashed var(--accent-blue); border-radius: 40px;
+            padding: 10px 30px; font-size: 20px; font-weight: 700; color: var(--accent-blue);
+        }
+        .loop-back-line i { font-size: 24px; }
+
+        /* 数据包沿管道移动 */
+        .step-data-packet {
+            position: absolute; top: 58px; width: 12px; height: 12px;
+            border-radius: 50%; background: var(--accent-blue); z-index: 3;
+            animation: stepPacketMove 5s ease-in-out infinite;
+            box-shadow: 0 0 10px var(--accent-blue);
+        }
+        @keyframes stepPacketMove {
+            0%{left:80px;opacity:0;} 10%{opacity:1;} 90%{opacity:1;} 100%{left:calc(100% - 80px);opacity:0;}
+        }
+
+        /* ===================== SLIDE 5 — 总结 ===================== */
+        .slide-5 {
+            padding: 50px 80px; text-align: center;
+        }
+        .slide-5 h2 { font-size: 50px; font-weight: 900; margin-bottom: 30px; }
+        .slide-5 h2 span { color: var(--accent-blue); }
+
+        .summary-ring {
+            width: 380px; height: 380px; border-radius: 50%;
+            border: 6px solid var(--accent-blue); position: relative;
+            margin: 0 auto 30px; display: flex; align-items: center;
+            justify-content: center; background: rgba(0,0,0,0.2);
+            box-shadow: 0 0 40px var(--glow-blue);
+        }
+        /* 旋转光环 */
+        .summary-ring::before {
+            content: ''; position: absolute;
+            width: calc(100% + 24px); height: calc(100% + 24px);
+            border-radius: 50%; border: 3px dashed rgba(0,212,255,0.2);
+            animation: ringRotate 20s linear infinite;
+        }
+        @keyframes ringRotate { 0%{transform:rotate(0deg);}100%{transform:rotate(360deg);} }
+
+        /* 连接弧线 SVG */
+        .ring-arcs {
+            position: absolute; width: 100%; height: 100%;
+            top: 0; left: 0; pointer-events: none;
+        }
+
+        .ring-center { text-align: center; }
+        .ring-center i { font-size: 48px; color: var(--accent-blue); margin-bottom: 8px; display: block; }
+        .ring-center .ring-title { font-size: 26px; font-weight: 900; color: var(--accent-blue); }
+        .ring-center .ring-sub { font-size: 17px; color: var(--text-secondary); margin-top: 4px; }
+
+        .ring-item {
+            position: absolute; display: flex; flex-direction: column;
+            align-items: center; gap: 4px;
+        }
+        .ring-item .ri-icon {
+            width: 60px; height: 60px; border-radius: 50%;
+            background: var(--accent-blue); color: #fff;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 28px; box-shadow: 0 4px 14px var(--glow-blue);
+            transition: transform 0.3s ease;
+        }
+        .ring-item .ri-icon:hover { transform: scale(1.15); }
+        .ring-item .ri-label { font-size: 20px; font-weight: 700; color: var(--text-primary); }
+
+        .ring-item.ri-top    { top: -38px; left: 50%; transform: translateX(-50%); }
+        .ring-item.ri-right  { right: -50px; top: 50%; transform: translateY(-50%); }
+        .ring-item.ri-bottom { bottom: -38px; left: 50%; transform: translateX(-50%); }
+        .ring-item.ri-left   { left: -50px; top: 50%; transform: translateY(-50%); }
+
+        .ring-item:nth-child(3) .ri-icon { background: var(--accent-blue); }
+        .ring-item:nth-child(4) .ri-icon { background: var(--accent-cyan); }
+        .ring-item:nth-child(5) .ri-icon { background: var(--accent-purple); }
+        .ring-item:nth-child(6) .ri-icon { background: var(--accent-violet); }
+
+        .summary-footer { max-width: 900px; margin: 0 auto; }
+        .summary-footer .key-msg {
+            font-size: 30px; font-weight: 800; color: var(--accent-purple); margin-bottom: 10px;
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+        }
+        .summary-footer .key-detail { font-size: 24px; color: var(--text-secondary); line-height: 1.7; }
+        .summary-footer .key-detail .hl-bg {
+            background: linear-gradient(transparent 60%, rgba(0,212,255,0.2) 60%); font-weight: 700;
+        }
+
+        /* 总结页底部 - 三个关键词卡 */
+        .summary-pills {
+            display: flex; gap: 24px; justify-content: center; margin-top: 24px;
+        }
+        .summary-pill {
+            display: inline-flex; align-items: center; gap: 10px;
+            background: var(--dark-tertiary); border: 2px solid rgba(0,212,255,0.2); border-radius: 50px;
+            padding: 10px 28px; font-size: 20px; font-weight: 700; color: var(--accent-blue);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .summary-pill:hover { transform: translateY(-4px); box-shadow: 0 6px 20px var(--glow-blue); }
+        .summary-pill i { font-size: 22px; }
+    </style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+
+<div class="slides-container">
+
+    <!-- ===================== SLIDE 1: 封面 ===================== -->
+    <div class="slide slide-1 active" data-index="0">
+
+        <div class="deco-circle dc1"></div>
+        <div class="deco-circle dc2"></div>
+        <div class="deco-circle dc3"></div>
+
+        <!-- 浮动粒子 -->
+        <div class="particle" style="width:8px;height:8px;background:var(--accent-blue);top:18%;left:12%;animation-delay:0s;"></div>
+        <div class="particle" style="width:6px;height:6px;background:var(--accent-purple);top:35%;right:18%;animation-delay:1.5s;"></div>
+        <div class="particle" style="width:10px;height:10px;background:var(--accent-cyan);bottom:25%;left:22%;animation-delay:3s;"></div>
+        <div class="particle" style="width:7px;height:7px;background:var(--accent-violet);top:65%;right:28%;animation-delay:4.5s;"></div>
+
+        <!-- 左侧循环装饰 -->
+        <div class="s1-loop-graphic s1-loop-left">
+            <svg width="180" height="200" viewBox="0 0 120 140" fill="none">
+                <circle cx="60" cy="70" r="50" stroke="var(--accent-blue)" stroke-width="4" fill="none" opacity="0.5" stroke-dasharray="8,6"/>
+                <path d="M60 20L60 8" stroke="var(--accent-blue)" stroke-width="3" opacity="0.5"/>
+                <polygon points="54,10 60,0 66,10" fill="var(--accent-blue)" opacity="0.5"/>
+                <circle cx="60" cy="20" r="8" fill="var(--accent-blue)" opacity="0.4"/>
+                <circle cx="110" cy="70" r="8" fill="var(--accent-cyan)" opacity="0.4"/>
+                <circle cx="60" cy="120" r="8" fill="var(--accent-purple)" opacity="0.4"/>
+                <circle cx="10" cy="70" r="8" fill="var(--accent-violet)" opacity="0.4"/>
+                <text x="60" y="74" text-anchor="middle" fill="var(--accent-blue)" font-size="14" font-weight="700" opacity="0.5">Loop</text>
+            </svg>
+        </div>
+
+        <!-- 右侧检查清单装饰 -->
+        <div class="s1-loop-graphic s1-loop-right">
+            <svg width="160" height="180" viewBox="0 0 100 120" fill="none">
+                <rect x="10" y="5" width="80" height="110" rx="10" fill="rgba(0,212,255,0.1)" opacity="0.3"/>
+                <rect x="16" y="15" width="68" height="90" rx="6" fill="var(--dark-secondary)" opacity="0.5"/>
+                <rect x="24" y="28" width="10" height="10" rx="2" fill="none" stroke="var(--accent-blue)" stroke-width="2" opacity="0.5"/>
+                <path d="M27 33L30 36L35 29" stroke="var(--accent-blue)" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+                <rect x="40" y="30" width="36" height="5" rx="2" fill="var(--accent-blue)" opacity="0.3"/>
+                <rect x="24" y="48" width="10" height="10" rx="2" fill="none" stroke="var(--accent-blue)" stroke-width="2" opacity="0.5"/>
+                <path d="M27 53L30 56L35 49" stroke="var(--accent-blue)" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+                <rect x="40" y="50" width="36" height="5" rx="2" fill="var(--accent-blue)" opacity="0.3"/>
+                <rect x="24" y="68" width="10" height="10" rx="2" fill="none" stroke="var(--accent-blue)" stroke-width="2" opacity="0.5"/>
+                <path d="M27 73L30 76L35 69" stroke="var(--accent-blue)" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+                <rect x="40" y="70" width="36" height="5" rx="2" fill="var(--accent-blue)" opacity="0.3"/>
+                <rect x="24" y="88" width="10" height="10" rx="2" fill="none" stroke="var(--accent-blue)" stroke-width="2" opacity="0.4"/>
+                <rect x="40" y="90" width="36" height="5" rx="2" fill="var(--text-muted)" opacity="0.3"/>
+            </svg>
+        </div>
+
+        <div class="anim s1-icon-grid">
+            <div class="s1-icon-pill"><i class="ri-loop-left-line"></i> 闭环</div>
+            <div class="s1-icon-pill"><i class="ri-robot-2-line"></i> Agent审查</div>
+            <div class="s1-icon-pill"><i class="ri-list-check-3"></i> Checklist</div>
+            <div class="s1-icon-pill"><i class="ri-shield-check-line"></i> 自验证</div>
+        </div>
+
+        <div class="badge anim">
+            <i class="ri-shield-check-line"></i>
+            第三个护栏
+        </div>
+
+        <h1 class="anim"><span class="shimmer-text">反馈循环</span></h1>
+        <div class="subtitle anim">Feedback Loop</div>
+        <div class="deco-line anim"></div>
+
+        <div class="anim s1-core-badge">
+            <i class="ri-refresh-line"></i>
+            Build → Verify → Fix → <span class="ul">强制闭环</span>
+        </div>
+
+        <div class="anim kaomoji" style="margin-top:24px;">
+            (｡◕‿◕｡) 循环往复，质量无忧~
+        </div>
+    </div>
+
+    <!-- ===================== SLIDE 2: 对比 ===================== -->
+    <div class="slide slide-2" data-index="1">
+
+        <div class="deco-circle dc1"></div>
+
+        <div class="float-icon" style="right:20px;bottom:30px;font-size:80px;animation-delay:1s;">
+            <i class="ri-robot-2-line"></i>
+        </div>
+
+        <h2 class="anim">代码审查：<span>从人到 Agent</span></h2>
+
+        <div class="compare-wrapper">
+            <div class="compare-card old anim">
+                <div class="card-icon"><i class="ri-user-line"></i></div>
+                <h3>传统开发</h3>
+                <div class="desc-line">
+                    <i class="ri-arrow-right-s-line"></i>
+                    <span><span class="bold">人类工程师</span> 负责代码审查</span>
+                </div>
+                <div class="desc-line">
+                    <i class="ri-arrow-right-s-line"></i>
+                    <span>依赖经验，<span style="font-style:italic;" class="text-muted">易遗漏</span></span>
+                </div>
+
+                <!-- 可视化：人 → 代码 → ？ -->
+                <div class="compare-visual">
+                    <div class="compare-avatar avatar-human"><i class="ri-user-line"></i></div>
+                    <div class="compare-flow-arrow"><i class="ri-arrow-right-line"></i></div>
+                    <svg width="60" height="50" viewBox="0 0 60 50">
+                        <rect x="5" y="5" width="50" height="40" rx="6" fill="rgba(255,255,255,0.05)" opacity="0.6"/>
+                        <rect x="12" y="14" width="28" height="4" rx="2" fill="var(--text-muted)"/>
+                        <rect x="12" y="22" width="36" height="4" rx="2" fill="var(--text-muted)"/>
+                        <rect x="12" y="30" width="20" height="4" rx="2" fill="var(--text-muted)"/>
+                    </svg>
+                    <div class="compare-flow-arrow"><i class="ri-arrow-right-line"></i></div>
+                    <svg width="40" height="40" viewBox="0 0 40 40">
+                        <circle cx="20" cy="20" r="18" fill="none" stroke="var(--text-muted)" stroke-width="2"/>
+                        <text x="20" y="25" text-anchor="middle" fill="var(--text-muted)" font-size="16" font-weight="900">?</text>
+                    </svg>
+                </div>
+
+                <div class="reliability-bar">
+                    <div class="reliability-fill" data-width="55%"></div>
+                </div>
+                <div class="reliability-label">
+                    <span>可靠性</span><span>~55%</span>
+                </div>
+            </div>
+
+            <div class="vs-circle anim">VS</div>
+
+            <div class="compare-card new anim">
+                <div class="card-icon"><i class="ri-robot-2-line"></i></div>
+                <h3>Harness 模式</h3>
+                <div class="desc-line">
+                    <i class="ri-arrow-right-s-line"></i>
+                    <span><span class="hl bold">Agent 对 Agent</span> 审查</span>
+                </div>
+                <div class="desc-line">
+                    <i class="ri-arrow-right-s-line"></i>
+                    <span><span class="ul">标准化</span>、<span class="bg-warm bold">不遗漏</span></span>
+                </div>
+
+                <!-- 可视化：Agent → 代码 → Agent审查 → ✓ -->
+                <div class="compare-visual">
+                    <div class="compare-avatar avatar-agent"><i class="ri-robot-2-line"></i></div>
+                    <div class="compare-flow-arrow"><i class="ri-arrow-right-line"></i></div>
+                    <svg width="60" height="50" viewBox="0 0 60 50">
+                        <rect x="5" y="5" width="50" height="40" rx="6" fill="rgba(0,212,255,0.1)" opacity="0.8"/>
+                        <rect x="12" y="14" width="28" height="4" rx="2" fill="var(--accent-blue)" opacity="0.6"/>
+                        <rect x="12" y="22" width="36" height="4" rx="2" fill="var(--accent-blue)" opacity="0.6"/>
+                        <rect x="12" y="30" width="20" height="4" rx="2" fill="var(--accent-blue)" opacity="0.6"/>
+                    </svg>
+                    <div class="compare-flow-arrow"><i class="ri-arrow-right-line"></i></div>
+                    <div class="compare-avatar avatar-agent2"><i class="ri-shield-check-line"></i></div>
+                    <div class="compare-flow-arrow"><i class="ri-arrow-right-line"></i></div>
+                    <svg width="40" height="40" viewBox="0 0 40 40">
+                        <circle cx="20" cy="20" r="18" fill="rgba(0,229,204,0.1)" stroke="var(--accent-cyan)" stroke-width="2"/>
+                        <path d="M13 20L18 25L28 15" stroke="var(--accent-cyan)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                    </svg>
+                </div>
+
+                <div class="reliability-bar">
+                    <div class="reliability-fill" data-width="95%"></div>
+                </div>
+                <div class="reliability-label">
+                    <span>可靠性</span><span>~95%</span>
+                </div>
+
+                <div class="kaomoji" style="margin-top:16px;text-align:center;">
+                    ٩(ˊᗜˋ*)و Agent互审更靠谱！
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== SLIDE 3: PreCompletionChecklist ===================== -->
+    <div class="slide slide-3" data-index="2">
+
+        <div class="deco-circle dc2"></div>
+
+        <div class="particle" style="width:8px;height:8px;background:var(--accent-blue);top:12%;right:20%;animation-delay:0.5s;"></div>
+        <div class="particle" style="width:6px;height:6px;background:var(--accent-purple);bottom:18%;left:15%;animation-delay:2s;"></div>
+
+        <h2 class="anim">核心机制</h2>
+        <div class="sub-title anim">LangChain 提出的关键中间件</div>
+
+        <div class="s3-layout">
+            <div class="s3-left">
+                <div class="checklist-box anim">
+                    <div class="checklist-header">
+                        <i class="ri-list-check-3"></i>
+                        <div class="ch-title">PreCompletionChecklistMiddleware</div>
+                    </div>
+
+                    <div class="checklist-item anim">
+                        <i class="ri-checkbox-circle-fill"></i>
+                        <span>在 Agent <span class="key">退出之前</span> 拦截它</span>
+                    </div>
+                    <div class="checklist-item anim">
+                        <i class="ri-checkbox-circle-fill"></i>
+                        <span>提醒 Agent 对照 <span class="key ul">任务规格</span> 做验证</span>
+                    </div>
+                    <div class="checklist-item anim">
+                        <i class="ri-checkbox-circle-fill"></i>
+                        <span>确保输出 <span class="key bg-warm">完全符合</span> 原始要求</span>
+                    </div>
+                </div>
+
+                <div class="mechanism-note anim">
+                    <i class="ri-lightbulb-line" style="margin-right:8px;color:var(--accent-blue);font-size:22px;"></i>
+                    <span class="bold">关键点：</span>对照的是<span class="bold" style="text-decoration:underline;">任务要求</span>，而非 Agent 自己的代码
+                </div>
+
+                <div class="kaomoji anim" style="margin-top:16px;">
+                    (⚆_⚆) 退出前先检查！
+                </div>
+            </div>
+
+            <div class="s3-right">
+                <div class="anim intercept-svg-wrap">
+                    <svg viewBox="0 0 280 360" width="280" height="360">
+                        <!-- Agent主体 -->
+                        <rect x="80" y="20" width="120" height="60" rx="14" fill="var(--accent-blue)" opacity="0.9"/>
+                        <text x="140" y="50" text-anchor="middle" fill="white" font-size="15" font-weight="700">⚙ Agent</text>
+                        <text x="140" y="68" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-size="11">执行任务中…</text>
+
+                        <!-- 箭头向下 -->
+                        <path d="M140 80L140 110" stroke="var(--accent-blue)" stroke-width="3" marker-end="url(#arrBlue)"/>
+
+                        <!-- 代码产出 -->
+                        <rect x="90" y="115" width="100" height="45" rx="10" fill="rgba(0,212,255,0.1)" stroke="var(--accent-blue)" stroke-width="2"/>
+                        <text x="140" y="135" text-anchor="middle" fill="var(--accent-blue)" font-size="12" font-weight="700">代码产出</text>
+                        <text x="140" y="150" text-anchor="middle" fill="var(--text-muted)" font-size="10">output.js</text>
+
+                        <!-- 箭头向下 -->
+                        <path d="M140 160L140 185" stroke="var(--accent-blue)" stroke-width="3" marker-end="url(#arrBlue)"/>
+
+                        <!-- 拦截中间件 - 闪烁红框 -->
+                        <rect x="30" y="190" width="220" height="70" rx="16" fill="rgba(0,212,255,0.05)" stroke="var(--accent-purple)" stroke-width="3" stroke-dasharray="8,4"/>
+                        <text x="140" y="218" text-anchor="middle" fill="var(--accent-purple)" font-size="13" font-weight="800">✓ PreCompletionChecklist</text>
+                        <text x="140" y="240" text-anchor="middle" fill="var(--text-secondary)" font-size="11">对照任务规格 · 逐项检查</text>
+
+                        <!-- 拦截标识 -->
+                        <circle cx="30" cy="225" r="14" fill="var(--accent-purple)" opacity="0.15"/>
+                        <text x="30" y="229" text-anchor="middle" fill="var(--accent-purple)" font-size="12" font-weight="900">!</text>
+
+                        <!-- 分叉箭头 -->
+                        <path d="M100 260L80 290" stroke="var(--accent-purple)" stroke-width="2.5" marker-end="url(#arrPurple)"/>
+                        <path d="M180 260L200 290" stroke="var(--accent-cyan)" stroke-width="2.5" marker-end="url(#arrCyan)"/>
+
+                        <!-- 失败 -->
+                        <rect x="20" y="295" width="110" height="50" rx="12" fill="rgba(177,78,255,0.1)" stroke="var(--accent-purple)" stroke-width="2"/>
+                        <text x="75" y="318" text-anchor="middle" fill="var(--accent-purple)" font-size="12" font-weight="700">✗ 不通过</text>
+                        <text x="75" y="335" text-anchor="middle" fill="var(--text-secondary)" font-size="10">回去修复</text>
+
+                        <!-- 回环箭头 -->
+                        <path d="M20 320C0 320 -5 50 80 40" stroke="var(--accent-purple)" stroke-width="2" fill="none" stroke-dasharray="5,4" opacity="0.5" marker-end="url(#arrPurple)"/>
+
+                        <!-- 通过 -->
+                        <rect x="150" y="295" width="110" height="50" rx="12" fill="rgba(0,229,204,0.1)" stroke="var(--accent-cyan)" stroke-width="2"/>
+                        <text x="205" y="318" text-anchor="middle" fill="var(--accent-cyan)" font-size="12" font-weight="700">✓ 通过</text>
+                        <text x="205" y="335" text-anchor="middle" fill="var(--text-secondary)" font-size="10">提交完成</text>
+
+                        <defs>
+                            <marker id="arrBlue" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+                                <path d="M1 1L4 6L7 1" fill="none" stroke="var(--accent-blue)" stroke-width="1.5"/>
+                            </marker>
+                            <marker id="arrPurple" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+                                <path d="M1 1L4 6L7 1" fill="none" stroke="var(--accent-purple)" stroke-width="1.5"/>
+                            </marker>
+                            <marker id="arrCyan" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+                                <path d="M1 1L4 6L7 1" fill="none" stroke="var(--accent-cyan)" stroke-width="1.5"/>
+                            </marker>
+                        </defs>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== SLIDE 4: 四步流程 ===================== -->
+    <div class="slide slide-4" data-index="3">
+
+        <div class="deco-circle dc1"></div>
+        <div class="deco-circle dc3"></div>
+
+        <div class="float-icon" style="left:20px;top:50px;font-size:90px;animation-delay:2s;">
+            <i class="ri-loop-left-line"></i>
+        </div>
+
+        <h2 class="anim"><span class="shimmer-text">Build & Self-Verify</span> 闭环流程</h2>
+        <div class="tag-line anim">Harness 强制 AI 按顺序执行 · 不可跳过</div>
+
+        <div class="steps-flow">
+            <!-- 数据包动画 -->
+            <div class="step-data-packet"></div>
+
+            <!-- Step 1 -->
+            <div class="step-card anim">
+                <div class="step-num">1</div>
+                <div class="step-icon"><i class="ri-compass-3-line"></i></div>
+                <h4>规划与发现</h4>
+                <div class="en-name">Plan & Discover</div>
+                <p>读取任务规格<br>扫描代码库<br>制定计划</p>
+            </div>
+
+            <div class="step-arrow anim"><i class="ri-arrow-right-line"></i></div>
+
+            <!-- Step 2 -->
+            <div class="step-card anim">
+                <div class="step-num">2</div>
+                <div class="step-icon"><i class="ri-hammer-line"></i></div>
+                <h4>构建</h4>
+                <div class="en-name">Build</div>
+                <p>按计划实现<br>同时构建<br>测试用例</p>
+            </div>
+
+            <div class="step-arrow anim"><i class="ri-arrow-right-line"></i></div>
+
+            <!-- Step 3 -->
+            <div class="step-card anim">
+                <div class="step-num">3</div>
+                <div class="step-icon"><i class="ri-shield-check-line"></i></div>
+                <h4>验证</h4>
+                <div class="en-name">Verify</div>
+                <p>运行测试<br>对照<b class="text-blue">任务要求</b><br>进行检查</p>
+            </div>
+
+            <div class="step-arrow anim"><i class="ri-arrow-right-line"></i></div>
+
+            <!-- Step 4 -->
+            <div class="step-card anim">
+                <div class="step-num">4</div>
+                <div class="step-icon"><i class="ri-tools-line"></i></div>
+                <h4>修复</h4>
+                <div class="en-name">Fix</div>
+                <p>分析错误<br>回顾原始规格<br>修复问题</p>
+            </div>
+        </div>
+
+        <div class="loop-back anim">
+            <div class="loop-back-line">
+                <i class="ri-refresh-line"></i>
+                固定四步 · 强制顺序 · 不可跳过 · 形成闭环
+                <i class="ri-loop-left-line"></i>
+            </div>
+        </div>
+
+        <div class="kaomoji anim" style="margin-top:20px;">
+            (｡♥‿♥｡) 一步一步来，不能偷懒哦~
+        </div>
+    </div>
+
+    <!-- ===================== SLIDE 5: 总结 ===================== -->
+    <div class="slide slide-5" data-index="4">
+
+        <div class="deco-circle dc1"></div>
+        <div class="deco-circle dc2"></div>
+
+        <div class="particle" style="width:9px;height:9px;background:var(--accent-blue);top:15%;right:18%;animation-delay:0s;"></div>
+        <div class="particle" style="width:7px;height:7px;background:var(--accent-purple);bottom:20%;left:15%;animation-delay:2.5s;"></div>
+        <div class="particle" style="width:8px;height:8px;background:var(--accent-cyan);top:60%;right:10%;animation-delay:4s;"></div>
+
+        <h2 class="anim">标准化 <span>闭环</span> 流程</h2>
+
+        <div class="summary-ring anim">
+            <!-- 连接弧线 -->
+            <svg class="ring-arcs" viewBox="0 0 380 380">
+                <!-- 四段弧线连接四个节点 -->
+                <path d="M190 10 A180 180 0 0 1 370 190" fill="none" stroke="var(--accent-blue)" stroke-width="2" opacity="0.3" stroke-dasharray="6,4"/>
+                <path d="M370 190 A180 180 0 0 1 190 370" fill="none" stroke="var(--accent-cyan)" stroke-width="2" opacity="0.3" stroke-dasharray="6,4"/>
+                <path d="M190 370 A180 180 0 0 1 10 190" fill="none" stroke="var(--accent-purple)" stroke-width="2" opacity="0.3" stroke-dasharray="6,4"/>
+                <path d="M10 190 A180 180 0 0 1 190 10" fill="none" stroke="var(--accent-violet)" stroke-width="2" opacity="0.3" stroke-dasharray="6,4"/>
+                <!-- 箭头三角 -->
+                <polygon points="365,185 375,190 365,195" fill="var(--accent-blue)" opacity="0.4"/>
+                <polygon points="195,365 190,375 185,365" fill="var(--accent-cyan)" opacity="0.4"/>
+                <polygon points="15,195 5,190 15,185" fill="var(--accent-purple)" opacity="0.4"/>
+                <polygon points="185,15 190,5 195,15" fill="var(--accent-violet)" opacity="0.4"/>
+            </svg>
+
+            <div class="ring-center">
+                <i class="ri-loop-left-line"></i>
+                <div class="ring-title">Build &<br>Self-Verify</div>
+                <div class="ring-sub">闭环四步</div>
+            </div>
+
+            <div class="ring-item ri-top anim">
+                <div class="ri-icon"><i class="ri-compass-3-line"></i></div>
+                <div class="ri-label">规划</div>
+            </div>
+
+            <div class="ring-item ri-right anim">
+                <div class="ri-icon"><i class="ri-hammer-line"></i></div>
+                <div class="ri-label">构建</div>
+            </div>
+
+            <div class="ring-item ri-bottom anim">
+                <div class="ri-icon"><i class="ri-shield-check-line"></i></div>
+                <div class="ri-label">验证</div>
+            </div>
+
+            <div class="ring-item ri-left anim">
+                <div class="ri-icon"><i class="ri-tools-line"></i></div>
+                <div class="ri-label">修复</div>
+            </div>
+        </div>
+
+        <div class="summary-footer">
+            <div class="key-msg anim">
+                <i class="ri-shield-star-line" style="font-size:28px;"></i>
+                Harness 强制 AI 按顺序执行，不能跳过任何一步
+            </div>
+            <div class="key-detail anim">
+                通过 <span class="hl-bg">Agent 对 Agent</span> 审查 + <span class="hl-bg">PreCompletionChecklist</span> 机制，
+                构建出<span class="bold text-blue">可靠的反馈循环</span>
+            </div>
+        </div>
+
+        <div class="summary-pills anim">
+            <div class="summary-pill"><i class="ri-robot-2-line"></i> Agent 互审</div>
+            <div class="summary-pill"><i class="ri-list-check-3"></i> Checklist 拦截</div>
+            <div class="summary-pill"><i class="ri-loop-left-line"></i> 强制闭环</div>
+        </div>
+
+        <div class="kaomoji anim" style="margin-top:24px;">
+            (๑•̀ㅂ•́)و✧ 质量守护者上线！
+        </div>
+    </div>
+
+</div>
+
+<script>
+(function() {
+    const slides = document.querySelectorAll('.slide');
+    const total  = slides.length;
+    let current  = 0;
+    let isTransitioning = false;
+
+    function showSlide(idx) {
+        if (idx < 0 || idx >= total || isTransitioning || idx === current) return;
+        isTransitioning = true;
+
+        // 离开当前页
+        slides[current].querySelectorAll('.anim').forEach(el => el.classList.remove('visible'));
+        slides[current].classList.remove('active');
+
+        current = idx;
+        slides[current].classList.add('active');
+
+        // 逐个元素缓入
+        const anims = slides[current].querySelectorAll('.anim');
+        anims.forEach((el, i) => {
+            el.classList.remove('visible');
+            setTimeout(() => el.classList.add('visible'), 120 + i * 150);
+        });
+
+        // 触发可靠度条动画
+        setTimeout(() => {
+            slides[current].querySelectorAll('.reliability-fill').forEach(bar => {
+                bar.style.width = bar.dataset.width;
+            });
+        }, 600);
+
+        setTimeout(() => { isTransitioning = false; }, 800);
+    }
+
+    // 初始化
+    setTimeout(() => {
+        const anims = slides[0].querySelectorAll('.anim');
+        anims.forEach((el, i) => {
+            setTimeout(() => el.classList.add('visible'), 120 + i * 150);
+        });
+    }, 300);
+
+    // 键盘
+    document.addEventListener('keydown', e => {
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') { e.preventDefault(); showSlide(current + 1); }
+        if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp') { e.preventDefault(); showSlide(current - 1); }
+    });
+
+    // 鼠标点击
+    document.addEventListener('click', e => {
+        if (e.clientX > window.innerWidth / 2) showSlide(current + 1);
+        else showSlide(current - 1);
+    });
+
+    // 滚轮
+    let wheelLock = false;
+    document.addEventListener('wheel', e => {
+        if (wheelLock) return;
+        wheelLock = true;
+        if (e.deltaY > 0) showSlide(current + 1);
+        else showSlide(current - 1);
+        setTimeout(() => wheelLock = false, 600);
+    }, { passive: true });
+
+    // 触摸
+    let touchStartX = 0;
+    document.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; });
+    document.addEventListener('touchend', e => {
+        const diff = touchStartX - e.changedTouches[0].clientX;
+        if (Math.abs(diff) > 50) {
+            if (diff > 0) showSlide(current + 1);
+            else showSlide(current - 1);
+        }
+    });
+})();
+</script>
+
+</body>
+</html>

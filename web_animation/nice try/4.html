@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPsec Focus | Visual Master</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'Noto Sans SC', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    },
+                    colors: {
+                        primary: '#0A84FF',
+                        accent: '#30D158',
+                        warning: '#FFD60A',
+                        purple: '#BF5AF2',
+                        card: '#1c1c1e'
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        body {
+            background-color: #000;
+            color: #fff;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+        }
+
+        /* --- 极简侧边栏 --- */
+        .sidebar-container {
+            width: 300px;
+            flex-shrink: 0;
+            background: linear-gradient(to right, rgba(0,0,0,0.8), transparent);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 3rem 2rem;
+            z-index: 20;
+            pointer-events: none; /* 让鼠标事件穿透，不阻挡视线 */
+        }
+        .sidebar-content { pointer-events: auto; }
+
+        /* --- 主舞台 --- */
+        .main-stage {
+            flex-grow: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at 60% 50%, #1a1a1a 0%, #000 100%);
+        }
+
+        .swiper {
+            width: 100%;
+            height: 100%;
+            padding-top: 40px;
+            padding-bottom: 40px;
+        }
+
+        .swiper-slide {
+            width: 380px; /* 卡片更宽，容纳更多文字 */
+            height: 520px; /* 卡片更高 */
+            background: rgba(35, 35, 40, 0.6);
+            backdrop-filter: blur(40px) saturate(180%); /* Apple 质感 */
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 32px;
+            overflow: hidden; /* 裁剪溢出的图标 */
+            position: relative;
+            transition: all 0.3s;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        }
+
+        /* 激活状态 */
+        .swiper-slide-active {
+            background: rgba(45, 45, 50, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 0 50px rgba(48, 209, 88, 0.15); /* 绿色氛围光 */
+        }
+
+        /* --- 巨型基底图标 (Watermark Icon) --- */
+        .watermark-icon {
+            position: absolute;
+            top: -40px;
+            left: -40px;
+            font-size: 14rem; /* 极大 */
+            opacity: 0.08;
+            transform: rotate(-10deg);
+            pointer-events: none;
+            z-index: 0;
+            transition: opacity 0.5s;
+        }
+        .swiper-slide-active .watermark-icon {
+            opacity: 0.15; /* 激活时稍微明显一点 */
+        }
+
+        /* --- 内容排版 --- */
+        .slide-content {
+            position: relative;
+            z-index: 10;
+            height: 100%;
+            padding: 2.5rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        /* 序号 */
+        .slide-num {
+            position: absolute;
+            top: 2.5rem;
+            right: 2.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 4rem;
+            font-weight: 800;
+            color: rgba(255,255,255,0.05);
+            line-height: 1;
+        }
+        .swiper-slide-active .slide-num {
+            color: rgba(255,255,255,0.1);
+        }
+
+        /* --- 荧光笔增强版 --- */
+        .highlight-box {
+            background: rgba(0,0,0,0.3);
+            border-left: 4px solid #444;
+            padding: 1rem;
+            border-radius: 0 8px 8px 0;
+            margin-top: auto;
+            transition: all 0.3s;
+        }
+        
+        .swiper-slide-active .highlight-box {
+            border-left-color: var(--highlight-color);
+            background: linear-gradient(90deg, rgba(255,255,255,0.05) 0%, transparent 100%);
+        }
+
+        .highlight-text {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.5rem; /* 大字体 */
+            font-weight: 700;
+            color: #ccc;
+            display: inline-block;
+            position: relative;
+        }
+
+        /* 只有激活时才高亮文字 */
+        .swiper-slide-active .highlight-text {
+            color: #fff;
+            text-shadow: 0 0 20px var(--highlight-color);
+        }
+
+        /* 隧道模式卡片 */
+        .tunnel-slide { display: none; }
+    </style>
+</head>
+<body>
+
+    <aside class="sidebar-container">
+        <div class="sidebar-content">
+            <h5 class="text-xs font-bold text-gray-500 tracking-[4px] uppercase mb-4">Presentation</h5>
+            <h1 class="text-5xl font-extrabold text-white leading-tight">IPsec<br><span class="text-accent">Flow</span></h1>
+            <p class="mt-4 text-gray-400 text-sm">Use <span class="bg-white/20 px-1.5 rounded text-white font-mono">←</span> <span class="bg-white/20 px-1.5 rounded text-white font-mono">→</span> to navigate</p>
+        </div>
+
+        <div class="sidebar-content">
+            <button id="mode-toggle" class="w-full py-4 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-accent/50 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-3 group">
+                <i class="fa-solid fa-toggle-off text-xl text-gray-500 group-hover:text-accent transition-colors" id="mode-icon"></i>
+                <span id="mode-text">SWITCH TO TUNNEL</span>
+            </button>
+        </div>
+    </aside>
+
+    <main class="main-stage">
+        <div class="swiper mySwiper">
+            <div class="swiper-wrapper">
+                
+                <div class="swiper-slide" style="--highlight-color: #FFD60A;">
+                    <i class="fa-solid fa-file-code watermark-icon text-warning"></i>
+                    <div class="slide-num">01</div>
+                    
+                    <div class="slide-content">
+                        <div class="mt-16">
+                            <h2 class="text-4xl font-bold text-white mb-2">应用层数据</h2>
+                            <p class="text-lg text-warning font-mono">Payload / HTTP</p>
+                        </div>
+
+                        <div class="text-xl text-gray-300 leading-relaxed font-light">
+                            这是用户产生的<strong class="text-white font-bold">原始明文</strong>。例如一个 GET 请求或 SQL 查询。在进入协议栈前，它未被任何安全协议包裹。
+                        </div>
+
+                        <div class="highlight-box">
+                            <div class="text-xs text-gray-500 uppercase tracking-widest mb-1">Status</div>
+                            <div class="highlight-text">CLEAR TEXT</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="swiper-slide" style="--highlight-color: #BF5AF2;">
+                    <i class="fa-solid fa-layer-group watermark-icon text-purple"></i>
+                    <div class="slide-num">02</div>
+                    
+                    <div class="slide-content">
+                        <div class="mt-16">
+                            <h2 class="text-4xl font-bold text-white mb-2">传输层封装</h2>
+                            <p class="text-lg text-purple font-mono">Layer 4 / TCP</p>
+                        </div>
+
+                        <div class="text-xl text-gray-300 leading-relaxed font-light">
+                            操作系统加上 TCP 头。关键是<strong class="text-white font-bold">端口号</strong>，它标记了哪个程序在通信。数据流依然是可见的。
+                        </div>
+
+                        <div class="highlight-box">
+                            <div class="text-xs text-gray-500 uppercase tracking-widest mb-1">Ports</div>
+                            <div class="highlight-text">443 &rarr; 1024</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="swiper-slide" style="--highlight-color: #0A84FF;">
+                    <i class="fa-solid fa-network-wired watermark-icon text-primary"></i>
+                    <div class="slide-num">03</div>
+                    
+                    <div class="slide-content">
+                        <div class="mt-16">
+                            <h2 class="text-4xl font-bold text-white mb-2">网络层寻址</h2>
+                            <p class="text-lg text-primary font-mono">Layer 3 / IP</p>
+                        </div>
+
+                        <div class="text-xl text-gray-300 leading-relaxed font-light">
+                            加上 <strong class="text-white font-bold">IP 头部</strong>。这包含真实的源 IP 地址。在普通模式下，这就是数据包的最终外壳。
+                        </div>
+
+                        <div class="highlight-box">
+                            <div class="text-xs text-gray-500 uppercase tracking-widest mb-1">Source IP</div>
+                            <div class="highlight-text">192.168.1.5</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="swiper-slide" style="--highlight-color: #30D158;">
+                    <i class="fa-solid fa-shield-halved watermark-icon text-accent"></i>
+                    <div class="slide-num">04</div>
+                    
+                    <div class="slide-content">
+                        <div class="mt-16">
+                            <h2 class="text-4xl font-bold text-white mb-2">IPsec 拦截</h2>
+                            <p class="text-lg text-accent font-mono">ESP / Encryption</p>
+                        </div>
+
+                        <div class="text-xl text-gray-300 leading-relaxed font-light">
+                            策略引擎<strong class="text-white font-bold">强行拦截</strong>数据包。ESP 协议对内部载荷进行高强度加密。此刻起，中间人彻底致盲。
+                        </div>
+
+                        <div class="highlight-box">
+                            <div class="text-xs text-gray-500 uppercase tracking-widest mb-1">Security</div>
+                            <div class="highlight-text">AES-256 ENCRYPTED</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="swiper-slide tunnel-slide" style="--highlight-color: #ffffff;">
+                    <i class="fa-solid fa-globe watermark-icon text-white"></i>
+                    <div class="slide-num">05</div>
+                    
+                    <div class="slide-content">
+                        <div class="mt-16">
+                            <h2 class="text-4xl font-bold text-white mb-2">隧道新头部</h2>
+                            <p class="text-lg text-white font-mono">New IP / Gateway</p>
+                        </div>
+
+                        <div class="text-xl text-gray-300 leading-relaxed font-light">
+                            为了隐藏内部拓扑，生成一个<strong class="text-white font-bold">全新的外层 IP</strong>。通常是 VPN 网关地址。原数据包被整体包裹在内。
+                        </div>
+
+                        <div class="highlight-box">
+                            <div class="text-xs text-gray-500 uppercase tracking-widest mb-1">Tunnel Source</div>
+                            <div class="highlight-text">203.0.113.1</div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
+    <script>
+        // 初始化 Swiper 3D Coverflow
+        var swiper = new Swiper(".mySwiper", {
+            effect: "coverflow",
+            grabCursor: true,
+            centeredSlides: true,
+            slidesPerView: "auto",
+            initialSlide: 0,
+            spaceBetween: 60, // 卡片间距拉大，避免拥挤
+            coverflowEffect: {
+                rotate: 0,       // 减少旋转，让文字更易读
+                stretch: 0,
+                depth: 150,      // 增加深度感
+                modifier: 1,
+                slideShadows: true,
+            },
+            keyboard: { enabled: true },
+            mousewheel: { thresholdDelta: 50 },
+            speed: 500,
+        });
+
+        // 隧道模式逻辑
+        let isTunnelMode = false;
+        const toggleBtn = document.getElementById('mode-toggle');
+        const modeText = document.getElementById('mode-text');
+        const modeIcon = document.getElementById('mode-icon');
+        const tunnelSlide = document.querySelector('.tunnel-slide');
+
+        toggleBtn.addEventListener('click', () => {
+            isTunnelMode = !isTunnelMode;
+
+            if (isTunnelMode) {
+                modeText.innerText = "SWITCH TO TRANSPORT";
+                modeIcon.className = "fa-solid fa-toggle-on text-xl text-accent transition-colors";
+                toggleBtn.classList.add('border-accent');
+                
+                tunnelSlide.style.display = 'block'; // 显示
+                swiper.update();
+                swiper.slideTo(4);
+            } else {
+                modeText.innerText = "SWITCH TO TUNNEL";
+                modeIcon.className = "fa-solid fa-toggle-off text-xl text-gray-500 transition-colors";
+                toggleBtn.classList.remove('border-accent');
+
+                if (swiper.activeIndex === 4) swiper.slideTo(3);
+                setTimeout(() => {
+                    tunnelSlide.style.display = 'none';
+                    swiper.update();
+                }, 500);
+            }
+        });
+    </script>
+</body>
+</html>
