@@ -52,6 +52,13 @@ AI Animation/
     ├── AI Model/               # AI 模型演示（MLP、RNN、LSTM、GRU）
     ├── 3D - demonstrate.html
     ├── AI_Animation.html       # AI-Animation Skill 输出文件
+    ├── Animation/         # AI/ML 概念演示（RNN、LSTM、Word2Vec、GPU 等）
+    ├── Pirated websites/  # 钓鱼网站演示
+    ├── PPT Template/       # PPT 风格模板
+    ├── catch the packet/  # 数据包捕获演示
+    ├── DHCP/              # DHCP 协议演示
+    ├── geometry/           # 几何图形演示
+    ├── 3D - demonstrate.html
     ├── animation.html
     ├── ethernet-frame-animated.html
     ├── HTTPS.html
