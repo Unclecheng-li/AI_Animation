@@ -59,7 +59,7 @@ AI Animation/
 ```bash
 # 克隆仓库
 git clone https://github.com/Unclecheng-li/AI_Animation.git
-cd AI-Animation
+cd AI_Animation
 
 # 在浏览器中打开任意 .html 文件
 # 使用 ← → 方向键或鼠标滚轮翻页
