@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VSCode - AI代码重写器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .title-bar {
+            height: 32px;
+            background: #323233;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            border-bottom: 1px solid #2d2d30;
+        }
+
+        .window-controls {
+            display: flex;
+            gap: 8px;
+            margin-right: 15px;
+        }
+
+        .window-btn {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .window-btn.close { background: #ff5f56; }
+        .window-btn.minimize { background: #ffbd2e; }
+        .window-btn.maximize { background: #27c93f; }
+
+        .title-text {
+            font-size: 13px;
+            color: #858585;
+        }
+
+        .menu-bar {
+            height: 28px;
+            background: #2d2d2d;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            border-bottom: 1px solid #404040;
+            font-size: 13px;
+        }
+
+        .menu-item {
+            padding: 4px 10px;
+            cursor: pointer;
+            color: #d4d4d4;
+        }
+
+        .menu-item:hover {
+            background: #404040;
+        }
+
+        .main-area {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 50px;
+            background: #252526;
+            border-right: 1px solid #404040;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 10px;
+        }
+
+        .sidebar-icon {
+            width: 35px;
+            height: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 5px;
+            cursor: pointer;
+            border-radius: 5px;
+            color: #858585;
+        }
+
+        .sidebar-icon:hover {
+            background: #2a2d2e;
+        }
+
+        .sidebar-icon.active {
+            color: #d4d4d4;
+        }
+
+        .sidebar-icon svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        .editor-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .tab-bar {
+            height: 35px;
+            background: #2d2d2d;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid #404040;
+        }
+
+        .tab {
+            height: 100%;
+            padding: 0 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #1e1e1e;
+            border-right: 1px solid #2d2d2d;
+            cursor: pointer;
+            font-size: 13px;
+            color: #d4d4d4;
+            position: relative;
+        }
+
+        .tab.active {
+            background: #1e1e1e;
+        }
+
+        .tab.active::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #4fc1ff;
+        }
+
+        .tab-icon {
+            color: #519aba;
+        }
+
+        .tab-close {
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 3px;
+            color: #858585;
+        }
+
+        .tab-close:hover {
+            background: #424242;
+            color: #d4d4d4;
+        }
+
+        .editor-content {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            background: #1e1e1e;
+            position: relative;
+        }
+
+        .line-numbers {
+            width: 50px;
+            background: #1e1e1e;
+            padding: 0 10px;
+            text-align: right;
+            color: #5a5a5a;
+            font-size: 14px;
+            line-height: 21px;
+            user-select: none;
+            border-right: 1px solid #404040;
+            flex-shrink: 0;
+            z-index: 1;
+        }
+
+        .line-number {
+            padding-right: 15px;
+            height: 21px;
+            width: 100%;
+        }
+
+        .line-number.active {
+            color: #c6c6c6;
+            background: rgba(200, 200, 200, 0.1);
+        }
+
+        .line-number.modifying {
+            background: rgba(255, 165, 0, 0.2);
+            color: #ff9d00;
+        }
+
+        .line-number.modified {
+            background: rgba(79, 209, 197, 0.15);
+            color: #4fd1c5;
+        }
+
+        .code-area {
+            flex: 1;
+            padding: 10px;
+            overflow-y: auto;
+            font-size: 14px;
+            line-height: 21px;
+            position: relative;
+        }
+
+        .code-line {
+            height: 21px;
+            display: flex;
+            align-items: center;
+            white-space: pre;
+        }
+
+        .code-line.hidden {
+            visibility: hidden;
+        }
+
+        .code-line.visible {
+            visibility: visible;
+            animation: lineAppear 0.3s ease forwards;
+        }
+
+        .code-line.modifying {
+            animation: lineModify 0.5s ease forwards;
+        }
+
+        .code-line.modified {
+            animation: lineModified 0.3s ease forwards;
+        }
+
+        @keyframes lineAppear {
+            from {
+                opacity: 0;
+                transform: translateX(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes lineModify {
+            0% { background: transparent; }
+            50% { background: rgba(255, 165, 0, 0.3); }
+            100% { background: rgba(255, 165, 0, 0.15); }
+        }
+
+        @keyframes lineModified {
+            from { background: rgba(255, 165, 0, 0.15); }
+            to { background: transparent; }
+        }
+
+        .keyword { color: #c586c0; }
+        .function { color: #dcdcaa; }
+        .variable { color: #9cdcfe; }
+        .string { color: #ce9178; }
+        .comment { color: #6a9955; }
+        .operator { color: #d4d4d4; }
+        .type { color: #4ec9b0; }
+        .number { color: #b5cea8; }
+
+        .ai-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(30, 30, 30, 0.95);
+            border: 1px solid #404040;
+            border-radius: 8px;
+            padding: 20px 30px;
+            display: none;
+            align-items: center;
+            gap: 15px;
+            z-index: 100;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .ai-overlay.active {
+            display: flex;
+        }
+
+        .ai-spinner {
+            width: 30px;
+            height: 30px;
+            border: 3px solid #404040;
+            border-top-color: #4fc1ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .ai-text {
+            font-size: 14px;
+            color: #d4d4d4;
+        }
+
+        .ai-cursor {
+            display: inline-block;
+            width: 8px;
+            height: 16px;
+            background: #4fc1ff;
+            animation: blink 0.8s infinite;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        .ai-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #252526;
+            border: 1px solid #404040;
+            border-radius: 6px;
+            padding: 15px;
+            width: 300px;
+            font-size: 12px;
+            display: none;
+        }
+
+        .ai-panel.active {
+            display: block;
+        }
+
+        .ai-panel-header {
+            color: #4fc1ff;
+            font-weight: 600;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #404040;
+        }
+
+        .ai-panel-content {
+            color: #d4d4d4;
+            line-height: 1.6;
+        }
+
+        .ai-panel-step {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            margin-bottom: 8px;
+            opacity: 0.4;
+            transition: opacity 0.3s;
+        }
+
+        .ai-panel-step.active {
+            opacity: 1;
+        }
+
+        .ai-panel-step.completed {
+            opacity: 0.7;
+        }
+
+        .step-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #404040;
+            margin-top: 6px;
+            flex-shrink: 0;
+        }
+
+        .ai-panel-step.active .step-indicator {
+            background: #4fc1ff;
+            box-shadow: 0 0 8px #4fc1ff;
+        }
+
+        .ai-panel-step.completed .step-indicator {
+            background: #4fd1c5;
+        }
+
+        .status-bar {
+            height: 22px;
+            background: #007acc;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 10px;
+            font-size: 12px;
+        }
+
+        .status-left, .status-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            color: #fff;
+        }
+
+        .status-item svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .code-line .highlight-text {
+            background: rgba(255, 165, 0, 0.3);
+            border-radius: 2px;
+            padding: 0 2px;
+            animation: highlightPulse 0.5s ease infinite;
+        }
+
+        @keyframes highlightPulse {
+            0%, 100% { background: rgba(255, 165, 0, 0.3); }
+            50% { background: rgba(255, 165, 0, 0.5); }
+        }
+
+        .diff-added {
+            background: rgba(79, 209, 197, 0.2);
+            border-left: 2px solid #4fd1c5;
+        }
+
+        .diff-removed {
+            background: rgba(255, 107, 107, 0.2);
+            text-decoration: line-through;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="title-bar">
+            <div class="window-controls">
+                <div class="window-btn close"></div>
+                <div class="window-btn minimize"></div>
+                <div class="window-btn maximize"></div>
+            </div>
+            <div class="title-text">user@hermes: ~/opensource-project</div>
+        </div>
+
+        <div class="menu-bar">
+            <div class="menu-item">文件</div>
+            <div class="menu-item">编辑</div>
+            <div class="menu-item">选择</div>
+            <div class="menu-item">视图</div>
+            <div class="menu-item">终端</div>
+            <div class="menu-item">帮助</div>
+        </div>
+
+        <div class="main-area">
+            <div class="sidebar">
+                <div class="sidebar-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M3 3h18v18H3V3z"/>
+                    </svg>
+                </div>
+                <div class="sidebar-icon active">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                </div>
+                <div class="sidebar-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="11" cy="11" r="8"/>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                </div>
+            </div>
+
+            <div class="editor-area">
+                <div class="tab-bar">
+                    <div class="tab active">
+                        <span class="tab-icon">
+                            <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                            </svg>
+                        </span>
+                        <span>userApi.js</span>
+                        <span class="tab-close">×</span>
+                    </div>
+                </div>
+
+                <div class="editor-content" id="editorContent">
+                    <div class="line-numbers" id="lineNumbers"></div>
+                    <div class="code-area" id="codeArea">
+                        <div class="ai-overlay" id="aiOverlay">
+                            <div class="ai-spinner"></div>
+                            <div class="ai-text">
+                                AI正在重构代码<span class="ai-cursor"></span>
+                            </div>
+                        </div>
+                        <div class="ai-panel" id="aiPanel">
+                            <div class="ai-panel-header">
+                            <svg style="width: 14px; height: 14px; vertical-align: middle; margin-right: 6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="4" y="4" width="16" height="16" rx="2" ry="2"/>
+                                <rect x="9" y="9" width="6" height="6"/>
+                                <line x1="9" y1="1" x2="9" y2="4"/>
+                                <line x1="15" y1="1" x2="15" y2="4"/>
+                                <line x1="9" y1="20" x2="9" y2="23"/>
+                                <line x1="15" y1="20" x2="15" y2="23"/>
+                                <line x1="20" y1="9" x2="23" y2="9"/>
+                                <line x1="20" y1="14" x2="23" y2="14"/>
+                                <line x1="1" y1="9" x2="4" y2="9"/>
+                                <line x1="1" y1="14" x2="4" y2="14"/>
+                            </svg>
+                            AI 重写引擎
+                        </div>
+                            <div class="ai-panel-content">
+                                <div class="ai-panel-step" id="step0">
+                                    <div class="step-indicator"></div>
+                                    <span>分析代码结构</span>
+                                </div>
+                                <div class="ai-panel-step" id="step1">
+                                    <div class="step-indicator"></div>
+                                    <span>识别变量命名</span>
+                                </div>
+                                <div class="ai-panel-step" id="step2">
+                                    <div class="step-indicator"></div>
+                                    <span>重命名 fetchUserData</span>
+                                </div>
+                                <div class="ai-panel-step" id="step3">
+                                    <div class="step-indicator"></div>
+                                    <span>重命名 processUsers</span>
+                                </div>
+                                <div class="ai-panel-step" id="step4">
+                                    <div class="step-indicator"></div>
+                                    <span>调整代码格式</span>
+                                </div>
+                                <div class="ai-panel-step" id="step5">
+                                    <div class="step-indicator"></div>
+                                    <span>生成"原创"代码</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <div class="status-left">
+                <div class="status-item">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                        <path d="M2 17l10 5 10-5"/>
+                    </svg>
+                    主分支
+                </div>
+                <div class="status-item">0 ↑ 0 ↓</div>
+            </div>
+            <div class="status-right">
+                <div class="status-item">行 1, 列 1</div>
+                <div class="status-item">UTF-8</div>
+                <div class="status-item">JavaScript</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const originalCode = [
+            '// 优秀的开源项目代码',
+            '// 作者：真正的开发者',
+            '',
+            'function fetchUserData(userId) {',
+            '    const apiEndpoint = "/api/users/";',
+            '    ',
+            '    return fetch(apiEndpoint + userId)',
+            '        .then(response => response.json())',
+            '        .then(data => {',
+            '            return data;',
+            '        })',
+            '        .catch(error => {',
+            '            console.error("Error:", error);',
+            '        });',
+            '}',
+            '',
+            'async function processUsers(userList) {',
+            '    const results = [];',
+            '    ',
+            '    for (const user of userList) {',
+            '        const userData = await fetchUserData(user.id);',
+            '        results.push(userData);',
+            '    }',
+            '    ',
+            '    return results;',
+            '}'
+        ];
+
+        const modifiedCode = [
+            '// 俺独立开发的代码',
+            '// 作者：me',
+            '',
+            'function retrieveUserInfo(identifier) {',
+            '    const serviceUrl = "/api/users/";',
+            '    ',
+            '    return fetch(serviceUrl + identifier)',
+            '        .then(result => result.json())',
+            '        .then(payload => {',
+            '            return payload;',
+            '        })',
+            '        .catch(err => {',
+            '            console.error("Error:", err);',
+            '        });',
+            '}',
+            '',
+            'async function handleUsers(usersArray) {',
+            '    const output = [];',
+            '    ',
+            '    for (const item of usersArray) {',
+            '        const info = await retrieveUserInfo(item.id);',
+            '        output.push(info);',
+            '    }',
+            '    ',
+            '    return output;',
+            '}'
+        ];
+
+        const variableMappings = [
+            { old: 'fetchUserData', new: 'retrieveUserInfo' },
+            { old: 'userId', new: 'identifier' },
+            { old: 'apiEndpoint', new: 'serviceUrl' },
+            { old: 'userList', new: 'usersArray' },
+            { old: 'results', new: 'output' },
+            { old: 'user', new: 'item' },
+            { old: 'userData', new: 'info' },
+            { old: 'response', new: 'result' },
+            { old: 'data', new: 'payload' },
+            { old: 'error', new: 'err' }
+        ];
+
+        let currentLine = 0;
+        let currentStep = 0;
+
+        function initCode() {
+            const lineNumbers = document.getElementById('lineNumbers');
+            const codeArea = document.getElementById('codeArea');
+            
+            lineNumbers.innerHTML = '';
+            codeArea.innerHTML = '<div class="ai-overlay" id="aiOverlay"><div class="ai-spinner"></div><div class="ai-text">AI正在重构代码<span class="ai-cursor"></span></div></div><div class="ai-panel" id="aiPanel"><div class="ai-panel-header"><svg style="width: 14px; height: 14px; vertical-align: middle; margin-right: 6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>AI 重写引擎</div><div class="ai-panel-content"><div class="ai-panel-step" id="step0"><div class="step-indicator"></div><span>分析代码结构</span></div><div class="ai-panel-step" id="step1"><div class="step-indicator"></div><span>识别变量命名</span></div><div class="ai-panel-step" id="step2"><div class="step-indicator"></div><span>重命名 fetchUserData</span></div><div class="ai-panel-step" id="step3"><div class="step-indicator"></div><span>重命名 processUsers</span></div><div class="ai-panel-step" id="step4"><div class="step-indicator"></div><span>调整代码格式</span></div><div class="ai-panel-step" id="step5"><div class="step-indicator"></div><span>生成"原创"代码</span></div></div></div></div></div>';
+            
+            originalCode.forEach((line, index) => {
+                const lineNum = document.createElement('div');
+                lineNum.className = 'line-number';
+                lineNum.id = 'lineNum' + index;
+                lineNum.textContent = (index + 1).toString();
+                lineNumbers.appendChild(lineNum);
+
+                const codeLine = document.createElement('div');
+                codeLine.className = 'code-line hidden';
+                codeLine.id = 'codeLine' + index;
+                codeLine.innerHTML = highlightSyntax(line);
+                codeArea.appendChild(codeLine);
+            });
+
+            document.getElementById('aiOverlay').classList.add('active');
+            document.getElementById('aiPanel').classList.add('active');
+        }
+
+        function highlightSyntax(code) {
+            let result = code;
+            
+            result = result.replace(/(\/\/.*$)/gm, '<span class="comment">$1</span>');
+            result = result.replace(/\b(function|async|const|let|var|return|await|for|of|if|else)\b/g, '<span class="keyword">$1</span>');
+            result = result.replace(/\b(\d+)\b/g, '<span class="number">$1</span>');
+            result = result.replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)/g, '<span class="string">$1</span>');
+            result = result.replace(/\b([a-zA-Z_]\w*)\s*(?=\()/g, '<span class="function">$1</span>');
+            result = result.replace(/\b([a-zA-Z_]\w*)\s*(?=\.)/g, '<span class="variable">$1</span>');
+            
+            return result;
+        }
+
+        function showLine(index) {
+            if (index >= originalCode.length) {
+                startRewrite();
+                return;
+            }
+
+            const lineNum = document.getElementById('lineNum' + index);
+            const codeLine = document.getElementById('codeLine' + index);
+            
+            lineNum.classList.add('active');
+            codeLine.classList.remove('hidden');
+            codeLine.classList.add('visible');
+            
+            setTimeout(() => {
+                lineNum.classList.remove('active');
+                showLine(index + 1);
+            }, 200);
+        }
+
+        function startRewrite() {
+            currentStep = 0;
+            animateStep();
+        }
+
+        function animateStep() {
+            if (currentStep >= 6) {
+                document.getElementById('aiOverlay').classList.remove('active');
+                return;
+            }
+
+            const step = document.getElementById('step' + currentStep);
+            if (step) {
+                step.classList.add('active');
+            }
+
+            setTimeout(() => {
+                if (step) {
+                    step.classList.remove('active');
+                    step.classList.add('completed');
+                }
+
+                if (currentStep === 2) {
+                    processFunctionRename('fetchUserData', 'retrieveUserInfo', [3, 15]);
+                } else if (currentStep === 3) {
+                    processFunctionRename('processUsers', 'handleUsers', [16, 24]);
+                } else if (currentStep === 4) {
+                    processVariableRename();
+                } else {
+                    currentStep++;
+                    animateStep();
+                }
+            }, 800);
+        }
+
+        function processFunctionRename(oldName, newName, lineRange) {
+            let delay = 0;
+            for (let i = lineRange[0]; i <= lineRange[1]; i++) {
+                setTimeout(() => {
+                    const lineNum = document.getElementById('lineNum' + i);
+                    const codeLine = document.getElementById('codeLine' + i);
+                    
+                    if (codeLine.textContent.includes(oldName)) {
+                        lineNum.classList.add('modifying');
+                        codeLine.classList.add('modifying');
+                        
+                        setTimeout(() => {
+                            const html = codeLine.innerHTML;
+                            const newHtml = html.replace(new RegExp(oldName, 'g'), 
+                                `<span class="diff-added">${newName}</span><span class="diff-removed">${oldName}</span>`);
+                            codeLine.innerHTML = newHtml;
+                            
+                            setTimeout(() => {
+                                lineNum.classList.remove('modifying');
+                                lineNum.classList.add('modified');
+                                codeLine.classList.remove('modifying');
+                                codeLine.classList.add('modified');
+                                codeLine.innerHTML = highlightSyntax(modifiedCode[i]);
+                            }, 600);
+                        }, 300);
+                    }
+                }, delay);
+                delay += 400;
+            }
+
+            setTimeout(() => {
+                currentStep++;
+                animateStep();
+            }, delay + 1000);
+        }
+
+        function processVariableRename() {
+            const variableChanges = [
+                { old: 'userId', new: 'identifier', lines: [4, 7] },
+                { old: 'apiEndpoint', new: 'serviceUrl', lines: [5, 8] },
+                { old: 'userList', new: 'usersArray', lines: [17, 22] },
+                { old: 'results', new: 'output', lines: [18, 23] },
+                { old: 'user', new: 'item', lines: [19, 20, 22] },
+                { old: 'userData', new: 'info', lines: [20, 22] },
+                { old: 'response', new: 'result', lines: [8, 9] },
+                { old: 'data', new: 'payload', lines: [10, 11] },
+                { old: 'error', new: 'err', lines: [13, 14] }
+            ];
+
+            let delay = 0;
+            variableChanges.forEach(change => {
+                change.lines.forEach(lineIndex => {
+                    setTimeout(() => {
+                        const lineNum = document.getElementById('lineNum' + lineIndex);
+                        const codeLine = document.getElementById('codeLine' + lineIndex);
+                        
+                        if (codeLine.textContent.includes(change.old)) {
+                            lineNum.classList.add('modifying');
+                            codeLine.classList.add('modifying');
+                            
+                            setTimeout(() => {
+                                const html = codeLine.innerHTML;
+                                const newHtml = html.replace(new RegExp(change.old, 'g'), 
+                                    `<span class="highlight-text">${change.new}</span>`);
+                                codeLine.innerHTML = newHtml;
+                                
+                                setTimeout(() => {
+                                    lineNum.classList.remove('modifying');
+                                    lineNum.classList.add('modified');
+                                    codeLine.classList.remove('modifying');
+                                    codeLine.classList.add('modified');
+                                    codeLine.innerHTML = highlightSyntax(modifiedCode[lineIndex]);
+                                }, 400);
+                            }, 200);
+                        }
+                    }, delay);
+                });
+                delay += 200;
+            });
+
+            setTimeout(() => {
+                currentStep++;
+                animateStep();
+            }, delay + 800);
+        }
+
+        window.addEventListener('load', function() {
+            initCode();
+            setTimeout(() => {
+                showLine(0);
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

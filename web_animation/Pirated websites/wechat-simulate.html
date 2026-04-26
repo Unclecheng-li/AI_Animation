@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>微信聊天 - Hermes智能助手</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a1a1a1;
+        }
+
+        /* 消息动画 */
+        @keyframes messageSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(15px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        [data-message-bubble] {
+            animation: messageSlideIn 0.4s ease-out forwards;
+        }
+
+        /* 头像动画 */
+        @keyframes avatarBounce {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.05);
+            }
+        }
+
+        .avatar-bounce {
+            animation: avatarBounce 0.3s ease-out;
+        }
+
+        /* 输入框聚焦效果 */
+        .input-focus:focus {
+            outline: none;
+            border-color: #07c160;
+            box-shadow: 0 0 0 2px rgba(7, 193, 96, 0.1);
+        }
+
+        /* 发送按钮悬停 */
+        .send-btn:hover {
+            background-color: #059669;
+        }
+
+        /* 聊天气泡三角形 */
+        .bubble-left::before {
+            content: '';
+            position: absolute;
+            left: -8px;
+            top: 12px;
+            border-width: 6px;
+            border-style: solid;
+            border-color: transparent white transparent transparent;
+        }
+
+        .bubble-right::before {
+            content: '';
+            position: absolute;
+            right: -8px;
+            top: 12px;
+            border-width: 6px;
+            border-style: solid;
+            border-color: transparent transparent transparent #95EC69;
+        }
+
+        /* 时间分隔线 */
+        .time-divider {
+            position: relative;
+            text-align: center;
+            padding: 20px 0;
+        }
+
+        .time-divider::before {
+            content: '';
+            position: absolute;
+            left: 20%;
+            right: 20%;
+            top: 50%;
+            height: 1px;
+            background: #e0e0e0;
+        }
+
+        .time-divider span {
+            position: relative;
+            background: #f5f5f5;
+            padding: 0 12px;
+            color: #999;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body class="bg-gray-200 min-h-screen flex items-center justify-center p-4">
+    <!-- 主容器 -->
+    <div class="max-w-lg w-full bg-white h-[85vh] flex flex-col shadow-2xl rounded-2xl overflow-hidden">
+        
+        <!-- 顶部导航栏 -->
+        <header class="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-10">
+            <div class="flex items-center space-x-3">
+                <button class="text-gray-600 hover:text-gray-800 transition-colors">
+                    <i class="fas fa-chevron-left text-lg"></i>
+                </button>
+                <div class="flex items-center space-x-2">
+                    <img src="PNG/xc.jpg" alt="赤川鹤鸣" class="w-10 h-10 rounded-full object-cover">
+                    <div>
+                        <h1 class="font-semibold text-gray-800 text-base">赤川鹤鸣_Channel</h1>
+                        <p class="text-xs text-gray-500">在线</p>
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <button class="text-gray-500 hover:text-gray-700 transition-colors">
+                    <i class="fas fa-phone text-lg"></i>
+                </button>
+                <button class="text-gray-500 hover:text-gray-700 transition-colors">
+                    <i class="fas fa-video text-lg"></i>
+                </button>
+                <button class="text-gray-500 hover:text-gray-700 transition-colors">
+                    <i class="fas fa-ellipsis-v text-lg"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- 聊天内容区域 -->
+        <main id="chatContainer" class="flex-1 overflow-y-auto px-4 py-4 bg-gray-50">
+            
+            <!-- 聊天消息将在这里动态生成 -->
+            <div id="messagesContainer" class="space-y-4">
+                <!-- 初始加载提示 -->
+                <div class="text-center py-8">
+                    <div class="inline-flex items-center space-x-2 text-gray-500 text-sm">
+                        <i class="fas fa-comments"></i>
+                        <span>正在连接聊天...</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- 底部输入区域 -->
+        <footer class="bg-gray-50 border-t border-gray-200 px-4 py-3">
+            <div class="flex items-end space-x-3">
+                <!-- 功能按钮 -->
+                <div class="flex items-center space-x-3 pb-2">
+                    <button class="text-gray-500 hover:text-gray-700 transition-colors">
+                        <i class="fas fa-microphone text-xl"></i>
+                    </button>
+                    <button id="emojiBtn" class="text-gray-500 hover:text-gray-700 transition-colors">
+                        <i class="far fa-smile text-xl"></i>
+                    </button>
+                    <button class="text-gray-500 hover:text-gray-700 transition-colors">
+                        <i class="fas fa-folder-open text-xl"></i>
+                    </button>
+                </div>
+                
+                <!-- 输入框 -->
+                <div class="flex-1">
+                    <textarea 
+                        id="messageInput"
+                        class="w-full px-4 py-2 bg-white border border-gray-300 rounded-2xl resize-none input-focus transition-all duration-200"
+                        rows="1"
+                        placeholder="输入消息..."
+                        style="min-height: 36px; max-height: 120px;"
+                    ></textarea>
+                </div>
+                
+                <!-- 发送按钮 -->
+                <button 
+                    id="sendBtn"
+                    class="send-btn bg-green-500 text-white px-5 py-2 rounded-full font-medium hover:bg-green-600 transition-colors duration-200 flex items-center space-x-2"
+                >
+                    <span>发送</span>
+                    <i class="fas fa-paper-plane text-sm"></i>
+                </button>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // 聊天数据配置
+        const chatData = {
+            currentUser: {
+                name: '网络小白_Uncle城',
+                avatar: 'PNG/BA_Hoshino.jpg',
+                bgColor: 'from-blue-500 to-blue-700'
+            },
+            otherUser: {
+                name: '赤川鹤鸣_Channel',
+                avatar: 'PNG/xc.jpg',
+                bgColor: 'from-green-400 to-green-600'
+            },
+            messages: [
+                {
+                    sender: 'other',
+                    content: '嗨~最近在研究什么好东西呢？(｡･ω･｡)',
+                    time: '14:23'
+                },
+                {
+                    sender: 'current',
+                    content: '最近在深度体验 Hermes 这个开源 Agent 框架，确实很强！(๑•̀ㅂ•́)و✧',
+                    time: '14:23'
+                },
+                {
+                    sender: 'other',
+                    content: '哦？说说看，有什么亮点？(☆▽☆)',
+                    time: '14:24'
+                },
+                {
+                    sender: 'current',
+                    content: '它的 Skill 生态系统太棒了！支持插件扩展，各种场景都能覆盖。(≧▽≦)',
+                    time: '14:24'
+                },
+                {
+                    sender: 'other',
+                    content: '听起来不错，不过我听说有个问题？(；′⌒`)',
+                    time: '14:25'
+                },
+                {
+                    sender: 'current',
+                    content: '但是这里有个关键问题，还是我的室友用了Hermes一个晚上之后和我反馈的：就是Hermes 用得越久，自动生成的 Skill 会越积越多，反而可能导致效率下降。(´;ω;`)',
+                    time: '14:26'
+                },
+                {
+                    sender: 'other',
+                    content: '这个确实是个值得注意的问题。(；′⌒`)',
+                    time: '14:26'
+                },
+                {
+                    sender: 'other',
+                    content: '就像手机用久了会变卡一样，积累的 Skill 可能会占用系统资源。(*/ω＼*)',
+                    time: '14:27'
+                },
+                {
+                    sender: 'current',
+                    content: '对！而且有时候自动生成的 Skill 质量参差不齐，命名也可能混乱。(￣▽￣)',
+                    time: '14:27'
+                },
+                {
+                    sender: 'other',
+                    content: '那有什么解决方案吗？(☆▽☆)',
+                    time: '14:28'
+                },
+                {
+                    sender: 'current',
+                    content: '建议定期清理不需要的 Skill，或者手动管理 Skill 的启用状态。(๑•̀ㅂ•́)و✧',
+                    time: '14:28'
+                },
+                {
+                    sender: 'current',
+                    content: '另外也可以给 Skill 设置优先级，让重要的 Skill 获得更多资源。(｡･ω･｡)',
+                    time: '14:29'
+                },
+                {
+                    sender: 'other',
+                    content: '明白了，看来需要在使用和优化之间找到平衡点。(｡･ω･｡)',
+                    time: '14:29'
+                },
+                {
+                    sender: 'current',
+                    content: '没错！总体来说 Hermes 还是非常值得推荐的，这些小问题不影响它的核心价值！(≧▽≦)',
+                    time: '14:30'
+                },
+                {
+                    sender: 'other',
+                    content: '好的，我回头也试试！感谢分享 ✧*。٩(ˊᗜˋ*)و✧*。',
+                    time: '14:30'
+                }
+            ]
+        };
+
+        // DOM 元素
+        const messagesContainer = document.getElementById('messagesContainer');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+
+        // 生成用户头像
+        function createAvatar(isCurrentUser) {
+            const user = isCurrentUser ? chatData.currentUser : chatData.otherUser;
+            
+            // 使用图片头像，头像位置由父容器控制
+            return `
+                <img src="${user.avatar}" alt="${user.name}" class="w-10 h-10 rounded-full object-cover flex-shrink-0">
+            `;
+        }
+
+        // 生成消息气泡
+        function createMessageElement(message, index) {
+            const isCurrentUser = message.sender === 'current';
+            const bubbleClass = isCurrentUser 
+                ? 'bg-green-500 text-gray-800 bubble-right ml-auto' 
+                : 'bg-white text-gray-800 bubble-left mr-auto';
+            
+            // 调整顺序：
+            // 网络小白（当前用户）：头像在右(小order)，消息在左(大order)
+            // 赤川鹤鸣（其他用户）：头像在左(小order)，消息在右(大order)
+            const avatarOrder = isCurrentUser ? 'order-2' : 'order-1';
+            const contentOrder = isCurrentUser ? 'order-1' : 'order-2';
+            
+            // 不使用 flex-row-reverse，直接按 order 顺序显示
+            return `
+                <div class="flex items-end space-x-2">
+                    <div class="${avatarOrder}">
+                        ${createAvatar(isCurrentUser)}
+                    </div>
+                    <div class="${contentOrder} max-w-xs lg:max-w-md">
+                        <div class="${bubbleClass} rounded-2xl px-4 py-2 shadow-sm relative" data-message-bubble>
+                            <p class="text-sm leading-relaxed whitespace-pre-wrap break-words">${message.content}</p>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-1 ${isCurrentUser ? 'text-right' : ''}">${message.time}</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 添加时间分隔线
+        function createTimeDivider(time) {
+            return `
+                <div class="time-divider">
+                    <span>${time}</span>
+                </div>
+            `;
+        }
+
+        // 自动滚动到底部
+        function scrollToBottom() {
+            const chatContainer = document.getElementById('chatContainer');
+            setTimeout(() => {
+                chatContainer.scrollTo({
+                    top: chatContainer.scrollHeight,
+                    behavior: 'smooth'
+                });
+            }, 100);
+        }
+
+        // 显示消息
+        function displayMessage(message, index) {
+            // 清除加载提示
+            const loading提示 = messagesContainer.querySelector('.text-center.py-8');
+            if (loading提示) {
+                loading提示.remove();
+            }
+
+            // 添加时间分隔线（第一条消息）
+            if (index === 0) {
+                const timeDivider = createTimeDivider('今天 14:23');
+                messagesContainer.insertAdjacentHTML('beforeend', timeDivider);
+            }
+
+            // 添加消息
+            const messageHTML = createMessageElement(message, index);
+            messagesContainer.insertAdjacentHTML('beforeend', messageHTML);
+
+            // 自动滚动
+            scrollToBottom();
+        }
+
+        // 逐条显示消息
+        function displayMessagesSequentially() {
+            chatData.messages.forEach((message, index) => {
+                setTimeout(() => {
+                    displayMessage(message, index);
+                }, index * 1000); // 每条消息间隔1秒
+            });
+        }
+
+        // 发送消息
+        function sendMessage() {
+            const content = messageInput.value.trim();
+            if (!content) return;
+
+            const now = new Date();
+            const time = now.getHours().toString().padStart(2, '0') + ':' + 
+                        now.getMinutes().toString().padStart(2, '0');
+
+            const message = {
+                sender: 'current',
+                content: content,
+                time: time
+            };
+
+            displayMessage(message, chatData.messages.length);
+            chatData.messages.push(message);
+            messageInput.value = '';
+            messageInput.style.height = 'auto';
+        }
+
+        // 输入框自动调整高度
+        function autoResizeTextarea() {
+            messageInput.style.height = 'auto';
+            messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
+        }
+
+        // 事件监听
+        messageInput.addEventListener('input', autoResizeTextarea);
+
+        messageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        sendBtn.addEventListener('click', sendMessage);
+
+        // 页面加载完成后开始显示消息
+        window.addEventListener('load', () => {
+            setTimeout(displayMessagesSequentially, 500);
+        });
+
+        // 页面可见性变化时继续显示消息
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                scrollToBottom();
+            }
+        });
+    </script>
+</body>
+</html>
