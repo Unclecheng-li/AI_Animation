@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ssh-keysign-pwn | Cyber Attack Chain</title>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#030407;
+  --panel:rgba(8,12,18,.72);
+  --panel2:rgba(255,255,255,.035);
+  --line:rgba(255,255,255,.12);
+  --text:#f4f8ff;
+  --muted:#8a94aa;
+  --dim:#566073;
+  --cyan:#00f0ff;
+  --blue:#2788ff;
+  --purple:#b829f7;
+  --pink:#ff2d8f;
+  --red:#ff2d55;
+  --amber:#ffb800;
+  --green:#00ff9d;
+}
+html,body{width:100%;height:100%;overflow:hidden}
+body{
+  font-family:"Noto Sans SC","Microsoft YaHei",Arial,sans-serif;
+  color:var(--text);
+  background:var(--bg);
+  letter-spacing:0;
+}
+#bg-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;filter:blur(6px)}
+.matrix{
+  position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.16;
+  background-image:
+    linear-gradient(rgba(0,240,255,.11) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,240,255,.11) 1px,transparent 1px);
+  background-size:78px 78px;
+  transform:perspective(700px) rotateX(58deg) translateY(18%);
+  transform-origin:50% 100%;
+  animation:grid-drift 18s linear infinite;
+}
+.matrix::after{
+  content:"";position:absolute;inset:0;
+  background:linear-gradient(180deg,transparent 0%,rgba(0,0,0,.7) 68%,rgba(0,0,0,.95) 100%);
+}
+@keyframes grid-drift{to{background-position:78px 78px}}
+.noise{position:fixed;inset:0;z-index:70;pointer-events:none;opacity:.06;background:
+  repeating-linear-gradient(0deg,transparent 0 2px,#000 2px 4px),
+  repeating-linear-gradient(90deg,transparent 0 3px,rgba(255,255,255,.2) 3px 4px)}
+.vignette{position:fixed;inset:0;z-index:69;pointer-events:none;background:radial-gradient(circle at center,transparent 36%,rgba(0,0,0,.82) 100%)}
+.aurora{position:fixed;inset:-18%;z-index:0;pointer-events:none;opacity:.72;filter:blur(38px);mix-blend-mode:screen;background:radial-gradient(circle at var(--mx,50%) var(--my,50%),rgba(0,240,255,.18),transparent 24%),conic-gradient(from 90deg at 30% 45%,rgba(0,240,255,.12),transparent 24%,rgba(255,45,143,.14),transparent 52%,rgba(0,255,157,.1),transparent 80%,rgba(0,240,255,.12));animation:aurora-roll 16s ease-in-out infinite alternate}
+@keyframes aurora-roll{0%{transform:rotate(-4deg) scale(1)}100%{transform:rotate(5deg) scale(1.08)}}
+.corner{position:fixed;z-index:75;width:86px;height:86px;pointer-events:none;border-color:rgba(0,240,255,.42)}
+.corner::after{content:"";position:absolute;width:10px;height:10px;background:var(--cyan);box-shadow:0 0 18px var(--cyan)}
+.corner.tl{top:24px;left:24px;border-top:2px solid;border-left:2px solid}.corner.tl::after{top:-5px;left:-5px}
+.corner.tr{top:24px;right:24px;border-top:2px solid;border-right:2px solid}.corner.tr::after{top:-5px;right:-5px}
+.corner.bl{bottom:24px;left:24px;border-bottom:2px solid;border-left:2px solid}.corner.bl::after{bottom:-5px;left:-5px}
+.corner.br{bottom:24px;right:24px;border-bottom:2px solid;border-right:2px solid}.corner.br::after{bottom:-5px;right:-5px}
+.slide-container{position:relative;z-index:2;width:100vw;height:100vh}
+.slide{
+  position:absolute;inset:0;display:grid;place-items:center;padding:56px 78px;
+  opacity:0;pointer-events:none;transition:opacity .7s cubic-bezier(.2,.8,.2,1);overflow:hidden;isolation:isolate;
+}
+.slide.active{opacity:1;pointer-events:auto}
+.slide::before{content:"";position:absolute;inset:0;z-index:-1;opacity:0;background:radial-gradient(circle at 50% 50%,rgba(0,240,255,.12),transparent 38%);transform:scale(.8);transition:opacity .8s,transform 1.2s}
+.slide.active::before{opacity:1;transform:scale(1)}
+
+.stage{width:min(1180px,100%);height:min(690px,calc(100vh - 112px));display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative}
+.anim{opacity:0;transform:translateY(38px) scale(.98);filter:blur(10px)}
+.slide.active .anim.show{opacity:1;transform:translateY(0) scale(1);filter:blur(0);transition:opacity .8s cubic-bezier(.2,.8,.2,1),transform .8s cubic-bezier(.2,.8,.2,1),filter .8s ease}
+.lc{display:inline-flex;align-items:center;justify-content:center}.lc svg{width:100%;height:100%;stroke-width:2}
+.lc-18{width:18px;height:18px}.lc-24{width:24px;height:24px}.lc-32{width:32px;height:32px}.lc-44{width:44px;height:44px}
+.c-cyan{color:var(--cyan)}.c-blue{color:var(--blue)}.c-purple{color:var(--purple)}.c-pink{color:var(--pink)}.c-red{color:var(--red)}.c-amber{color:var(--amber)}.c-green{color:var(--green)}
+.mono{font-family:"Courier New",Consolas,monospace}
+.eyebrow{
+  display:inline-flex;align-items:center;gap:10px;padding:9px 16px;border:1px solid rgba(0,240,255,.24);
+  background:rgba(0,240,255,.055);border-radius:6px;color:var(--cyan);font-size:12px;font-weight:900;letter-spacing:3px;
+}
+.dot{width:8px;height:8px;background:var(--green);box-shadow:0 0 16px var(--green);animation:pulse-dot 1.4s ease-in-out infinite}
+@keyframes pulse-dot{50%{opacity:.35;transform:scale(.6)}}
+
+.arch-stage{justify-content:flex-start;padding-top:40px}
+.arch-title{font-size:clamp(2rem,4vw,3.2rem);font-weight:900;text-align:center;line-height:1.1;margin-top:6px}
+.arch-subtitle{font-size:clamp(1rem,2vw,1.3rem);color:var(--muted);text-align:center;margin-top:8px;font-weight:500}
+.arch-wrap{position:relative;width:min(1100px,95vw);height:420px;margin-top:28px}
+.arch-svg{position:absolute;inset:0;width:100%;height:100%;z-index:1;overflow:visible;transform:scale(1.15);transform-origin:center center}
+.arch-node{position:absolute;z-index:2;display:flex;flex-direction:column;align-items:center;gap:10px}
+.arch-icon{width:56px;height:56px;border-radius:50%;border:1.5px solid rgba(0,240,255,.45);background:rgba(0,240,255,.08);display:grid;place-items:center;color:var(--cyan);box-shadow:0 0 24px rgba(0,240,255,.18);font-size:22px}
+.arch-label{font-size:12px;color:var(--muted);font-weight:900;letter-spacing:2px;text-transform:uppercase}
+.user-node .arch-icon{width:48px;height:48px;border-color:rgba(255,45,143,.45);background:rgba(255,45,143,.08);color:var(--pink);box-shadow:0 0 24px rgba(255,45,143,.18);font-size:20px}
+.user-node .arch-label{color:var(--pink);font-size:11px}
+.arch-card{position:absolute;z-index:2;background:rgba(8,12,18,.82);border:1.5px solid rgba(255,255,255,.18);border-radius:12px;padding:16px 18px;display:flex;flex-direction:column;gap:10px;backdrop-filter:blur(16px);box-shadow:0 16px 48px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.06);transition:border-color .3s,box-shadow .3s;transform:scale(0.65);transform-origin:center center}
+.arch-card:hover{border-color:rgba(0,240,255,.4);box-shadow:0 20px 56px rgba(0,0,0,.6),0 0 30px rgba(0,240,255,.08),inset 0 1px 0 rgba(255,255,255,.08)}
+.arch-card-head{display:flex;align-items:center;gap:8px;font-size:10px;font-weight:900;letter-spacing:2px;color:var(--dim);text-transform:uppercase;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:2px}
+.arch-card-head i{width:18px;height:18px;stroke-width:2}
+.arch-card-body{display:flex;flex-direction:column;gap:6px}
+.arch-mono{font-family:"Courier New",Consolas,monospace;font-size:13px;font-weight:700;color:var(--text);line-height:1.3}
+.arch-desc{font-size:11px;color:var(--muted);line-height:1.4}
+.arch-target{border-color:rgba(255,255,255,.22);background:rgba(12,16,24,.88)}
+.arch-target:hover{border-color:rgba(255,45,143,.5);box-shadow:0 20px 56px rgba(0,0,0,.6),0 0 30px rgba(255,45,143,.1),inset 0 1px 0 rgba(255,255,255,.08)}
+.arch-footer{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:28px}
+.arch-badge{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.035);border-radius:6px;font-size:12px;font-weight:900;color:var(--muted);letter-spacing:1px}
+.arch-badge b{color:var(--text);font-size:14px;letter-spacing:0;margin-left:2px}
+.slide.active .arch-card{animation:arch-in .7s cubic-bezier(.2,.8,.2,1) both}
+.slide.active .arch-card:nth-child(2){animation-delay:.1s}
+.slide.active .arch-card:nth-child(3){animation-delay:.2s}
+.slide.active .arch-card:nth-child(4){animation-delay:.3s}
+.slide.active .arch-card:nth-child(5){animation-delay:.35s}
+.slide.active .arch-card:nth-child(6){animation-delay:.4s}
+.slide.active .arch-card:nth-child(7){animation-delay:.45s}
+.slide.active .arch-card:nth-child(8){animation-delay:.5s}
+.slide.active .arch-card:nth-child(9){animation-delay:.55s}
+@keyframes arch-in{from{opacity:0;transform:translateY(12px) scale(0.63)}to{opacity:1;transform:translateY(0) scale(0.65)}}
+@keyframes flow-dash{to{stroke-dashoffset:-20}}
+.slide.active .arch-flow{animation:flow-dash 1.2s linear infinite}
+
+@media (max-width:980px){
+  .slide{padding:44px 22px}.stage{height:calc(100vh - 88px)}
+  .arch-wrap{height:360px}
+  .arch-card{padding:10px 12px;width:120px!important}
+  .arch-mono{font-size:11px}.arch-desc{font-size:10px}
+  .arch-icon{width:44px;height:44px;font-size:18px}
+  .user-node .arch-icon{width:40px;height:40px;font-size:16px}
+}
+@media (max-width:760px){
+  .arch-wrap{height:auto;display:flex;flex-direction:column;gap:16px;align-items:center}
+  .arch-svg{display:none}
+  .arch-node{position:relative;left:auto!important;top:auto!important;transform:none!important}
+  .arch-card{position:relative;left:auto!important;top:auto!important;transform:none!important;width:min(320px,90vw)!important}
+  .arch-target{width:min(320px,90vw)!important}
+  .arch-stage{padding-top:20px}
+}
+@media (max-width:600px){
+  .corner{display:none}.slide{padding:28px 14px}
+  .arch-footer{gap:8px}.arch-badge{padding:6px 10px;font-size:11px}
+  .arch-badge b{font-size:12px}
+}
+</style>
+</head>
+<body>
+<canvas id="bg-canvas"></canvas>
+<div class="aurora"></div>
+<div class="matrix"></div>
+<div class="noise"></div>
+<div class="vignette"></div>
+
+<main class="slide-container">
+  <section class="slide active" id="s1">
+    <div class="stage arch-stage">
+      <div class="anim eyebrow" style="margin-bottom:8px"><span class="dot"></span><span>KERNEL BREACH / PUBLIC POC</span></div>
+      <h2 class="anim arch-title">ssh-keysign<span style="color:var(--pink)"> PWN</span></h2>
+      <p class="anim arch-subtitle">你的密钥，不一定属于你</p>
+
+      <div class="anim arch-wrap">
+        <svg class="arch-svg" viewBox="0 0 1100 520" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <marker id="arr-cyan" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+              <path d="M0 0 L8 4 L0 8 Z" fill="rgba(0,240,255,.55)"/>
+            </marker>
+            <marker id="arr-pink" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+              <path d="M0 0 L8 4 L0 8 Z" fill="rgba(255,45,143,.55)"/>
+            </marker>
+            <marker id="arr-amber" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+              <path d="M0 0 L8 4 L0 8 Z" fill="rgba(255,184,0,.55)"/>
+            </marker>
+          </defs>
+
+          <path class="arch-flow" d="M80 260 L180 260" stroke="rgba(0,240,255,.45)" stroke-width="1.5" stroke-dasharray="6 4" fill="none" marker-end="url(#arr-cyan)"/>
+          <path class="arch-flow" d="M320 260 L420 260" stroke="rgba(0,240,255,.45)" stroke-width="1.5" stroke-dasharray="6 4" fill="none" marker-end="url(#arr-cyan)"/>
+          <path class="arch-flow" d="M560 200 L680 140" stroke="rgba(255,45,143,.45)" stroke-width="1.5" stroke-dasharray="6 4" fill="none" marker-end="url(#arr-pink)"/>
+          <path class="arch-flow" d="M560 260 L680 260" stroke="rgba(0,240,255,.45)" stroke-width="1.5" stroke-dasharray="6 4" fill="none" marker-end="url(#arr-cyan)"/>
+          <path class="arch-flow" d="M560 320 L680 380" stroke="rgba(255,184,0,.45)" stroke-width="1.5" stroke-dasharray="6 4" fill="none" marker-end="url(#arr-amber)"/>
+          <path class="arch-flow" d="M820 140 L940 140" stroke="rgba(255,45,143,.45)" stroke-width="1.5" stroke-dasharray="6 4" fill="none" marker-end="url(#arr-pink)"/>
+          <path class="arch-flow" d="M820 260 L940 260" stroke="rgba(0,240,255,.45)" stroke-width="1.5" stroke-dasharray="6 4" fill="none" marker-end="url(#arr-cyan)"/>
+          <path class="arch-flow" d="M820 380 L940 380" stroke="rgba(255,184,0,.45)" stroke-width="1.5" stroke-dasharray="6 4" fill="none" marker-end="url(#arr-amber)"/>
+
+          <rect x="95" y="238" width="70" height="18" rx="4" fill="rgba(8,12,18,.85)" stroke="rgba(255,255,255,.08)"/>
+          <text x="130" y="250" fill="rgba(138,148,170,.95)" font-size="10" font-family="Courier New,monospace" text-anchor="middle" font-weight="700">trigger</text>
+          <rect x="335" y="238" width="70" height="18" rx="4" fill="rgba(8,12,18,.85)" stroke="rgba(255,255,255,.08)"/>
+          <text x="370" y="250" fill="rgba(138,148,170,.95)" font-size="10" font-family="Courier New,monospace" text-anchor="middle" font-weight="700">race</text>
+          <rect x="585" y="153" width="70" height="18" rx="4" fill="rgba(8,12,18,.85)" stroke="rgba(255,255,255,.08)"/>
+          <text x="620" y="165" fill="rgba(138,148,170,.95)" font-size="10" font-family="Courier New,monospace" text-anchor="middle" font-weight="700">fd theft</text>
+          <rect x="585" y="238" width="70" height="18" rx="4" fill="rgba(8,12,18,.85)" stroke="rgba(255,255,255,.08)"/>
+          <text x="620" y="250" fill="rgba(138,148,170,.95)" font-size="10" font-family="Courier New,monospace" text-anchor="middle" font-weight="700">exploit</text>
+          <rect x="585" y="343" width="70" height="18" rx="4" fill="rgba(8,12,18,.85)" stroke="rgba(255,255,255,.08)"/>
+          <text x="620" y="355" fill="rgba(138,148,170,.95)" font-size="10" font-family="Courier New,monospace" text-anchor="middle" font-weight="700">payload</text>
+          <rect x="845" y="118" width="70" height="18" rx="4" fill="rgba(8,12,18,.85)" stroke="rgba(255,255,255,.08)"/>
+          <text x="880" y="130" fill="rgba(138,148,170,.95)" font-size="10" font-family="Courier New,monospace" text-anchor="middle" font-weight="700">host keys</text>
+          <rect x="845" y="238" width="70" height="18" rx="4" fill="rgba(8,12,18,.85)" stroke="rgba(255,255,255,.08)"/>
+          <text x="880" y="250" fill="rgba(138,148,170,.95)" font-size="10" font-family="Courier New,monospace" text-anchor="middle" font-weight="700">shadow</text>
+          <rect x="845" y="358" width="70" height="18" rx="4" fill="rgba(8,12,18,.85)" stroke="rgba(255,255,255,.08)"/>
+          <text x="880" y="370" fill="rgba(138,148,170,.95)" font-size="10" font-family="Courier New,monospace" text-anchor="middle" font-weight="700">mitm</text>
+        </svg>
+
+        <div class="arch-node user-node" style="left:100px;top:50%;transform:translateY(-50%)">
+          <div class="arch-icon"><i data-lucide="user"></i></div>
+          <div class="arch-label">Attacker</div>
+        </div>
+
+        <div class="arch-card" style="left:245px;top:35%;transform:translateY(-50%);width:140px">
+          <div class="arch-card-head"><i data-lucide="crosshair" class="c-red"></i><span>ENTRY</span></div>
+          <div class="arch-card-body">
+            <div class="arch-mono">pidfd_getfd</div>
+            <div class="arch-desc">CVE-2026-46333</div>
+          </div>
+        </div>
+
+        <div class="arch-card" style="left:430px;top:35%;transform:translateY(-50%);width:140px">
+          <div class="arch-card-head"><i data-lucide="timer" class="c-amber"></i><span>RACE</span></div>
+          <div class="arch-card-body">
+            <div class="arch-mono">μs window</div>
+            <div class="arch-desc">mm NULL / fd open</div>
+          </div>
+        </div>
+
+        <div class="arch-card" style="left:640px;top:30px;width:140px">
+          <div class="arch-card-head"><i data-lucide="file-key" class="c-cyan"></i><span>PATH A</span></div>
+          <div class="arch-card-body">
+            <div class="arch-mono">sshkeysign</div>
+            <div class="arch-desc">Host private keys</div>
+          </div>
+        </div>
+
+        <div class="arch-card" style="left:640px;top:130px;width:140px">
+          <div class="arch-card-head"><i data-lucide="file-warning" class="c-pink"></i><span>PATH B</span></div>
+          <div class="arch-card-body">
+            <div class="arch-mono">chage_pwn</div>
+            <div class="arch-desc">/etc/shadow</div>
+          </div>
+        </div>
+
+        <div class="arch-card" style="left:640px;top:230px;width:140px">
+          <div class="arch-card-head"><i data-lucide="shield-off" class="c-amber"></i><span>IMPACT</span></div>
+          <div class="arch-card-body">
+            <div class="arch-mono">MITM / Root</div>
+            <div class="arch-desc">Trust broken</div>
+          </div>
+        </div>
+
+        <div class="arch-card arch-target" style="left:875px;top:30px;width:140px">
+          <div class="arch-card-head"><i data-lucide="server" class="c-cyan"></i><span>TARGET</span></div>
+          <div class="arch-card-body">
+            <div class="arch-mono c-cyan">ssh_host_*</div>
+            <div class="arch-desc">3 keys at risk</div>
+          </div>
+        </div>
+
+        <div class="arch-card arch-target" style="left:875px;top:130px;width:140px">
+          <div class="arch-card-head"><i data-lucide="database" class="c-pink"></i><span>TARGET</span></div>
+          <div class="arch-card-body">
+            <div class="arch-mono c-pink">password hash</div>
+            <div class="arch-desc">Offline crack</div>
+          </div>
+        </div>
+
+        <div class="arch-card arch-target" style="left:875px;top:230px;width:140px">
+          <div class="arch-card-head"><i data-lucide="activity" class="c-amber"></i><span>RESULT</span></div>
+          <div class="arch-card-body">
+            <div class="arch-mono c-amber">2000 spawns</div>
+            <div class="arch-desc">Full compromise</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="anim arch-footer">
+        <div class="arch-badge"><span class="lc lc-18 c-red"><i data-lucide="triangle-alert"></i></span>CVE <b>2026-46333</b></div>
+        <div class="arch-badge"><span class="lc lc-18 c-cyan"><i data-lucide="cpu"></i></span><b>Linux Kernel</b></div>
+        <div class="arch-badge"><span class="lc lc-18 c-green"><i data-lucide="copy"></i></span><b>FD Theft</b></div>
+        <div class="arch-badge"><span class="lc lc-18 c-amber"><i data-lucide="zap"></i></span><b>Race Condition</b></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+const canvas=document.getElementById("bg-canvas");
+const ctx=canvas.getContext("2d");
+let W,H,particles=[];
+function resize(){W=canvas.width=window.innerWidth;H=canvas.height=window.innerHeight}
+resize();
+window.addEventListener("resize",resize);
+class Particle{
+  constructor(){
+    this.x=Math.random()*W;
+    this.y=Math.random()*H;
+    this.vx=(Math.random()-.5)*.42;
+    this.vy=(Math.random()-.5)*.42;
+    this.r=Math.random()*1.6+.45;
+    this.a=Math.random()*.55+.1;
+    this.h=Math.random()>.7?330:(Math.random()>.48?178:145);
+  }
+  update(){
+    this.x+=this.vx;this.y+=this.vy;
+    if(this.x<0||this.x>W)this.vx*=-1;
+    if(this.y<0||this.y>H)this.vy*=-1;
+  }
+  draw(){
+    ctx.beginPath();
+    ctx.arc(this.x,this.y,this.r,0,Math.PI*2);
+    ctx.fillStyle=`hsla(${this.h},88%,62%,${this.a})`;
+    ctx.fill();
+  }
+}
+for(let i=0;i<115;i++)particles.push(new Particle());
+function animateCanvas(){
+  ctx.fillStyle="rgba(3,4,7,.19)";
+  ctx.fillRect(0,0,W,H);
+  for(const p of particles){p.update();p.draw()}
+  for(let i=0;i<particles.length;i++){
+    for(let j=i+1;j<particles.length;j++){
+      const dx=particles[i].x-particles[j].x,dy=particles[i].y-particles[j].y;
+      const d=Math.sqrt(dx*dx+dy*dy);
+      if(d<116){
+        ctx.beginPath();
+        ctx.moveTo(particles[i].x,particles[i].y);
+        ctx.lineTo(particles[j].x,particles[j].y);
+        ctx.strokeStyle=`rgba(0,240,255,${.085*(1-d/116)})`;
+        ctx.lineWidth=.45;
+        ctx.stroke();
+      }
+    }
+  }
+  requestAnimationFrame(animateCanvas);
+}
+animateCanvas();
+function initIcons(){if(window.lucide)window.lucide.createIcons()}
+initIcons();
+let mx=window.innerWidth/2,my=window.innerHeight/2,rafId=null;
+document.addEventListener("pointermove",e=>{
+  mx=e.clientX;my=e.clientY;
+  if(rafId)return;
+  rafId=requestAnimationFrame(()=>{
+    document.documentElement.style.setProperty("--mx",`${mx}px`);
+    document.documentElement.style.setProperty("--my",`${my}px`);
+    rafId=null;
+  });
+},{passive:true});
+
+const slide=document.querySelector(".slide");
+function reveal(){
+  slide.querySelectorAll(".anim").forEach((el,i)=>{
+    el.classList.remove("show");
+    setTimeout(()=>{
+      el.classList.add("show");
+      if(i===slide.querySelectorAll(".anim").length-1)initIcons();
+    },120+i*125);
+  });
+}
+reveal();
+</script>
+</body>
+</html>
