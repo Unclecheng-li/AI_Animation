@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CIFSwitch 攻击链路演示</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700;900&family=Noto+Sans+SC:wght@400;700;900&display=swap');
+
+  :root {
+    --paper: #f4f1ea;
+    --ink: #1a1a1a;
+    --red: #c41e3a;
+    --yellow: #e4a010;
+    --blue: #1e3a5f;
+    --green: #2e7d32;
+    --gray: #6b6b6b;
+    --tape: rgba(255,255,255,0.45);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: #2a2a2a;
+    overflow: hidden;
+    font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+  }
+
+  #app {
+    width: 100vw; height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .slide-container {
+    width: 100%; height: 100%;
+    max-width: 1920px; max-height: 1080px;
+    aspect-ratio: 16/9;
+    background: var(--paper);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 0 60px rgba(0,0,0,0.5);
+  }
+
+  /* 报纸纹理背景 */
+  .slide-container::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+      repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 3px),
+      repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(0,0,0,0.02) 2px, rgba(0,0,0,0.02) 3px);
+    pointer-events: none; z-index: 0;
+  }
+
+  .slide {
+    position: absolute; inset: 0;
+    display: none;
+    padding: 60px 80px;
+    z-index: 1;
+  }
+  .slide.active { display: flex; flex-direction: column; }
+
+  /* 动画基础 */
+  .anim-item {
+    opacity: 0;
+    transform: translateY(40px) scale(0.96);
+    transition: all 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .slide.active .anim-item.show {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  /* 便签纸样式 */
+  .sticky-note {
+    background: #fff9c4;
+    box-shadow: 3px 3px 10px rgba(0,0,0,0.15);
+    padding: 24px 28px;
+    position: relative;
+    transform: rotate(-1.5deg);
+  }
+  .sticky-note::before {
+    content: '';
+    position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+    width: 80px; height: 24px;
+    background: var(--tape);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+  .sticky-note.red-note { background: #ffcdd2; transform: rotate(1.2deg); }
+  .sticky-note.blue-note { background: #bbdefb; transform: rotate(-0.8deg); }
+  .sticky-note.green-note { background: #c8e6c9; transform: rotate(0.8deg); }
+
+  /* 标题样式 */
+  .headline {
+    font-family: 'Noto Serif SC', serif;
+    font-weight: 900;
+    color: var(--ink);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+
+  .subhead {
+    font-family: 'Noto Sans SC', sans-serif;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1.3;
+  }
+
+  /* 强调样式 */
+  .highlight-red {
+    background: linear-gradient(180deg, transparent 60%, rgba(196,30,58,0.25) 60%);
+    font-weight: 700;
+  }
+  .highlight-yellow {
+    background: linear-gradient(180deg, transparent 60%, rgba(228,160,16,0.35) 60%);
+    font-weight: 700;
+  }
+  .highlight-blue {
+    background: linear-gradient(180deg, transparent 60%, rgba(30,58,95,0.2) 60%);
+    font-weight: 700;
+  }
+  .highlight-green {
+    background: linear-gradient(180deg, transparent 60%, rgba(46,125,50,0.2) 60%);
+    font-weight: 700;
+  }
+  .box-red {
+    display: inline-block;
+    background: var(--red);
+    color: white;
+    padding: 2px 10px;
+    font-weight: 900;
+  }
+  .box-yellow {
+    display: inline-block;
+    background: var(--yellow);
+    color: var(--ink);
+    padding: 2px 10px;
+    font-weight: 900;
+  }
+  .box-blue {
+    display: inline-block;
+    background: var(--blue);
+    color: white;
+    padding: 2px 10px;
+    font-weight: 900;
+  }
+  .box-green {
+    display: inline-block;
+    background: var(--green);
+    color: white;
+    padding: 2px 10px;
+    font-weight: 900;
+  }
+  .underline-wavy {
+    text-decoration: underline;
+    text-decoration-style: wavy;
+    text-decoration-color: var(--red);
+    text-underline-offset: 4px;
+    font-weight: 700;
+  }
+  .italic-em {
+    font-style: italic;
+    font-weight: 700;
+    color: var(--red);
+  }
+
+  /* 图标容器 */
+  .icon-wrap {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 48px; height: 48px;
+    background: var(--ink);
+    color: var(--paper);
+    border-radius: 8px;
+    margin-right: 12px;
+  }
+  .icon-wrap svg { width: 28px; height: 28px; }
+
+  .icon-wrap-lg {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 64px; height: 64px;
+    background: var(--ink);
+    color: var(--paper);
+    border-radius: 12px;
+    margin-right: 16px;
+  }
+  .icon-wrap-lg svg { width: 36px; height: 36px; }
+
+  /* 页面指示器 */
+  .page-indicator {
+    position: absolute;
+    bottom: 30px; right: 50px;
+    display: flex; gap: 10px;
+    z-index: 10;
+  }
+  .dot {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.15);
+    transition: all 0.3s;
+    cursor: pointer;
+  }
+  .dot.active { background: var(--red); transform: scale(1.3); }
+
+  .nav-hint {
+    position: absolute;
+    bottom: 30px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 14px;
+    color: var(--gray);
+    opacity: 0.6;
+    z-index: 10;
+    letter-spacing: 2px;
+  }
+
+  /* ===== 封面页 ===== */
+  .slide-cover {
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    position: relative;
+  }
+  .slide-cover .newspaper-header {
+    position: absolute;
+    top: 30px; left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Noto Serif SC', serif;
+    font-size: 18px;
+    letter-spacing: 8px;
+    color: var(--gray);
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 8px;
+    width: 80%;
+    text-align: center;
+  }
+  .slide-cover .main-title {
+    font-size: 100px;
+    font-weight: 900;
+    line-height: 1.1;
+    margin-bottom: 30px;
+  }
+  .slide-cover .main-title .line1 { display: block; font-size: 80px; }
+  .slide-cover .main-title .line2 {
+    display: block;
+    color: var(--red);
+    font-size: 130px;
+  }
+  .slide-cover .tagline {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 50px;
+    color: var(--gray);
+  }
+  .slide-cover .badge-group {
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .slide-cover .badge {
+    padding: 16px 32px;
+    font-size: 22px;
+    font-weight: 900;
+    border: 3px solid var(--ink);
+    background: white;
+    transform: rotate(-2deg);
+    box-shadow: 4px 4px 0 var(--ink);
+  }
+  .slide-cover .badge.red {
+    background: var(--red);
+    color: white;
+    border-color: var(--red);
+    transform: rotate(2deg);
+  }
+
+  /* ===== CIFS 引入页 ===== */
+  .slide-cifs {
+    justify-content: flex-start;
+    padding-top: 70px;
+    align-items: center;
+    text-align: center;
+  }
+  .slide-cifs .section-title {
+    font-size: 72px;
+    margin-bottom: 50px;
+  }
+  .slide-cifs .cifs-desc {
+    font-size: 36px;
+    line-height: 1.8;
+    max-width: 1100px;
+    margin-bottom: 50px;
+  }
+  .slide-cifs .protocol-flow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  .slide-cifs .flow-node {
+    background: white;
+    border: 3px solid var(--ink);
+    padding: 20px 32px;
+    font-size: 26px;
+    font-weight: 900;
+    box-shadow: 3px 3px 0 var(--ink);
+  }
+  .slide-cifs .flow-arrow {
+    font-size: 40px;
+    color: var(--red);
+    font-weight: 900;
+  }
+
+  /* ===== 正常流程页 ===== */
+  .slide-normal {
+    justify-content: flex-start;
+    padding-top: 60px;
+  }
+  .slide-normal .section-title {
+    font-size: 56px;
+    margin-bottom: 40px;
+    text-align: center;
+  }
+  .slide-normal .flow-chart {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    margin-top: 20px;
+  }
+  .slide-normal .flow-step {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    width: 100%;
+    max-width: 1000px;
+  }
+  .slide-normal .step-box {
+    flex: 1;
+    background: white;
+    border: 3px solid var(--ink);
+    padding: 24px 32px;
+    font-size: 24px;
+    font-weight: 700;
+    box-shadow: 4px 4px 0 rgba(0,0,0,0.1);
+    text-align: center;
+  }
+  .slide-normal .step-arrow {
+    font-size: 36px;
+    color: var(--blue);
+    font-weight: 900;
+  }
+  .slide-normal .step-label {
+    font-size: 18px;
+    color: var(--gray);
+    margin-top: 8px;
+    font-weight: 400;
+  }
+  .slide-normal .trust-banner {
+    margin-top: 40px;
+    padding: 16px 40px;
+    background: var(--green);
+    color: white;
+    font-size: 28px;
+    font-weight: 900;
+    transform: rotate(-1deg);
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.2);
+  }
+
+  /* ===== 漏洞核心页 ===== */
+  .slide-bug {
+    justify-content: flex-start;
+    padding-top: 60px;
+  }
+  .slide-bug .section-title {
+    font-size: 56px;
+    margin-bottom: 40px;
+    text-align: center;
+  }
+  .slide-bug .bug-cards {
+    display: flex;
+    gap: 40px;
+    justify-content: center;
+    align-items: stretch;
+    flex-wrap: wrap;
+    margin-top: 20px;
+  }
+  .slide-bug .bug-card {
+    width: 420px;
+    padding: 32px;
+    position: relative;
+  }
+  .slide-bug .bug-card .card-title {
+    font-size: 32px;
+    font-weight: 900;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .slide-bug .bug-card .card-body {
+    font-size: 24px;
+    line-height: 1.8;
+  }
+  .slide-bug .missing-badge {
+    display: inline-block;
+    background: var(--red);
+    color: white;
+    font-size: 20px;
+    font-weight: 900;
+    padding: 6px 16px;
+    margin-top: 16px;
+    transform: rotate(-2deg);
+  }
+
+  /* ===== 攻击链路页 ===== */
+  .slide-attack {
+    justify-content: flex-start;
+    padding-top: 50px;
+  }
+  .slide-attack .section-title {
+    font-size: 56px;
+    margin-bottom: 30px;
+    text-align: center;
+  }
+  .slide-attack .attack-flow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    width: 100%;
+  }
+  .slide-attack .attack-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .slide-attack .attack-node {
+    background: white;
+    border: 3px solid var(--ink);
+    padding: 18px 28px;
+    font-size: 22px;
+    font-weight: 700;
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.1);
+    text-align: center;
+    max-width: 320px;
+  }
+  .slide-attack .attack-node.red {
+    background: #ffcdd2;
+    border-color: var(--red);
+  }
+  .slide-attack .attack-node.yellow {
+    background: #fff9c4;
+    border-color: var(--yellow);
+  }
+  .slide-attack .attack-arrow {
+    font-size: 30px;
+    color: var(--red);
+    font-weight: 900;
+  }
+  .slide-attack .attack-result {
+    margin-top: 30px;
+    padding: 20px 50px;
+    background: var(--red);
+    color: white;
+    font-size: 32px;
+    font-weight: 900;
+    transform: rotate(-1.5deg);
+    box-shadow: 4px 4px 0 rgba(0,0,0,0.2);
+  }
+
+  /* ===== 总结页 ===== */
+  .slide-summary {
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+  }
+  .slide-summary .final-title {
+    font-size: 72px;
+    margin-bottom: 40px;
+  }
+  .slide-summary .conclusion-box {
+    background: white;
+    border: 4px solid var(--ink);
+    padding: 40px 60px;
+    max-width: 1000px;
+    box-shadow: 8px 8px 0 rgba(0,0,0,0.1);
+    transform: rotate(-1deg);
+    margin-bottom: 40px;
+  }
+  .slide-summary .conclusion-box p {
+    font-size: 32px;
+    line-height: 1.7;
+    margin-bottom: 16px;
+  }
+  .slide-summary .conclusion-box p:last-child { margin-bottom: 0; }
+  .slide-summary .code-snippet {
+    display: inline-block;
+    background: var(--ink);
+    color: #7ee787;
+    font-family: 'Courier New', monospace;
+    font-size: 24px;
+    padding: 12px 24px;
+    margin-top: 10px;
+    border-radius: 4px;
+  }
+
+  /* 装饰元素 */
+  .deco-circle {
+    position: absolute;
+    border-radius: 50%;
+    border: 3px solid var(--ink);
+    opacity: 0.08;
+    z-index: 0;
+  }
+  .deco-line {
+    position: absolute;
+    height: 3px;
+    background: var(--ink);
+    opacity: 0.1;
+    z-index: 0;
+  }
+
+  /* 响应式 */
+  @media (max-width: 1200px) {
+    .slide { padding: 40px; }
+    .slide-cover .main-title { font-size: 70px; }
+    .slide-cover .main-title .line2 { font-size: 90px; }
+    .slide-cifs .cifs-desc { font-size: 28px; }
+    .slide-bug .bug-card { width: 340px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div class="slide-container">
+
+    <!-- 封面页 -->
+    <div class="slide slide-cover active" data-index="0">
+      <div class="newspaper-header anim-item" data-delay="0">ATTACK CHAIN &nbsp;|&nbsp; 攻击链路特刊 &nbsp;|&nbsp; 2026年6月5日</div>
+      <div class="main-title anim-item" data-delay="200">
+        <span class="line1">CIFSwitch</span>
+        <span class="line2">攻击链路</span>
+      </div>
+      <div class="tagline anim-item" data-delay="400">从 CIFS 认证到 Root 提权 &nbsp;·&nbsp; 身份混淆全解析</div>
+      <div class="badge-group">
+        <div class="badge anim-item" data-delay="600">request_key</div>
+        <div class="badge red anim-item" data-delay="750">cifs.upcall</div>
+        <div class="badge anim-item" data-delay="900" style="background:var(--blue);color:white;border-color:var(--blue);">命名空间欺骗</div>
+      </div>
+      <div class="deco-circle" style="width:300px;height:300px;top:-80px;right:-80px;"></div>
+      <div class="deco-circle" style="width:200px;height:200px;bottom:60px;left:-60px;"></div>
+    </div>
+
+    <!-- CIFS 引入页 -->
+    <div class="slide slide-cifs" data-index="1">
+      <div class="section-title headline anim-item" data-delay="0">
+        <span class="highlight-blue">一切从 CIFS 开始</span>
+      </div>
+      <div class="cifs-desc anim-item" data-delay="200">
+        CIFS 是 Linux <span class="underline-wavy">访问 Windows 共享文件夹</span> 的协议<br>
+        挂载时需要 <span class="box-blue">Kerberos</span> 认证
+      </div>
+      <div class="protocol-flow">
+        <div class="flow-node anim-item" data-delay="400">
+          <span class="icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
+          Linux
+        </div>
+        <div class="flow-arrow anim-item" data-delay="500">&rarr;</div>
+        <div class="flow-node anim-item" data-delay="600" style="border-color:var(--blue);">
+          <span class="icon-wrap" style="background:var(--blue);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+          Kerberos 认证
+        </div>
+        <div class="flow-arrow anim-item" data-delay="700">&rarr;</div>
+        <div class="flow-node anim-item" data-delay="800">
+          <span class="icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
+          Windows 共享
+        </div>
+      </div>
+      <div class="deco-line" style="width:50%;top:55%;left:25%;"></div>
+    </div>
+
+    <!-- 正常流程页 -->
+    <div class="slide slide-normal" data-index="2">
+      <div class="section-title headline anim-item" data-delay="0">
+        <span class="highlight-green">正常流程</span>
+      </div>
+      <div class="flow-chart">
+        <div class="flow-step anim-item" data-delay="200">
+          <div class="step-box">
+            <div>CIFS 模块发出认证请求</div>
+            <div class="step-label">内核态 &rarr; 用户态</div>
+          </div>
+          <div class="step-arrow">&rarr;</div>
+          <div class="step-box" style="border-color:var(--green);">
+            <div>request_key 机制</div>
+            <div class="step-label">唤醒 root 帮手</div>
+          </div>
+        </div>
+        <div class="flow-step anim-item" data-delay="400">
+          <div class="step-arrow" style="transform:rotate(90deg);">&rarr;</div>
+        </div>
+        <div class="flow-step anim-item" data-delay="500">
+          <div class="step-box" style="border-color:var(--blue);">
+            <div><span class="box-blue">cifs.upcall</span> 被唤醒</div>
+            <div class="step-label">ROOT 权限进程</div>
+          </div>
+          <div class="step-arrow">&rarr;</div>
+          <div class="step-box">
+            <div>读取请求描述信息</div>
+            <div class="step-label">认证目标 / 凭据 / 进程</div>
+          </div>
+        </div>
+        <div class="flow-step anim-item" data-delay="700">
+          <div class="step-arrow" style="transform:rotate(90deg);">&rarr;</div>
+        </div>
+        <div class="flow-step anim-item" data-delay="800">
+          <div class="step-box" style="border-color:var(--green);background:#e8f5e9;">
+            <div>完成认证，返回结果</div>
+            <div class="step-label">一切正常</div>
+          </div>
+        </div>
+      </div>
+      <div class="trust-banner anim-item" data-delay="1000">
+        默认前提：描述信息来自内核，是 <span class="highlight-yellow">可信的</span>
+      </div>
+      <div class="deco-circle" style="width:250px;height:250px;top:30px;right:30px;"></div>
+    </div>
+
+    <!-- 漏洞核心页 -->
+    <div class="slide slide-bug" data-index="3">
+      <div class="section-title headline anim-item" data-delay="0">
+        <span class="highlight-red">漏洞核心：校验缺失</span>
+      </div>
+      <div class="bug-cards">
+        <div class="sticky-note green-note bug-card anim-item" data-delay="200">
+          <div class="card-title">
+            <span class="icon-wrap-lg" style="background:var(--green);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span>
+            内核有校验机制
+          </div>
+          <div class="card-body">
+            <span class="box-green">vet_description</span><br>
+            专门验证请求<br>是否来自 CIFS 模块
+          </div>
+        </div>
+        <div class="sticky-note red-note bug-card anim-item" data-delay="500">
+          <div class="card-title">
+            <span class="icon-wrap-lg" style="background:var(--red);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+            但 CIFS 没实现
+          </div>
+          <div class="card-body">
+            任何用户都能<br><span class="underline-wavy">伪造描述信息</span><br>
+            内核 <span class="italic-em">分不清真假</span>
+          </div>
+          <div class="missing-badge">校验缺失 &rarr; 信任崩塌</div>
+        </div>
+      </div>
+      <div class="deco-circle" style="width:300px;height:300px;bottom:-80px;left:-80px;"></div>
+    </div>
+
+    <!-- 攻击链路页 -->
+    <div class="slide slide-attack" data-index="4">
+      <div class="section-title headline anim-item" data-delay="0">
+        <span class="highlight-red">攻击链路：走进攻击者的地盘</span>
+      </div>
+      <div class="attack-flow">
+        <div class="attack-row anim-item" data-delay="200">
+          <div class="attack-node red">
+            <span class="icon-wrap" style="width:36px;height:36px;margin-right:8px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+            攻击者伪造请求
+          </div>
+          <div class="attack-arrow">&rarr;</div>
+          <div class="attack-node yellow">
+            PID 指向 <span class="box-red">攻击者命名空间</span>
+          </div>
+        </div>
+        <div class="attack-row anim-item" data-delay="400">
+          <div class="attack-arrow" style="transform:rotate(90deg);">&rarr;</div>
+        </div>
+        <div class="attack-row anim-item" data-delay="500">
+          <div class="attack-node" style="border-color:var(--blue);">
+            <span class="box-blue">cifs.upcall</span> (ROOT)
+          </div>
+          <div class="attack-arrow">&rarr;</div>
+          <div class="attack-node red">
+            进入攻击者命名空间
+          </div>
+        </div>
+        <div class="attack-row anim-item" data-delay="700">
+          <div class="attack-arrow" style="transform:rotate(90deg);">&rarr;</div>
+        </div>
+        <div class="attack-row anim-item" data-delay="800">
+          <div class="attack-node yellow">
+            查用户配置被篡改
+          </div>
+          <div class="attack-arrow">&rarr;</div>
+          <div class="attack-node red">
+            <span class="italic-em">加载恶意代码</span>
+          </div>
+        </div>
+        <div class="attack-row anim-item" data-delay="1000">
+          <div class="attack-arrow" style="transform:rotate(90deg);">&rarr;</div>
+        </div>
+        <div class="attack-result anim-item" data-delay="1100">
+          往 sudoers 加一条 &rarr; <span class="highlight-yellow">免密 sudo 提权</span>
+        </div>
+      </div>
+      <div class="deco-circle" style="width:350px;height:350px;top:-100px;right:-100px;"></div>
+    </div>
+
+    <!-- 总结页 -->
+    <div class="slide slide-summary" data-index="5">
+      <div class="final-title headline anim-item" data-delay="0">
+        <span class="highlight-red">攻击本质</span>
+      </div>
+      <div class="conclusion-box anim-item" data-delay="300">
+        <p>内核 <span class="italic-em">默认信任</span> 了未经验证的描述信息</p>
+        <p>root 进程被 <span class="underline-wavy">骗进</span> 攻击者的命名空间</p>
+        <p>查用户 &rarr; 变 &rarr; <span class="box-red">执行恶意代码</span></p>
+        <p>最终：往 sudoers 写入免密规则</p>
+        <div class="code-snippet">echo "user ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers</div>
+      </div>
+      <div class="deco-circle" style="width:250px;height:250px;top:40px;left:40px;"></div>
+      <div class="deco-circle" style="width:180px;height:180px;bottom:100px;right:80px;"></div>
+    </div>
+
+    <!-- 导航 -->
+    <div class="page-indicator">
+      <div class="dot active" data-goto="0"></div>
+      <div class="dot" data-goto="1"></div>
+      <div class="dot" data-goto="2"></div>
+      <div class="dot" data-goto="3"></div>
+      <div class="dot" data-goto="4"></div>
+      <div class="dot" data-goto="5"></div>
+    </div>
+    <div class="nav-hint">点击或按方向键切换</div>
+
+  </div>
+</div>
+
+<script>
+(function() {
+  const slides = document.querySelectorAll('.slide');
+  const dots = document.querySelectorAll('.dot');
+  let current = 0;
+  const total = slides.length;
+
+  function showSlide(index) {
+    slides.forEach((s, i) => {
+      s.classList.toggle('active', i === index);
+      if (i === index) {
+        const items = s.querySelectorAll('.anim-item');
+        items.forEach(item => {
+          item.classList.remove('show');
+          const delay = parseInt(item.dataset.delay || 0);
+          setTimeout(() => item.classList.add('show'), delay);
+        });
+      }
+    });
+    dots.forEach((d, i) => d.classList.toggle('active', i === index));
+    current = index;
+  }
+
+  function next() { showSlide((current + 1) % total); }
+  function prev() { showSlide((current - 1 + total) % total); }
+
+  document.querySelector('.slide-container').addEventListener('click', (e) => {
+    if (e.target.closest('.dot')) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    if (x > rect.width / 2) next(); else prev();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') next();
+    if (e.key === 'ArrowLeft') prev();
+  });
+
+  dots.forEach(d => d.addEventListener('click', (e) => {
+    e.stopPropagation();
+    showSlide(parseInt(d.dataset.goto));
+  }));
+
+  showSlide(0);
+})();
+</script>
+
+</body>
+</html>

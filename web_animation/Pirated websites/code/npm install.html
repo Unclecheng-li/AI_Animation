@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>npm install</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0c0c0c;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .terminal {
+            width: 900px;
+            height: 600px;
+            background: #1e1e1e;
+            border-radius: 8px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .terminal-header {
+            height: 32px;
+            background: #2d2d2d;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            gap: 8px;
+            border-bottom: 1px solid #3c3c3c;
+        }
+
+        .terminal-btn {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .btn-close { background: #ff5f56; }
+        .btn-min { background: #ffbd2e; }
+        .btn-max { background: #27c93f; }
+
+        .terminal-title {
+            margin-left: 10px;
+            font-size: 13px;
+            color: #cccccc;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        .terminal-body {
+            flex: 1;
+            padding: 12px 16px;
+            overflow-y: auto;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #cccccc;
+        }
+
+        .terminal-body::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .terminal-body::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .terminal-body::-webkit-scrollbar-thumb {
+            background: #4a4a4a;
+            border-radius: 4px;
+        }
+
+        .line {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            margin-bottom: 2px;
+            opacity: 0;
+            animation: fadeIn 0.05s ease forwards;
+        }
+
+        @keyframes fadeIn {
+            to { opacity: 1; }
+        }
+
+        .prefix {
+            color: #6cc644;
+            flex-shrink: 0;
+        }
+
+        .prefix.warn {
+            color: #f0883e;
+        }
+
+        .prefix.error {
+            color: #f85149;
+        }
+
+        .prefix.info {
+            color: #58a6ff;
+        }
+
+        .text { color: #cccccc; }
+        .text.dim { color: #8b949e; }
+        .text.pkg { color: #79c0ff; }
+        .text.ver { color: #a5d6ff; }
+        .text.time { color: #8b949e; }
+        .text.dep { color: #d2a8ff; }
+        .text.added { color: #3fb950; }
+
+        .spinner {
+            display: inline-block;
+            width: 12px;
+            text-align: center;
+            animation: spin 0.5s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .progress-bar {
+            width: 200px;
+            height: 8px;
+            background: #30363d;
+            border-radius: 4px;
+            overflow: hidden;
+            display: inline-block;
+            margin: 0 8px;
+            vertical-align: middle;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #238636;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .cursor {
+            display: inline-block;
+            width: 8px;
+            height: 15px;
+            background: #cccccc;
+            animation: blink 1s step-end infinite;
+            vertical-align: text-bottom;
+        }
+
+        @keyframes blink {
+            50% { opacity: 0; }
+        }
+
+        .tree-line {
+            padding-left: 20px;
+            color: #8b949e;
+        }
+
+        .vuln-box {
+            border: 1px solid #f0883e;
+            border-radius: 6px;
+            padding: 12px;
+            margin: 8px 0;
+            background: rgba(240, 136, 62, 0.05);
+        }
+
+        .vuln-title {
+            color: #f0883e;
+            font-weight: bold;
+            margin-bottom: 6px;
+        }
+
+        .vuln-item {
+            color: #e3b341;
+            padding-left: 16px;
+            line-height: 1.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="terminal">
+        <div class="terminal-header">
+            <div class="terminal-btn btn-close"></div>
+            <div class="terminal-btn btn-min"></div>
+            <div class="terminal-btn btn-max"></div>
+            <span class="terminal-title">powershell — npm install</span>
+        </div>
+        <div class="terminal-body" id="terminal"></div>
+    </div>
+
+    <script>
+        const terminal = document.getElementById('terminal');
+
+        const packages = [
+            { name: 'lodash', ver: '4.17.21', deps: 0 },
+            { name: 'axios', ver: '1.6.2', deps: 4 },
+            { name: 'express', ver: '4.18.2', deps: 32 },
+            { name: 'react', ver: '18.2.0', deps: 3 },
+            { name: 'react-dom', ver: '18.2.0', deps: 2 },
+            { name: '@types/node', ver: '20.10.0', deps: 1 },
+            { name: 'typescript', ver: '5.3.2', deps: 0 },
+            { name: 'webpack', ver: '5.89.0', deps: 28 },
+            { name: 'babel-loader', ver: '9.1.3', deps: 12 },
+            { name: 'eslint', ver: '8.54.0', deps: 15 },
+            { name: '@babel/core', ver: '7.23.5', deps: 18 },
+            { name: '@babel/preset-env', ver: '7.23.5', deps: 22 },
+            { name: 'sass', ver: '1.69.5', deps: 5 },
+            { name: 'tailwindcss', ver: '3.3.6', deps: 8 },
+            { name: 'jest', ver: '29.7.0', deps: 25 },
+            { name: '@testing-library/react', ver: '14.1.2', deps: 9 },
+            { name: 'uuid', ver: '9.0.1', deps: 0 },
+            { name: 'moment', ver: '2.29.4', deps: 0 },
+            { name: 'chalk', ver: '4.1.2', deps: 3 },
+            { name: 'commander', ver: '11.1.0', deps: 0 },
+            { name: 'inquirer', ver: '9.2.12', deps: 14 },
+            { name: 'ora', ver: '7.0.1', deps: 6 },
+            { name: 'fs-extra', ver: '11.1.1', deps: 2 },
+            { name: 'glob', ver: '10.3.10', deps: 7 },
+            { name: 'rimraf', ver: '5.0.5', deps: 4 },
+            { name: 'semver', ver: '7.5.4', deps: 1 },
+            { name: 'cross-spawn', ver: '7.0.3', deps: 2 },
+            { name: 'which', ver: '4.0.0', deps: 2 },
+            { name: 'isexe', ver: '2.0.0', deps: 0 },
+            { name: 'path-key', ver: '3.1.1', deps: 0 },
+            { name: 'shebang-command', ver: '2.0.0', deps: 1 },
+            { name: 'shebang-regex', ver: '3.0.0', deps: 0 },
+            { name: 'debug', ver: '4.3.4', deps: 1 },
+            { name: 'ms', ver: '2.1.3', deps: 0 },
+            { name: 'has-flag', ver: '4.0.0', deps: 0 },
+            { name: 'supports-color', ver: '7.2.0', deps: 1 },
+            { name: 'ansi-styles', ver: '4.3.0', deps: 2 },
+            { name: 'color-convert', ver: '2.0.1', deps: 1 },
+            { name: 'color-name', ver: '1.1.4', deps: 0 },
+            { name: 'escape-string-regexp', ver: '4.0.0', deps: 0 },
+            { name: 'is-fullwidth-code-point', ver: '3.0.0', deps: 0 },
+            { name: 'slice-ansi', ver: '4.0.0', deps: 3 },
+            { name: 'ansi-regex', ver: '5.0.1', deps: 0 },
+            { name: 'emoji-regex', ver: '8.0.0', deps: 0 },
+            { name: 'string-width', ver: '4.2.3', deps: 4 },
+            { name: 'strip-ansi', ver: '6.0.1', deps: 1 },
+            { name: 'is-interactive', ver: '2.0.0', deps: 0 },
+            { name: 'is-unicode-supported', ver: '1.3.0', deps: 0 },
+            { name: 'log-symbols', ver: '5.1.0', deps: 2 },
+            { name: 'stdin-discarder', ver: '0.1.0', deps: 2 },
+            { name: 'bl', ver: '5.1.0', deps: 4 },
+            { name: 'readable-stream', ver: '3.6.2', deps: 5 },
+            { name: 'inherits', ver: '2.0.4', deps: 0 },
+            { name: 'string_decoder', ver: '1.3.0', deps: 1 },
+            { name: 'util-deprecate', ver: '1.0.2', deps: 0 },
+            { name: 'safe-buffer', ver: '5.2.1', deps: 0 },
+            { name: 'buffer', ver: '6.0.3', deps: 4 },
+            { name: 'base64-js', ver: '1.5.1', deps: 0 },
+            { name: 'ieee754', ver: '1.2.1', deps: 0 },
+            { name: 'process', ver: '0.11.10', deps: 0 },
+            { name: 'through', ver: '2.3.8', deps: 0 },
+            { name: 'xtend', ver: '4.0.2', deps: 0 },
+            { name: 'run-async', ver: '2.4.1', deps: 0 },
+            { name: 'rxjs', ver: '7.8.1', deps: 1 },
+            { name: 'tslib', ver: '2.6.2', deps: 0 },
+            { name: 'mute-stream', ver: '1.0.0', deps: 0 },
+            { name: 'lodash-es', ver: '4.17.21', deps: 0 },
+            { name: 'core-js', ver: '3.33.3', deps: 0 },
+            { name: 'regenerator-runtime', ver: '0.14.0', deps: 0 },
+            { name: '@jridgewell/gen-mapping', ver: '0.3.3', deps: 4 },
+            { name: '@jridgewell/set-array', ver: '1.1.2', deps: 0 },
+            { name: '@jridgewell/sourcemap-codec', ver: '1.4.15', deps: 0 },
+            { name: '@jridgewell/trace-mapping', ver: '0.3.20', deps: 2 },
+            { name: '@jridgewell/resolve-uri', ver: '3.1.1', deps: 0 },
+            { name: '@ampproject/remapping', ver: '2.2.1', deps: 2 },
+            { name: '@babel/code-frame', ver: '7.23.5', deps: 3 },
+            { name: '@babel/highlight', ver: '7.23.4', deps: 3 },
+            { name: '@babel/helper-validator-identifier', ver: '7.22.20', deps: 0 },
+            { name: 'js-tokens', ver: '4.0.0', deps: 0 },
+            { name: 'picocolors', ver: '1.0.0', deps: 0 },
+            { name: 'json5', ver: '2.2.3', deps: 0 },
+            { name: '@babel/compat-data', ver: '7.23.5', deps: 0 },
+            { name: '@babel/helper-compilation-targets', ver: '7.22.15', deps: 6 },
+            { name: 'browserslist', ver: '4.22.2', deps: 4 },
+            { name: 'caniuse-lite', ver: '1.0.30001565', deps: 0 },
+            { name: 'electron-to-chromium', ver: '1.4.601', deps: 0 },
+            { name: 'node-releases', ver: '2.0.14', deps: 0 },
+            { name: 'update-browserslist-db', ver: '1.0.13', deps: 3 },
+            { name: 'escalade', ver: '3.1.1', deps: 0 },
+            { name: 'fraction.js', ver: '4.3.7', deps: 0 },
+            { name: 'normalize-range', ver: '0.1.2', deps: 0 },
+            { name: 'postcss-value-parser', ver: '4.2.0', deps: 0 },
+            { name: 'lru-cache', ver: '5.1.1', deps: 1 },
+            { name: 'yallist', ver: '4.0.0', deps: 0 },
+            { name: '@babel/generator', ver: '7.23.5', deps: 6 },
+            { name: '@babel/types', ver: '7.23.5', deps: 2 },
+            { name: 'to-fast-properties', ver: '2.0.0', deps: 0 },
+            { name: '@babel/parser', ver: '7.23.5', deps: 0 },
+            { name: '@babel/template', ver: '7.22.15', deps: 3 },
+            { name: '@babel/traverse', ver: '7.23.5', deps: 10 },
+            { name: 'globals', ver: '11.12.0', deps: 0 },
+            { name: '@babel/helper-function-name', ver: '7.23.0', deps: 3 },
+            { name: '@babel/helper-split-export-declaration', ver: '7.22.6', deps: 0 },
+            { name: '@babel/helper-hoist-variables', ver: '7.22.5', deps: 1 },
+            { name: '@babel/helper-environment-visitor', ver: '7.22.20', deps: 0 },
+            { name: 'minimatch', ver: '3.1.2', deps: 3 },
+            { name: 'brace-expansion', ver: '2.0.1', deps: 2 },
+            { name: 'balanced-match', ver: '1.0.2', deps: 0 },
+            { name: 'concat-map', ver: '0.0.1', deps: 0 },
+        ];
+
+        const vulns = [
+            'lodash  <4.17.21  严重性: 高危  原型链污染漏洞',
+            'moment  <2.29.4   严重性: 中危  路径遍历漏洞',
+            'debug   <4.3.4    严重性: 低危  ReDoS正则表达式漏洞',
+        ];
+
+        function createLine(html, delay = 0) {
+            const line = document.createElement('div');
+            line.className = 'line';
+            line.style.animationDelay = delay + 's';
+            line.innerHTML = html;
+            terminal.appendChild(line);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        function sleep(ms) {
+            return new Promise(r => setTimeout(r, ms));
+        }
+
+        let running = false;
+
+        async function run() {
+            if (running) return;
+            running = true;
+
+            // 初始命令
+            createLine('<span class="text">PS F:\\project&gt; <span style="color:#fff">npm install</span></span>');
+            await sleep(400);
+
+            createLine('<span class="text dim">npm WARN config global `--global`, `--local` are deprecated. Use `--location=global` instead.</span>');
+            await sleep(200);
+
+            createLine('');
+            createLine('<span class="prefix">&gt;</span> <span class="text">my-project@1.0.0 postinstall</span>');
+            createLine('<span class="prefix">&gt;</span> <span class="text">node scripts/setup.js</span>');
+            createLine('');
+            await sleep(300);
+
+            // 开始安装
+            createLine('<span class="prefix info">⏵</span> <span class="text">Resolving dependencies...</span>');
+            await sleep(600);
+
+            // 解析树
+            for (let i = 0; i < 8; i++) {
+                const pkg = packages[i];
+                createLine(`<span class="text tree-line">└─ <span class="pkg">${pkg.name}</span>@<span class="ver">${pkg.ver}</span></span>`);
+                await sleep(80 + Math.random() * 100);
+            }
+
+            createLine('');
+            createLine('<span class="prefix info">⏵</span> <span class="text">Fetching packages...</span>');
+            await sleep(400);
+
+            // 大量下载
+            let downloaded = 0;
+            const total = packages.length;
+
+            for (let i = 0; i < total; i++) {
+                const pkg = packages[i];
+                const size = (Math.random() * 500 + 10).toFixed(1);
+                const spinner = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'];
+                const spin = spinner[i % spinner.length];
+
+                createLine(`<span class="prefix">${spin}</span> <span class="text">http fetch GET 200 https://registry.npmjs.org/${pkg.name}/-/${pkg.name}-${pkg.ver}.tgz ${size}KB (in ${(Math.random()*800+50).toFixed(0)}ms)</span>`);
+                downloaded++;
+
+                if (i % 5 === 0) {
+                    await sleep(30);
+                } else {
+                    await sleep(15 + Math.random() * 40);
+                }
+            }
+
+            createLine('');
+            createLine('<span class="prefix info">⏵</span> <span class="text">Linking dependencies...</span>');
+            await sleep(300);
+
+            // 构建依赖树
+            const treePkgs = packages.slice(0, 30);
+            for (let i = 0; i < treePkgs.length; i++) {
+                const pkg = treePkgs[i];
+                const indent = '  '.repeat(Math.min(pkg.deps, 4));
+                const connector = pkg.deps > 0 ? '├─' : '└─';
+                createLine(`<span class="text tree-line">${indent}${connector} <span class="dep">${pkg.name}</span>@<span class="ver">${pkg.ver}</span></span>`);
+                await sleep(20 + Math.random() * 30);
+            }
+
+            createLine('');
+            createLine('<span class="prefix info">⏵</span> <span class="text">Building fresh packages...</span>');
+            await sleep(500);
+
+            // node-gyp 编译
+            createLine('<span class="text dim">[1/5] Validating package.json...</span>');
+            await sleep(150);
+            createLine('<span class="text dim">[2/5] Resolving packages...</span>');
+            await sleep(150);
+            createLine('<span class="text dim">[3/5] Fetching packages...</span>');
+            await sleep(200);
+            createLine('<span class="text dim">[4/5] Linking dependencies...</span>');
+            await sleep(300);
+            createLine('<span class="text dim">[5/5] Building fresh packages...</span>');
+            await sleep(400);
+
+            // 编译输出
+            createLine('<span class="text dim">gyp info it worked if it ends with ok</span>');
+            await sleep(100);
+            createLine('<span class="text dim">gyp info using node-gyp@9.4.0</span>');
+            await sleep(100);
+            createLine('<span class="text dim">gyp info using node@20.10.0 | win32 | x64</span>');
+            await sleep(200);
+            createLine('<span class="text dim">gyp info spawn C:\\Python311\\python.exe</span>');
+            await sleep(300);
+            createLine('<span class="text dim">gyp info spawn args [ \'binding.gyp\', \'-f\', \'msvs\', ... ]</span>');
+            await sleep(500);
+            createLine('<span class="text dim">gyp info ok</span>');
+            await sleep(200);
+
+            createLine('');
+
+            // 安全审计
+            createLine('<span class="prefix warn">⚠</span> <span class="text">Running security audit...</span>');
+            await sleep(600);
+
+            createLine('<span class="text dim">Found 0 vulnerabilities</span>');
+            await sleep(200);
+            createLine('<span class="text dim">  - 3 moderate severity vulnerabilities require manual review</span>');
+            await sleep(200);
+
+            // 漏洞详情框
+            createLine(`<div class="vuln-box">
+                <div class="vuln-title">3 vulnerabilities found - Packages audited: ${packages.length}</div>
+                ${vulns.map(v => `<div class="vuln-item">• ${v}</div>`).join('')}
+            </div>`);
+            await sleep(400);
+
+            createLine('<span class="text dim">Run `npm audit fix` to fix them, or `npm audit` for details</span>');
+            await sleep(200);
+            createLine('');
+
+            // 最终结果
+            createLine('<span class="prefix added">+</span> <span class="text added">my-project@1.0.0</span>');
+            createLine('<span class="text">added <span class="added">' + packages.length + '</span> packages, and audited <span class="added">' + (packages.length + 156) + '</span> packages in <span class="added">3m</span></span>');
+            createLine('');
+            createLine('<span class="text">' + (packages.length + 47) + ' packages are looking for funding</span>');
+            createLine('<span class="text dim">  run `npm fund` for details</span>');
+            createLine('');
+
+            // 最终命令提示
+            createLine('<span class="text">PS F:\\project&gt; <span class="cursor"></span></span>');
+        }
+
+        // 等待用户按回车键开始
+        createLine('<span class="text">PS F:\\project&gt; <span style="color:#fff">npm install</span><span class="cursor"></span></span>');
+
+        document.addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter' && !running) {
+                // 移除等待状态的命令行，重新显示并开始执行
+                terminal.innerHTML = '';
+                await run();
+            }
+        });
+    </script>
+</body>
+</html>

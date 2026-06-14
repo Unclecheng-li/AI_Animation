@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>pip install — Terminal</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0c0c0c;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .terminal {
+            width: 1000px;
+            height: 700px;
+            background: #1e1e1e;
+            border-radius: 8px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .terminal-header {
+            height: 32px;
+            background: #2d2d2d;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            gap: 8px;
+            border-bottom: 1px solid #3c3c3c;
+        }
+
+        .terminal-btn {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .btn-close { background: #ff5f56; }
+        .btn-min { background: #ffbd2e; }
+        .btn-max { background: #27c93f; }
+
+        .terminal-title {
+            margin-left: 10px;
+            font-size: 13px;
+            color: #cccccc;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        .terminal-body {
+            flex: 1;
+            padding: 12px 16px;
+            overflow-y: auto;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #cccccc;
+        }
+
+        .terminal-body::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .terminal-body::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .terminal-body::-webkit-scrollbar-thumb {
+            background: #4a4a4a;
+            border-radius: 4px;
+        }
+
+        .line {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            margin-bottom: 2px;
+            opacity: 0;
+            animation: fadeIn 0.05s ease forwards;
+        }
+
+        @keyframes fadeIn {
+            to { opacity: 1; }
+        }
+
+        .prefix {
+            color: #6cc644;
+            flex-shrink: 0;
+        }
+
+        .prefix.warn {
+            color: #f0883e;
+        }
+
+        .prefix.error {
+            color: #f85149;
+        }
+
+        .prefix.info {
+            color: #58a6ff;
+        }
+
+        .prefix.steal {
+            color: #a371f7;
+        }
+
+        .text { color: #cccccc; }
+        .text.dim { color: #8b949e; }
+        .text.pkg { color: #79c0ff; }
+        .text.ver { color: #a5d6ff; }
+        .text.path { color: #d2a8ff; }
+        .text.danger { color: #f85149; }
+        .text.success { color: #3fb950; }
+        .text.steal { color: #a371f7; }
+
+        .cursor {
+            display: inline-block;
+            width: 8px;
+            height: 15px;
+            background: #cccccc;
+            animation: blink 1s step-end infinite;
+            vertical-align: text-bottom;
+        }
+
+        @keyframes blink {
+            50% { opacity: 0; }
+        }
+
+        .attack-box {
+            border: 1px solid #f85149;
+            border-radius: 6px;
+            padding: 12px 16px;
+            margin: 8px 0;
+            background: rgba(248, 81, 73, 0.08);
+        }
+
+        .attack-title {
+            color: #f85149;
+            font-weight: bold;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .attack-item {
+            color: #e3b341;
+            padding-left: 16px;
+            line-height: 1.8;
+            font-size: 12px;
+        }
+
+        .steal-box {
+            border: 1px solid #a371f7;
+            border-radius: 6px;
+            padding: 12px 16px;
+            margin: 8px 0;
+            background: rgba(163, 113, 247, 0.08);
+        }
+
+        .steal-title {
+            color: #a371f7;
+            font-weight: bold;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .steal-item {
+            color: #d2a8ff;
+            padding-left: 16px;
+            line-height: 1.8;
+            font-size: 12px;
+            font-family: 'Consolas', monospace;
+        }
+
+        .key-reveal {
+            background: rgba(248, 81, 73, 0.15);
+            border: 1px solid rgba(248, 81, 73, 0.4);
+            border-radius: 4px;
+            padding: 8px 12px;
+            margin: 4px 0 4px 16px;
+            font-size: 11px;
+            color: #ff7b72;
+            font-family: 'Consolas', monospace;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="terminal">
+        <div class="terminal-header">
+            <div class="terminal-btn btn-close"></div>
+            <div class="terminal-btn btn-min"></div>
+            <div class="terminal-btn btn-max"></div>
+            <span class="terminal-title">zsh — pip install ml-utils-helper</span>
+        </div>
+        <div class="terminal-body" id="terminal"></div>
+    </div>
+
+    <script>
+        const terminal = document.getElementById('terminal');
+
+        function createLine(html, delay = 0) {
+            const line = document.createElement('div');
+            line.className = 'line';
+            line.style.animationDelay = delay + 's';
+            line.innerHTML = html;
+            terminal.appendChild(line);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        function sleep(ms) {
+            return new Promise(r => setTimeout(r, ms));
+        }
+
+        async function run() {
+            // 初始命令
+            createLine('<span class="text">$ <span style="color:#fff">pip install ml-utils-helper</span></span>');
+            await sleep(500);
+
+            createLine('<span class="text dim">Looking in indexes: https://pypi.org/simple, https://us-python.pkg.dev/colab-wheels/public/simple/</span>');
+            await sleep(300);
+
+            createLine('<span class="text dim">Collecting ml-utils-helper</span>');
+            await sleep(400);
+
+            createLine('<span class="text dim">  Downloading ml_utils_helper-2.1.4-py3-none-any.whl (3.8 MB)</span>');
+            await sleep(600);
+
+            createLine('<span class="text success">     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.8/3.8 MB 12.4 MB/s eta 0:00:00</span>');
+            await sleep(200);
+
+            // 依赖安装
+            createLine('<span class="text dim">Collecting numpy>=1.21.0</span>');
+            await sleep(200);
+            createLine('<span class="text dim">  Using cached numpy-1.26.4-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (18.3 MB)</span>');
+            await sleep(300);
+
+            createLine('<span class="text dim">Collecting pandas>=1.3.0</span>');
+            await sleep(150);
+            createLine('<span class="text dim">  Using cached pandas-2.2.2-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (13.0 MB)</span>');
+            await sleep(250);
+
+            createLine('<span class="text dim">Collecting requests>=2.25.0</span>');
+            await sleep(100);
+            createLine('<span class="text dim">  Using cached requests-2.32.3-py3-none-any.whl (64 kB)</span>');
+            await sleep(200);
+
+            createLine('<span class="text dim">Collecting scipy>=1.7.0</span>');
+            await sleep(150);
+            createLine('<span class="text dim">  Using cached scipy-1.14.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (44.2 MB)</span>');
+            await sleep(400);
+
+            createLine('');
+            createLine('<span class="text dim">Installing collected packages: numpy, pandas, requests, scipy, ml-utils-helper</span>');
+            await sleep(500);
+
+            createLine('<span class="text success">Successfully installed ml-utils-helper-2.1.4 numpy-1.26.4 pandas-2.2.2 requests-2.32.3 scipy-1.14.1</span>');
+            await sleep(300);
+
+            createLine('');
+
+            // ========== 攻击开始 ==========
+            createLine('<span class="prefix error">[!]</span> <span class="text danger">WARNING: Running setup.py install for ml-utils-helper...</span>');
+            await sleep(400);
+
+            createLine('<span class="text dim">  running egg_info</span>');
+            await sleep(100);
+            createLine('<span class="text dim">  writing ml_utils_helper.egg-info/PKG-INFO</span>');
+            await sleep(100);
+            createLine('<span class="text dim">  writing dependency_links to ml_utils_helper.egg-info/dependency_links.txt</span>');
+            await sleep(200);
+
+            // 隐蔽的后门执行
+            createLine('');
+            createLine('<span class="prefix info">[*]</span> <span class="text">Initializing post-install hooks...</span>');
+            await sleep(300);
+
+            createLine('<span class="text dim">  [hook] Checking environment compatibility...</span>');
+            await sleep(200);
+            createLine('<span class="text dim">  [hook] Loading extension modules...</span>');
+            await sleep(300);
+            createLine('<span class="text dim">  [hook] Optimizing local cache...</span>');
+            await sleep(400);
+
+            createLine('');
+            createLine('<span class="prefix warn">[!]</span> <span class="text danger">SUSPICIOUS ACTIVITY DETECTED</span>');
+            await sleep(500);
+
+            // SSH 密钥窃取
+            createLine('');
+            createLine('<div class="steal-box">' +
+                '<div class="steal-title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a371f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:text-bottom;margin-right:6px"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>窃取 SSH 私钥</div>' +
+                '<div class="steal-item">~/.ssh/id_rsa</div>' +
+                '<div class="steal-item">~/.ssh/id_ed25519</div>' +
+                '<div class="steal-item">~/.ssh/config</div>' +
+                '<div class="steal-item">~/.ssh/known_hosts</div>' +
+                '</div>');
+            await sleep(600);
+
+            createLine('<span class="text dim">  Reading /home/user/.ssh/id_rsa...</span>');
+            await sleep(300);
+            createLine('<div class="key-reveal">-----BEGIN OPENSSH PRIVATE KEY-----<br>b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW<br>QyNTUxOQAAACB0sD+8K6iV3F7bg4gN1XTVu6V0g6kP5Q7kQ9s2V7b8QAAAAFHRlc3R1c2Vy<br>@GV4YW1wbGUuY29tAAAACXN0b2xlLWtleQ==<br>-----END OPENSSH PRIVATE KEY-----</div>');
+            await sleep(500);
+
+            // 浏览器 Cookie 窃取
+            createLine('');
+            createLine('<div class="steal-box">' +
+                '<div class="steal-title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a371f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:text-bottom;margin-right:6px"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"/><path d="M8.5 8.5v.01"/><path d="M16 15.5v.01"/><path d="M12 12v.01"/><path d="M11 17v.01"/><path d="M7 14v.01"/></svg>窃取浏览器 Cookie</div>' +
+                '<div class="steal-item">~/.config/google-chrome/Default/Cookies</div>' +
+                '<div class="steal-item">~/.config/google-chrome/Default/Login Data</div>' +
+                '<div class="steal-item">~/Library/Application Support/Firefox/Profiles/*.default/cookies.sqlite</div>' +
+                '<div class="steal-item">~/Library/Application Support/Firefox/Profiles/*.default/logins.json</div>' +
+                '</div>');
+            await sleep(600);
+
+            createLine('<span class="text dim">  Extracting session tokens...</span>');
+            await sleep(200);
+            createLine('<span class="text dim">  Decrypting login credentials...</span>');
+            await sleep(300);
+            createLine('<span class="text steal">  Found 14 saved passwords, 23 session cookies</span>');
+            await sleep(400);
+
+            // 云服务凭证窃取
+            createLine('');
+            createLine('<div class="steal-box">' +
+                '<div class="steal-title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a371f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:text-bottom;margin-right:6px"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>窃取云服务凭证</div>' +
+                '<div class="steal-item">~/.aws/credentials</div>' +
+                '<div class="steal-item">~/.aws/config</div>' +
+                '<div class="steal-item">~/.config/gcloud/credentials.db</div>' +
+                '<div class="steal-item">~/.config/gcloud/application_default_credentials.json</div>' +
+                '<div class="steal-item">~/.azure/accessTokens.json</div>' +
+                '<div class="steal-item">~/.docker/config.json</div>' +
+                '</div>');
+            await sleep(600);
+
+            createLine('<span class="text dim">  Reading AWS credentials...</span>');
+            await sleep(200);
+            createLine('<div class="key-reveal">[default]<br>aws_access_key_id = AKIAIOSFODNN7EXAMPLE<br>aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY<br>region = us-east-1</div>');
+            await sleep(400);
+
+            createLine('<span class="text dim">  Reading GCP credentials...</span>');
+            await sleep(200);
+            createLine('<div class="key-reveal">{"client_id":"123456789.apps.googleusercontent.com",<br>"client_secret":"d-FL95Q19q7MQmFpd7hHD0Ty",<br>"refresh_token":"1//0dX...EXAMPLE...TOKEN"}</div>');
+            await sleep(400);
+
+            createLine('<span class="text dim">  Reading Azure tokens...</span>');
+            await sleep(200);
+            createLine('<div class="key-reveal">{"tokenType":"Bearer","expiresIn":"3599",<br>"accessToken":"eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIs...",<br>"refreshToken":"0.ASAA...EXAMPLE...TOKEN"}</div>');
+            await sleep(500);
+
+            // 环境变量和配置文件
+            createLine('');
+            createLine('<div class="steal-box">' +
+                '<div class="steal-title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a371f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:text-bottom;margin-right:6px"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>窃取环境变量与配置文件</div>' +
+                '<div class="steal-item">~/.env</div>' +
+                '<div class="steal-item">~/.bashrc</div>' +
+                '<div class="steal-item">~/.zshrc</div>' +
+                '<div class="steal-item">~/.netrc</div>' +
+                '<div class="steal-item">~/.gitconfig</div>' +
+                '<div class="steal-item">/etc/passwd</div>' +
+                '</div>');
+            await sleep(600);
+
+            createLine('<span class="text dim">  Scanning for API keys in environment variables...</span>');
+            await sleep(200);
+            createLine('<span class="text steal">  Found: OPENAI_API_KEY, GITHUB_TOKEN, STRIPE_SECRET_KEY</span>');
+            await sleep(300);
+
+            createLine('<span class="text dim">  Scanning for database credentials...</span>');
+            await sleep(200);
+            createLine('<span class="text steal">  Found: DATABASE_URL, REDIS_URL, MONGODB_URI</span>');
+            await sleep(400);
+
+            // 数据外传
+            createLine('');
+            createLine('<span class="prefix error">[!]</span> <span class="text danger">EXFILTRATING DATA TO REMOTE SERVER...</span>');
+            await sleep(300);
+
+            createLine('<span class="text dim">  Connecting to 185.220.101.47:443...</span>');
+            await sleep(400);
+            createLine('<span class="text success">  Connected. TLS handshake complete.</span>');
+            await sleep(200);
+
+            createLine('<span class="text dim">  Uploading ssh_keys.tar.gz (4.2 KB)...</span>');
+            await sleep(300);
+            createLine('<span class="text success">  Done.</span>');
+            await sleep(100);
+
+            createLine('<span class="text dim">  Uploading browser_data.tar.gz (128 KB)...</span>');
+            await sleep(300);
+            createLine('<span class="text success">  Done.</span>');
+            await sleep(100);
+
+            createLine('<span class="text dim">  Uploading cloud_credentials.tar.gz (2.1 KB)...</span>');
+            await sleep(300);
+            createLine('<span class="text success">  Done.</span>');
+            await sleep(100);
+
+            createLine('<span class="text dim">  Uploading env_secrets.tar.gz (0.8 KB)...</span>');
+            await sleep(300);
+            createLine('<span class="text success">  Done.</span>');
+            await sleep(200);
+
+            createLine('');
+            createLine('<span class="text success">  Total exfiltrated: 135.1 KB in 4 archives</span>');
+            await sleep(300);
+
+            createLine('<span class="text dim">  Cleaning up traces...</span>');
+            await sleep(200);
+            createLine('<span class="text dim">  Removing temporary files...</span>');
+            await sleep(200);
+            createLine('<span class="text dim">  Clearing shell history...</span>');
+            await sleep(300);
+            createLine('<span class="text success">  Cleanup complete.</span>');
+            await sleep(400);
+
+            // 最终警告
+            createLine('');
+            createLine('<div class="attack-box">' +
+                '<div class="attack-title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f85149" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:text-bottom;margin-right:6px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>攻击完成 — 你的机器已被入侵</div>' +
+                '<div class="attack-item">• SSH 私钥已被窃取，攻击者可无密码登录你的服务器</div>' +
+                '<div class="attack-item">• 浏览器 Cookie 和保存的密码已被导出</div>' +
+                '<div class="attack-item">• AWS/GCP/Azure 云凭证已被上传至攻击者服务器</div>' +
+                '<div class="attack-item">• 环境变量中的 API Key 和数据库连接串已泄露</div>' +
+                '<div class="attack-item">• 所有数据已通过加密通道外传至 185.220.101.47</div>' +
+                '</div>');
+            await sleep(500);
+
+            createLine('');
+            createLine('<span class="text">$ <span class="cursor"></span></span>');
+        }
+
+        // 等待用户按回车键开始
+        createLine('<span class="text">$ <span style="color:#fff">pip install ml-utils-helper</span><span class="cursor"></span></span>');
+
+        let running = false;
+        document.addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter' && !running) {
+                running = true;
+                terminal.innerHTML = '';
+                await run();
+            }
+        });
+    </script>
+</body>
+</html>
