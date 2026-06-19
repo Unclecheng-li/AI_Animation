@@ -113,7 +113,7 @@ Links: [README](./skills/ppt-animation/README.md) · [SKILL.md](./skills/ppt-ani
 #### `flowchart`
 
 <a href="./skills/flowchart">
-<img src="<!-- IMAGE:flowchart-banner -->" alt="flowchart Skill" width="100%">
+<img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/130f278e-3978-433d-b9f2-5fb79dcab3c3" />
 </a>
 
 **分类:** 流程图 / 概念图 / 原理演示
@@ -130,10 +130,10 @@ Links: [README](./skills/ppt-animation/README.md) · [SKILL.md](./skills/ppt-ani
 
 <table>
 <tr>
-<td align="center" width="25%"><a href="./skills/flowchart/README.md#支持的图表类型"><img src="<!-- IMAGE:flowchart-rnn -->" alt="RNN preview" /></a><br /><sub><code>RNN</code><br />时间步展开</sub></td>
-<td align="center" width="25%"><a href="./skills/flowchart/README.md#支持的图表类型"><img src="<!-- IMAGE:flowchart-lstm -->" alt="LSTM preview" /></a><br /><sub><code>LSTM</code><br />三门门控动画</sub></td>
-<td align="center" width="25%"><a href="./skills/flowchart/README.md#支持的图表类型"><img src="<!-- IMAGE:flowchart-gpu -->" alt="GPU preview" /></a><br /><sub><code>GPU</code><br />并行架构</sub></td>
-<td align="center" width="25%"><a href="./skills/flowchart/README.md#支持的图表类型"><img src="<!-- IMAGE:flowchart-process -->" alt="process preview" /></a><br /><sub><code>流程图</code><br />攻击链/工作流</sub></td>
+<td align="center" width="25%"><a href="./skills/flowchart/README.md#支持的图表类型"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/4c6fcc04-7b36-4a65-87a1-b6eb01949179" /></a><br /><sub><code>RNN</code><br />RNN流程图</sub></td>
+<td align="center" width="25%"><a href="./skills/flowchart/README.md#支持的图表类型"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/267231a2-2b93-4e55-bfb2-577c2a73927f" /></a><br /><sub><code>LSTM</code><br />LSTM流程图</sub></td>
+<td align="center" width="25%"><a href="./skills/flowchart/README.md#支持的图表类型"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/90645354-939c-444c-becd-2dd2a12b4f6d" /></a><br /><sub><code>GPU</code><br />架构图</sub></td>
+<td align="center" width="25%"><a href="./skills/flowchart/README.md#支持的图表类型"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/80bcb567-21a0-4e49-a51e-6723ace3eb1e" /></a><br /><sub><code>流程图</code><br />攻击链/工作流</sub></td>
 </tr>
 </table>
 
