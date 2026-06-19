@@ -77,7 +77,7 @@
 #### `ppt-animation`
 
 <a href="./skills/ppt-animation">
-<img src="<!-- IMAGE:ppt-animation-banner -->" alt="ppt-animation Skill" width="100%">
+<img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/221ac125-02f7-4bac-b179-25085034ff67" />
 </a>
 
 **分类:** PPT 演示 / 翻页动画
@@ -94,11 +94,11 @@
 
 <table>
 <tr>
-<td align="center" width="20%"><a href="./skills/ppt-animation/README.md#主题画廊"><img src="<!-- IMAGE:ppt-theme-dark-tech -->" alt="dark-tech preview" /></a><br /><sub><code>dark-tech</code><br />暗色科技风</sub></td>
-<td align="center" width="20%"><a href="./skills/ppt-animation/README.md#主题画廊"><img src="<!-- IMAGE:ppt-theme-warm-paper -->" alt="warm-paper preview" /></a><br /><sub><code>warm-paper</code><br />暖色报纸风</sub></td>
-<td align="center" width="20%"><a href="./skills/ppt-animation/README.md#主题画廊"><img src="<!-- IMAGE:ppt-theme-clean-white -->" alt="clean-white preview" /></a><br /><sub><code>clean-white</code><br />简约白色</sub></td>
-<td align="center" width="20%"><a href="./skills/ppt-animation/README.md#主题画廊"><img src="<!-- IMAGE:ppt-theme-cyber-red -->" alt="cyber-red preview" /></a><br /><sub><code>cyber-red</code><br />赛博朋克红橙</sub></td>
-<td align="center" width="20%"><a href="./skills/ppt-animation/README.md#主题画廊"><img src="<!-- IMAGE:ppt-theme-gradient-dark -->" alt="gradient-dark preview" /></a><br /><sub><code>gradient-dark</code><br />渐变暗色</sub></td>
+<td align="center" width="20%"><a href="./skills/ppt-animation/README.md#主题画廊"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/dbc2ddbc-3ec9-4d3e-892c-59e04f629124" /></a><br /><sub><code>dark-tech</code><br />暗色科技风</sub></td>
+<td align="center" width="20%"><a href="./skills/ppt-animation/README.md#主题画廊"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/a9ceaa1c-4c21-418a-a091-ecf84db91240" /></a><br /><sub><code>warm-paper</code><br />暖色报纸风</sub></td>
+<td align="center" width="20%"><a href="./skills/ppt-animation/README.md#主题画廊"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/474d7fe9-52fb-41e8-a86d-89d92a7d3f55" /></a><br /><sub><code>clean-white</code><br />简约白色</sub></td>
+<td align="center" width="20%"><a href="./skills/ppt-animation/README.md#主题画廊"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/8829f50c-2162-4c7b-a8ea-aac458962112" /></a><br /><sub><code>cyber-red</code><br />赛博朋克红橙</sub></td>
+<td align="center" width="20%"><a href="./skills/ppt-animation/README.md#主题画廊"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/e5cdadf4-b0fd-41d2-90d8-3f12e63e2ec8" /></a><br /><sub><code>gradient-dark</code><br />渐变暗色</sub></td>
 </tr>
 </table>
 
