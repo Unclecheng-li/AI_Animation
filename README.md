@@ -23,7 +23,7 @@
 
 一句话生成：
 - 📊 **PPT 风格演示** — 科普、技术讲解、视频配套演示
-- 🧠 **AI/ML 模型可视化** — RNN、LSTM、GRU、MLP、Word2Vec、GPU 等
+- 📈 **流程图 / 原理演示** — 流程图、概念图、对比图、时序图、AI 模型可视化等
 - 🌐 **网络协议可视化** — TCP/IP、IPv4、以太帧、路由、DHCP 等
 - 🏗️ **动态架构图** — 系统架构、流程图、时序图、数据流图、状态机，带流动动画 + 多格式导出
 - 📝 **学霸笔记** — 手写笔记本风格的精美 HTML 学习笔记，两种模板风格
@@ -42,9 +42,9 @@
 <br/><sub>PPT 演示 / 翻页动画</sub>
 </td>
 <td width="50%" valign="top" align="center">
-<a href="#ai-model-viz"><img src="<!-- IMAGE:ai-model-viz-preview -->" alt="ai-model-viz preview" width="100%"></a>
-<br/><a href="#ai-model-viz"><strong>ai-model-viz</strong></a>
-<br/><sub>AI 模型 / 神经网络可视化</sub>
+<a href="#flowchart"><img src="<!-- IMAGE:flowchart-preview -->" alt="flowchart preview" width="100%"></a>
+<br/><a href="#flowchart"><strong>flowchart</strong></a>
+<br/><sub>流程图 / 概念图 / 原理演示</sub>
 </td>
 </tr>
 <tr>
@@ -110,36 +110,36 @@ Links: [README](./skills/ppt-animation/README.md) · [SKILL.md](./skills/ppt-ani
 
 <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
 
-#### `ai-model-viz`
+#### `flowchart`
 
-<a href="./skills/ai-model-viz">
-<img src="<!-- IMAGE:ai-model-viz-banner -->" alt="ai-model-viz Skill" width="100%">
+<a href="./skills/flowchart">
+<img src="<!-- IMAGE:flowchart-banner -->" alt="flowchart Skill" width="100%">
 </a>
 
-**分类:** AI 模型 / 神经网络可视化
-**适用于:** AI 科普视频、教学课件、技术分享——需要直观展示模型结构、数据流动、门控机制的场景。
+**分类:** 流程图 / 概念图 / 原理演示
+**适用于:** 视频科普、技术讲解、PPT 配图——需要动画流程图、概念对比、原理演示的场景。
 
-`ai-model-viz` 生成 AI/ML 模型原理的动态 HTML 可视化页面。用纯 CSS/SVG 绘制模型结构图，用动画展示数据流动、门控激活、权重传递等过程。暗色科技风格，节点发光、连接线渐变、数据流粒子效果。
+`flowchart` 生成教育/科普类流程图与原理演示的动画 HTML。暗色科技风格，节点发光、箭头流动、数据粒子效果。不只是 AI 模型——任何概念、流程、对比、交互都能用动画呈现。与 `dynami-carchify` 互补：flowchart 偏教育演示（好看 + 直观），dynami-carchify 偏工程架构（精确 + 可导出）。
 
 亮点:
-- 支持 MLP / RNN / LSTM / GRU / Word2Vec / GPU 等模型
-- 每个模型有针对性的动画重点（如 LSTM 三门依次激活、RNN 时间步展开）
+- 7 种图表类型：流程图 / 概念图 / 原理演示 / 时序图 / 对比图 / 时间线 / 系统概览
+- AI/ML 模型可视化完整保留（RNN / LSTM / GRU / MLP / Word2Vec / GPU）
 - 暗色科技风：深色背景 + 蓝/紫/橙渐变节点 + 发光效果
+- 连接线流动动画 + 数据粒子效果，页面始终保持动态感
 - 支持自动播放 / 手动步进 / hover 高亮三种交互模式
-- 数据流箭头持续循环流动，页面始终保持动态感
 
 <table>
 <tr>
-<td align="center" width="25%"><a href="./skills/ai-model-viz/README.md#模型列表"><img src="<!-- IMAGE:ai-model-rnn -->" alt="RNN preview" /></a><br /><sub><code>RNN</code><br />时间步展开</sub></td>
-<td align="center" width="25%"><a href="./skills/ai-model-viz/README.md#模型列表"><img src="<!-- IMAGE:ai-model-lstm -->" alt="LSTM preview" /></a><br /><sub><code>LSTM</code><br />三门门控动画</sub></td>
-<td align="center" width="25%"><a href="./skills/ai-model-viz/README.md#模型列表"><img src="<!-- IMAGE:ai-model-gru -->" alt="GRU preview" /></a><br /><sub><code>GRU</code><br />简化门控对比</sub></td>
-<td align="center" width="25%"><a href="./skills/ai-model-viz/README.md#模型列表"><img src="<!-- IMAGE:ai-model-gpu -->" alt="GPU preview" /></a><br /><sub><code>GPU</code><br />并行架构</sub></td>
+<td align="center" width="25%"><a href="./skills/flowchart/README.md#支持的图表类型"><img src="<!-- IMAGE:flowchart-rnn -->" alt="RNN preview" /></a><br /><sub><code>RNN</code><br />时间步展开</sub></td>
+<td align="center" width="25%"><a href="./skills/flowchart/README.md#支持的图表类型"><img src="<!-- IMAGE:flowchart-lstm -->" alt="LSTM preview" /></a><br /><sub><code>LSTM</code><br />三门门控动画</sub></td>
+<td align="center" width="25%"><a href="./skills/flowchart/README.md#支持的图表类型"><img src="<!-- IMAGE:flowchart-gpu -->" alt="GPU preview" /></a><br /><sub><code>GPU</code><br />并行架构</sub></td>
+<td align="center" width="25%"><a href="./skills/flowchart/README.md#支持的图表类型"><img src="<!-- IMAGE:flowchart-process -->" alt="process preview" /></a><br /><sub><code>流程图</code><br />攻击链/工作流</sub></td>
 </tr>
 </table>
 
-<sub>↑ 部分模型预览 — <a href="./skills/ai-model-viz/README.md#模型列表"><b>查看完整模型列表</b></a>。</sub>
+<sub>↑ 部分图表预览 — <a href="./skills/flowchart/README.md#支持的图表类型"><b>查看完整图表类型列表</b></a>。</sub>
 
-Links: [README](./skills/ai-model-viz/README.md) · [SKILL.md](./skills/ai-model-viz/SKILL.md)
+Links: [README](./skills/flowchart/README.md) · [SKILL.md](./skills/flowchart/SKILL.md)
 
 ---
 
@@ -266,7 +266,7 @@ npx skills add https://github.com/Unclecheng-li/AI_Animation
 
 # 安装单个 Skill
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/ppt-animation
-npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/ai-model-viz
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/flowchart
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/network-protocol-viz
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/dynami-carchify
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/scholar-notes
@@ -306,7 +306,7 @@ git clone https://github.com/Unclecheng-li/AI_Animation.git
 ```
 
 ```
-用 ai-model-viz 演示 LSTM 的工作原理
+用 flowchart 演示 LSTM 的工作原理
 ```
 
 ```
@@ -332,7 +332,7 @@ ai-animation-skills/
 │   │   ├── README.md            ← 人类可读文档
 │   │   ├── references/          ← Prompt 参考
 │   │   └── assets/              ← 模板 HTML 文件
-│   ├── ai-model-viz/
+│   ├── flowchart/
 │   │   ├── SKILL.md
 │   │   ├── README.md
 │   │   ├── references/
@@ -376,7 +376,7 @@ A collection of AI Agent skills for generating stunning HTML animation pages. Ea
 | Skill | Description | Templates |
 |-------|-------------|-----------|
 | [`ppt-animation`](./skills/ppt-animation) | PPT-style slideshow animations with 5 built-in themes | 30+ |
-| [`ai-model-viz`](./skills/ai-model-viz) | AI/ML model visualization (RNN, LSTM, GRU, MLP, etc.) | 15+ |
+| [`flowchart`](./skills/flowchart) | Animated flowcharts, concept maps, process diagrams, AI model viz | 7 types + 7 examples |
 | [`network-protocol-viz`](./skills/network-protocol-viz) | Network protocol animations (TCP, IPv4, routing, etc.) | 10+ |
 | [`dynami-carchify`](./skills/dynami-carchify) | Animated architecture/workflow/sequence/dataflow/lifecycle diagrams | 5 types |
 | [`scholar-notes`](./skills/scholar-notes) | Handwritten notebook-style HTML learning notes | 2 styles |
