@@ -37,24 +37,24 @@
 <table>
 <tr>
 <td width="50%" valign="top" align="center">
-<a href="#ppt-animation"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/3cf633d6-70a6-498c-8280-7e0b994a0a55" /></a>
+<a href="#ppt-animation"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/a6576e08-210b-4fda-867c-c0bd1a847d13" /></a>
 <br/><a href="#ppt-animation"><strong>ppt-animation</strong></a>
 <br/><sub>PPT 演示 / 翻页动画</sub>
 </td>
 <td width="50%" valign="top" align="center">
-<a href="#flowchart"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/f9051300-6d61-451c-bb21-3453d8dc1491" /></a>
+<a href="#flowchart"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/90414d79-80a5-47bc-bc5b-ee567160d021" /></a>
 <br/><a href="#flowchart"><strong>flowchart</strong></a>
 <br/><sub>流程图 / 概念图 / 原理演示</sub>
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top" align="center">
-<a href="#network-protocol-viz"><img width="2532" height="1440" alt="image" src="https://github.com/user-attachments/assets/65aabdbf-085a-4c6c-be3f-d30a494d1da0" /></a>
+<a href="#network-protocol-viz"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/39d12d3d-3c15-4e83-b2f4-0186fc9e5e2e" /></a>
 <br/><a href="#network-protocol-viz"><strong>network-protocol-viz</strong></a>
 <br/><sub>网络协议 / 数据包演示</sub>
 </td>
 <td width="50%" valign="top" align="center">
-<a href="#dynami-carchify"><img width="2536" height="1440" alt="image" src="https://github.com/user-attachments/assets/0b1a3093-4dc7-4e51-80cc-a53eace31da2" /></a>
+<a href="#dynami-carchify"><img width="2537" height="1440" alt="image" src="https://github.com/user-attachments/assets/61e42d50-1dfb-487a-9e5a-29e956a10e7f" /></a>
 <br/><a href="#dynami-carchify"><strong>dynami-carchify</strong></a>
 <br/><sub>动态架构图 / 流程图 / 时序图</sub>
 </td>
@@ -95,8 +95,8 @@
 <table>
 <tr>
 <td align="center" width="20%"><a href="./skills/ppt-animation/README.md#主题画廊"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/dbc2ddbc-3ec9-4d3e-892c-59e04f629124" /></a><br /><sub><code>dark-tech</code><br />暗色科技风</sub></td>
-<td align="center" width="20%"><a href="./skills/ppt-animation/README.md#主题画廊"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/a9ceaa1c-4c21-418a-a091-ecf84db91240" /></a><br /><sub><code>warm-paper</code><br />暖色报纸风</sub></td>
-<td align="center" width="20%"><a href="./skills/ppt-animation/README.md#主题画廊"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/474d7fe9-52fb-41e8-a86d-89d92a7d3f55" /></a><br /><sub><code>clean-white</code><br />简约白色</sub></td>
+<td align="center" width="20%"><a href="./skills/ppt-animation/README.md#主题画廊"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/939788e1-3a77-451f-84de-aa10fb2f4c4c" /></a><br /><sub><code>warm-paper</code><br />暖色报纸风</sub></td>
+<td align="center" width="20%"><a href="./skills/ppt-animation/README.md#主题画廊"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/30601c48-32c4-42ab-86a3-2699a3e01a58" /></a><br /><sub><code>clean-white</code><br />简约白色</sub></td>
 <td align="center" width="20%"><a href="./skills/ppt-animation/README.md#主题画廊"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/8829f50c-2162-4c7b-a8ea-aac458962112" /></a><br /><sub><code>cyber-red</code><br />赛博朋克红橙</sub></td>
 <td align="center" width="20%"><a href="./skills/ppt-animation/README.md#主题画廊"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/e5cdadf4-b0fd-41d2-90d8-3f12e63e2ec8" /></a><br /><sub><code>gradient-dark</code><br />渐变暗色</sub></td>
 </tr>
@@ -206,8 +206,7 @@ Links: [README](./skills/network-protocol-viz/README.md) · [SKILL.md](./skills/
 <td align="center" width="20%"><a href="./skills/dynami-carchify/README.md#支持的图表类型"><img width="2537" height="1440" alt="image" src="https://github.com/user-attachments/assets/e2ce7b4f-356a-4f99-93d1-bd391eafbea2" /></a><br /><sub><code>architecture</code><br />系统架构图</sub></td>
 <td align="center" width="20%"><a href="./skills/dynami-carchify/README.md#支持的图表类型"><img width="2533" height="1440" alt="image" src="https://github.com/user-attachments/assets/b2435e86-04b3-4825-83b8-122fd8c6490a" /></a><br /><sub><code>workflow</code><br />工作流图</sub></td>
 <td align="center" width="20%"><a href="./skills/dynami-carchify/README.md#支持的图表类型"><img width="2535" height="1440" alt="image" src="https://github.com/user-attachments/assets/d8acd7f3-7a93-4c4d-a4b9-a42e6264b909" /></a><br /><sub><code>sequence</code><br />时序图</sub></td>
-<td align="center" width="20%"><a href="./skills/dynami-carchify/README.md#支持的图表类型"><img width="2532" height="1440" alt="image" src="https://github.com/user-attachments/assets/1702a0f6-4ba6-42b7-bcb6-aa182f7cabf8" />
-</a><br /><sub><code>dataflow</code><br />数据流图</sub></td>
+<td align="center" width="20%"><a href="./skills/dynami-carchify/README.md#支持的图表类型"><img width="2537" height="1440" alt="image" src="https://github.com/user-attachments/assets/e400f2a4-2eb6-4be5-ac6b-18c49b353060" /></a><br /><sub><code>dataflow</code><br />数据流图</sub></td>
 <td align="center" width="20%"><a href="./skills/dynami-carchify/README.md#支持的图表类型"><img width="2536" height="1440" alt="image" src="https://github.com/user-attachments/assets/26dcdd9e-0c93-40a8-a7fc-42032f0e68a7" /></a><br /><sub><code>lifecycle</code><br />状态机</sub></td>
 </tr>
 </table>
