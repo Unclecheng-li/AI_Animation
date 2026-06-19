@@ -223,7 +223,7 @@ Links: [README](./skills/dynami-carchify/README.md) · [SKILL.md](./skills/dynam
 #### `scholar-notes`
 
 <a href="./skills/scholar-notes">
-<img src="<!-- IMAGE:scholar-notes-banner -->" alt="scholar-notes Skill" width="100%">
+<img width="2538" height="1440" alt="image" src="https://github.com/user-attachments/assets/bcdacd28-6e36-4d72-b493-8aee513630b3" />
 </a>
 
 **分类:** 学霸笔记 / 手写笔记本风格 HTML
@@ -240,8 +240,8 @@ Links: [README](./skills/dynami-carchify/README.md) · [SKILL.md](./skills/dynam
 
 <table>
 <tr>
-<td align="center" width="50%"><a href="./skills/scholar-notes/README.md#两种风格"><img src="<!-- IMAGE:scholar-notes-style-a -->" alt="Style A preview" /></a><br /><sub><code>Style A</code><br />学霸笔记本</sub></td>
-<td align="center" width="50%"><a href="./skills/scholar-notes/README.md#两种风格"><img src="<!-- IMAGE:scholar-notes-style-b -->" alt="Style B preview" /></a><br /><sub><code>Style B</code><br />手账皮革本</sub></td>
+<td align="center" width="50%"><a href="./skills/scholar-notes/README.md#两种风格"><img width="2540" height="1440" alt="image" src="https://github.com/user-attachments/assets/5eff500a-3653-4a98-bdcf-1896a5721621" /></a><br /><sub><code>Style A</code><br />学霸笔记本</sub></td>
+<td align="center" width="50%"><a href="./skills/scholar-notes/README.md#两种风格"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/45fd6706-4cf1-4206-9159-d921213da1ca" /></a><br /><sub><code>Style B</code><br />手账皮革本</sub></td>
 </tr>
 </table>
 
