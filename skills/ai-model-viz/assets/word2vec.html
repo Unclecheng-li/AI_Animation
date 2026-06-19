@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Word2Vec：给每个词一张"语义身份证"</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+            background: 
+                radial-gradient(circle at bottom left, #001f54 0%, transparent 50%),
+                radial-gradient(circle at top right, #001f54 0%, transparent 30%),
+                #000000;
+            min-height: 100vh;
+            overflow: hidden;
+            color: #fff;
+            position: relative;
+        }
+
+        /* 噪点效果 */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            opacity: 0.15;
+            mix-blend-mode: overlay;
+            animation: noiseMove 20s linear infinite;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        @keyframes noiseMove {
+            0% { transform: translate(0, 0) scale(1.1); }
+            25% { transform: translate(-2%, -2%) scale(1.05); }
+            50% { transform: translate(0, 0) scale(1.1); }
+            75% { transform: translate(2%, 2%) scale(1.05); }
+            100% { transform: translate(0, 0) scale(1.1); }
+        }
+
+        /* 粒子画布 */
+        #particlesCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        /* 右上角Logo */
+        .logo {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            color: #fff;
+            font-family: sans-serif;
+            text-align: right;
+            z-index: 100;
+        }
+        .logo svg {
+            width: 32px;
+            height: 32px;
+            margin-bottom: 4px;
+        }
+        .logo-text {
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(96, 165, 250, 0.5);
+        }
+
+        .container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 60px 80px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .section-title {
+            font-size: 56px;
+            font-weight: 800;
+            margin-bottom: 20px;
+            text-align: center;
+            color: #34d399;
+            text-shadow: 0 0 20px rgba(52, 211, 153, 0.5);
+            opacity: 0;
+            transform: translateY(30px);
+            animation: fadeInUp 0.8s ease forwards;
+            animation-delay: 0.2s;
+        }
+
+        .section-subtitle {
+            font-size: 24px;
+            color: #888;
+            text-align: center;
+            margin-bottom: 40px;
+            opacity: 0;
+            animation: fadeInUp 0.8s ease forwards;
+            animation-delay: 0.5s;
+        }
+
+        /* 缓入动画 */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* ========== Word2Vec架构图样式 ========== */
+        .word2vec-arch-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 25px;
+            padding: 40px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            max-width: 1600px;
+            transform: scale(1.05);
+            opacity: 0;
+            animation: archFadeIn 1s ease forwards;
+            animation-delay: 1s;
+            margin-top: 20px;
+        }
+
+        @keyframes archFadeIn {
+            from {
+                opacity: 0;
+                transform: scale(1.05) translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1.05) translateY(0);
+            }
+        }
+
+        .word2vec-arch-layer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeInUp 0.6s ease forwards;
+        }
+
+        /* 输入层 - 第1个 */
+        .word2vec-arch-diagram > .input-layer { animation-delay: 1.2s; }
+        /* Word2Vec层 - 第3个 */
+        .word2vec-arch-diagram > .word2vec-layer { animation-delay: 2.2s; }
+        /* 语义关联层 - 第5个 */
+        .word2vec-arch-diagram > .semantic-layer { animation-delay: 3.2s; }
+        /* 语义运算层 - 第7个 */
+        .word2vec-arch-diagram > .operation-layer { animation-delay: 4.2s; }
+        /* RNN层 - 第9个 */
+        .word2vec-arch-diagram > .rnn-layer { animation-delay: 5.2s; }
+
+        .word2vec-layer-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .word2vec-layer-box {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            border-radius: 16px;
+            padding: 22px;
+            min-width: 180px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        .word2vec-layer-box:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        /* 详细内容项 */
+        .word2vec-detail-item {
+            opacity: 0;
+            transform: translateY(15px);
+            animation: fadeInUp 0.5s ease forwards;
+        }
+
+        /* 输入层内部详细内容 */
+        .input-layer .word2vec-detail-item:nth-child(1) { animation-delay: 1.4s; }
+        .input-layer .word2vec-detail-item:nth-child(2) { animation-delay: 1.6s; }
+        .input-layer .word2vec-detail-item:nth-child(3) { animation-delay: 1.8s; }
+
+        /* Word2Vec层内部详细内容 */
+        .word2vec-layer .word2vec-detail-item:nth-child(1) { animation-delay: 2.4s; }
+        .word2vec-layer .word2vec-detail-item:nth-child(2) { animation-delay: 2.6s; }
+        .word2vec-layer .word2vec-detail-item:nth-child(3) { animation-delay: 2.8s; }
+        .word2vec-layer .word2vec-detail-item:nth-child(4) { animation-delay: 3.0s; }
+
+        /* 语义关联层内部详细内容 */
+        .semantic-layer .word2vec-detail-item:nth-child(1) { animation-delay: 3.4s; }
+        .semantic-layer .word2vec-detail-item:nth-child(2) { animation-delay: 3.6s; }
+        .semantic-layer .word2vec-detail-item:nth-child(3) { animation-delay: 3.8s; }
+
+        /* 语义运算层内部详细内容 */
+        .operation-layer .word2vec-detail-item:nth-child(1) { animation-delay: 4.4s; }
+        .operation-layer .word2vec-detail-item:nth-child(2) { animation-delay: 4.6s; }
+        .operation-layer .word2vec-detail-item:nth-child(3) { animation-delay: 4.8s; }
+
+        /* RNN层内部详细内容 */
+        .rnn-layer .word2vec-detail-item:nth-child(1) { animation-delay: 5.4s; }
+        .rnn-layer .word2vec-detail-item:nth-child(2) { animation-delay: 5.6s; }
+        .rnn-layer .word2vec-detail-item:nth-child(3) { animation-delay: 5.8s; }
+
+        /* 输入层样式 - One-hot */
+        .input-box {
+            border-color: rgba(239, 68, 68, 0.4);
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.05));
+        }
+
+        .input-box .word2vec-icon {
+            color: #ef4444;
+        }
+
+        /* Word2Vec层样式 */
+        .word2vec-box {
+            border-color: rgba(52, 211, 153, 0.5);
+            background: linear-gradient(135deg, rgba(52, 211, 153, 0.15), rgba(34, 197, 94, 0.1));
+        }
+
+        .word2vec-box .word2vec-icon {
+            color: #34d399;
+        }
+
+        .word2vec-box .word2vec-title {
+            color: #34d399;
+        }
+
+        /* 语义关联层样式 */
+        .semantic-box {
+            border-color: rgba(254, 202, 87, 0.5);
+            background: linear-gradient(135deg, rgba(254, 202, 87, 0.15), rgba(251, 191, 36, 0.1));
+        }
+
+        .semantic-box .word2vec-icon {
+            color: #feca57;
+        }
+
+        .semantic-box .word2vec-title {
+            color: #feca57;
+        }
+
+        /* 语义运算层样式 */
+        .operation-box {
+            border-color: rgba(96, 165, 250, 0.5);
+            background: linear-gradient(135deg, rgba(96, 165, 250, 0.15), rgba(59, 130, 246, 0.1));
+        }
+
+        .operation-box .word2vec-icon {
+            color: #60a5fa;
+        }
+
+        .operation-box .word2vec-title {
+            color: #60a5fa;
+        }
+
+        /* RNN层样式 */
+        .rnn-box {
+            border-color: rgba(139, 92, 246, 0.5);
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(124, 58, 237, 0.1));
+        }
+
+        .rnn-box .word2vec-icon {
+            color: #8b5cf6;
+        }
+
+        .rnn-box .word2vec-title {
+            color: #8b5cf6;
+        }
+
+        .word2vec-icon {
+            width: 44px;
+            height: 44px;
+            margin: 0 auto 10px;
+        }
+
+        .word2vec-icon svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .word2vec-title {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        .word2vec-desc {
+            font-size: 11px;
+            color: #888;
+        }
+
+        .word2vec-badge {
+            margin-top: 10px;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+        }
+
+        .word2vec-box .word2vec-badge {
+            background: rgba(52, 211, 153, 0.2);
+            color: #6ee7b7;
+        }
+
+        /* 2013年份标记 */
+        .year-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px 12px;
+            background: rgba(52, 211, 153, 0.2);
+            border: 1px solid rgba(52, 211, 153, 0.4);
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 700;
+            color: #34d399;
+            margin-top: 8px;
+        }
+
+        /* 语义距离可视化 */
+        .semantic-viz {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 10px;
+            align-items: center;
+        }
+
+        .semantic-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+        }
+
+        .word-badge {
+            padding: 3px 8px;
+            border-radius: 5px;
+            font-weight: 600;
+            font-size: 11px;
+        }
+
+        .word-badge.apple {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .word-badge.banana {
+            background: rgba(254, 202, 87, 0.2);
+            color: #feca57;
+            border: 1px solid rgba(254, 202, 87, 0.3);
+        }
+
+        .word-badge.car {
+            background: rgba(96, 165, 250, 0.2);
+            color: #60a5fa;
+            border: 1px solid rgba(96, 165, 250, 0.3);
+        }
+
+        .distance-indicator {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .distance-line {
+            height: 2px;
+            background: linear-gradient(90deg, transparent, currentColor, transparent);
+        }
+
+        .distance-line.short {
+            width: 20px;
+        }
+
+        .distance-line.long {
+            width: 40px;
+        }
+
+        .distance-value {
+            font-size: 9px;
+            color: #666;
+        }
+
+        /* 语义运算公式 */
+        .formula-viz {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            margin-top: 10px;
+            font-size: 11px;
+        }
+
+        .formula-word {
+            padding: 3px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .formula-word.king {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        .formula-word.man {
+            background: rgba(96, 165, 250, 0.2);
+            color: #60a5fa;
+        }
+
+        .formula-word.woman {
+            background: rgba(254, 202, 87, 0.2);
+            color: #feca57;
+        }
+
+        .formula-word.queen {
+            background: rgba(52, 211, 153, 0.2);
+            color: #34d399;
+        }
+
+        .formula-op {
+            color: #666;
+            font-weight: 700;
+        }
+
+        /* 连接线样式 */
+        .word2vec-arch-connector {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            min-width: 50px;
+            opacity: 0;
+            animation: fadeIn 0.5s ease forwards;
+        }
+
+        /* 箭头动画延迟 */
+        .word2vec-arch-diagram > .word2vec-arch-connector:nth-child(2) { animation-delay: 2.0s; }
+        .word2vec-arch-diagram > .word2vec-arch-connector:nth-child(4) { animation-delay: 3.0s; }
+        .word2vec-arch-diagram > .word2vec-arch-connector:nth-child(6) { animation-delay: 4.0s; }
+        .word2vec-arch-diagram > .word2vec-arch-connector:nth-child(8) { animation-delay: 5.0s; }
+
+        .word2vec-connector-svg {
+            width: 50px;
+            height: 18px;
+        }
+
+        .word2vec-connector-label {
+            font-size: 10px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* 核心原理说明 */
+        .principle-section {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 20px 30px;
+            backdrop-filter: blur(10px);
+            max-width: 1200px;
+            margin-top: 50px;
+            opacity: 0;
+            transform: translateY(30px);
+            animation: fadeInUp 0.8s ease forwards;
+            animation-delay: 6.0s;
+        }
+
+        .principle-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 18px;
+            font-weight: 700;
+            color: #34d399;
+            margin-bottom: 12px;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeInUp 0.6s ease forwards;
+            animation-delay: 6.2s;
+        }
+
+        .principle-title svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        .principle-content {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .principle-text {
+            font-size: 15px;
+            color: #ddd;
+            line-height: 1.6;
+            margin: 0;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeInUp 0.6s ease forwards;
+        }
+
+        /* 核心原理文字依次出现 - 使用更精确的选择器 */
+        .principle-content > p.principle-text:nth-of-type(1) { animation-delay: 6.4s; }
+        .principle-content > p.principle-text:nth-of-type(2) { animation-delay: 6.8s; }
+        .principle-content > p.principle-text:nth-of-type(3) { animation-delay: 7.8s; }
+
+        .principle-highlight {
+            color: #feca57;
+            font-weight: 700;
+            background: rgba(254, 202, 87, 0.15);
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        .principle-green {
+            color: #34d399;
+            font-weight: 800;
+        }
+
+        .principle-white {
+            color: #fff;
+            font-weight: 900;
+        }
+
+        /* 时间线对比 */
+        .timeline-compare {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 30px;
+            margin-top: 15px;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeInUp 0.6s ease forwards;
+            animation-delay: 7.0s;
+        }
+
+        .timeline-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            opacity: 0;
+            transform: translateY(15px);
+            animation: fadeInUp 0.5s ease forwards;
+        }
+
+        .timeline-compare .timeline-item:nth-child(1) { animation-delay: 7.1s; }
+        .timeline-compare .timeline-item:nth-child(3) { animation-delay: 7.3s; }
+
+        .timeline-year {
+            font-size: 20px;
+            font-weight: 800;
+            padding: 6px 16px;
+            border-radius: 8px;
+        }
+
+        .timeline-year.old {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .timeline-year.new {
+            background: rgba(52, 211, 153, 0.2);
+            color: #34d399;
+            border: 1px solid rgba(52, 211, 153, 0.3);
+        }
+
+        .timeline-text {
+            font-size: 13px;
+            color: #aaa;
+            text-align: center;
+        }
+
+        .timeline-arrow {
+            width: 40px;
+            height: 20px;
+            color: #666;
+            opacity: 0;
+            animation: fadeIn 0.4s ease forwards;
+            animation-delay: 7.2s;
+        }
+
+        .timeline-arrow svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 响应式调整 */
+        @media (max-width: 1600px) {
+            .word2vec-arch-diagram {
+                transform: scale(1.0);
+            }
+        }
+
+        @media (max-width: 1400px) {
+            .word2vec-arch-diagram {
+                flex-wrap: wrap;
+                gap: 20px;
+                max-width: 900px;
+            }
+            
+            .word2vec-arch-connector {
+                transform: rotate(90deg);
+                margin: 5px 0;
+            }
+            
+            .word2vec-connector-label {
+                transform: rotate(-90deg);
+            }
+
+            .section-title {
+                font-size: 48px;
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .container {
+                padding: 40px;
+            }
+            
+            .section-title {
+                font-size: 36px;
+            }
+
+            .section-subtitle {
+                font-size: 18px;
+            }
+            
+            .word2vec-arch-diagram {
+                flex-direction: column;
+                transform: scale(0.9);
+            }
+            
+            .word2vec-arch-connector {
+                transform: rotate(90deg);
+            }
+
+            .principle-section {
+                padding: 15px 20px;
+                margin-top: 30px;
+            }
+
+            .principle-text {
+                font-size: 14px;
+            }
+
+            .timeline-compare {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .timeline-arrow {
+                transform: rotate(90deg);
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Canvas粒子效果 -->
+    <canvas id="particlesCanvas"></canvas>
+
+    <div class="container">
+        <h1 class="section-title">Word2Vec：给每个词一张"语义身份证"</h1>
+        <p class="section-subtitle">2013年，词向量技术横空出世，彻底改变 NLP 格局</p>
+        
+        <div class="word2vec-arch-diagram">
+            <!-- 左侧：One-hot输入 -->
+            <div class="word2vec-arch-layer input-layer">
+                <div class="word2vec-layer-label">Input</div>
+                <div class="word2vec-layer-box input-box">
+                    <div class="word2vec-detail-item">
+                        <div class="word2vec-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <rect x="3" y="3" width="7" height="7" rx="1"/>
+                                <rect x="14" y="3" width="7" height="7" rx="1"/>
+                                <rect x="14" y="14" width="7" height="7" rx="1"/>
+                                <rect x="3" y="14" width="7" height="7" rx="1"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="word2vec-detail-item">
+                        <div class="word2vec-title">One-hot 编码</div>
+                    </div>
+                    <div class="word2vec-detail-item">
+                        <div class="word2vec-desc">笨重的长向量</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 连接线1：转换 -->
+            <div class="word2vec-arch-connector">
+                <svg class="word2vec-connector-svg" viewBox="0 0 50 18">
+                    <line x1="0" y1="9" x2="45" y2="9" stroke="rgba(52, 211, 153, 0.5)" stroke-width="2"/>
+                    <polygon points="40,5 50,9 40,13" fill="rgba(52, 211, 153, 0.5)"/>
+                </svg>
+                <span class="word2vec-connector-label">转换</span>
+            </div>
+
+            <!-- Word2Vec层 -->
+            <div class="word2vec-arch-layer word2vec-layer">
+                <div class="word2vec-layer-label">Word2Vec</div>
+                <div class="word2vec-layer-box word2vec-box">
+                    <div class="word2vec-detail-item">
+                        <div class="word2vec-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                <path d="M2 17l10 5 10-5"/>
+                                <path d="M2 12l10 5 10-5"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="word2vec-detail-item">
+                        <div class="word2vec-title">词向量</div>
+                    </div>
+                    <div class="word2vec-detail-item">
+                        <div class="word2vec-desc">低维稠密向量</div>
+                    </div>
+                    <div class="word2vec-detail-item">
+                        <div class="year-badge">2013</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 连接线2：语义关联 -->
+            <div class="word2vec-arch-connector">
+                <svg class="word2vec-connector-svg" viewBox="0 0 50 18">
+                    <line x1="0" y1="9" x2="45" y2="9" stroke="rgba(254, 202, 87, 0.5)" stroke-width="2"/>
+                    <polygon points="40,5 50,9 40,13" fill="rgba(254, 202, 87, 0.5)"/>
+                </svg>
+                <span class="word2vec-connector-label">关联</span>
+            </div>
+
+            <!-- 语义关联层 -->
+            <div class="word2vec-arch-layer semantic-layer">
+                <div class="word2vec-layer-label">Semantic</div>
+                <div class="word2vec-layer-box semantic-box">
+                    <div class="word2vec-detail-item">
+                        <div class="word2vec-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M12 16v-4M12 8h.01"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="word2vec-detail-item">
+                        <div class="word2vec-title">语义距离</div>
+                    </div>
+                    <div class="word2vec-detail-item">
+                        <div class="semantic-viz">
+                            <div class="semantic-row">
+                                <span class="word-badge apple">苹果</span>
+                                <div class="distance-indicator" style="color: #34d399;">
+                                    <div class="distance-line short"></div>
+                                    <span class="distance-value">近</span>
+                                </div>
+                                <span class="word-badge banana">香蕉</span>
+                            </div>
+                            <div class="semantic-row">
+                                <span class="word-badge apple">苹果</span>
+                                <div class="distance-indicator" style="color: #ef4444;">
+                                    <div class="distance-line long"></div>
+                                    <span class="distance-value">远</span>
+                                </div>
+                                <span class="word-badge car">汽车</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 连接线3：语义运算 -->
+            <div class="word2vec-arch-connector">
+                <svg class="word2vec-connector-svg" viewBox="0 0 50 18">
+                    <line x1="0" y1="9" x2="45" y2="9" stroke="rgba(96, 165, 250, 0.5)" stroke-width="2"/>
+                    <polygon points="40,5 50,9 40,13" fill="rgba(96, 165, 250, 0.5)"/>
+                </svg>
+                <span class="word2vec-connector-label">运算</span>
+            </div>
+
+            <!-- 语义运算层 -->
+            <div class="word2vec-arch-layer operation-layer">
+                <div class="word2vec-layer-label">Operation</div>
+                <div class="word2vec-layer-box operation-box">
+                    <div class="word2vec-detail-item">
+                        <div class="word2vec-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="word2vec-detail-item">
+                        <div class="word2vec-title">语义运算</div>
+                    </div>
+                    <div class="word2vec-detail-item">
+                        <div class="formula-viz">
+                            <span class="formula-word king">国王</span>
+                            <span class="formula-op">-</span>
+                            <span class="formula-word man">男</span>
+                            <span class="formula-op">+</span>
+                            <span class="formula-word woman">女</span>
+                            <span class="formula-op">=</span>
+                            <span class="formula-word queen">女王</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 连接线4：赋能RNN -->
+            <div class="word2vec-arch-connector">
+                <svg class="word2vec-connector-svg" viewBox="0 0 50 18">
+                    <line x1="0" y1="9" x2="45" y2="9" stroke="rgba(139, 92, 246, 0.5)" stroke-width="2"/>
+                    <polygon points="40,5 50,9 40,13" fill="rgba(139, 92, 246, 0.5)"/>
+                </svg>
+                <span class="word2vec-connector-label">赋能</span>
+            </div>
+
+            <!-- RNN层 -->
+            <div class="word2vec-arch-layer rnn-layer">
+                <div class="word2vec-layer-label">RNN</div>
+                <div class="word2vec-layer-box rnn-box">
+                    <div class="word2vec-detail-item">
+                        <div class="word2vec-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="word2vec-detail-item">
+                        <div class="word2vec-title">循环神经网络</div>
+                    </div>
+                    <div class="word2vec-detail-item">
+                        <div class="word2vec-desc">完美输入燃料</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 底部：核心原理说明 -->
+        <div class="principle-section">
+            <div class="principle-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 16v-4M12 8h.01"/>
+                </svg>
+                核心原理与突破性意义
+            </div>
+            <div class="principle-content">
+                <p class="principle-text">Word2Vec 不再使用<span class="principle-green">笨重的长向量</span>，而是把每个词转换成一串只有<span class="principle-white">几百个数字</span>的<span class="principle-green">低维稠密向量</span>。</p>
+                <p class="principle-text"><span class="principle-highlight">用数字空间里的距离来表达语义</span>——意思相近的词，它们转化出来的数字向量在数学空间里的位置也会<span class="principle-green">非常接近</span>。</p>
+                
+                <div class="timeline-compare">
+                    <div class="timeline-item">
+                        <div class="timeline-year old">1986</div>
+                        <div class="timeline-text">RNN 诞生<br/>沉寂27年</div>
+                    </div>
+                    <div class="timeline-arrow">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                    </div>
+                    <div class="timeline-item">
+                        <div class="timeline-year new">2013</div>
+                        <div class="timeline-text">Word2Vec 出现<br/>NLP爆发式增长</div>
+                    </div>
+                </div>
+                
+                <p class="principle-text" style="margin-top: 15px; text-align: center;">终于，AI <span class="principle-highlight">不再是死记硬背字形</span>，而是通过数字<span class="principle-green">真正"理解"了词与词之间的关系</span>。</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 粒子效果
+        const canvas = document.getElementById('particlesCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        const particles = [];
+        const particleCount = 100;
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 2 + 0.5;
+                this.speedX = (Math.random() - 0.5) * 0.5;
+                this.speedY = (Math.random() - 0.5) * 0.5;
+                this.opacity = Math.random() * 0.5 + 0.1;
+                this.color = `rgba(96, 165, 250, ${this.opacity})`;
+            }
+
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
+                    this.reset();
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        for (let i = 0; i < particleCount; i++) {
+            particles.push(new Particle());
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(particle => {
+                particle.update();
+                particle.draw();
+            });
+            requestAnimationFrame(animateParticles);
+        }
+
+        animateParticles();
+    </script>
+</body>
+</html>

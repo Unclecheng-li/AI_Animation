@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TCP协议可视化演示</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#6C5CE7',
+            secondary: '#00CEFF',
+            accent: '#FC5C65',
+            dark: '#1E293B',
+            darker: '#0F172A',
+            light: '#CBD5E1'
+          },
+          fontFamily: {
+            inter: ['Inter', 'sans-serif'],
+          },
+        },
+      }
+    }
+  </script>
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .content-auto {
+        content-visibility: auto;
+      }
+      .text-shadow {
+        text-shadow: 0 0 10px rgba(108, 92, 231, 0.7);
+      }
+      .glow {
+        box-shadow: 0 0 15px rgba(108, 92, 231, 0.5);
+      }
+      .packet {
+        transition: all 0.5s ease;
+      }
+      .bg-grid {
+        background-image: 
+          linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+        background-size: 20px 20px;
+      }
+    }
+  </style>
+</head>
+<body class="bg-darker text-light min-h-screen font-inter overflow-x-hidden bg-grid">
+  <!-- 导航栏 -->
+  <nav class="bg-dark/80 backdrop-blur-md border-b border-primary/20 fixed top-0 left-0 right-0 z-50 transition-all duration-300">
+    <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+      <div class="flex items-center space-x-2">
+        <i class="fa fa-exchange text-primary text-2xl"></i>
+        <h1 class="text-xl md:text-2xl font-bold text-shadow">TCP<span class="text-primary">协议</span>可视化</h1>
+      </div>
+      <div class="hidden md:flex items-center space-x-6">
+        <a href="#overview" class="hover:text-primary transition-colors duration-300">概述</a>
+        <a href="#three-way-handshake" class="hover:text-primary transition-colors duration-300">三次握手</a>
+        <a href="#data-transmission" class="hover:text-primary transition-colors duration-300">数据传输</a>
+        <a href="#connection-termination" class="hover:text-primary transition-colors duration-300">连接终止</a>
+      </div>
+      <button class="md:hidden text-2xl">
+        <i class="fa fa-bars"></i>
+      </button>
+    </div>
+  </nav>
+
+  <!-- 主内容 -->
+  <main class="container mx-auto px-4 pt-24 pb-16">
+    <!-- 英雄区 -->
+    <section id="overview" class="mb-20 text-center">
+      <h2 class="text-[clamp(1.8rem,5vw,3rem)] font-bold mb-6 text-shadow">TCP协议可视化演示</h2>
+      <p class="text-lg md:text-xl max-w-3xl mx-auto mb-10 text-light/80">
+        传输控制协议（TCP）是一种面向连接的、可靠的、基于字节流的传输层通信协议。
+        通过下面的交互式演示，探索TCP协议的工作原理。
+      </p>
+      <div class="flex flex-wrap justify-center gap-4">
+        <button id="play-all-btn" class="bg-primary hover:bg-primary/80 text-white px-6 py-3 rounded-lg transition-all duration-300 transform hover:scale-105 glow flex items-center">
+          <i class="fa fa-play mr-2"></i> 播放全部动画
+        </button>
+        <button id="reset-all-btn" class="bg-dark hover:bg-dark/80 text-light border border-primary/30 px-6 py-3 rounded-lg transition-all duration-300 transform hover:scale-105 flex items-center">
+          <i class="fa fa-refresh mr-2"></i> 重置所有
+        </button>
+      </div>
+    </section>
+
+    <!-- 三次握手部分 -->
+    <section id="three-way-handshake" class="mb-20 bg-dark/50 rounded-2xl p-6 md:p-8 backdrop-blur-sm border border-primary/20 transform transition-all duration-500 hover:shadow-lg hover:shadow-primary/10">
+      <h3 class="text-2xl md:text-3xl font-bold mb-8 flex items-center">
+        <span class="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center mr-3">
+          <i class="fa fa-handshake-o text-primary"></i>
+        </span>
+        三次握手 (Three-Way Handshake)
+      </h3>
+      
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div class="md:col-span-2 relative h-[300px] border border-primary/10 rounded-xl overflow-hidden bg-darker/50">
+          <div class="absolute top-4 left-4 text-sm text-light/60">客户端</div>
+          <div id="client-1" class="absolute top-16 left-10 w-24 h-16 bg-primary/20 border border-primary rounded-lg flex items-center justify-center text-center transform transition-all duration-500">
+            <span class="text-sm">客户端</span>
+          </div>
+          
+          <div class="absolute top-4 right-4 text-sm text-light/60">服务器</div>
+          <div id="server-1" class="absolute top-16 right-10 w-24 h-16 bg-secondary/20 border border-secondary rounded-lg flex items-center justify-center text-center transform transition-all duration-500">
+            <span class="text-sm">服务器</span>
+          </div>
+          
+          <div id="packet-container-1" class="absolute top-0 left-0 right-0 bottom-0 pointer-events-none">
+            <!-- 数据包将在这里动态生成 -->
+          </div>
+        </div>
+        
+        <div class="flex flex-col justify-between">
+          <div>
+            <p class="mb-4 text-light/90">
+              TCP三次握手是建立连接的过程，包括以下步骤：
+            </p>
+            <ul class="space-y-3">
+              <li id="step-1" class="flex items-start">
+                <span class="w-5 h-5 rounded-full bg-dark border border-light/30 flex items-center justify-center mr-3 mt-1 transition-all duration-300">
+                  <span class="text-xs">1</span>
+                </span>
+                <div>
+                  <span class="font-medium">客户端发送SYN包</span>
+                  <p class="text-sm text-light/70 mt-1">客户端向服务器发送SYN包，请求建立连接</p>
+                </div>
+              </li>
+              <li id="step-2" class="flex items-start">
+                <span class="w-5 h-5 rounded-full bg-dark border border-light/30 flex items-center justify-center mr-3 mt-1 transition-all duration-300">
+                  <span class="text-xs">2</span>
+                </span>
+                <div>
+                  <span class="font-medium">服务器发送SYN+ACK包</span>
+                  <p class="text-sm text-light/70 mt-1">服务器收到SYN包后，发送SYN+ACK包确认</p>
+                </div>
+              </li>
+              <li id="step-3" class="flex items-start">
+                <span class="w-5 h-5 rounded-full bg-dark border border-light/30 flex items-center justify-center mr-3 mt-1 transition-all duration-300">
+                  <span class="text-xs">3</span>
+                </span>
+                <div>
+                  <span class="font-medium">客户端发送ACK包</span>
+                  <p class="text-sm text-light/70 mt-1">客户端收到SYN+ACK包后，发送ACK包完成连接建立</p>
+                </div>
+              </li>
+            </ul>
+          </div>
+          
+          <div class="mt-6 flex space-x-3">
+            <button id="play-handshake-btn" class="bg-primary/20 hover:bg-primary/30 text-primary px-4 py-2 rounded-lg transition-all duration-300 flex items-center">
+              <i class="fa fa-play mr-2"></i> 播放动画
+            </button>
+            <button id="reset-handshake-btn" class="bg-dark hover:bg-dark/80 text-light border border-primary/30 px-4 py-2 rounded-lg transition-all duration-300 flex items-center">
+              <i class="fa fa-refresh mr-2"></i> 重置
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 数据传输部分 -->
+    <section id="data-transmission" class="mb-20 bg-dark/50 rounded-2xl p-6 md:p-8 backdrop-blur-sm border border-secondary/20 transform transition-all duration-500 hover:shadow-lg hover:shadow-secondary/10">
+      <h3 class="text-2xl md:text-3xl font-bold mb-8 flex items-center">
+        <span class="w-10 h-10 bg-secondary/20 rounded-full flex items-center justify-center mr-3">
+          <i class="fa fa-exchange text-secondary"></i>
+        </span>
+        数据传输 (Data Transmission)
+      </h3>
+      
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div class="md:col-span-2 relative h-[300px] border border-secondary/10 rounded-xl overflow-hidden bg-darker/50">
+          <div class="absolute top-4 left-4 text-sm text-light/60">发送方</div>
+          <div id="sender" class="absolute top-16 left-10 w-24 h-16 bg-primary/20 border border-primary rounded-lg flex items-center justify-center text-center transform transition-all duration-500">
+            <span class="text-sm">发送方</span>
+          </div>
+          
+          <div class="absolute top-4 right-4 text-sm text-light/60">接收方</div>
+          <div id="receiver" class="absolute top-16 right-10 w-24 h-16 bg-secondary/20 border border-secondary rounded-lg flex items-center justify-center text-center transform transition-all duration-500">
+            <span class="text-sm">接收方</span>
+          </div>
+          
+          <div id="packet-container-2" class="absolute top-0 left-0 right-0 bottom-0 pointer-events-none">
+            <!-- 数据包将在这里动态生成 -->
+          </div>
+          
+          <div id="window-1" class="absolute bottom-10 left-10 w-32 h-20 border-2 border-dashed border-primary/30 rounded-lg"></div>
+          <div id="window-2" class="absolute bottom-10 right-10 w-32 h-20 border-2 border-dashed border-secondary/30 rounded-lg"></div>
+        </div>
+        
+        <div class="flex flex-col justify-between">
+          <div>
+            <p class="mb-4 text-light/90">
+              TCP数据传输是可靠的、面向连接的过程，包括以下特点：
+            </p>
+            <ul class="space-y-3">
+              <li id="step-4" class="flex items-start">
+                <span class="w-5 h-5 rounded-full bg-dark border border-light/30 flex items-center justify-center mr-3 mt-1 transition-all duration-300">
+                  <span class="text-xs">1</span>
+                </span>
+                <div>
+                  <span class="font-medium">分段传输</span>
+                  <p class="text-sm text-light/70 mt-1">应用层数据被分割成TCP认为最适合发送的数据块</p>
+                </div>
+              </li>
+              <li id="step-5" class="flex items-start">
+                <span class="w-5 h-5 rounded-full bg-dark border border-light/30 flex items-center justify-center mr-3 mt-1 transition-all duration-300">
+                  <span class="text-xs">2</span>
+                </span>
+                <div>
+                  <span class="font-medium">确认机制</span>
+                  <p class="text-sm text-light/70 mt-1">接收方收到数据后发送确认(ACK)，未收到确认则重发</p>
+                </div>
+              </li>
+              <li id="step-6" class="flex items-start">
+                <span class="w-5 h-5 rounded-full bg-dark border border-light/30 flex items-center justify-center mr-3 mt-1 transition-all duration-300">
+                  <span class="text-xs">3</span>
+                </span>
+                <div>
+                  <span class="font-medium">滑动窗口</span>
+                  <p class="text-sm text-light/70 mt-1">TCP通过滑动窗口协议进行流量控制</p>
+                </div>
+              </li>
+            </ul>
+          </div>
+          
+          <div class="mt-6 flex space-x-3">
+            <button id="play-data-btn" class="bg-secondary/20 hover:bg-secondary/30 text-secondary px-4 py-2 rounded-lg transition-all duration-300 flex items-center">
+              <i class="fa fa-play mr-2"></i> 播放动画
+            </button>
+            <button id="reset-data-btn" class="bg-dark hover:bg-dark/80 text-light border border-secondary/30 px-4 py-2 rounded-lg transition-all duration-300 flex items-center">
+              <i class="fa fa-refresh mr-2"></i> 重置
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 连接终止部分 -->
+    <section id="connection-termination" class="mb-20 bg-dark/50 rounded-2xl p-6 md:p-8 backdrop-blur-sm border border-accent/20 transform transition-all duration-500 hover:shadow-lg hover:shadow-accent/10">
+      <h3 class="text-2xl md:text-3xl font-bold mb-8 flex items-center">
+        <span class="w-10 h-10 bg-accent/20 rounded-full flex items-center justify-center mr-3">
+          <i class="fa fa-power-off text-accent"></i>
+        </span>
+        四次挥手 (Connection Termination)
+      </h3>
+      
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div class="md:col-span-2 relative h-[300px] border border-accent/10 rounded-xl overflow-hidden bg-darker/50">
+          <div class="absolute top-4 left-4 text-sm text-light/60">客户端</div>
+          <div id="client-2" class="absolute top-16 left-10 w-24 h-16 bg-primary/20 border border-primary rounded-lg flex items-center justify-center text-center transform transition-all duration-500">
+            <span class="text-sm">客户端</span>
+          </div>
+          
+          <div class="absolute top-4 right-4 text-sm text-light/60">服务器</div>
+          <div id="server-2" class="absolute top-16 right-10 w-24 h-16 bg-secondary/20 border border-secondary rounded-lg flex items-center justify-center text-center transform transition-all duration-500">
+            <span class="text-sm">服务器</span>
+          </div>
+          
+          <div id="packet-container-3" class="absolute top-0 left-0 right-0 bottom-0 pointer-events-none">
+            <!-- 数据包将在这里动态生成 -->
+          </div>
+        </div>
+        
+        <div class="flex flex-col justify-between">
+          <div>
+            <p class="mb-4 text-light/90">
+              TCP四次挥手是关闭连接的过程，包括以下步骤：
+            </p>
+            <ul class="space-y-3">
+              <li id="step-7" class="flex items-start">
+                <span class="w-5 h-5 rounded-full bg-dark border border-light/30 flex items-center justify-center mr-3 mt-1 transition-all duration-300">
+                  <span class="text-xs">1</span>
+                </span>
+                <div>
+                  <span class="font-medium">客户端发送FIN包</span>
+                  <p class="text-sm text-light/70 mt-1">客户端向服务器发送FIN包，表示请求关闭连接</p>
+                </div>
+              </li>
+              <li id="step-8" class="flex items-start">
+                <span class="w-5 h-5 rounded-full bg-dark border border-light/30 flex items-center justify-center mr-3 mt-1 transition-all duration-300">
+                  <span class="text-xs">2</span>
+                </span>
+                <div>
+                  <span class="font-medium">服务器发送ACK包</span>
+                  <p class="text-sm text-light/70 mt-1">服务器收到FIN包后，发送ACK包确认</p>
+                </div>
+              </li>
+              <li id="step-9" class="flex items-start">
+                <span class="w-5 h-5 rounded-full bg-dark border border-light/30 flex items-center justify-center mr-3 mt-1 transition-all duration-300">
+                  <span class="text-xs">3</span>
+                </span>
+                <div>
+                  <span class="font-medium">服务器发送FIN包</span>
+                  <p class="text-sm text-light/70 mt-1">服务器向客户端发送FIN包，表示请求关闭连接</p>
+                </div>
+              </li>
+              <li id="step-10" class="flex items-start">
+                <span class="w-5 h-5 rounded-full bg-dark border border-light/30 flex items-center justify-center mr-3 mt-1 transition-all duration-300">
+                  <span class="text-xs">4</span>
+                </span>
+                <div>
+                  <span class="font-medium">客户端发送ACK包</span>
+                  <p class="text-sm text-light/70 mt-1">客户端收到FIN包后，发送ACK包确认</p>
+                </div>
+              </li>
+            </ul>
+          </div>
+          
+          <div class="mt-6 flex space-x-3">
+            <button id="play-termination-btn" class="bg-accent/20 hover:bg-accent/30 text-accent px-4 py-2 rounded-lg transition-all duration-300 flex items-center">
+              <i class="fa fa-play mr-2"></i> 播放动画
+            </button>
+            <button id="reset-termination-btn" class="bg-dark hover:bg-dark/80 text-light border border-accent/30 px-4 py-2 rounded-lg transition-all duration-300 flex items-center">
+              <i class="fa fa-refresh mr-2"></i> 重置
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 技术细节部分 -->
+    <section class="mb-20 bg-dark/30 rounded-2xl p-6 md:p-8 backdrop-blur-sm border border-light/10">
+      <h3 class="text-2xl md:text-3xl font-bold mb-8">TCP协议技术细节</h3>
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div>
+          <h4 class="text-xl font-semibold mb-4 flex items-center">
+            <i class="fa fa-info-circle text-primary mr-2"></i> 主要特点
+          </h4>
+          <ul class="space-y-2">
+            <li class="flex items-start">
+              <i class="fa fa-check-circle text-primary mt-1 mr-2"></i>
+              <span>面向连接：通信前需要建立连接，通信结束后需要释放连接</span>
+            </li>
+            <li class="flex items-start">
+              <i class="fa fa-check-circle text-primary mt-1 mr-2"></i>
+              <span>可靠传输：通过序列号、确认应答、重传机制保证数据可靠到达</span>
+            </li>
+            <li class="flex items-start">
+              <i class="fa fa-check-circle text-primary mt-1 mr-2"></i>
+              <span>面向字节流：TCP将应用层数据看作无结构的字节流</span>
+            </li>
+            <li class="flex items-start">
+              <i class="fa fa-check-circle text-primary mt-1 mr-2"></i>
+              <span>拥塞控制：通过拥塞窗口机制避免网络拥塞</span>
+            </li>
+            <li class="flex items-start">
+              <i class="fa fa-check-circle text-primary mt-1 mr-2"></i>
+              <span>流量控制：通过滑动窗口协议进行端到端的流量控制</span>
+            </li>
+          </ul>
+        </div>
+        
+        <div>
+          <h4 class="text-xl font-semibold mb-4 flex items-center">
+            <i class="fa fa-tasks text-secondary mr-2"></i> 关键机制
+          </h4>
+          <ul class="space-y-2">
+            <li class="flex items-start">
+              <i class="fa fa-cogs text-secondary mt-1 mr-2"></i>
+              <span>三次握手：建立可靠连接的过程</span>
+            </li>
+            <li class="flex items-start">
+              <i class="fa fa-cogs text-secondary mt-1 mr-2"></i>
+              <span>四次挥手：关闭连接的过程</span>
+            </li>
+            <li class="flex items-start">
+              <i class="fa fa-cogs text-secondary mt-1 mr-2"></i>
+              <span>滑动窗口：流量控制和高效传输的机制</span>
+            </li>
+            <li class="flex items-start">
+              <i class="fa fa-cogs text-secondary mt-1 mr-2"></i>
+              <span>超时重传：当数据包丢失时的重传机制</span>
+            </li>
+            <li class="flex items-start">
+              <i class="fa fa-cogs text-secondary mt-1 mr-2"></i>
+              <span>拥塞避免：防止网络过载的机制</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 页脚 -->
+  <footer class="bg-dark/80 backdrop-blur-md border-t border-primary/20 py-6">
+    <div class="container mx-auto px-4 text-center text-light/60">
+      <p>TCP协议可视化演示 &copy; 2023</p>
+      <p class="text-sm mt-2">基于纯前端技术构建，使用Tailwind CSS和Font Awesome</p>
+    </div>
+  </footer>
+
+  <script>
+    // 三次握手动画
+    document.getElementById('play-handshake-btn').addEventListener('click', function() {
+      playHandshakeAnimation();
+    });
+    
+    document.getElementById('reset-handshake-btn').addEventListener('click', function() {
+      resetHandshakeAnimation();
+    });
+    
+    // 数据传输动画
+    document.getElementById('play-data-btn').addEventListener('click', function() {
+      playDataTransmissionAnimation();
+    });
+    
+    document.getElementById('reset-data-btn').addEventListener('click', function() {
+      resetDataTransmissionAnimation();
+    });
+    
+    // 连接终止动画
+    document.getElementById('play-termination-btn').addEventListener('click', function() {
+      playConnectionTerminationAnimation();
+    });
+    
+    document.getElementById('reset-termination-btn').addEventListener('click', function() {
+      resetConnectionTerminationAnimation();
+    });
+    
+    // 播放全部动画
+    document.getElementById('play-all-btn').addEventListener('click', function() {
+      playHandshakeAnimation();
+      
+      setTimeout(function() {
+        resetHandshakeAnimation();
+        playDataTransmissionAnimation();
+      }, 12000);
+      
+      setTimeout(function() {
+        resetDataTransmissionAnimation();
+        playConnectionTerminationAnimation();
+      }, 24000);
+    });
+    
+    // 重置全部
+    document.getElementById('reset-all-btn').addEventListener('click', function() {
+      resetHandshakeAnimation();
+      resetDataTransmissionAnimation();
+      resetConnectionTerminationAnimation();
+    });
+    
+    // 三次握手动画函数
+    function playHandshakeAnimation() {
+      resetHandshakeAnimation();
+      
+      const packetContainer = document.getElementById('packet-container-1');
+      const client = document.getElementById('client-1');
+      const server = document.getElementById('server-1');
+      
+      // 步骤1：客户端发送SYN包
+      setTimeout(function() {
+        document.getElementById('step-1').querySelector('span').classList.remove('bg-dark', 'border-light/30');
+        document.getElementById('step-1').querySelector('span').classList.add('bg-primary', 'border-primary');
+        document.getElementById('step-1').querySelector('span').innerHTML = '<i class="fa fa-check text-white text-xs"></i>';
+        
+        client.classList.add('scale-110', 'glow');
+        createPacket(packetContainer, 'SYN', 'primary', client, server, 1, 2000);
+      }, 1000);
+      
+      // 步骤2：服务器发送SYN+ACK包
+      setTimeout(function() {
+        document.getElementById('step-2').querySelector('span').classList.remove('bg-dark', 'border-light/30');
+        document.getElementById('step-2').querySelector('span').classList.add('bg-secondary', 'border-secondary');
+        document.getElementById('step-2').querySelector('span').innerHTML = '<i class="fa fa-check text-white text-xs"></i>';
+        
+        server.classList.add('scale-110', 'glow');
+        createPacket(packetContainer, 'SYN+ACK', 'secondary', server, client, 2, 2000);
+      }, 4000);
+      
+      // 步骤3：客户端发送ACK包
+      setTimeout(function() {
+        document.getElementById('step-3').querySelector('span').classList.remove('bg-dark', 'border-light/30');
+        document.getElementById('step-3').querySelector('span').classList.add('bg-primary', 'border-primary');
+        document.getElementById('step-3').querySelector('span').innerHTML = '<i class="fa fa-check text-white text-xs"></i>';
+        
+        client.classList.add('scale-110', 'glow');
+        createPacket(packetContainer, 'ACK', 'primary', client, server, 3, 2000);
+        
+        // 最终状态
+        setTimeout(function() {
+          client.classList.remove('scale-110', 'glow');
+          server.classList.remove('scale-110', 'glow');
+          client.classList.add('scale-125', 'glow');
+          server.classList.add('scale-125', 'glow');
+        }, 2000);
+      }, 7000);
+    }
+    
+    function resetHandshakeAnimation() {
+      const packetContainer = document.getElementById('packet-container-1');
+      packetContainer.innerHTML = '';
+      
+      const client = document.getElementById('client-1');
+      const server = document.getElementById('server-1');
+      
+      client.classList.remove('scale-110', 'scale-125', 'glow');
+      server.classList.remove('scale-110', 'scale-125', 'glow');
+      
+      // 重置步骤指示器
+      for (let i = 1; i <= 3; i++) {
+        const step = document.getElementById(`step-${i}`);
+        step.querySelector('span').classList.remove('bg-primary', 'bg-secondary', 'border-primary', 'border-secondary');
+        step.querySelector('span').classList.add('bg-dark', 'border-light/30');
+        step.querySelector('span').innerHTML = `<span class="text-xs">${i}</span>`;
+      }
+    }
+    
+    // 数据传输动画函数
+    function playDataTransmissionAnimation() {
+      resetDataTransmissionAnimation();
+      
+      const packetContainer = document.getElementById('packet-container-2');
+      const sender = document.getElementById('sender');
+      const receiver = document.getElementById('receiver');
+      
+      // 步骤1：分段传输
+      setTimeout(function() {
+        document.getElementById('step-4').querySelector('span').classList.remove('bg-dark', 'border-light/30');
+        document.getElementById('step-4').querySelector('span').classList.add('bg-secondary', 'border-secondary');
+        document.getElementById('step-4').querySelector('span').innerHTML = '<i class="fa fa-check text-white text-xs"></i>';
+        
+        sender.classList.add('scale-110', 'glow');
+        
+        // 创建多个数据包
+        createPacket(packetContainer, 'DATA 1', 'primary', sender, receiver, 1, 1500);
+        setTimeout(() => createPacket(packetContainer, 'DATA 2', 'primary', sender, receiver, 2, 1500), 500);
+        setTimeout(() => createPacket(packetContainer, 'DATA 3', 'primary', sender, receiver, 3, 1500), 1000);
+      }, 1000);
+      
+      // 步骤2：确认机制
+      setTimeout(function() {
+        document.getElementById('step-5').querySelector('span').classList.remove('bg-dark', 'border-light/30');
+        document.getElementById('step-5').querySelector('span').classList.add('bg-secondary', 'border-secondary');
+        document.getElementById('step-5').querySelector('span').innerHTML = '<i class="fa fa-check text-white text-xs"></i>';
+        
+        receiver.classList.add('scale-110', 'glow');
+        
+        // 创建确认包
+        createPacket(packetContainer, 'ACK 1', 'secondary', receiver, sender, 4, 1500);
+        setTimeout(() => createPacket(packetContainer, 'ACK 2', 'secondary', receiver, sender, 5, 1500), 500);
+        setTimeout(() => createPacket(packetContainer, 'ACK 3', 'secondary', receiver, sender, 6, 1500), 1000);
+      }, 4000);
+      
+      // 步骤3：滑动窗口
+      setTimeout(function() {
+        document.getElementById('step-6').querySelector('span').classList.remove('bg-dark', 'border-light/30');
+        document.getElementById('step-6').querySelector('span').classList.add('bg-secondary', 'border-secondary');
+        document.getElementById('step-6').querySelector('span').innerHTML = '<i class="fa fa-check text-white text-xs"></i>';
+        
+        sender.classList.add('scale-110', 'glow');
+        receiver.classList.add('scale-110', 'glow');
+        
+        // 模拟窗口变化
+        const window1 = document.getElementById('window-1');
+        const window2 = document.getElementById('window-2');
+        
+        window1.classList.add('border-primary');
+        window2.classList.add('border-secondary');
+        
+        // 窗口大小变化动画
+        setTimeout(() => {
+          window1.style.width = '40px';
+          window1.style.transition = 'width 1s ease';
+          window2.style.width = '40px';
+          window2.style.transition = 'width 1s ease';
+        }, 500);
+        
+        setTimeout(() => {
+          window1.style.width = '56px';
+          window1.style.transition = 'width 1s ease';
+          window2.style.width = '56px';
+          window2.style.transition = 'width 1s ease';
+        }, 1500);
+        
+        // 发送更多数据
+        setTimeout(() => createPacket(packetContainer, 'DATA 4', 'primary', sender, receiver, 7, 1500), 1000);
+        setTimeout(() => createPacket(packetContainer, 'DATA 5', 'primary', sender, receiver, 8, 1500), 1500);
+        setTimeout(() => createPacket(packetContainer, 'ACK 4', 'secondary', receiver, sender, 9, 1500), 3000);
+        setTimeout(() => createPacket(packetContainer, 'ACK 5', 'secondary', receiver, sender, 10, 1500), 3500);
+      }, 7000);
+      
+      // 最终状态
+      setTimeout(function() {
+        sender.classList.remove('scale-110', 'glow');
+        receiver.classList.remove('scale-110', 'glow');
+        document.getElementById('window-1').classList.remove('border-primary');
+        document.getElementById('window-2').classList.remove('border-secondary');
+      }, 11000);
+    }
+    
+    function resetDataTransmissionAnimation() {
+      const packetContainer = document.getElementById('packet-container-2');
+      packetContainer.innerHTML = '';
+      
+      const sender = document.getElementById('sender');
+      const receiver = document.getElementById('receiver');
+      
+      sender.classList.remove('scale-110', 'scale-125', 'glow');
+      receiver.classList.remove('scale-110', 'scale-125', 'glow');
+      
+      // 重置窗口大小
+      const window1 = document.getElementById('window-1');
+      const window2 = document.getElementById('window-2');
+      
+      window1.style.width = '32px';
+      window2.style.width = '32px';
+      window1.classList.remove('border-primary');
+      window2.classList.remove('border-secondary');
+      
+      // 重置步骤指示器
+      for (let i = 4; i <= 6; i++) {
+        const step = document.getElementById(`step-${i}`);
+        step.querySelector('span').classList.remove('bg-primary', 'bg-secondary', 'border-primary', 'border-secondary');
+        step.querySelector('span').classList.add('bg-dark', 'border-light/30');
+        step.querySelector('span').innerHTML = `<span class="text-xs">${i-3}</span>`;
+      }
+    }
+    
+    // 连接终止动画函数
+    function playConnectionTerminationAnimation() {
+      resetConnectionTerminationAnimation();
+      
+      const packetContainer = document.getElementById('packet-container-3');
+      const client = document.getElementById('client-2');
+      const server = document.getElementById('server-2');
+      
+      // 步骤1：客户端发送FIN包
+      setTimeout(function() {
+        document.getElementById('step-7').querySelector('span').classList.remove('bg-dark', 'border-light/30');
+        document.getElementById('step-7').querySelector('span').classList.add('bg-accent', 'border-accent');
+        document.getElementById('step-7').querySelector('span').innerHTML = '<i class="fa fa-check text-white text-xs"></i>';
+        
+        client.classList.add('scale-110', 'glow');
+        createPacket(packetContainer, 'FIN', 'accent', client, server, 1, 2000);
+      }, 1000);
+      
+      // 步骤2：服务器发送ACK包
+      setTimeout(function() {
+        document.getElementById('step-8').querySelector('span').classList.remove('bg-dark', 'border-light/30');
+        document.getElementById('step-8').querySelector('span').classList.add('bg-accent', 'border-accent');
+        document.getElementById('step-8').querySelector('span').innerHTML = '<i class="fa fa-check text-white text-xs"></i>';
+        
+        server.classList.add('scale-110', 'glow');
+        createPacket(packetContainer, 'ACK', 'accent', server, client, 2, 2000);
+      }, 4000);
+      
+      // 步骤3：服务器发送FIN包
+      setTimeout(function() {
+        document.getElementById('step-9').querySelector('span').classList.remove('bg-dark', 'border-light/30');
+        document.getElementById('step-9').querySelector('span').classList.add('bg-accent', 'border-accent');
+        document.getElementById('step-9').querySelector('span').innerHTML = '<i class="fa fa-check text-white text-xs"></i>';
+        
+        server.classList.add('scale-110', 'glow');
+        createPacket(packetContainer, 'FIN', 'accent', server, client, 3, 2000);
+      }, 7000);
+      
+      // 步骤4：客户端发送ACK包
+      setTimeout(function() {
+        document.getElementById('step-10').querySelector('span').classList.remove('bg-dark', 'border-light/30');
+        document.getElementById('step-10').querySelector('span').classList.add('bg-accent', 'border-accent');
+        document.getElementById('step-10').querySelector('span').innerHTML = '<i class="fa fa-check text-white text-xs"></i>';
+        
+        client.classList.add('scale-110', 'glow');
+        createPacket(packetContainer, 'ACK', 'accent', client, server, 4, 2000);
+        
+        // 最终状态
+        setTimeout(function() {
+          client.classList.remove('scale-110', 'glow');
+          server.classList.remove('scale-110', 'glow');
+          client.classList.add('opacity-50');
+          server.classList.add('opacity-50');
+        }, 2000);
+      }, 10000);
+    }
+    
+    function resetConnectionTerminationAnimation() {
+      const packetContainer = document.getElementById('packet-container-3');
+      packetContainer.innerHTML = '';
+      
+      const client = document.getElementById('client-2');
+      const server = document.getElementById('server-2');
+      
+      client.classList.remove('scale-110', 'scale-125', 'glow', 'opacity-50');
+      server.classList.remove('scale-110', 'scale-125', 'glow', 'opacity-50');
+      
+      // 重置步骤指示器
+      for (let i = 7; i <= 10; i++) {
+        const step = document.getElementById(`step-${i}`);
+        step.querySelector('span').classList.remove('bg-accent', 'border-accent');
+        step.querySelector('span').classList.add('bg-dark', 'border-light/30');
+        step.querySelector('span').innerHTML = `<span class="text-xs">${i-6}</span>`;
+      }
+    }
+    
+    // 创建数据包动画
+    function createPacket(container, text, color, from, to, id, duration) {
+      const packet = document.createElement('div');
+      packet.id = `packet-${id}`;
+      packet.className = 'packet absolute px-2 py-1 rounded text-xs font-medium flex items-center justify-center';
+      packet.style.backgroundColor = `${color}/20`;
+      packet.style.color = color;
+      packet.style.border = `1px solid ${color}`;
+      packet.style.zIndex = 10;
+      packet.style.width = '40px';
+      packet.style.height = '24px';
+      packet.innerHTML = text;
+      
+      // 获取起点和终点坐标
+      const fromRect = from.getBoundingClientRect();
+      const toRect = to.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      
+      const startX = fromRect.left - containerRect.left + fromRect.width / 2;
+      const startY = fromRect.top - containerRect.top + fromRect.height / 2;
+      const endX = toRect.left - containerRect.left + toRect.width / 2;
+      const endY = toRect.top - containerRect.top + toRect.height / 2;
+      
+      // 设置初始位置
+      packet.style.left = `${startX}px`;
+      packet.style.top = `${startY}px`;
+      
+      // 添加到容器
+      container.appendChild(packet);
+      
+      // 创建动画
+      const animation = packet.animate([
+        { left: `${startX}px`, top: `${startY}px`, opacity: 1, transform: 'translate(-50%, -50%) scale(1)' },
+        { left: `${(startX + endX) / 2}px`, top: `${(startY + endY) / 2 - 20}px`, opacity: 0.8, transform: 'translate(-50%, -50%) scale(1.1)' },
+        { left: `${endX}px`, top: `${endY}px`, opacity: 0, transform: 'translate(-50%, -50%) scale(0.8)' }
+      ], {
+        duration: duration,
+        easing: 'ease-in-out'
+      });
+      
+      // 动画完成后移除元素
+      animation.onfinish = function() {
+        packet.remove();
+      };
+    }
+    
+    // 平滑滚动
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        
+        const targetId = this.getAttribute('href');
+        const targetElement = document.querySelector(targetId);
+        
+        if (targetElement) {
+          window.scrollTo({
+            top: targetElement.offsetTop - 80,
+            behavior: 'smooth'
+          });
+        }
+      });
+    });
+    
+    // 导航栏滚动效果
+    window.addEventListener('scroll', function() {
+      const nav = document.querySelector('nav');
+      if (window.scrollY > 50) {
+        nav.classList.add('py-2');
+        nav.classList.remove('py-3');
+      } else {
+        nav.classList.add('py-3');
+        nav.classList.remove('py-2');
+      }
+    });
+  </script>
+</body>
+</html>
+  

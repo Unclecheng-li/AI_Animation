@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2013年：RNN 迎来时代</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
+            background: #0a0a0f;
+            min-height: 100vh;
+            overflow: hidden;
+            color: #fff;
+            position: relative;
+        }
+
+        /* 背景网格 */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(52, 211, 153, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(52, 211, 153, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* 噪点效果 */
+        body::after {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            opacity: 0.08;
+            mix-blend-mode: overlay;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* 右上角Logo */
+        .logo {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            color: #fff;
+            font-family: sans-serif;
+            text-align: right;
+            z-index: 100;
+            opacity: 0.9;
+        }
+        .logo svg {
+            width: 28px;
+            height: 28px;
+            margin-bottom: 4px;
+        }
+        .logo-text {
+            font-size: 11px;
+            font-weight: 500;
+            letter-spacing: 1.5px;
+            color: rgba(255, 255, 255, 0.6);
+            text-transform: uppercase;
+        }
+
+        /* 主容器 */
+        .container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 60px 80px;
+            z-index: 10;
+        }
+
+        /* 标题 */
+        .header {
+            margin-bottom: 40px;
+        }
+
+        .title {
+            font-size: 14px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.5);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: 32px;
+            font-weight: 600;
+            color: #fff;
+            letter-spacing: -0.5px;
+        }
+
+        /* 架构图容器 */
+        .architecture-container {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* SVG连接线画布 */
+        #connectionCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        /* 架构节点 */
+        .architecture-layer {
+            display: flex;
+            align-items: center;
+            gap: 80px;
+            position: relative;
+            z-index: 2;
+        }
+
+        /* 模块组 */
+        .module-group {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        /* 模块容器 - 带边框 */
+        .module-container {
+            border: 1px solid rgba(52, 211, 153, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            background: rgba(10, 10, 15, 0.6);
+            backdrop-filter: blur(10px);
+            min-width: 200px;
+            position: relative;
+        }
+
+        .module-container::before {
+            content: attr(data-label);
+            position: absolute;
+            top: -10px;
+            left: 16px;
+            background: #0a0a0f;
+            padding: 0 8px;
+            font-size: 10px;
+            font-weight: 600;
+            color: rgba(52, 211, 153, 0.8);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        /* 单个模块 */
+        .module {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 20px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .module:hover {
+            background: rgba(52, 211, 153, 0.08);
+            border-color: rgba(52, 211, 153, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .module-icon {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            background: rgba(52, 211, 153, 0.1);
+            border: 1px solid rgba(52, 211, 153, 0.2);
+        }
+
+        .module-icon svg {
+            width: 20px;
+            height: 20px;
+            stroke: #34d399;
+            fill: none;
+            stroke-width: 1.5;
+        }
+
+        .module-content {
+            flex: 1;
+        }
+
+        .module-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 2px;
+        }
+
+        .module-desc {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        /* 左侧输入节点 */
+        .input-node {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            padding: 20px;
+        }
+
+        .input-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: 2px solid rgba(52, 211, 153, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(52, 211, 153, 0.05);
+        }
+
+        .input-icon svg {
+            width: 24px;
+            height: 24px;
+            stroke: #34d399;
+            fill: none;
+            stroke-width: 1.5;
+        }
+
+        .input-label {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.5);
+            text-align: center;
+            line-height: 1.4;
+        }
+
+        /* 中央处理节点 */
+        .center-node {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: 2px solid rgba(52, 211, 153, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(52, 211, 153, 0.08);
+            position: relative;
+        }
+
+        .center-node::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 1px solid rgba(52, 211, 153, 0.2);
+            animation: pulse-ring 2s ease-out infinite;
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+
+        .center-node svg {
+            width: 32px;
+            height: 32px;
+            stroke: #34d399;
+            fill: none;
+            stroke-width: 1.5;
+        }
+
+        /* 连接线标签 */
+        .connection-label {
+            position: absolute;
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.4);
+            background: #0a0a0f;
+            padding: 2px 6px;
+            border-radius: 4px;
+            white-space: nowrap;
+        }
+
+        /* 右侧输出 */
+        .output-section {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .output-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .output-bar {
+            width: 120px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .output-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #34d399, #10b981);
+            border-radius: 2px;
+            transition: width 1s ease;
+        }
+
+        .output-label {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.5);
+            min-width: 80px;
+        }
+
+        /* 动画 */
+        .fade-in {
+            opacity: 0;
+            animation: fadeIn 0.8s ease forwards;
+        }
+
+        @keyframes fadeIn {
+            to { opacity: 1; }
+        }
+
+        /* 连接线渐显动画 */
+        @keyframes lineFadeIn {
+            from {
+                opacity: 0;
+                stroke-dashoffset: 100;
+            }
+            to {
+                opacity: 1;
+                stroke-dashoffset: 0;
+            }
+        }
+
+        .delay-1 { animation-delay: 0.1s; }
+        .delay-2 { animation-delay: 0.2s; }
+        .delay-3 { animation-delay: 0.3s; }
+        .delay-4 { animation-delay: 0.4s; }
+        .delay-5 { animation-delay: 0.5s; }
+
+        /* 响应式 */
+        @media (max-width: 1200px) {
+            .container {
+                padding: 40px;
+            }
+            .architecture-layer {
+                gap: 40px;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 右上角Logo -->
+    <div class="logo">
+        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="30" r="12" fill="#34d399"/>
+            <path d="M35 45 Q50 70 65 45" stroke="#34d399" stroke-width="4" fill="none"/>
+            <path d="M30 60 Q50 90 70 60" stroke="#34d399" stroke-width="4" fill="none"/>
+        </svg>
+        <div class="logo-text">NetworkNoob</div>
+    </div>
+
+    <div class="container">
+        <div class="header fade-in">
+            <div class="title">Historical Context</div>
+            <div class="subtitle">2013年：RNN 迎来时代</div>
+        </div>
+
+        <div class="architecture-container">
+            <svg id="connectionCanvas"></svg>
+            
+            <div class="architecture-layer">
+                <!-- 左侧输入 -->
+                <div class="input-node fade-in delay-1">
+                    <div class="input-icon">
+                        <svg viewBox="0 0 24 24">
+                            <circle cx="12" cy="8" r="4"/>
+                            <path d="M4 20c0-4 4-6 8-6s8 2 8 6"/>
+                        </svg>
+                    </div>
+                    <div class="input-label">User<br>Interaction</div>
+                </div>
+
+                <!-- 中央处理 -->
+                <div class="center-node fade-in delay-2">
+                    <svg viewBox="0 0 24 24">
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                    </svg>
+                </div>
+
+                <!-- 右侧模块组 -->
+                <div class="module-group fade-in delay-3">
+                    <!-- 运算层 -->
+                    <div class="module-container" data-label="Operational Layer">
+                        <div class="module">
+                            <div class="module-icon">
+                                <svg viewBox="0 0 24 24">
+                                    <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                                    <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+                                    <path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/>
+                                </svg>
+                            </div>
+                            <div class="module-content">
+                                <div class="module-title">GPU 算力爆发</div>
+                                <div class="module-desc">终于能撑得起 RNN 的大规模计算</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AI引擎层 -->
+                    <div class="module-container" data-label="AI Engine Layer">
+                        <div class="module">
+                            <div class="module-icon">
+                                <svg viewBox="0 0 24 24">
+                                    <line x1="4" y1="9" x2="20" y2="9"/>
+                                    <line x1="4" y1="15" x2="20" y2="15"/>
+                                    <line x1="10" y1="3" x2="8" y2="21"/>
+                                    <line x1="16" y1="3" x2="14" y2="21"/>
+                                </svg>
+                            </div>
+                            <div class="module-content">
+                                <div class="module-title">Word2Vec</div>
+                                <div class="module-desc">给 RNN 送上了最完美的"点火魔法"</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右侧输出 -->
+                <div class="output-section fade-in delay-4">
+                    <div class="output-item">
+                        <div class="output-bar">
+                            <div class="output-bar-fill" style="width: 85%"></div>
+                        </div>
+                        <div class="output-label">机器翻译</div>
+                    </div>
+                    <div class="output-item">
+                        <div class="output-bar">
+                            <div class="output-bar-fill" style="width: 92%"></div>
+                        </div>
+                        <div class="output-label">语音识别</div>
+                    </div>
+                    <div class="output-item">
+                        <div class="output-bar">
+                            <div class="output-bar-fill" style="width: 78%"></div>
+                        </div>
+                        <div class="output-label">自然语言处理</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 绘制连接线
+        function drawConnections() {
+            const svg = document.getElementById('connectionCanvas');
+            const container = document.querySelector('.architecture-container');
+            
+            svg.innerHTML = '';
+            svg.setAttribute('width', container.offsetWidth);
+            svg.setAttribute('height', container.offsetHeight);
+
+            const nodes = document.querySelectorAll('.input-node, .center-node, .module-container, .output-section');
+            
+            // 创建带渐显动画的虚线连接
+            const createAnimatedLine = (x1, y1, x2, y2, delay = 0, color = 'rgba(52, 211, 153, 0.3)') => {
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', x1);
+                line.setAttribute('y1', y1);
+                line.setAttribute('x2', x2);
+                line.setAttribute('y2', y2);
+                line.setAttribute('stroke', color);
+                line.setAttribute('stroke-width', '1');
+                line.setAttribute('stroke-dasharray', '5,5');
+                line.setAttribute('fill', 'none');
+                line.setAttribute('opacity', '0');
+                line.style.animation = `lineFadeIn 0.6s ease forwards ${delay}s`;
+                return line;
+            };
+
+            // 获取节点中心位置
+            const getCenter = (element) => {
+                const rect = element.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
+                return {
+                    x: rect.left + rect.width / 2 - containerRect.left,
+                    y: rect.top + rect.height / 2 - containerRect.top
+                };
+            };
+
+            // 绘制连接线
+            if (nodes.length >= 4) {
+                const inputCenter = getCenter(nodes[0]);
+                const centerNode = getCenter(nodes[1]);
+                const moduleGroup = getCenter(nodes[2]);
+                const outputSection = getCenter(nodes[3]);
+
+                // 输入到中央 (延迟0.5s)
+                svg.appendChild(createAnimatedLine(inputCenter.x + 30, inputCenter.y, centerNode.x - 40, centerNode.y, 0.5));
+                
+                // 中央到模块组 (延迟0.7s)
+                svg.appendChild(createAnimatedLine(centerNode.x + 40, centerNode.y, moduleGroup.x - 110, moduleGroup.y, 0.7));
+                
+                // 模块组到输出 (延迟0.9s)
+                svg.appendChild(createAnimatedLine(moduleGroup.x + 110, moduleGroup.y, outputSection.x - 80, outputSection.y, 0.9));
+            }
+        }
+
+        // 初始化
+        window.addEventListener('load', drawConnections);
+        window.addEventListener('resize', drawConnections);
+
+        // 模块悬停效果
+        document.querySelectorAll('.module').forEach(module => {
+            module.addEventListener('mouseenter', function() {
+                this.style.transform = 'translateY(-4px) scale(1.02)';
+            });
+            module.addEventListener('mouseleave', function() {
+                this.style.transform = 'translateY(0) scale(1)';
+            });
+        });
+
+        // 进度条动画
+        setTimeout(() => {
+            document.querySelectorAll('.output-bar-fill').forEach(bar => {
+                const width = bar.style.width;
+                bar.style.width = '0';
+                setTimeout(() => {
+                    bar.style.width = width;
+                }, 100);
+            });
+        }, 1000);
+    </script>
+</body>
+</html>

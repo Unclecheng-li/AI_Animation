@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>One-hot 编码：早期的笨方法</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+            background: 
+                radial-gradient(circle at bottom left, #001f54 0%, transparent 50%),
+                radial-gradient(circle at top right, #001f54 0%, transparent 30%),
+                #000000;
+            min-height: 100vh;
+            overflow: hidden;
+            color: #fff;
+            position: relative;
+        }
+
+        /* 噪点效果 */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            opacity: 0.15;
+            mix-blend-mode: overlay;
+            animation: noiseMove 20s linear infinite;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        @keyframes noiseMove {
+            0% { transform: translate(0, 0) scale(1.1); }
+            25% { transform: translate(-2%, -2%) scale(1.05); }
+            50% { transform: translate(0, 0) scale(1.1); }
+            75% { transform: translate(2%, 2%) scale(1.05); }
+            100% { transform: translate(0, 0) scale(1.1); }
+        }
+
+        /* 粒子画布 */
+        #particlesCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        /* 右上角Logo */
+        .logo {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            color: #fff;
+            font-family: sans-serif;
+            text-align: right;
+            z-index: 100;
+        }
+        .logo svg {
+            width: 32px;
+            height: 32px;
+            margin-bottom: 4px;
+        }
+        .logo-text {
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(96, 165, 250, 0.5);
+        }
+
+        .container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 60px 80px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .section-title {
+            font-size: 56px;
+            font-weight: 800;
+            margin-bottom: 20px;
+            text-align: center;
+            color: #e94560;
+            text-shadow: 0 0 20px rgba(233, 69, 96, 0.5);
+            opacity: 0;
+            transform: translateY(30px);
+            animation: fadeInUp 0.8s ease forwards;
+            animation-delay: 0.2s;
+        }
+
+        /* 缓入动画 */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* ========== One-hot架构图样式 ========== */
+        .onehot-arch-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 30px;
+            padding: 40px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            max-width: 1600px;
+            transform: scale(1.2);
+            opacity: 0;
+            animation: archFadeIn 1s ease forwards;
+            animation-delay: 1s;
+            margin-top: 40px;
+        }
+
+        @keyframes archFadeIn {
+            from {
+                opacity: 0;
+                transform: scale(1.2) translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1.2) translateY(0);
+            }
+        }
+
+        .onehot-arch-layer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeInUp 0.6s ease forwards;
+        }
+
+        /* 词汇字典层 - 第1个 */
+        .onehot-arch-diagram > .input-layer { animation-delay: 1.2s; }
+        /* One-hot编码层 - 第3个 */
+        .onehot-arch-diagram > .onehot-layer { animation-delay: 2.2s; }
+        /* 稀疏向量层 - 第5个 */
+        .onehot-arch-diagram > .output-layer { animation-delay: 3.2s; }
+
+        .onehot-layer-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .onehot-layer-box {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            border-radius: 16px;
+            padding: 24px;
+            min-width: 180px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        .onehot-layer-box:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        /* 模块内部内容依次显示 */
+        .onehot-box-content {
+            opacity: 1;
+        }
+
+        /* 详细内容项 */
+        .onehot-detail-item {
+            opacity: 0;
+            transform: translateY(15px);
+            animation: fadeInUp 0.5s ease forwards;
+        }
+
+        /* 词汇字典层内部详细内容 - 减慢动画 */
+        .input-layer .onehot-detail-item:nth-child(1) { animation-delay: 1.4s; }  /* 图标 */
+        .input-layer .onehot-detail-item:nth-child(2) { animation-delay: 1.6s; }  /* 标题 */
+        .input-layer .onehot-detail-item:nth-child(3) { animation-delay: 1.8s; }  /* 描述 */
+        .input-layer .onehot-detail-item:nth-child(4) { animation-delay: 2.0s; }  /* 词列表 */
+
+        /* One-hot编码层内部详细内容 - 减慢动画 */
+        .onehot-layer .onehot-detail-item:nth-child(1) { animation-delay: 2.4s; }  /* 图标 */
+        .onehot-layer .onehot-detail-item:nth-child(2) { animation-delay: 2.6s; }  /* 标题 */
+        .onehot-layer .onehot-detail-item:nth-child(3) { animation-delay: 2.8s; }  /* 描述 */
+        .onehot-layer .onehot-detail-item:nth-child(4) { animation-delay: 3.0s; }  /* 徽章 */
+
+        /* 稀疏向量层内部详细内容 - 减慢动画，逐个显示 */
+        /* 图标、标题、描述 */
+        .output-layer .onehot-detail-item:nth-child(1) { animation-delay: 3.4s; }  /* 图标 */
+        .output-layer .onehot-detail-item:nth-child(2) { animation-delay: 3.6s; }  /* 标题 */
+        .output-layer .onehot-detail-item:nth-child(3) { animation-delay: 3.8s; }  /* 描述 */
+        /* 第一行：我 = [1,0,0...] */
+        .output-layer .onehot-detail-item:nth-child(4) { animation-delay: 4.0s; }
+        /* 第二行：吃 = [0,1,0...] */
+        .output-layer .onehot-detail-item:nth-child(5) { animation-delay: 4.5s; }
+        /* 第三行：苹果 = [0,0,1...] */
+        .output-layer .onehot-detail-item:nth-child(6) { animation-delay: 5.0s; }
+
+
+        /* 输入层样式 */
+        .input-box {
+            border-color: rgba(96, 165, 250, 0.4);
+            background: linear-gradient(135deg, rgba(96, 165, 250, 0.1), rgba(59, 130, 246, 0.05));
+        }
+
+        .input-box .onehot-icon {
+            color: #60a5fa;
+        }
+
+        /* One-hot编码层样式 */
+        .onehot-box {
+            border-color: rgba(233, 69, 96, 0.5);
+            background: linear-gradient(135deg, rgba(233, 69, 96, 0.15), rgba(220, 38, 38, 0.1));
+            position: relative;
+        }
+
+        .onehot-box .onehot-icon {
+            color: #e94560;
+        }
+
+        .onehot-box .onehot-title {
+            color: #e94560;
+        }
+
+        /* 输出层样式 */
+        .output-box {
+            border-color: rgba(254, 202, 87, 0.4);
+            background: linear-gradient(135deg, rgba(254, 202, 87, 0.1), rgba(251, 191, 36, 0.05));
+        }
+
+        .output-box .onehot-icon {
+            color: #feca57;
+        }
+
+        .onehot-icon {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 12px;
+        }
+
+        .onehot-icon svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .onehot-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .onehot-desc {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .onehot-badge {
+            margin-top: 12px;
+            padding: 8px 12px;
+            background: rgba(233, 69, 96, 0.2);
+            border-radius: 8px;
+            font-size: 12px;
+            color: #fca5a5;
+        }
+
+        /* 词汇列表示例 */
+        .word-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .word-item {
+            padding: 8px 16px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            font-size: 14px;
+            border: 1px solid rgba(96, 165, 250, 0.3);
+            color: #60a5fa;
+        }
+
+        /* 向量可视化 */
+        .vector-display {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            margin-top: 8px;
+        }
+
+        .vector-row-display {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            padding: 8px 0;
+        }
+
+        .vector-word {
+            min-width: 50px;
+            font-weight: 700;
+            color: #feca57;
+        }
+
+        .vector-cells {
+            display: flex;
+            gap: 3px;
+        }
+
+        .v-cell {
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .v-cell.one {
+            background: #e94560;
+            color: #fff;
+            box-shadow: 0 0 8px rgba(233, 69, 96, 0.5);
+        }
+
+        .v-cell.zero {
+            background: rgba(255, 255, 255, 0.1);
+            color: #666;
+        }
+
+        /* 连接线样式 */
+        .onehot-arch-connector {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            min-width: 80px;
+            opacity: 0;
+            animation: fadeIn 0.5s ease forwards;
+        }
+
+        /* 编码箭头 - 第2个元素 */
+        .onehot-arch-diagram > .onehot-arch-connector:nth-child(2) { animation-delay: 2.2s; }
+        /* 输出箭头 - 第4个元素 */
+        .onehot-arch-diagram > .onehot-arch-connector:nth-child(4) { animation-delay: 3.2s; }
+
+        .onehot-connector-svg {
+            width: 80px;
+            height: 20px;
+        }
+
+        .onehot-connector-label {
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* 核心问题说明 */
+        .onehot-problem-section {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 25px 35px;
+            backdrop-filter: blur(10px);
+            max-width: 1200px;
+            margin-top: 80px;
+            opacity: 0;
+            transform: translateY(30px);
+            animation: fadeInUp 0.8s ease forwards;
+            animation-delay: 5.5s;
+        }
+
+        .onehot-problem-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 20px;
+            font-weight: 700;
+            color: #ef4444;
+            margin-bottom: 15px;
+        }
+
+        .onehot-problem-title svg {
+            width: 28px;
+            height: 28px;
+        }
+
+        .onehot-problem-content {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .onehot-problem-text {
+            font-size: 18px;
+            color: #ddd;
+            line-height: 1.6;
+            margin: 0;
+        }
+
+        .onehot-highlight {
+            color: #feca57;
+            font-weight: 700;
+            background: rgba(254, 202, 87, 0.15);
+            padding: 3px 10px;
+            border-radius: 6px;
+        }
+
+        .onehot-danger {
+            color: #ef4444;
+            font-weight: 800;
+            text-decoration: underline;
+            text-decoration-color: #ef4444;
+            text-decoration-thickness: 3px;
+        }
+
+        .onehot-white {
+            color: #fff;
+            font-weight: 900;
+            font-size: 1.1em;
+        }
+
+        /* 维度爆炸警告 */
+        .dimension-warning {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 15px;
+            padding: 15px 25px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 12px;
+        }
+
+        .warning-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .warning-icon {
+            width: 32px;
+            height: 32px;
+            color: #60a5fa;
+        }
+
+        .warning-icon svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .warning-text {
+            font-size: 14px;
+            color: #ddd;
+            font-weight: 600;
+        }
+
+        .warning-arrow {
+            width: 24px;
+            height: 24px;
+            color: #ef4444;
+        }
+
+        .warning-arrow svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 响应式调整 */
+        @media (max-width: 1600px) {
+            .onehot-arch-diagram {
+                transform: scale(1.05);
+            }
+        }
+
+        @media (max-width: 1400px) {
+            .onehot-arch-diagram {
+                flex-wrap: wrap;
+                gap: 25px;
+                transform: scale(1);
+            }
+            
+            .onehot-arch-connector {
+                transform: rotate(90deg);
+                margin: 10px 0;
+            }
+            
+            .onehot-connector-label {
+                transform: rotate(-90deg);
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .container {
+                padding: 40px;
+            }
+            
+            .section-title {
+                font-size: 40px;
+            }
+            
+            .onehot-arch-diagram {
+                flex-direction: column;
+                transform: scale(0.9);
+            }
+            
+            .onehot-arch-connector {
+                transform: rotate(90deg);
+            }
+            
+            .onehot-problem-section {
+                padding: 20px;
+            }
+            
+            .onehot-problem-text {
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 右上角logo -->
+    <div class="logo">
+        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="30" r="12" fill="#60a5fa"/>
+            <path d="M35 45 Q50 70 65 45" stroke="#60a5fa" stroke-width="4" fill="none"/>
+            <path d="M30 60 Q50 90 70 60" stroke="#60a5fa" stroke-width="4" fill="none"/>
+        </svg>
+        <div class="logo-text">NetworkNoob</div>
+    </div>
+
+    <!-- Canvas粒子效果 -->
+    <canvas id="particlesCanvas"></canvas>
+
+    <div class="container">
+        <h1 class="section-title">One-hot 编码：早期的笨方法</h1>
+        
+        <div class="onehot-arch-diagram">
+            <!-- 左侧：输入层 -->
+            <div class="onehot-arch-layer input-layer">
+                <div class="onehot-layer-label">Input</div>
+                <div class="onehot-layer-box input-box">
+                    <div class="onehot-box-content">
+                        <div class="onehot-detail-item">
+                            <div class="onehot-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
+                                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
+                                    <path d="M12 6h4M12 10h4M8 14h8"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="onehot-detail-item">
+                            <div class="onehot-title">词汇字典</div>
+                        </div>
+                        <div class="onehot-detail-item">
+                            <div class="onehot-desc">10,000+ 个词</div>
+                        </div>
+                        <div class="onehot-detail-item">
+                            <div class="word-list">
+                                <div class="word-item">我</div>
+                                <div class="word-item">吃</div>
+                                <div class="word-item">苹果</div>
+                                <div class="word-item">...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 连接线1 -->
+            <div class="onehot-arch-connector">
+                <svg class="onehot-connector-svg" viewBox="0 0 80 20">
+                    <line x1="0" y1="10" x2="75" y2="10" stroke="rgba(233, 69, 96, 0.5)" stroke-width="2"/>
+                    <polygon points="70,6 80,10 70,14" fill="rgba(233, 69, 96, 0.5)"/>
+                </svg>
+                <span class="onehot-connector-label">编码</span>
+            </div>
+
+            <!-- 中间：One-hot编码层 -->
+            <div class="onehot-arch-layer onehot-layer">
+                <div class="onehot-layer-label">Processing</div>
+                <div class="onehot-layer-box onehot-box">
+                    <div class="onehot-box-content">
+                        <div class="onehot-detail-item">
+                            <div class="onehot-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <rect x="3" y="3" width="7" height="7" rx="1"/>
+                                    <rect x="14" y="3" width="7" height="7" rx="1"/>
+                                    <rect x="14" y="14" width="7" height="7" rx="1"/>
+                                    <rect x="3" y="14" width="7" height="7" rx="1"/>
+                                    <path d="M10 6.5h4M6.5 10v4M17.5 10v4M10 17.5h4"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="onehot-detail-item">
+                            <div class="onehot-title">One-hot 编码</div>
+                        </div>
+                        <div class="onehot-detail-item">
+                            <div class="onehot-desc">独热编码</div>
+                        </div>
+                        <div class="onehot-detail-item">
+                            <div class="onehot-badge">
+                                只有1个位置为1
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 连接线2 -->
+            <div class="onehot-arch-connector">
+                <svg class="onehot-connector-svg" viewBox="0 0 80 20">
+                    <line x1="0" y1="10" x2="75" y2="10" stroke="rgba(254, 202, 87, 0.5)" stroke-width="2"/>
+                    <polygon points="70,6 80,10 70,14" fill="rgba(254, 202, 87, 0.5)"/>
+                </svg>
+                <span class="onehot-connector-label">输出</span>
+            </div>
+
+            <!-- 右侧：输出层 -->
+            <div class="onehot-arch-layer output-layer">
+                <div class="onehot-layer-label">Output</div>
+                <div class="onehot-layer-box output-box">
+                    <div class="onehot-box-content">
+                        <div class="onehot-detail-item">
+                            <div class="onehot-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <path d="M4 6h16M4 12h16M4 18h16"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="onehot-detail-item">
+                            <div class="onehot-title">稀疏向量</div>
+                        </div>
+                        <div class="onehot-detail-item">
+                            <div class="onehot-desc">超长向量表示</div>
+                        </div>
+                        <!-- 第一行：我 = [1,0,0...] -->
+                        <div class="onehot-detail-item vector-row-display">
+                            <span class="vector-word">我</span>
+                            <span style="color: #666;">=</span>
+                            <div class="vector-cells">
+                                <div class="v-cell one">1</div>
+                                <div class="v-cell zero">0</div>
+                                <div class="v-cell zero">0</div>
+                                <div class="v-cell zero">...</div>
+                            </div>
+                        </div>
+                        <!-- 第二行：吃 = [0,1,0...] -->
+                        <div class="onehot-detail-item vector-row-display">
+                            <span class="vector-word">吃</span>
+                            <span style="color: #666;">=</span>
+                            <div class="vector-cells">
+                                <div class="v-cell zero">0</div>
+                                <div class="v-cell one">1</div>
+                                <div class="v-cell zero">0</div>
+                                <div class="v-cell zero">...</div>
+                            </div>
+                        </div>
+                        <!-- 第三行：苹果 = [0,0,1...] -->
+                        <div class="onehot-detail-item vector-row-display">
+                            <span class="vector-word">苹果</span>
+                            <span style="color: #666;">=</span>
+                            <div class="vector-cells">
+                                <div class="v-cell zero">0</div>
+                                <div class="v-cell zero">0</div>
+                                <div class="v-cell one">1</div>
+                                <div class="v-cell zero">...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 底部：核心问题说明 -->
+        <div class="onehot-problem-section">
+            <div class="onehot-problem-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 8v4M12 16h.01"/>
+                </svg>
+                核心问题：维度爆炸
+            </div>
+            <div class="onehot-problem-content">
+                <p class="onehot-problem-text">如果你的字典里有 <span class="onehot-white">10,000</span> 个词，每个词都要变成一个拥有 <span class="onehot-white">10,000</span> 个数字的<span class="onehot-danger">超长向量</span>。</p>
+                <p class="onehot-problem-text">在这个向量里，<span class="onehot-highlight">只有属于这个词的那个位置标记为 1</span>，其余 <span class="onehot-white">9,999</span> 个位置<span class="onehot-danger">全是 0</span>。</p>
+                
+                <div class="dimension-warning">
+                    <div class="warning-item">
+                        <div class="warning-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
+                                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
+                            </svg>
+                        </div>
+                        <div class="warning-text">10万词字典</div>
+                    </div>
+                    <div class="warning-arrow">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                    </div>
+                    <div class="warning-item">
+                        <div class="warning-icon" style="color: #ef4444;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                <path d="M2 17l10 5 10-5"/>
+                                <path d="M2 12l10 5 10-5"/>
+                            </svg>
+                        </div>
+                        <div class="warning-text" style="color: #ef4444;">10万维向量</div>
+                    </div>
+                    <div class="warning-arrow">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                    </div>
+                    <div class="warning-item">
+                        <div class="warning-icon" style="color: #ef4444;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M12 6v6l4 2"/>
+                            </svg>
+                        </div>
+                        <div class="warning-text" style="color: #ef4444;">算力崩塌</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 粒子效果
+        const canvas = document.getElementById('particlesCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        const particles = [];
+        const particleCount = 100;
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 2 + 0.5;
+                this.speedX = (Math.random() - 0.5) * 0.5;
+                this.speedY = (Math.random() - 0.5) * 0.5;
+                this.opacity = Math.random() * 0.5 + 0.1;
+                this.color = `rgba(96, 165, 250, ${this.opacity})`;
+            }
+
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
+                    this.reset();
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        for (let i = 0; i < particleCount; i++) {
+            particles.push(new Particle());
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(particle => {
+                particle.update();
+                particle.draw();
+            });
+            requestAnimationFrame(animateParticles);
+        }
+
+        animateParticles();
+    </script>
+</body>
+</html>

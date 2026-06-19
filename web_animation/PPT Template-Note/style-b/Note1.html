@@ -1,0 +1,1405 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTTP/2 协议笔记</title>
+    <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@300;400;700&family=Ma+Shan+Zheng&family=Zeyada&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    <style>
+        :root {
+            --paper-color: #fdfbf7;
+            --paper-shadow: #e8e4dc;
+            --ink-color: #2c2c2c;
+            --ink-light: #4a4a4a;
+            --accent-blue: #2b6cb0;
+            --accent-red: #c53030;
+            --highlight: rgba(255, 255, 0, 0.4);
+            --highlight-pink: rgba(255, 105, 180, 0.3);
+            --line-color: #a4b0be;
+            --margin-line: #ff6b6b;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Kalam', 'Ma Shan Zheng', cursive;
+            background: #3d3d3d;
+            background-image:
+                radial-gradient(circle at 20% 50%, rgba(255,255,255,0.05) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(255,255,255,0.03) 0%, transparent 50%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        /* 笔记本整体容器 */
+        .notebook {
+            width: 900px;
+            max-width: 95vw;
+            background: #8b4513;
+            background-image:
+                repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px),
+                linear-gradient(180deg, #8b4513 0%, #6b3410 100%);
+            border-radius: 12px 18px 18px 12px;
+            padding: 25px 20px 25px 35px;
+            box-shadow:
+                0 0 0 2px #5c2e0b,
+                0 20px 60px rgba(0,0,0,0.6),
+                inset 0 1px 0 rgba(255,255,255,0.1);
+            position: relative;
+            transform-style: preserve-3d;
+            perspective: 1500px;
+        }
+
+        /* 书脊 */
+        .notebook::before {
+            content: '';
+            position: absolute;
+            left: 25px;
+            top: 15px;
+            bottom: 15px;
+            width: 3px;
+            background: linear-gradient(180deg,
+                rgba(0,0,0,0.3) 0%,
+                rgba(0,0,0,0.1) 20%,
+                rgba(0,0,0,0.3) 40%,
+                rgba(0,0,0,0.1) 60%,
+                rgba(0,0,0,0.3) 80%,
+                rgba(0,0,0,0.1) 100%);
+            border-radius: 2px;
+        }
+
+        /* 金属环装订效果 */
+        .rings {
+            position: absolute;
+            left: 8px;
+            top: 0;
+            bottom: 0;
+            width: 30px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-evenly;
+            z-index: 10;
+        }
+
+        .ring {
+            width: 24px;
+            height: 14px;
+            background: linear-gradient(180deg, #c0c0c0 0%, #808080 50%, #a0a0a0 100%);
+            border-radius: 50%;
+            box-shadow:
+                0 2px 4px rgba(0,0,0,0.4),
+                inset 0 1px 0 rgba(255,255,255,0.3);
+            position: relative;
+        }
+
+        .ring::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: -3px;
+            width: 8px;
+            height: 20px;
+            background: linear-gradient(90deg, #d0d0d0 0%, #909090 50%, #b0b0b0 100%);
+            border-radius: 4px;
+            transform: translateX(-50%);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+
+        /* 页面容器 */
+        .pages-container {
+            position: relative;
+            width: 100%;
+            min-height: 700px;
+        }
+
+        .page {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            min-height: 700px;
+            background: var(--paper-color);
+            background-image:
+                repeating-linear-gradient(
+                    transparent,
+                    transparent 31px,
+                    var(--line-color) 31px,
+                    var(--line-color) 32px
+                );
+            background-size: 100% 32px;
+            background-position: 0 48px;
+            border-radius: 4px 12px 12px 4px;
+            padding: 40px 50px 40px 60px;
+            box-shadow:
+                2px 2px 8px rgba(0,0,0,0.15),
+                inset 0 0 60px rgba(139, 69, 19, 0.03);
+            transform-origin: left center;
+            transition: transform 0.8s cubic-bezier(0.645, 0.045, 0.355, 1), opacity 0.6s ease;
+            opacity: 0;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .page.active {
+            opacity: 1;
+            pointer-events: all;
+            transform: rotateY(0deg);
+            z-index: 5;
+        }
+
+        .page.flipped {
+            transform: rotateY(-140deg);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* 左边距红线 */
+        .page::before {
+            content: '';
+            position: absolute;
+            left: 50px;
+            top: 0;
+            bottom: 0;
+            width: 1px;
+            background: var(--margin-line);
+            opacity: 0.4;
+        }
+
+        /* 纸张纹理 */
+        .page::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+            pointer-events: none;
+            opacity: 0.6;
+        }
+
+        /* 封面特殊样式 */
+        .page.cover {
+            background: #f5f0e8;
+            background-image: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            cursor: pointer;
+        }
+
+        .page.cover::before {
+            display: none;
+        }
+
+        .cover-decoration {
+            position: absolute;
+            top: 30px;
+            right: 40px;
+            font-size: 4rem;
+            opacity: 0.15;
+            transform: rotate(-15deg);
+        }
+
+        .cover-title {
+            font-family: 'Ma Shan Zheng', cursive;
+            font-size: 3.5rem;
+            color: var(--accent-blue);
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+            position: relative;
+            display: inline-block;
+        }
+
+        .cover-title::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: -10%;
+            width: 120%;
+            height: 3px;
+            background: var(--accent-blue);
+            opacity: 0.3;
+            border-radius: 2px;
+        }
+
+        .cover-subtitle {
+            font-size: 1.4rem;
+            color: var(--ink-light);
+            margin-bottom: 40px;
+            font-style: italic;
+        }
+
+        .cover-doodle {
+            width: 200px;
+            height: 150px;
+            margin: 20px 0;
+            opacity: 0.6;
+        }
+
+        .cover-hint {
+            position: absolute;
+            bottom: 40px;
+            font-size: 1rem;
+            color: var(--ink-light);
+            opacity: 0.7;
+            animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+
+        /* 内容页样式 */
+        .content-wrapper {
+            position: relative;
+            z-index: 1;
+        }
+
+        .page-header {
+            font-family: 'Ma Shan Zheng', cursive;
+            font-size: 2rem;
+            color: var(--accent-blue);
+            margin-bottom: 16px;
+            padding-bottom: 6px;
+            border-bottom: 2px solid var(--accent-blue);
+            opacity: 0.7;
+            display: inline-block;
+        }
+
+        .handwriting {
+            font-size: 1.15rem;
+            line-height: 32px;
+            color: var(--ink-color);
+            text-align: justify;
+            margin-bottom: 12px;
+            position: relative;
+        }
+
+        .highlight {
+            background: linear-gradient(180deg, transparent 60%, var(--highlight) 60%);
+            padding: 0 2px;
+            font-weight: bold;
+        }
+
+        .highlight-pink {
+            background: linear-gradient(180deg, transparent 60%, var(--highlight-pink) 60%);
+            padding: 0 2px;
+            font-weight: bold;
+        }
+
+        .underline-wavy {
+            text-decoration: underline;
+            text-decoration-style: wavy;
+            text-decoration-color: var(--accent-red);
+            text-underline-offset: 3px;
+            font-weight: bold;
+        }
+
+        .key-term {
+            color: var(--accent-blue);
+            font-weight: bold;
+            border-bottom: 1px dashed var(--accent-blue);
+        }
+
+        .warning-text {
+            color: var(--accent-red);
+            font-weight: bold;
+        }
+
+        .note-in-margin {
+            position: absolute;
+            right: -30px;
+            width: 80px;
+            font-size: 0.85rem;
+            color: var(--accent-red);
+            transform: rotate(-5deg);
+            opacity: 0.8;
+        }
+
+        .arrow-drawn {
+            display: inline-block;
+            font-size: 1.5rem;
+            color: var(--accent-blue);
+            margin: 0 5px;
+        }
+
+        /* 交互式图解区域 */
+        .diagram-container {
+            background: rgba(255,255,255,0.6);
+            border: 2px dashed var(--line-color);
+            border-radius: 12px;
+            padding: 16px;
+            margin: 12px 0;
+            position: relative;
+        }
+
+        .diagram-title {
+            font-family: 'Ma Shan Zheng', cursive;
+            font-size: 1.2rem;
+            color: var(--accent-blue);
+            margin-bottom: 12px;
+            text-align: center;
+        }
+
+        /* HPACK动态表图解 */
+        .hpack-demo {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+
+        .dynamic-table {
+            flex: 1;
+            min-width: 200px;
+            background: #fff;
+            border: 2px solid var(--ink-light);
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 3px 3px 0 rgba(0,0,0,0.1);
+        }
+
+        .table-header {
+            font-weight: bold;
+            color: var(--accent-blue);
+            border-bottom: 1px solid var(--line-color);
+            padding-bottom: 6px;
+            margin-bottom: 8px;
+            font-size: 1rem;
+        }
+
+        .table-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 6px;
+            margin: 3px 0;
+            background: #f8f9fa;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            border-left: 3px solid transparent;
+        }
+
+        .table-row.active {
+            background: #e3f2fd;
+            border-left-color: var(--accent-blue);
+            transform: scale(1.02);
+        }
+
+        .table-row .idx {
+            color: var(--accent-red);
+            font-weight: bold;
+            min-width: 30px;
+        }
+
+        .table-row .content {
+            color: var(--ink-color);
+            flex: 1;
+            margin-left: 8px;
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+
+        .table-row .size {
+            color: var(--ink-light);
+            font-size: 0.8rem;
+        }
+
+        .transmission-visual {
+            flex: 1;
+            min-width: 220px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .packet-stream {
+            background: #fff;
+            border: 2px solid var(--line-color);
+            border-radius: 8px;
+            padding: 12px;
+            min-height: 120px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .packet {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 3px 8px;
+            margin: 2px;
+            background: var(--accent-blue);
+            color: white;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-family: monospace;
+            animation: packetAppear 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .packet.index-ref {
+            background: var(--accent-red);
+            font-size: 0.75rem;
+        }
+
+        @keyframes packetAppear {
+            from {
+                transform: scale(0) translateY(-10px);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1) translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .demo-controls {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn-handdrawn {
+            padding: 6px 16px;
+            background: #fff;
+            border: 2px solid var(--ink-color);
+            border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+            font-family: 'Kalam', cursive;
+            font-size: 0.95rem;
+            color: var(--ink-color);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 2px 2px 0 rgba(0,0,0,0.1);
+        }
+
+        .btn-handdrawn:hover {
+            transform: translateY(-2px) rotate(-1deg);
+            box-shadow: 3px 3px 0 rgba(0,0,0,0.15);
+            background: #fff9e6;
+        }
+
+        .btn-handdrawn:active {
+            transform: translateY(0) rotate(0);
+            box-shadow: 1px 1px 0 rgba(0,0,0,0.1);
+        }
+
+        /* 内存放大攻击演示 */
+        .attack-demo {
+            text-align: center;
+        }
+
+        .memory-bar-container {
+            width: 100%;
+            height: 36px;
+            background: #e0e0e0;
+            border-radius: 18px;
+            overflow: hidden;
+            margin: 12px 0;
+            border: 2px solid var(--ink-light);
+            position: relative;
+        }
+
+        .memory-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #48bb78 0%, #ed8936 50%, #f56565 100%);
+            border-radius: 18px;
+            transition: width 0.1s linear;
+            position: relative;
+        }
+
+        .memory-label {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: monospace;
+            font-size: 0.95rem;
+            color: var(--ink-color);
+            font-weight: bold;
+            z-index: 2;
+            text-shadow: 0 0 4px rgba(255,255,255,0.8);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .stat-box {
+            background: #fff;
+            border: 2px solid var(--line-color);
+            border-radius: 10px;
+            padding: 12px;
+            box-shadow: 2px 2px 0 rgba(0,0,0,0.08);
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--ink-light);
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: var(--accent-red);
+            font-family: monospace;
+        }
+
+        .ratio-display {
+            font-size: 1.6rem;
+            color: var(--accent-red);
+            font-weight: bold;
+            margin: 8px 0;
+            font-family: 'Ma Shan Zheng', cursive;
+        }
+
+        /* 流控锁定图解 */
+        .flow-control-diagram {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .entity-box {
+            background: #fff;
+            border: 3px solid var(--ink-color);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            min-width: 140px;
+            box-shadow: 3px 3px 0 rgba(0,0,0,0.1);
+            position: relative;
+        }
+
+        .entity-box.client {
+            border-color: var(--accent-blue);
+        }
+
+        .entity-box.server {
+            border-color: var(--accent-red);
+        }
+
+        .entity-label {
+            font-family: 'Ma Shan Zheng', cursive;
+            font-size: 1.2rem;
+            margin-bottom: 8px;
+        }
+
+        .entity-box.client .entity-label {
+            color: var(--accent-blue);
+        }
+
+        .entity-box.server .entity-label {
+            color: var(--accent-red);
+        }
+
+        .window-size {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: var(--accent-red);
+            font-family: monospace;
+        }
+
+        .arrow-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            min-width: 180px;
+        }
+
+        .arrow-line {
+            width: 100%;
+            height: 3px;
+            background: var(--line-color);
+            position: relative;
+        }
+
+        .arrow-line.locked {
+            background: var(--accent-red);
+            background-image: repeating-linear-gradient(90deg, transparent, transparent 5px, rgba(255,255,255,0.5) 5px, rgba(255,255,255,0.5) 10px);
+        }
+
+        .arrow-line::after {
+            content: '▶';
+            position: absolute;
+            right: -5px;
+            top: -8px;
+            color: var(--line-color);
+            font-size: 1rem;
+        }
+
+        .arrow-line.locked::after {
+            content: '\2715';
+            color: var(--accent-red);
+            right: 50%;
+            transform: translateX(50%);
+            top: -10px;
+            font-size: 1.2rem;
+        }
+
+        .arrow-label {
+            font-size: 0.85rem;
+            color: var(--ink-light);
+            background: var(--paper-color);
+            padding: 2px 10px;
+            border-radius: 10px;
+            border: 1px dashed var(--line-color);
+        }
+
+        .memory-locked {
+            background: #fff;
+            border: 2px solid var(--accent-red);
+            border-radius: 10px;
+            padding: 12px;
+            margin-top: 12px;
+            text-align: center;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(197, 48, 48, 0.2); }
+            50% { box-shadow: 0 0 0 10px rgba(197, 48, 48, 0); }
+        }
+
+        .lock-icon {
+            font-size: 1.8rem;
+            color: var(--accent-red);
+            margin-bottom: 4px;
+        }
+
+        /* 页码 */
+        .page-number {
+            position: absolute;
+            bottom: 15px;
+            right: 30px;
+            font-size: 0.9rem;
+            color: var(--ink-light);
+            opacity: 0.6;
+        }
+
+        /* 涂鸦装饰 */
+        .doodle {
+            position: absolute;
+            opacity: 0.12;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .doodle-1 {
+            top: 80px;
+            right: 40px;
+            font-size: 3rem;
+            transform: rotate(20deg);
+        }
+
+        .doodle-2 {
+            bottom: 100px;
+            left: 80px;
+            font-size: 2.5rem;
+            transform: rotate(-15deg);
+        }
+
+        /* 手绘SVG示意图 */
+        .sketch-diagram {
+            margin: 12px 0;
+            text-align: center;
+        }
+
+        .sketch-diagram svg {
+            max-width: 100%;
+            height: auto;
+        }
+
+        /* 概念卡片 */
+        .concept-cards {
+            display: flex;
+            gap: 12px;
+            margin: 12px 0;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .concept-card {
+            background: #fff;
+            border: 2px solid var(--ink-light);
+            border-radius: 10px;
+            padding: 12px 16px;
+            text-align: center;
+            box-shadow: 2px 2px 0 rgba(0,0,0,0.08);
+            flex: 1;
+            min-width: 120px;
+            max-width: 200px;
+        }
+
+        .concept-card .card-icon {
+            font-size: 1.8rem;
+            margin-bottom: 6px;
+        }
+
+        .concept-card .card-title {
+            font-family: 'Ma Shan Zheng', cursive;
+            font-size: 1.1rem;
+            color: var(--accent-blue);
+            margin-bottom: 4px;
+        }
+
+        .concept-card .card-desc {
+            font-size: 0.85rem;
+            color: var(--ink-light);
+            line-height: 1.4;
+        }
+
+        /* 重点框 */
+        .key-point-box {
+            background: linear-gradient(135deg, #fff9e6 0%, #fff5d6 100%);
+            border: 2px solid var(--accent-blue);
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin: 12px 0;
+            position: relative;
+            box-shadow: 2px 2px 0 rgba(0,0,0,0.06);
+        }
+
+        .key-point-box::before {
+            content: '\2605';
+            position: absolute;
+            top: -10px;
+            left: 12px;
+            background: var(--paper-color);
+            padding: 0 6px;
+            color: var(--accent-blue);
+            font-size: 1rem;
+        }
+
+        .key-point-box .box-title {
+            font-family: 'Ma Shan Zheng', cursive;
+            font-size: 1.1rem;
+            color: var(--accent-blue);
+            margin-bottom: 6px;
+        }
+
+        .key-point-box .box-content {
+            font-size: 1rem;
+            line-height: 1.6;
+            color: var(--ink-color);
+        }
+
+        /* 流程步骤 */
+        .flow-steps {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin: 12px 0;
+            flex-wrap: wrap;
+        }
+
+        .flow-step {
+            background: #fff;
+            border: 2px solid var(--line-color);
+            border-radius: 8px;
+            padding: 8px 12px;
+            text-align: center;
+            font-size: 0.9rem;
+            box-shadow: 1px 1px 0 rgba(0,0,0,0.06);
+        }
+
+        .flow-step .step-num {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            background: var(--accent-blue);
+            color: white;
+            border-radius: 50%;
+            font-size: 0.75rem;
+            line-height: 20px;
+            margin-right: 4px;
+        }
+
+        .flow-arrow {
+            font-size: 1.2rem;
+            color: var(--accent-blue);
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .notebook {
+                padding: 20px 15px 20px 30px;
+            }
+
+            .page {
+                padding: 30px 25px 30px 45px;
+                min-height: 500px;
+            }
+
+            .cover-title {
+                font-size: 2.5rem;
+            }
+
+            .handwriting {
+                font-size: 1rem;
+                line-height: 28px;
+            }
+
+            .hpack-demo {
+                flex-direction: column;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .flow-control-diagram {
+                flex-direction: column;
+            }
+
+            .arrow-container {
+                width: 100%;
+            }
+
+            .concept-cards {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .concept-card {
+                max-width: 100%;
+                width: 100%;
+            }
+        }
+
+        /* 便签贴纸效果 */
+        .sticky-note {
+            position: absolute;
+            background: #fffacd;
+            padding: 12px;
+            box-shadow: 2px 4px 8px rgba(0,0,0,0.15);
+            transform: rotate(-3deg);
+            font-size: 0.85rem;
+            max-width: 160px;
+            z-index: 10;
+        }
+
+        .sticky-note::before {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 12px;
+            background: rgba(255,255,255,0.4);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        .sticky-note.top-right {
+            top: 20px;
+            right: 20px;
+            transform: rotate(3deg);
+        }
+    </style>
+</head>
+<body>
+    <div class="notebook">
+        <div class="rings">
+            <div class="ring"></div>
+            <div class="ring"></div>
+            <div class="ring"></div>
+            <div class="ring"></div>
+            <div class="ring"></div>
+            <div class="ring"></div>
+            <div class="ring"></div>
+            <div class="ring"></div>
+        </div>
+
+        <div class="pages-container" id="pagesContainer">
+            <!-- 封面 -->
+            <div class="page cover active" data-page="0">
+                <div class="cover-decoration"><i class="ri-broadcast-line"></i></div>
+                <div class="cover-title">HTTP/2 协议笔记</div>
+                <div class="cover-subtitle">HPACK 压缩与安全攻击原理</div>
+                <svg class="cover-doodle" viewBox="0 0 200 150">
+                    <path d="M20,75 Q50,20 100,75 T180,75" fill="none" stroke="#2b6cb0" stroke-width="2" stroke-dasharray="5,5" opacity="0.5"/>
+                    <rect x="40" y="50" width="30" height="40" fill="none" stroke="#2c2c2c" stroke-width="1.5" rx="3"/>
+                    <rect x="130" y="40" width="30" height="50" fill="none" stroke="#2c2c2c" stroke-width="1.5" rx="3"/>
+                    <text x="45" y="75" font-size="12" fill="#c53030">C</text>
+                    <text x="135" y="70" font-size="12" fill="#2b6cb0">S</text>
+                    <path d="M70,70 L130,65" stroke="#2c2c2c" stroke-width="1" marker-end="url(#arrowhead)"/>
+                    <defs>
+                        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#2c2c2c"/>
+                        </marker>
+                    </defs>
+                </svg>
+                <div style="font-size: 1rem; color: var(--ink-light); margin-top: 20px;">
+                    <span style="display: block; margin: 5px 0;"><i class="ri-check-line"></i> 多路复用</span>
+                    <span style="display: block; margin: 5px 0;"><i class="ri-check-line"></i> 头部压缩</span>
+                    <span style="display: block; margin: 5px 0;"><i class="ri-check-line"></i> 流控机制</span>
+                </div>
+                <div class="cover-hint">点击翻页开始阅读 ↓</div>
+            </div>
+
+            <!-- 第1页：HTTP/2简介 -->
+            <div class="page" data-page="1">
+                <div class="content-wrapper">
+                    <div class="page-header">一、HTTP/2 基础</div>
+
+                    <div class="sticky-note top-right">
+                        重点！<br>
+                        现代Web<br>
+                        基础协议
+                    </div>
+
+                    <p class="handwriting" id="text1"></p>
+
+                    <!-- 核心特性卡片 -->
+                    <div class="concept-cards">
+                        <div class="concept-card">
+                            <div class="card-icon"><i class="ri-loop-left-line"></i></div>
+                            <div class="card-title">多路复用</div>
+                            <div class="card-desc">单一连接上并行传输多个请求/响应</div>
+                        </div>
+                        <div class="concept-card">
+                            <div class="card-icon"><i class="ri-compress-v-line"></i></div>
+                            <div class="card-title">头部压缩</div>
+                            <div class="card-desc">HPACK算法减少头部传输大小</div>
+                        </div>
+                        <div class="concept-card">
+                            <div class="card-icon"><i class="ri-dashboard-3-line"></i></div>
+                            <div class="card-title">流控机制</div>
+                            <div class="card-desc">接收方控制发送方数据窗口</div>
+                        </div>
+                    </div>
+
+                    <!-- HPACK核心概念 -->
+                    <div class="key-point-box">
+                        <div class="box-title">HPACK 压缩核心</div>
+                        <div class="box-content">
+                            客户端与服务器共同维护一个<span class="highlight">动态表</span>，存储已发送的头部字段。
+                            后续通信只需用 <span class="underline-wavy">1字节索引</span> 引用即可，
+                            服务器解码时将索引展开为完整头部内容。
+                        </div>
+                    </div>
+
+                    <!-- 手绘流程图 -->
+                    <div class="sketch-diagram">
+                        <svg width="500" height="120" viewBox="0 0 500 120">
+                            <!-- 客户端 -->
+                            <rect x="20" y="30" width="80" height="60" rx="8" fill="none" stroke="#2b6cb0" stroke-width="2" stroke-dasharray="4,2"/>
+                            <text x="60" y="65" text-anchor="middle" font-size="14" fill="#2b6cb0" font-family="Kalam">客户端</text>
+
+                            <!-- 箭头1 -->
+                            <path d="M110,50 L180,50" stroke="#2c2c2c" stroke-width="1.5" marker-end="url(#arr1)"/>
+                            <text x="145" y="45" text-anchor="middle" font-size="10" fill="#4a4a4a">完整头部</text>
+                            <defs><marker id="arr1" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2c2c2c"/></marker></defs>
+
+                            <!-- 动态表 -->
+                            <rect x="200" y="20" width="100" height="80" rx="8" fill="#fff9e6" stroke="#c53030" stroke-width="2"/>
+                            <text x="250" y="45" text-anchor="middle" font-size="13" fill="#c53030" font-family="Ma Shan Zheng">动态表</text>
+                            <text x="250" y="65" text-anchor="middle" font-size="10" fill="#4a4a4a">存储头部</text>
+                            <text x="250" y="80" text-anchor="middle" font-size="10" fill="#4a4a4a">索引引用</text>
+
+                            <!-- 箭头2 -->
+                            <path d="M310,50 L380,50" stroke="#2c2c2c" stroke-width="1.5" marker-end="url(#arr2)"/>
+                            <text x="345" y="45" text-anchor="middle" font-size="10" fill="#4a4a4a">1字节索引</text>
+                            <defs><marker id="arr2" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2c2c2c"/></marker></defs>
+
+                            <!-- 服务器 -->
+                            <rect x="400" y="30" width="80" height="60" rx="8" fill="none" stroke="#2b6cb0" stroke-width="2" stroke-dasharray="4,2"/>
+                            <text x="440" y="65" text-anchor="middle" font-size="14" fill="#2b6cb0" font-family="Kalam">服务器</text>
+                        </svg>
+                    </div>
+
+                    <div class="doodle doodle-1"><i class="ri-global-line"></i></div>
+                </div>
+                <div class="page-number">1</div>
+            </div>
+
+            <!-- 第2页：HPACK原理 -->
+            <div class="page" data-page="2">
+                <div class="content-wrapper">
+                    <div class="page-header">二、HPACK 头部压缩</div>
+
+                    <p class="handwriting" id="text2"></p>
+
+                    <div class="diagram-container">
+                        <div class="diagram-title">动态表工作原理演示</div>
+                        <div class="hpack-demo">
+                            <div class="dynamic-table">
+                                <div class="table-header">动态表 (Dynamic Table)</div>
+                                <div id="tableContent">
+                                    <div class="table-row active">
+                                        <span class="idx">62</span>
+                                        <span class="content">:method: GET</span>
+                                        <span class="size">~30B</span>
+                                    </div>
+                                    <div class="table-row">
+                                        <span class="idx">63</span>
+                                        <span class="content" id="cookieRow">:authority: example.com</span>
+                                        <span class="size">~25B</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="transmission-visual">
+                                <div class="packet-stream" id="packetStream">
+                                    <div style="font-size: 0.9rem; color: var(--ink-light); margin-bottom: 10px;">传输数据流：</div>
+                                </div>
+                                <div class="demo-controls">
+                                    <button class="btn-handdrawn" onclick="sendFullHeader()">发送完整头部</button>
+                                    <button class="btn-handdrawn" onclick="sendIndexRef()">发送索引引用</button>
+                                    <button class="btn-handdrawn" onclick="resetHpack()">重置</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="key-point-box">
+                        <div class="box-title">核心机制</div>
+                        <div class="box-content">
+                            动态表就像一本<span class="key-term">共享字典</span>。第一次发送需要传输完整内容，
+                            后续只需发送<span class="highlight">索引号</span>（如 0xBE），服务器即可展开为完整头部。
+                            <span class="warning-text">1字节索引 ↔ 4KB数据</span>，压缩效率极高！
+                        </div>
+                    </div>
+                </div>
+                <div class="page-number">2</div>
+            </div>
+
+            <!-- 第3页：内存放大攻击 -->
+            <div class="page" data-page="3">
+                <div class="content-wrapper">
+                    <div class="page-header">三、内存放大攻击</div>
+
+                    <p class="handwriting" id="text3"></p>
+
+                    <!-- 攻击流程 -->
+                    <div class="flow-steps">
+                        <div class="flow-step">
+                            <span class="step-num">1</span>插入大头部
+                        </div>
+                        <span class="flow-arrow">→</span>
+                        <div class="flow-step">
+                            <span class="step-num">2</span>发送千个索引
+                        </div>
+                        <span class="flow-arrow">→</span>
+                        <div class="flow-step">
+                            <span class="step-num">3</span>内存暴涨
+                        </div>
+                    </div>
+
+                    <div class="diagram-container">
+                        <div class="diagram-title">攻击效果演示</div>
+                        <div class="attack-demo">
+                            <div class="memory-bar-container">
+                                <div class="memory-bar" id="memoryBar"></div>
+                                <div class="memory-label" id="memoryLabel">0 MB</div>
+                            </div>
+
+                            <div class="stats-grid">
+                                <div class="stat-box">
+                                    <div class="stat-label">网络流量</div>
+                                    <div class="stat-value" id="networkTraffic">0 KB</div>
+                                </div>
+                                <div class="stat-box">
+                                    <div class="stat-label">服务器内存</div>
+                                    <div class="stat-value" id="serverMemory">0 MB</div>
+                                </div>
+                                <div class="stat-box">
+                                    <div class="stat-label">放大比率</div>
+                                    <div class="stat-value" id="ratio">0:1</div>
+                                </div>
+                            </div>
+
+                            <div class="ratio-display" id="ratioDisplay">放大比率: 0:1</div>
+
+                            <div class="demo-controls">
+                                <button class="btn-handdrawn" onclick="startAttack()">模拟攻击</button>
+                                <button class="btn-handdrawn" onclick="resetAttack()">重置</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="key-point-box" style="border-color: var(--accent-red);">
+                        <div class="box-title" style="color: var(--accent-red);"><i class="ri-alert-line"></i> 攻击核心</div>
+                        <div class="box-content">
+                            几KB网络流量 → 几MB服务器内存。实测放大比率高达 <span class="underline-wavy">1357:1</span>！
+                        </div>
+                    </div>
+                </div>
+                <div class="page-number">3</div>
+            </div>
+
+            <!-- 第4页：流控锁定 -->
+            <div class="page" data-page="4">
+                <div class="content-wrapper">
+                    <div class="page-header">四、流控锁定机制</div>
+
+                    <p class="handwriting" id="text4"></p>
+
+                    <div class="diagram-container">
+                        <div class="diagram-title">WINDOW_UPDATE 流控锁定</div>
+                        <div class="flow-control-diagram">
+                            <div class="entity-box client">
+                                <div class="entity-label">客户端 (攻击者)</div>
+                                <div style="font-size: 0.85rem; color: var(--ink-light); margin: 4px 0;">初始窗口大小</div>
+                                <div class="window-size" id="windowSize">0</div>
+                            </div>
+
+                            <div class="arrow-container">
+                                <div class="arrow-line locked" id="arrowLine"></div>
+                                <div class="arrow-label" id="arrowLabel">数据流已锁定</div>
+                                <div style="font-size: 0.8rem; color: var(--accent-red); margin-top: 4px;">
+                                    WINDOW_UPDATE = 0
+                                </div>
+                            </div>
+
+                            <div class="entity-box server">
+                                <div class="entity-label">服务器 (受害者)</div>
+                                <div style="font-size: 0.85rem; color: var(--ink-light); margin: 4px 0;">内存分配</div>
+                                <div class="window-size" id="serverAlloc">0 MB</div>
+                            </div>
+                        </div>
+
+                        <div class="memory-locked" id="memoryLocked" style="display: none;">
+                            <div class="lock-icon"><i class="ri-lock-line"></i></div>
+                            <div style="font-weight: bold; color: var(--accent-red);">内存已锁定！</div>
+                            <div style="font-size: 0.85rem; color: var(--ink-light); margin-top: 4px;">
+                                服务器无法发送响应，已分配内存永远不会释放
+                            </div>
+                        </div>
+
+                        <div class="demo-controls" style="margin-top: 12px;">
+                            <button class="btn-handdrawn" onclick="simulateLock()">模拟流控锁定</button>
+                            <button class="btn-handdrawn" onclick="resetLock()">重置</button>
+                        </div>
+                    </div>
+
+                    <div class="key-point-box" style="border-color: var(--accent-red);">
+                        <div class="box-title" style="color: var(--accent-red);"><i class="ri-lock-line"></i> 致命组合</div>
+                        <div class="box-content">
+                            内存放大攻击 + 窗口大小设为 <span class="underline-wavy">0</span> = 
+                            <span class="warning-text">内存永久锁定</span>，造成严重资源耗尽！
+                        </div>
+                    </div>
+                </div>
+                <div class="page-number">4</div>
+            </div>
+        </div>
+    </div>
+
+
+
+    <script>
+        let currentPage = 0;
+        const totalPages = 5;
+        const pages = document.querySelectorAll('.page');
+
+        const texts = {
+            1: `HTTP/2 是现代 Web 的基础协议，相比 HTTP/1.1 引入了<span class="highlight">多路复用</span>、<span class="highlight">头部压缩</span>等关键特性，大幅提升了 Web 性能。
+
+<span class="key-term">HPACK</span> 是 HTTP/2 的头部压缩算法，通过维护客户端与服务器共享的<span class="highlight-pink">动态表</span>，将重复头部字段替换为 <span class="underline-wavy">1字节索引</span>，显著减少传输开销。`,
+
+            2: `动态表就像一本<span class="key-term">共享字典</span>，双方共同维护。
+
+首次发送头部时需传输完整内容（如 Cookie: xxx...），后续通信只需发送<span class="highlight">索引号</span>（如 0xBE），服务器即可展开为完整头部。
+
+这个机制很巧妙，但也埋下了安全隐患...`,
+
+            3: `攻击者利用 HPACK 机制缺陷：先向动态表插入<span class="highlight">大头部</span>（如 4KB Cookie），再发送<span class="underline-wavy">数千个</span> 1字节索引引用。
+
+服务器解码时需为每个引用<span class="highlight-pink">分配完整头部内存</span>。几 KB 流量 → 几 MB 内存，形成严重的资源不对称消耗。`,
+
+            4: `HTTP/2 的<span class="key-term">流控机制</span>允许接收方通过 WINDOW_UPDATE 帧控制发送方数据窗口。
+
+攻击者将<span class="underline-wavy">初始窗口设为 0</span>，服务器分配大量内存后<span class="highlight-pink">永远无法发送响应</span>，导致内存被永久锁定！`
+        };
+
+        function showTextImmediate(pageNum) {
+            const textId = 'text' + pageNum;
+            const textEl = document.getElementById(textId);
+            if (textEl && texts[pageNum]) {
+                textEl.innerHTML = texts[pageNum];
+            }
+        }
+
+        function showPage(pageNum) {
+            pages.forEach((page, index) => {
+                page.classList.remove('active', 'flipped');
+                if (index < pageNum) {
+                    page.classList.add('flipped');
+                } else if (index === pageNum) {
+                    page.classList.add('active');
+                    // 文字立即全部显示
+                    showTextImmediate(pageNum);
+                }
+            });
+
+            currentPage = pageNum;
+        }
+
+        function nextPage() {
+            if (currentPage < totalPages - 1) {
+                showPage(currentPage + 1);
+            }
+        }
+
+        function prevPage() {
+            if (currentPage > 0) {
+                showPage(currentPage - 1);
+            }
+        }
+
+        // 点击封面翻页
+        document.querySelector('.page.cover').addEventListener('click', nextPage);
+
+        // HPACK演示
+        let hpackIndex = 63;
+
+        function sendFullHeader() {
+            const stream = document.getElementById('packetStream');
+            const packet = document.createElement('span');
+            packet.className = 'packet';
+            packet.textContent = 'Cookie: xxxxx... (4KB)';
+            stream.appendChild(packet);
+
+            hpackIndex++;
+            const table = document.getElementById('tableContent');
+            const row = document.createElement('div');
+            row.className = 'table-row active';
+            row.innerHTML = `<span class="idx">${hpackIndex}</span><span class="content">cookie: large_value...</span><span class="size">~4KB</span>`;
+            table.appendChild(row);
+
+            setTimeout(() => row.classList.remove('active'), 500);
+
+            if (stream.children.length > 6) {
+                stream.removeChild(stream.children[1]);
+            }
+        }
+
+        function sendIndexRef() {
+            const stream = document.getElementById('packetStream');
+            const packet = document.createElement('span');
+            packet.className = 'packet index-ref';
+            packet.textContent = `idx:${hpackIndex} (1B)`;
+            stream.appendChild(packet);
+
+            const rows = document.querySelectorAll('.table-row');
+            if (rows[rows.length - 1]) {
+                rows[rows.length - 1].classList.add('active');
+                setTimeout(() => rows[rows.length - 1].classList.remove('active'), 300);
+            }
+
+            if (stream.children.length > 6) {
+                stream.removeChild(stream.children[1]);
+            }
+        }
+
+        function resetHpack() {
+            document.getElementById('packetStream').innerHTML = '<div style="font-size: 0.9rem; color: var(--ink-light); margin-bottom: 10px;">传输数据流：</div>';
+            hpackIndex = 63;
+        }
+
+        // 攻击演示
+        let attackInterval;
+        let isAttacking = false;
+
+        function startAttack() {
+            if (isAttacking) return;
+            isAttacking = true;
+
+            let networkKb = 0;
+            let memoryMb = 0;
+            const targetMemory = 1357 * 4 / 1024;
+
+            attackInterval = setInterval(() => {
+                networkKb += 0.5;
+                memoryMb += 0.7;
+
+                if (memoryMb > targetMemory) memoryMb = targetMemory;
+
+                const ratio = memoryMb > 0 ? Math.round((memoryMb * 1024) / networkKb) : 0;
+
+                document.getElementById('networkTraffic').textContent = networkKb.toFixed(1) + ' KB';
+                document.getElementById('serverMemory').textContent = memoryMb.toFixed(1) + ' MB';
+                document.getElementById('ratio').textContent = ratio + ':1';
+                document.getElementById('ratioDisplay').textContent = '放大比率: ' + ratio + ':1';
+
+                const percent = Math.min((memoryMb / targetMemory) * 100, 100);
+                document.getElementById('memoryBar').style.width = percent + '%';
+                document.getElementById('memoryLabel').textContent = memoryMb.toFixed(1) + ' MB';
+
+                if (memoryMb >= targetMemory) {
+                    clearInterval(attackInterval);
+                    isAttacking = false;
+                }
+            }, 50);
+        }
+
+        function resetAttack() {
+            clearInterval(attackInterval);
+            isAttacking = false;
+            document.getElementById('networkTraffic').textContent = '0 KB';
+            document.getElementById('serverMemory').textContent = '0 MB';
+            document.getElementById('ratio').textContent = '0:1';
+            document.getElementById('ratioDisplay').textContent = '放大比率: 0:1';
+            document.getElementById('memoryBar').style.width = '0%';
+            document.getElementById('memoryLabel').textContent = '0 MB';
+        }
+
+        // 流控锁定演示
+        function simulateLock() {
+            document.getElementById('windowSize').textContent = '0';
+            document.getElementById('arrowLine').classList.add('locked');
+            document.getElementById('arrowLabel').textContent = '数据流已锁定！';
+            document.getElementById('arrowLabel').style.color = 'var(--accent-red)';
+            document.getElementById('serverAlloc').textContent = '512 MB';
+            document.getElementById('memoryLocked').style.display = 'block';
+        }
+
+        function resetLock() {
+            document.getElementById('windowSize').textContent = '65535';
+            document.getElementById('arrowLine').classList.remove('locked');
+            document.getElementById('arrowLabel').textContent = '数据流通畅';
+            document.getElementById('arrowLabel').style.color = 'var(--ink-light)';
+            document.getElementById('serverAlloc').textContent = '0 MB';
+            document.getElementById('memoryLocked').style.display = 'none';
+        }
+
+        // 键盘导航
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === ' ') {
+                nextPage();
+            } else if (e.key === 'ArrowLeft') {
+                prevPage();
+            }
+        });
+
+        // 初始化
+        showPage(0);
+    </script>
+</body>
+</html>

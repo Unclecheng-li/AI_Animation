@@ -1,141 +1,402 @@
-# AI Animation
+<div align="center">
 
-> 使用 AI 生成 HTML 演示动画的 Prompt 模板集合
+# AI Animation Skills
 
-[English](README.md) · [Prompts](prompt.md)
+**一套用 AI 生成炫酷 HTML 动画的 [Agent Skills](https://support.claude.com/en/articles/12512176-what-are-skills) 集合 · A collection of skills for generating cool HTML animations with AI**
 
----
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](./LICENSE)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](#contributing)
+[![Skills count](https://img.shields.io/badge/Skills-5-orange?style=flat-square)](#skills-gallery)
+[![Spec](https://img.shields.io/badge/Spec-SKILL.md-black?style=flat-square)](https://agentskills.io)
 
-## 项目简介
-<img width="2560" height="1440" alt="QQ_1775901765825" src="https://github.com/user-attachments/assets/77ee698e-7e88-43b7-b048-8eed006ed278" />
-<img width="2560" height="1440" alt="QQ_1775901779039" src="https://github.com/user-attachments/assets/e06a3dc6-a57f-40f6-b88b-d4da2c049f45" />
-<img width="2560" height="1440" alt="QQ_1775901789295" src="https://github.com/user-attachments/assets/657be29c-2770-46e2-8780-4d28712e3683" />
+[中文](#中文) · [English](#english)
 
-本项目整理了用于生成**炫酷 HTML 动画网页**的 AI Prompts，涵盖动画效果、3D 可视化、PPT 风格演示、UI 美化等多个类别。
-
-配合 `web_animation/` 中的示例文件，可以快速生成用于：
-
-- 📹 **视频创作** — AI City 系列视频的动画演示
-- 📚 **教学演示** — 技术概念的可视化呈现
-- 🔬 **技术科普** — 网络协议、神经网络等抽象概念的图形化展示
+</div>
 
 ---
 
-## 目录结构
+## 中文
 
-```
-AI Animation/
-├── README.md          # 项目说明文档
-├── prompt.md          # Prompt 模板集合（分类整理）
-├── prompt.txt         # 原始 Prompt 文本
-├── LICENSE            # MIT 开源协议
-├── UI/                # UI 设计参考图
-│   ├── design1.png ~ design6.png
-│   └── timeline.png
-└── web_animation/     # 示例 HTML 动画文件
-    ├── Animation/              # AI/ML 概念演示（RNN、LSTM、Word2Vec、GPU 等）
-    ├── BG/                     # 背景样式模板
-    ├── DHCP/                   # DHCP 协议演示
-    ├── geometry/               # 几何图形演示
-    ├── nice try/               # 实验性 Demo
-    ├── Pirated websites/       # 钓鱼网站演示（仅供安全教育）
-    ├── PPT Template/            # PPT 风格模板（基础版，5 个）
-    │   ├── PPT cover page.html
-    │   ├── PPT-Generate-1.html
-    │   ├── PPT-Generate-2.html
-    │   ├── PPT-Generate-3.html
-    │   └── PPT-Generate-4.html
-    ├── PPT Template-level2/     # PPT 风格模板（进阶版，27 个）
-    │   ├── 1.html ~ 9-3.html  # 多种布局变体
-    │   └── png/                # 模板缩略图
-    ├── catch the packet/       # 数据包捕获演示
-    ├── AI Model/               # AI 模型演示（MLP、RNN、LSTM、GRU）
-    ├── 3D - demonstrate.html
-    ├── AI_Animation.html       # AI-Animation Skill 输出文件
-    ├── Animation/         # AI/ML 概念演示（RNN、LSTM、Word2Vec、GPU 等）
-    ├── Pirated websites/  # 钓鱼网站演示
-    ├── PPT Template/       # PPT 风格模板
-    ├── catch the packet/  # 数据包捕获演示
-    ├── DHCP/              # DHCP 协议演示
-    ├── geometry/           # 几何图形演示
-    ├── 3D - demonstrate.html
-    ├── animation.html
-    ├── ethernet-frame-animated.html
-    ├── HTTPS.html
-    ├── ipv4_datagram.html
-    ├── ipv4_datagram - 3d.html
-    ├── ppp_frame_complete.html
-    ├── router-routing-table-animated.html
-    ├── switch-mac-table-animated.html
-    └── tcp-visualization.html
-```
+### 项目简介
+
+本仓库是基于 WorkBuddy / Claude Code / Cursor 等 AI Agent 的**动效 Skill 集合**。每个 Skill 是一个自包含文件夹，包含 `SKILL.md`（Agent 执行指令）、`README.md`（人类文档）、`references/`（Prompt 参考）和 `assets/`（模板 HTML）。安装后，AI Agent 会根据你的描述自动激活对应 Skill，生成完整的单文件 HTML 动画。
+
+一句话生成：
+- 📊 **PPT 风格演示** — 科普、技术讲解、视频配套演示
+- 🧠 **AI/ML 模型可视化** — RNN、LSTM、GRU、MLP、Word2Vec、GPU 等
+- 🌐 **网络协议可视化** — TCP/IP、IPv4、以太帧、路由、DHCP 等
+- 🏗️ **动态架构图** — 系统架构、流程图、时序图、数据流图、状态机，带流动动画 + 多格式导出
+- 📝 **学霸笔记** — 手写笔记本风格的精美 HTML 学习笔记，两种模板风格
+
+<div align="center">
+
+**👇 点击预览图查看各 Skill 详情**
+
+</div>
+
+<table>
+<tr>
+<td width="50%" valign="top" align="center">
+<a href="#ppt-animation"><img src="<!-- IMAGE:ppt-animation-preview -->" alt="ppt-animation preview" width="100%"></a>
+<br/><a href="#ppt-animation"><strong>ppt-animation</strong></a>
+<br/><sub>PPT 演示 / 翻页动画</sub>
+</td>
+<td width="50%" valign="top" align="center">
+<a href="#ai-model-viz"><img src="<!-- IMAGE:ai-model-viz-preview -->" alt="ai-model-viz preview" width="100%"></a>
+<br/><a href="#ai-model-viz"><strong>ai-model-viz</strong></a>
+<br/><sub>AI 模型 / 神经网络可视化</sub>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top" align="center">
+<a href="#network-protocol-viz"><img src="<!-- IMAGE:network-protocol-viz-preview -->" alt="network-protocol-viz preview" width="100%"></a>
+<br/><a href="#network-protocol-viz"><strong>network-protocol-viz</strong></a>
+<br/><sub>网络协议 / 数据包演示</sub>
+</td>
+<td width="50%" valign="top" align="center">
+<a href="#dynami-carchify"><img src="<!-- IMAGE:dynami-carchify-preview -->" alt="dynami-carchify preview" width="100%"></a>
+<br/><a href="#dynami-carchify"><strong>dynami-carchify</strong></a>
+<br/><sub>动态架构图 / 流程图 / 时序图</sub>
+</td>
+</tr>
+<tr>
+<td colspan="2" valign="top" align="center">
+<a href="#scholar-notes"><img src="<!-- IMAGE:scholar-notes-preview -->" alt="scholar-notes preview" width="50%"></a>
+<br/><a href="#scholar-notes"><strong>scholar-notes</strong></a>
+<br/><sub>学霸笔记 / 手写笔记本风格</sub>
+</td>
+</tr>
+</table>
 
 ---
 
-## 快速开始
+### Skills Gallery
 
-### 方式一：直接使用示例
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
+#### `ppt-animation`
+
+<a href="./skills/ppt-animation">
+<img src="<!-- IMAGE:ppt-animation-banner -->" alt="ppt-animation Skill" width="100%">
+</a>
+
+**分类:** PPT 演示 / 翻页动画
+**适用于:** 视频录制、技术科普、教学演示、直播课件——需要"PPT 翻页 + 元素依次缓入"动画效果的场景。
+
+`ppt-animation` 生成 PPT 风格的单文件 HTML 翻页演示。每次翻页后页面内元素依次缓入出现，支持暗色科技风、暖色报纸风、简约白色、赛博朋克红橙、渐变暗色等多套主题。键盘 / 滚轮 / 点击均可翻页，适配全屏播放和录屏。
+
+亮点:
+- 16:9 宽高比，适配全屏播放与录屏
+- 每次翻页后元素依次缓入出现（细化到每行文字）
+- 5 套内置主题：`dark-tech` / `warm-paper` / `clean-white` / `cyber-red` / `gradient-dark`
+- 核心概念用图形化元素（图表、流程图、示意图）展示，不依赖外部图片
+- 支持以已有模板为基础重构（`以 assets/xxx.html 为模板演示以上内容`）
+
+<table>
+<tr>
+<td align="center" width="20%"><a href="./skills/ppt-animation/README.md#主题画廊"><img src="<!-- IMAGE:ppt-theme-dark-tech -->" alt="dark-tech preview" /></a><br /><sub><code>dark-tech</code><br />暗色科技风</sub></td>
+<td align="center" width="20%"><a href="./skills/ppt-animation/README.md#主题画廊"><img src="<!-- IMAGE:ppt-theme-warm-paper -->" alt="warm-paper preview" /></a><br /><sub><code>warm-paper</code><br />暖色报纸风</sub></td>
+<td align="center" width="20%"><a href="./skills/ppt-animation/README.md#主题画廊"><img src="<!-- IMAGE:ppt-theme-clean-white -->" alt="clean-white preview" /></a><br /><sub><code>clean-white</code><br />简约白色</sub></td>
+<td align="center" width="20%"><a href="./skills/ppt-animation/README.md#主题画廊"><img src="<!-- IMAGE:ppt-theme-cyber-red -->" alt="cyber-red preview" /></a><br /><sub><code>cyber-red</code><br />赛博朋克红橙</sub></td>
+<td align="center" width="20%"><a href="./skills/ppt-animation/README.md#主题画廊"><img src="<!-- IMAGE:ppt-theme-gradient-dark -->" alt="gradient-dark preview" /></a><br /><sub><code>gradient-dark</code><br />渐变暗色</sub></td>
+</tr>
+</table>
+
+<sub>↑ 5 套主题一览 — <a href="./skills/ppt-animation/README.md#主题画廊"><b>打开完整画廊</b></a> 查看预览与适用场景。</sub>
+
+Links: [README](./skills/ppt-animation/README.md) · [SKILL.md](./skills/ppt-animation/SKILL.md)
+
+---
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
+#### `ai-model-viz`
+
+<a href="./skills/ai-model-viz">
+<img src="<!-- IMAGE:ai-model-viz-banner -->" alt="ai-model-viz Skill" width="100%">
+</a>
+
+**分类:** AI 模型 / 神经网络可视化
+**适用于:** AI 科普视频、教学课件、技术分享——需要直观展示模型结构、数据流动、门控机制的场景。
+
+`ai-model-viz` 生成 AI/ML 模型原理的动态 HTML 可视化页面。用纯 CSS/SVG 绘制模型结构图，用动画展示数据流动、门控激活、权重传递等过程。暗色科技风格，节点发光、连接线渐变、数据流粒子效果。
+
+亮点:
+- 支持 MLP / RNN / LSTM / GRU / Word2Vec / GPU 等模型
+- 每个模型有针对性的动画重点（如 LSTM 三门依次激活、RNN 时间步展开）
+- 暗色科技风：深色背景 + 蓝/紫/橙渐变节点 + 发光效果
+- 支持自动播放 / 手动步进 / hover 高亮三种交互模式
+- 数据流箭头持续循环流动，页面始终保持动态感
+
+<table>
+<tr>
+<td align="center" width="25%"><a href="./skills/ai-model-viz/README.md#模型列表"><img src="<!-- IMAGE:ai-model-rnn -->" alt="RNN preview" /></a><br /><sub><code>RNN</code><br />时间步展开</sub></td>
+<td align="center" width="25%"><a href="./skills/ai-model-viz/README.md#模型列表"><img src="<!-- IMAGE:ai-model-lstm -->" alt="LSTM preview" /></a><br /><sub><code>LSTM</code><br />三门门控动画</sub></td>
+<td align="center" width="25%"><a href="./skills/ai-model-viz/README.md#模型列表"><img src="<!-- IMAGE:ai-model-gru -->" alt="GRU preview" /></a><br /><sub><code>GRU</code><br />简化门控对比</sub></td>
+<td align="center" width="25%"><a href="./skills/ai-model-viz/README.md#模型列表"><img src="<!-- IMAGE:ai-model-gpu -->" alt="GPU preview" /></a><br /><sub><code>GPU</code><br />并行架构</sub></td>
+</tr>
+</table>
+
+<sub>↑ 部分模型预览 — <a href="./skills/ai-model-viz/README.md#模型列表"><b>查看完整模型列表</b></a>。</sub>
+
+Links: [README](./skills/ai-model-viz/README.md) · [SKILL.md](./skills/ai-model-viz/SKILL.md)
+
+---
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
+#### `network-protocol-viz`
+
+<a href="./skills/network-protocol-viz">
+<img src="<!-- IMAGE:network-protocol-viz-banner -->" alt="network-protocol-viz Skill" width="100%">
+</a>
+
+**分类:** 网络协议 / 数据包演示
+**适用于:** 网络课程、安全教育、技术分享——需要动态展示协议交互流程、数据包结构、路由转发的场景。
+
+`network-protocol-viz` 生成网络协议工作原理的动态 HTML 可视化页面。根据协议类型自动选择可视化方式：数据包/帧结构用分层矩形块 + hover 字段说明；交互流程用客户端/服务端时序图 + 数据包流动；路由转发用拓扑图 + 路径动画。必须包含播放/暂停/重置控制。
+
+亮点:
+- 支持 TCP/IP / IPv4 / 以太网帧 / 路由 / 交换机 / DHCP / HTTPS / PPP 等协议
+- 三种可视化模式：结构展开 / 时序交互 / 拓扑转发
+- 协议层颜色区分：物理层(灰) / 链路层(蓝) / 网络层(绿) / 传输层(橙) / 应用层(紫)
+- 数据包带发光尾迹沿路径流动
+- 安全教育模式：底部自动添加免责声明
+
+<table>
+<tr>
+<td align="center" width="25%"><a href="./skills/network-protocol-viz/README.md#协议列表"><img src="<!-- IMAGE:net-tcp -->" alt="TCP preview" /></a><br /><sub><code>TCP</code><br />三次握手</sub></td>
+<td align="center" width="25%"><a href="./skills/network-protocol-viz/README.md#协议列表"><img src="<!-- IMAGE:net-ipv4 -->" alt="IPv4 preview" /></a><br /><sub><code>IPv4</code><br />数据报 3D</sub></td>
+<td align="center" width="25%"><a href="./skills/network-protocol-viz/README.md#协议列表"><img src="<!-- IMAGE:net-routing -->" alt="Routing preview" /></a><br /><sub><code>Routing</code><br />路由表转发</sub></td>
+<td align="center" width="25%"><a href="./skills/network-protocol-viz/README.md#协议列表"><img src="<!-- IMAGE:net-https -->" alt="HTTPS preview" /></a><br /><sub><code>HTTPS</code><br />TLS 握手</sub></td>
+</tr>
+</table>
+
+<sub>↑ 部分协议预览 — <a href="./skills/network-protocol-viz/README.md#协议列表"><b>查看完整协议列表</b></a>。</sub>
+
+Links: [README](./skills/network-protocol-viz/README.md) · [SKILL.md](./skills/network-protocol-viz/SKILL.md)
+
+---
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
+#### `dynami-carchify`
+
+<a href="./skills/dynami-carchify">
+<img src="<!-- IMAGE:dynami-carchify-banner -->" alt="dynami-carchify Skill" width="100%">
+</a>
+
+**分类:** 动态架构图 / 流程图 / 时序图 / 数据流图 / 状态机
+**适用于:** 技术文档、系统设计评审、安全分析、CI/CD 可视化——需要专业级技术图表（带流动动画 + 多格式导出）的场景。
+
+`dynami-carchify` 生成专业级技术图表的单文件 HTML，包含内联 SVG、暗/亮主题切换、连接线流动动画、沿路径移动的发光粒子。接受自然语言描述或粘贴的 Mermaid 代码，从零开始布局。支持 5 种图表类型：架构图、工作流图、时序图、数据流图、状态机。内置 Node.js 渲染器 + JSON Schema 验证，也支持无 Node 环境的手动 SVG 模式。
+
+亮点:
+- 5 种图表类型：`architecture` / `workflow` / `sequence` / `dataflow` / `lifecycle`
+- 自动流动动画：CSS `stroke-dasharray` 流动 + SVG 粒子沿路径移动，按连接类型自动调速
+- 暗/亮主题切换（持久化到 `localStorage`，尊重 `prefers-color-scheme`）
+- 一键导出：PNG / JPEG / WebP / SVG / 动画 GIF / WebM 视频
+- 接受 Mermaid 代码输入，自动映射到对应图表类型并重新布局
+- CSS 变量色彩系统，组件类型语义化（前端/后端/数据库/云/安全/消息队列/外部）
+
+<table>
+<tr>
+<td align="center" width="20%"><a href="./skills/dynami-carchify/README.md#支持的图表类型"><img src="<!-- IMAGE:arch-architecture -->" alt="architecture preview" /></a><br /><sub><code>architecture</code><br />系统架构图</sub></td>
+<td align="center" width="20%"><a href="./skills/dynami-carchify/README.md#支持的图表类型"><img src="<!-- IMAGE:arch-workflow -->" alt="workflow preview" /></a><br /><sub><code>workflow</code><br />工作流图</sub></td>
+<td align="center" width="20%"><a href="./skills/dynami-carchify/README.md#支持的图表类型"><img src="<!-- IMAGE:arch-sequence -->" alt="sequence preview" /></a><br /><sub><code>sequence</code><br />时序图</sub></td>
+<td align="center" width="20%"><a href="./skills/dynami-carchify/README.md#支持的图表类型"><img src="<!-- IMAGE:arch-dataflow -->" alt="dataflow preview" /></a><br /><sub><code>dataflow</code><br />数据流图</sub></td>
+<td align="center" width="20%"><a href="./skills/dynami-carchify/README.md#支持的图表类型"><img src="<!-- IMAGE:arch-lifecycle -->" alt="lifecycle preview" /></a><br /><sub><code>lifecycle</code><br />状态机</sub></td>
+</tr>
+</table>
+
+<sub>↑ 5 种图表类型预览 — <a href="./skills/dynami-carchify/README.md#支持的图表类型"><b>查看完整说明</b></a>。</sub>
+
+Links: [README](./skills/dynami-carchify/README.md) · [SKILL.md](./skills/dynami-carchify/SKILL.md)
+
+---
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
+#### `scholar-notes`
+
+<a href="./skills/scholar-notes">
+<img src="<!-- IMAGE:scholar-notes-banner -->" alt="scholar-notes Skill" width="100%">
+</a>
+
+**分类:** 学霸笔记 / 手写笔记本风格 HTML
+**适用于:** 技术笔记、漏洞分析、安全研究记录、知识点总结、课堂笔记——需要将技术内容转化为视觉精美的手写笔记本风格网页的场景。
+
+`scholar-notes` 生成手写笔记本风格的单文件 HTML 学习笔记。两种模板风格：Style A（米黄横线纸 + 螺旋装订孔 + 胶带/咖啡渍装饰，适合通用技术笔记）和 Style B（皮革封面 + 金属环装订 + 翻页交互，适合攻击链分析、漏洞笔记）。内置丰富的组件系统：流程图、对比框、攻击链、代码块、便签等。所有图标使用平面 UI 库（Lucide / Remix Icon），禁止 emoji。
+
+亮点:
+- 两种模板风格：`Style A`（学霸笔记本 / 单页滚动）/ `Style B`（手账皮革本 / 翻页交互）
+- 手写感字体：Kalam + Patrick Hand + Zeyada / Ma Shan Zheng
+- 丰富组件：流程图 / 对比框 / 攻击链 / 代码块 / 便签 / 警告框 / 概念卡片
+- 颜色编码系统：红=警告/强调、蓝=信息/术语、绿=安全/正面、紫=技术/代码
+- 严格质量约束：禁止 emoji、内容高度适配封面、checklist 自检
+
+<table>
+<tr>
+<td align="center" width="50%"><a href="./skills/scholar-notes/README.md#两种风格"><img src="<!-- IMAGE:scholar-notes-style-a -->" alt="Style A preview" /></a><br /><sub><code>Style A</code><br />学霸笔记本</sub></td>
+<td align="center" width="50%"><a href="./skills/scholar-notes/README.md#两种风格"><img src="<!-- IMAGE:scholar-notes-style-b -->" alt="Style B preview" /></a><br /><sub><code>Style B</code><br />手账皮革本</sub></td>
+</tr>
+</table>
+
+<sub>↑ 两种风格预览 — <a href="./skills/scholar-notes/README.md#两种风格"><b>查看完整说明</b></a>。</sub>
+
+Links: [README](./skills/scholar-notes/README.md) · [SKILL.md](./skills/scholar-notes/SKILL.md)
+
+---
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
+### 安装
+
+| # | 方式 | 适用于 | 指定版本? |
+|---|------|--------|-----------|
+| A | [`skills` CLI (`npx`)](#option-a--skills-cli-npx) | 任意 Agent，一行安装，按需选择 Skill | ✅ via tag URL |
+| B | Git Clone + 手动复制 | 本地开发 / 魔改 | ✅ via commit |
+| C | GitHub Releases `.zip` | CI / 生产环境固定版本 | ✅ via release tag |
+
+#### Option A · `skills` CLI (npx)
 
 ```bash
-# 克隆仓库
-git clone https://github.com/Unclecheng-li/AI_Animation.git
-cd AI_Animation
+# 安装全部 Skill（推荐）
+npx skills add https://github.com/Unclecheng-li/AI_Animation
 
-# 在浏览器中打开任意 .html 文件
-# 使用 ← → 方向键或鼠标滚轮翻页
+# 安装单个 Skill
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/ppt-animation
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/ai-model-viz
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/network-protocol-viz
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/dynami-carchify
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/scholar-notes
 ```
 
-### 方式二：AI 生成新动画
+> **默认安装 `main` 分支最新版本。** CLI 会从源码树直接读取每个 Skill 的最新 `SKILL.md`。
 
-1. 打开 [prompt.md](prompt.md)，选择或修改合适的 Prompt
-2. 将 Prompt 发送给 AI（推荐 [Trae](https://trae.ai/)、Claude、GPT-4o）
-3. 指定输出文件路径
-4. 在浏览器中预览
+#### Option B · Git Clone
 
-**推荐 AI 工具：**
+```bash
+git clone https://github.com/Unclecheng-li/AI_Animation.git
+# 将 skills/<skill-name> 复制到你的 Agent 技能目录
+```
 
-| 工具 | 特点 | 适合场景 |
-|------|------|----------|
-| [Trae](https://trae.ai/) | 免费，可直接生成 HTML | 快速生成 |
-| Claude | 长上下文，代码质量高 | 复杂动画 |
-| Codex | 图形理解能力强 | UI 重构 |
+#### Option C · GitHub Releases
 
-### 方式三：UI 参考重构
+前往 [Releases 页面](https://github.com/Unclecheng-li/AI_Animation/releases) 下载 `.zip`，解压后复制到 Agent 技能目录。
 
-1. 在 `UI/` 文件夹中选择设计风格
-2. 使用 [prompt.md](prompt.md) 中「UI 置换」类 Prompt
-3. 让 AI 参考 UI 图片进行视觉重构
+### 兼容性
+
+| Agent / Runtime | Skill 存放路径 | 状态 |
+|---|---|---|
+| **WorkBuddy** | `~/.workbuddy/skills/<name>/` | ✅ 已测试 |
+| **Claude Code** | `.claude/skills/<name>/` | ✅ 兼容 |
+| **Cursor** | `.agents/skills/<name>/` | ✅ 兼容 |
+| **Codex CLI** | `.codex/skills/<name>/` | ✅ 兼容 |
+| **Gemini CLI** | extension manifest | ✅ 兼容 |
+
+> `SKILL.md` 格式与 Agent 无关，只要 Agent 支持 Skills 规范，将文件夹复制到对应目录即可。
+
+### 快速上手
+
+安装 Skill 后，直接在 AI Agent 中说：
+
+```
+用 ppt-animation 制作一个关于"HTTP协议"的演示，暗色主题，5页
+```
+
+```
+用 ai-model-viz 演示 LSTM 的工作原理
+```
+
+```
+用 network-protocol-viz 可视化 TCP 三次握手
+```
+
+```
+用 dynami-carchify 画一个微服务架构图，带流动动画
+```
+
+```
+把以上内容做成学霸笔记，Style A 风格
+```
+
+### 目录结构
+
+```text
+ai-animation-skills/
+├── skills/
+│   ├── SKILL_TEMPLATE.md        ← 新增 Skill 的标准模板
+│   ├── ppt-animation/
+│   │   ├── SKILL.md             ← Agent 执行指令（核心）
+│   │   ├── README.md            ← 人类可读文档
+│   │   ├── references/          ← Prompt 参考
+│   │   └── assets/              ← 模板 HTML 文件
+│   ├── ai-model-viz/
+│   │   ├── SKILL.md
+│   │   ├── README.md
+│   │   ├── references/
+│   │   └── assets/
+│   ├── network-protocol-viz/
+│   │   ├── SKILL.md
+│   │   ├── README.md
+│   │   ├── references/
+│   │   └── assets/
+│   ├── dynami-carchify/
+│   │   ├── SKILL.md
+│   │   ├── README.md
+│   │   ├── renderers/           ← 5 种图表渲染器
+│   │   ├── schemas/             ← JSON Schema 验证
+│   │   ├── examples/            ← 示例 JSON
+│   │   └── assets/              ← 模板 + GIF 导出库
+│   └── scholar-notes/
+│       ├── SKILL.md
+│       ├── README.md
+│       ├── assets/              ← Style A + Style B 模板
+│       ├── references/          ← 布局库 + 组件手册 + checklist
+│       └── examples/            ← Style A/B 示例（8 个）
+├── web_animation/               ← 原始示例 HTML（历史存档）
+├── UI/                          ← UI 设计参考图
+├── prompt.md                    ← Prompt 模板集合
+├── package.json
+├── CONTRIBUTING.md
+└── README.md
+```
 
 ---
 
-## 示例预览
+## English
 
-| 文件 | 主题 | 特点 |
-|------|------|------|
-| `tcp-visualization.html` | TCP 可视化 | 3D 效果、交互演示 |
-| `ipv4_datagram - 3d.html` | IPv4 数据报 | 3D 旋转、动态展示 |
-| `router-routing-table-animated.html` | 路由表 | 表格动画、路径高亮 |
-| `Animation/RNN-*.html` | RNN 神经网络 | 分步动画、概念可视化 |
-| `Animation/GPU.html` | GPU 架构 | 图形化演示 |
+### Overview
 
----
+A collection of AI Agent skills for generating stunning HTML animation pages. Each skill is a self-contained folder with `SKILL.md` (agent instructions), `README.md`, `references/`, and `assets/`. Once installed, the AI agent auto-activates the matching skill based on your description.
 
-## 技术栈
+### Skills
 
-- **前端**：HTML5 + CSS3 + JavaScript（原生，无框架依赖）
-- **动画**：CSS Animation / Keyframes / 3D Transform
-- **图表**：纯 CSS/JS 图形绘制，无外部库
-- **兼容性**：现代浏览器（Chrome、Firefox、Safari、Edge）
+| Skill | Description | Templates |
+|-------|-------------|-----------|
+| [`ppt-animation`](./skills/ppt-animation) | PPT-style slideshow animations with 5 built-in themes | 30+ |
+| [`ai-model-viz`](./skills/ai-model-viz) | AI/ML model visualization (RNN, LSTM, GRU, MLP, etc.) | 15+ |
+| [`network-protocol-viz`](./skills/network-protocol-viz) | Network protocol animations (TCP, IPv4, routing, etc.) | 10+ |
+| [`dynami-carchify`](./skills/dynami-carchify) | Animated architecture/workflow/sequence/dataflow/lifecycle diagrams | 5 types |
+| [`scholar-notes`](./skills/scholar-notes) | Handwritten notebook-style HTML learning notes | 2 styles |
 
----
+### Installation
 
-## 开源协议
+```bash
+# Install all skills
+npx skills add https://github.com/Unclecheng-li/AI_Animation
 
-本项目仅供学习和研究使用，请勿用于非法用途。
-请勿用于商业用途。
----
+# Install a single skill
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/ppt-animation
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/dynami-carchify
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/scholar-notes
+```
 
-## 致谢
+### Contributing
 
-- AI 工具：[Trae](https://trae.ai/)、Claude、ChatGPT 等
-- 所有参与测试和反馈的社区成员(虽然目前还没有desuwa)
+See [CONTRIBUTING.md](./CONTRIBUTING.md). New animation skills are welcome!
+
+### License
+
+MIT — for educational use only.

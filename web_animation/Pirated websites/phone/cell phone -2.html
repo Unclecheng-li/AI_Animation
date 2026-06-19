@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <!-- 移动端核心适配，禁止缩放 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>手机钓鱼短信演示 - 美国运营商/银行</title>
+    <style>
+        /* 全局样式重置 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "PingFang SC", "Microsoft Yahei", sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+            font-family: "PingFang SC", "Microsoft Yahei", sans-serif;
+        }
+
+        /* 手机机身模拟（核心视觉，适配移动端+PC） */
+        .phone-container {
+            width: 100%;
+            max-width: 420px;
+            height: 800px;
+            background-color: #111;
+            border-radius: 40px;
+            padding: 15px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.3);
+            position: relative;
+        }
+
+        /* 手机顶部听筒/摄像头 */
+        .phone-top {
+            width: 100%;
+            height: 40px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .phone-listener {
+            width: 80px;
+            height: 6px;
+            background-color: #333;
+            border-radius: 3px;
+        }
+
+        /* 手机屏幕（短信应用容器） */
+        .phone-screen {
+            width: 100%;
+            height: calc(100% - 40px);
+            background-color: #fff;
+            border-radius: 25px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        
+        /* 手机底部虚拟导航栏 */
+        .phone-nav {
+            height: 50px;
+            background-color: #f8f8f8;
+            border-top: 1px solid #eee;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+        }
+        
+        .nav-btn {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 50%;
+            background-color: #e5e5e5;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .nav-btn:hover {
+            background-color: #d0d0d0;
+        }
+        
+        /* 短信列表内容区域（调整高度以适应导航栏） */
+        .sms-list {
+            flex: 1;
+            overflow-y: auto;
+            background-color: #fafafa;
+            padding-bottom: 50px; /* 为导航栏留出空间 */
+        }
+
+        /* 手机状态栏（信号、时间、电池） */
+        .phone-status {
+            height: 44px;
+            background-color: #fff;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+            font-size: 14px;
+            color: #000;
+            border-bottom: 1px solid #eee;
+        }
+
+        .status-left {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .status-icon {
+            font-size: 16px;
+        }
+
+        /* 短信应用标题栏 */
+        .sms-header {
+            height: 48px;
+            background-color: #f8f8f8;
+            display: flex;
+            align-items: center;
+            padding: 0 15px;
+            border-bottom: 1px solid #eee;
+            font-weight: 500;
+            font-size: 18px;
+        }
+
+        /* 短信会话列表容器（可滚动） */
+        .sms-list {
+            flex: 1;
+            overflow-y: auto;
+            background-color: #fafafa;
+        }
+
+        /* 短信会话项（未读样式+点击交互） */
+        .sms-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .sms-item:hover {
+            background-color: #f5f5f5;
+            transform: translateX(2px);
+        }
+
+        .sms-item.unread {
+            background-color: #fefefe;
+            border-left: 4px solid #e63946; /* 未读红色标记，钓鱼短信重点提示 */
+        }
+        
+        /* 未读消息角标 */
+        .sms-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: #e63946;
+            color: #fff;
+            font-size: 12px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            min-width: 18px;
+            text-align: center;
+        }
+        
+        /* 短信链接样式 */
+        .sms-link {
+            color: #1E40AF;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        
+        .sms-link:hover {
+            text-decoration: underline;
+            color: #1D4ED8;
+        }
+        
+        /* 手机风格弹窗警告 */
+        .phone-alert {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .phone-alert.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .phone-alert-content {
+            background-color: #fff;
+            border-radius: 16px;
+            width: 80%;
+            max-width: 320px;
+            padding: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+        }
+        
+        .phone-alert.show .phone-alert-content {
+            transform: scale(1);
+        }
+        
+        .phone-alert-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        
+        .phone-alert-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #e63946;
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            margin-right: 12px;
+        }
+        
+        .phone-alert-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #111;
+        }
+        
+        .phone-alert-message {
+            font-size: 14px;
+            color: #333;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+        
+        .phone-alert-footer {
+            display: flex;
+            justify-content: flex-end;
+        }
+        
+        .phone-alert-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 8px;
+            background-color: #1E40AF;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .phone-alert-btn:hover {
+            background-color: #1D4ED8;
+        }
+
+        /* 会话项头部：发件人+时间 */
+        .sms-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+
+        .sms-sender {
+            font-weight: 500;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* 运营商/银行图标区分 */
+        .sender-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 12px;
+            color: #fff;
+        }
+
+        .icon-operator {
+            background-color: #0284c7; /* 运营商蓝色 */
+        }
+
+        .icon-bank {
+            background-color: #16a34a; /* 银行绿色 */
+        }
+
+        .sms-time {
+            font-size: 12px;
+            color: #999;
+        }
+
+        /* 会话项摘要（未展开时显示） */
+        .sms-item-desc {
+            font-size: 14px;
+            color: #666;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* 短信内容详情（展开后显示，模拟真实短信对话） */
+        .sms-detail {
+            padding: 0 15px;
+            max-height: 0;
+            overflow: hidden;
+            background-color: #fff;
+            transition: all 0.3s ease;
+        }
+        
+        .sms-detail.show {
+            padding: 10px 15px;
+            max-height: 300px;
+        }
+
+        /* 钓鱼短信气泡（对方发送，左侧，贴近手机原生短信样式） */
+        .sms-bubble {
+            max-width: 85%;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background-color: #e5e5e5;
+            font-size: 14px;
+            line-height: 1.6;
+            margin-bottom: 8px;
+            position: relative;
+        }
+
+        /* 最后一条短信取消底部边距 */
+        .sms-bubble:last-child {
+            margin-bottom: 0;
+        }
+
+        /* 滚动条美化（适配手机端视觉） */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background-color: #ccc;
+            border-radius: 2px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background-color: transparent;
+        }
+
+        /* 空状态样式 */
+        .empty-state {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            transform: translateY(-50%);
+            transition: all 0.3s ease;
+        }
+        
+        .empty-state.hidden {
+            opacity: 0;
+            visibility: hidden;
+        }
+        
+        /* 短信添加动画 */
+        @keyframes smsSlideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .sms-item.new {
+            animation: smsSlideIn 0.5s ease forwards;
+        }
+        
+        /* 媒体查询：超小屏适配 */
+        @media (max-width: 375px) {
+            .phone-container {
+                height: 700px;
+            }
+            .sms-sender {
+                font-size: 15px;
+            }
+        }
+    </style>
+    <!-- 引入阿里图标库（信号、电池、箭头等图标，无需本地资源） -->
+    <link rel="stylesheet" href="https://at.alicdn.com/t/c/font_4085272_9v2z905h75.css">
+</head>
+<body>
+    <!-- 手机机身容器 -->
+    <div class="phone-container">
+        <!-- 手机顶部听筒 -->
+        <div class="phone-top">
+            <div class="phone-listener"></div>
+        </div>
+        <!-- 手机屏幕（短信应用） -->
+        <div class="phone-screen">
+            <!-- 手机状态栏 -->
+            <div class="phone-status">
+                <div class="status-left">
+                    <span class="status-icon iconfont icon-xinhaoyouhao"></span>
+                    <span id="current-network">美国移动</span>
+                    <span id="current-time">11:45</span>
+                </div>
+                <div class="status-right">
+                    <span id="battery-percentage">100%</span>
+                    <span class="status-icon iconfont icon-dianchi100"></span>
+                </div>
+            </div>
+            <!-- 短信应用标题栏 -->
+            <div class="sms-header">
+                短信
+            </div>
+            <!-- 短信会话列表 -->
+            <div class="sms-list" id="smsList">
+                <!-- 初始为空，通过JavaScript动态添加 -->
+            </div>
+            
+            <!-- 空状态提示 -->
+            <div class="empty-state" id="emptyState">
+                <div style="text-align: center; padding: 60px 20px; color: #999;">
+                    <div style="font-size: 48px; margin-bottom: 20px;">📱</div>
+                    <div style="font-size: 16px; margin-bottom: 8px;">暂无短信</div>
+                    <div style="font-size: 14px;">新短信将显示在这里</div>
+                </div>
+            </div>
+            
+            <!-- 手机底部虚拟导航栏 -->
+            <div class="phone-nav">
+                <div class="nav-btn">
+                    <span class="status-icon iconfont icon-zuo"></span>
+                </div>
+                <div class="nav-btn">
+                    <span class="status-icon iconfont icon-zhong"></span>
+                </div>
+                <div class="nav-btn">
+                    <span class="status-icon iconfont icon-you"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 手机风格弹窗警告 -->
+    <div class="phone-alert" id="phoneAlert">
+        <div class="phone-alert-content">
+            <div class="phone-alert-header">
+                <div class="phone-alert-icon">⚠️</div>
+                <div class="phone-alert-title">安全警告</div>
+            </div>
+            <div class="phone-alert-message" id="alertMessage">
+                此链接可能是钓鱼网站！
+            </div>
+            <div class="phone-alert-footer">
+                <button class="phone-alert-btn" onclick="hideAlert()">我知道了</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 点击展开/收起短信详情
+        function toggleSms(el) {
+            const detail = el.querySelector('.sms-detail');
+            // 切换显示/隐藏（使用CSS动画）
+            detail.classList.toggle('show');
+            // 移除未读标记和角标
+            el.classList.remove('unread');
+            const badge = el.querySelector('.sms-badge');
+            if (badge) {
+                badge.style.display = 'none';
+            }
+        }
+
+        // 显示手机风格弹窗警告
+        function showAlert(message) {
+            const alert = document.getElementById('phoneAlert');
+            const alertMessage = document.getElementById('alertMessage');
+            alertMessage.textContent = message;
+            alert.classList.add('show');
+        }
+        
+        // 隐藏手机风格弹窗警告
+        function hideAlert() {
+            const alert = document.getElementById('phoneAlert');
+            alert.classList.remove('show');
+        }
+        
+        // 点击钓鱼链接跳转到钓鱼网站
+        function warnLink(el) {
+            event.preventDefault();
+            // 跳转到美国移动钓鱼网站页面
+            window.location.href = '3.us 10086.html';
+        }
+
+        // 动态更新手机状态栏时间（提升真实感）
+        function updateTime() {
+            const now = new Date();
+            let hours = now.getHours().toString().padStart(2, '0');
+            let minutes = now.getMinutes().toString().padStart(2, '0');
+            document.getElementById('current-time').innerText = `${hours}:${minutes}`;
+        }
+        
+        // 初始化时间+每分钟更新
+        updateTime();
+        setInterval(updateTime, 60000);
+
+        // 模拟电池电量更新
+        function updateBattery() {
+            const batteryLevels = ['100%', '95%', '90%', '85%', '80%'];
+            const randomLevel = batteryLevels[Math.floor(Math.random() * batteryLevels.length)];
+            document.getElementById('battery-percentage').innerText = randomLevel;
+        }
+        
+        // 初始化电池状态
+        updateBattery();
+
+        // 导航按钮点击事件
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                // 模拟导航按钮点击效果
+                this.style.backgroundColor = '#d0d0d0';
+                setTimeout(() => {
+                    this.style.backgroundColor = '#e5e5e5';
+                }, 200);
+            });
+        });
+
+        // 禁止页面长按选中（模拟手机操作体验）
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        document.addEventListener('selectstart', e => e.preventDefault());
+        
+        // 模拟手机震动效果（点击时）
+        document.querySelectorAll('.sms-item, .nav-btn').forEach(element => {
+            element.addEventListener('click', function() {
+                // 检查是否支持震动API
+                if (navigator.vibrate) {
+                    navigator.vibrate(10);
+                }
+            });
+        });
+        
+        // 动态添加钓鱼短信
+        function addPhishingSms() {
+            // 隐藏空状态
+            document.getElementById('emptyState').classList.add('hidden');
+            
+            // 创建短信元素
+            const smsItem = document.createElement('div');
+            smsItem.className = 'sms-item unread new';
+            smsItem.setAttribute('onclick', 'toggleSms(this)');
+            
+            smsItem.innerHTML = `
+                <div class="sms-badge">1</div>
+                <div class="sms-item-header">
+                    <div class="sms-sender">
+                        <span class="sender-icon icon-operator">美</span>
+                        【美国移动】
+                    </div>
+                    <div class="sms-time">刚刚</div>
+                </div>
+                <div class="sms-item-desc">您的手机号已欠费停机，点击链接充值立减20元，2小时内有效...</div>
+                <div class="sms-detail">
+                    <div class="sms-bubble">您的手机号已欠费停机，点击链接<a href="#" class="sms-link" onclick="warnLink(this)">https://us-10086.com</a>充值立减 20 元，2 小时内有效</div>
+                </div>
+            `;
+            
+            // 添加到短信列表
+            document.getElementById('smsList').prepend(smsItem);
+            
+            // 模拟手机震动
+            if (navigator.vibrate) {
+                navigator.vibrate(50);
+            }
+        }
+        
+        // 页面加载后延迟显示短信
+        window.addEventListener('DOMContentLoaded', function() {
+            setTimeout(addPhishingSms, 2000); // 2秒后收到短信
+        });
+    </script>
+</body>
+</html>

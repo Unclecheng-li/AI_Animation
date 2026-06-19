@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPv4 Datagram Visualization</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#121212',
+                        darker: '#0a0a0a',
+                        primary: '#1e1e2e',
+                        secondary: '#2d2d44',
+                        accent: '#ff2e93',
+                        highlight: '#ff7eb3',
+                        neutral: '#8a8aa0',
+                    },
+                    fontFamily: {
+                        mono: ['Fira Code', 'Consolas', 'monospace'],
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'glow': 'glow 2s ease-in-out infinite alternate',
+                        'fade-in': 'fadeIn 0.6s ease-out forwards',
+                    },
+                    keyframes: {
+                        glow: {
+                            '0%': { boxShadow: '0 0 5px rgba(255, 46, 147, 0.5)' },
+                            '100%': { boxShadow: '0 0 20px rgba(255, 46, 147, 0.8)' },
+                        },
+                        fadeIn: {
+                            '0%': { opacity: '0', transform: 'translateY(10px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .text-shadow {
+                text-shadow: 0 0 8px rgba(255, 46, 147, 0.6);
+            }
+            .border-glow {
+                box-shadow: 0 0 5px rgba(255, 46, 147, 0.5);
+            }
+            .datagram-field {
+                @apply border border-neutral/30 rounded-sm transition-all duration-300 hover:border-accent hover:bg-secondary/50 relative overflow-hidden opacity-0;
+            }
+            .datagram-field::before {
+                content: '';
+                @apply absolute top-0 left-0 w-full h-full bg-accent/5 opacity-0 transition-opacity duration-300;
+            }
+            .datagram-field:hover::before {
+                @apply opacity-100;
+            }
+            .tooltip {
+                @apply invisible absolute bg-darker text-white text-xs rounded py-1 px-2 z-10 w-64 -mt-24 ml-8 transform -translate-x-1/2 opacity-0 transition-all duration-300 pointer-events-none;
+            }
+            .datagram-field:hover .tooltip {
+                @apply visible opacity-100;
+            }
+            .tooltip::after {
+                content: '';
+                @apply absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-darker;
+            }
+            /* 3D transformations */
+            .perspective {
+                perspective: 1500px;
+            }
+            .preserve-3d {
+                transform-style: preserve-3d;
+            }
+            .rotate-y {
+                transform: rotateY(var(--rotate-y, 0deg));
+            }
+            .rotate-x {
+                transform: rotateX(var(--rotate-x, 0deg));
+            }
+            .translate-z {
+                transform: translateZ(var(--translate-z, 0px));
+            }
+        }
+    </style>
+</head>
+<body class="bg-dark text-gray-200 min-h-screen font-mono">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <header class="mb-12 text-center">
+            <h1 class="text-[clamp(1.8rem,5vw,3rem)] font-bold mb-2 text-white text-shadow">
+                IPv4 <span class="text-accent">Datagram</span> Format
+            </h1>
+            <p class="text-neutral max-w-2xl mx-auto">A visual representation of the IPv4 packet structure with accurate 32-bit word organization</p>
+        </header>
+
+        <div class="relative perspective">
+            <!-- IPv4 Datagram Visualization -->
+            <div class="bg-primary rounded-lg p-6 border border-secondary animate-glow preserve-3d transition-all duration-1000" id="datagram-container">
+                <!-- 32-bit word indicator -->
+                <div class="flex justify-between mb-2 text-xs text-neutral opacity-0" id="bit-indicators">
+                    <span>0 bits</span>
+                    <span>16 bits</span>
+                    <span>32 bits</span>
+                </div>
+                
+                <!-- First 32-bit word -->
+                <div class="flex h-14 mb-2">
+                    <div class="datagram-field w-[12.5%] flex items-center justify-center" style="min-width: 40px;" data-index="1">
+                        <span>Version<br/>(4 bits)</span>
+                        <div class="tooltip">Indicates the IP version (4 for IPv4)</div>
+                    </div>
+                    <div class="datagram-field w-[12.5%] flex items-center justify-center" style="min-width: 40px;" data-index="2">
+                        <span>IHL<br/>(4 bits)</span>
+                        <div class="tooltip">Internet Header Length - Size of the IP header in 32-bit words</div>
+                    </div>
+                    <div class="datagram-field w-[25%] flex items-center justify-center bg-secondary/30" style="min-width: 80px;" data-index="3">
+                        <span>TOS<br/>(8 bits)</span>
+                        <div class="tooltip">Type of Service - Specifies quality of service parameters</div>
+                    </div>
+                    <div class="datagram-field w-[50%] flex items-center justify-center border-accent" style="min-width: 160px;" data-index="4">
+                        <span>Total Length<br/>(16 bits)</span>
+                        <div class="tooltip">Total length of the datagram in bytes (header + data)</div>
+                    </div>
+                </div>
+                
+                <!-- Second 32-bit word -->
+                <div class="flex h-14 mb-2">
+                    <div class="datagram-field w-[50%] flex items-center justify-center" style="min-width: 160px;" data-index="5">
+                        <span>Identification<br/>(16 bits)</span>
+                        <div class="tooltip">Unique value for identifying fragments of the same datagram</div>
+                    </div>
+                    <div class="datagram-field w-[9.375%] flex items-center justify-center" style="min-width: 30px;" data-index="6">
+                        <span>Flags<br/>(3 bits)</span>
+                        <div class="tooltip">Control flags for fragmentation (DF, MF)</div>
+                    </div>
+                    <div class="datagram-field w-[40.625%] flex items-center justify-center" style="min-width: 130px;" data-index="7">
+                        <span>Fragment Offset<br/>(13 bits)</span>
+                        <div class="tooltip">Position of fragment data relative to the start of data in the original datagram</div>
+                    </div>
+                </div>
+                
+                <!-- Third 32-bit word -->
+                <div class="flex h-14 mb-2">
+                    <div class="datagram-field w-[25%] flex items-center justify-center" style="min-width: 80px;" data-index="8">
+                        <span>TTL<br/>(8 bits)</span>
+                        <div class="tooltip">Time to Live - Maximum number of hops the datagram can take</div>
+                    </div>
+                    <div class="datagram-field w-[25%] flex items-center justify-center" style="min-width: 80px;" data-index="9">
+                        <span>Protocol<br/>(8 bits)</span>
+                        <div class="tooltip">Indicates the protocol used in the data portion (e.g., TCP=6, UDP=17)</div>
+                    </div>
+                    <div class="datagram-field w-[50%] flex items-center justify-center" style="min-width: 160px;" data-index="10">
+                        <span>Header Checksum<br/>(16 bits)</span>
+                        <div class="tooltip">Used for error checking of the header</div>
+                    </div>
+                </div>
+                
+                <!-- Fourth 32-bit word -->
+                <div class="flex h-14 mb-2">
+                    <div class="datagram-field w-full flex items-center justify-center border-accent bg-secondary/20" data-index="11">
+                        <span>Source IP Address<br/>(32 bits)</span>
+                        <div class="tooltip">32-bit IP address of the sending host (e.g., 192.168.1.1)</div>
+                    </div>
+                </div>
+                
+                <!-- Fifth 32-bit word -->
+                <div class="flex h-14 mb-2">
+                    <div class="datagram-field w-full flex items-center justify-center border-accent bg-secondary/20" data-index="12">
+                        <span>Destination IP Address<br/>(32 bits)</span>
+                        <div class="tooltip">32-bit IP address of the receiving host (e.g., 10.0.0.2)</div>
+                    </div>
+                </div>
+                
+                <!-- Options (variable length) -->
+                <div class="flex h-14 mb-2">
+                    <div class="datagram-field w-full flex items-center justify-center" style="min-height: 60px;" data-index="13">
+                        <span>Options (if any)<br/>(0-40 bytes)</span>
+                        <div class="tooltip">Optional fields for special processing (rarely used)</div>
+                    </div>
+                </div>
+                
+                <!-- Data portion -->
+                <div class="flex h-24 relative overflow-hidden">
+                    <div class="datagram-field w-full flex items-center justify-center border-t-2 border-accent/50" data-index="14">
+                        <div class="text-center">
+                            <span>Data<br/>(Variable length)</span>
+                            <div class="mt-2 text-xs text-neutral">
+                                <div class="flex justify-center space-x-1">
+                                    <span class="inline-block w-2 h-2 bg-accent rounded-full animate-pulse"></span>
+                                    <span class="inline-block w-2 h-2 bg-accent rounded-full animate-pulse" style="animation-delay: 0.2s"></span>
+                                    <span class="inline-block w-2 h-2 bg-accent rounded-full animate-pulse" style="animation-delay: 0.4s"></span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="tooltip">Payload data from higher layer protocols (TCP, UDP, etc.)</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Decorative elements -->
+            <div class="absolute -top-4 -left-4 w-8 h-8 bg-accent/20 rounded-full blur-md"></div>
+            <div class="absolute -bottom-6 -right-6 w-12 h-12 bg-accent/30 rounded-full blur-lg"></div>
+        </div>
+        
+        <!-- Legend -->
+        <div class="mt-10 bg-primary/50 rounded-lg p-4 border border-secondary/50 opacity-0" id="legend">
+            <h3 class="text-accent text-lg mb-3 font-semibold">Field Legend</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                <div class="flex items-center"><span class="w-3 h-3 bg-accent rounded-sm mr-2"></span> Key identification fields</div>
+                <div class="flex items-center"><span class="w-3 h-3 bg-secondary/30 rounded-sm mr-2"></span> Service and quality fields</div>
+                <div class="flex items-center"><span class="w-3 h-3 border border-accent/50 bg-transparent rounded-sm mr-2"></span> Routing and control fields</div>
+                <div class="flex items-center"><span class="animate-pulse w-3 h-3 bg-accent rounded-full mr-2"></span> Data payload section</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Add some interactive effects
+        document.addEventListener('DOMContentLoaded', () => {
+            // Animate fields sequentially with 3D effect
+            const animateFields = () => {
+                const bitIndicators = document.getElementById('bit-indicators');
+                const fields = document.querySelectorAll('.datagram-field');
+                const legend = document.getElementById('legend');
+                
+                // First show the bit indicators
+                setTimeout(() => {
+                    bitIndicators.classList.add('animate-fade-in');
+                }, 300);
+                
+                // Then show each field in order with a small delay between them and 3D effect
+                fields.forEach((field, index) => {
+                    setTimeout(() => {
+                        field.classList.add('animate-fade-in');
+                        // Add 3D depth to each field based on its position
+                        field.style.transform = `translateZ(${index * 5}px)`;
+                    }, 500 + (index * 150));
+                });
+                
+                // Finally show the legend
+                setTimeout(() => {
+                    legend.classList.add('animate-fade-in');
+                }, 500 + (fields.length * 150) + 300);
+            };
+            
+            // Start the animation sequence
+            animateFields();
+            
+            // Add random floating particles for visual effect
+            const container = document.querySelector('.container');
+            
+            for (let i = 0; i < 10; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'fixed rounded-full bg-accent/10 pointer-events-none';
+                particle.style.width = `${Math.random() * 5 + 1}px`;
+                particle.style.height = particle.style.width;
+                particle.style.left = `${Math.random() * 100}vw`;
+                particle.style.top = `${Math.random() * 100}vh`;
+                particle.style.animation = `float ${Math.random() * 20 + 10}s linear infinite`;
+                particle.style.animationDelay = `${Math.random() * 10}s`;
+                container.appendChild(particle);
+            }
+            
+            // Add floating animation keyframes
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes float {
+                    0% {
+                        transform: translateY(0) translateX(0);
+                        opacity: 0.3;
+                    }
+                    25% {
+                        transform: translateY(-20px) translateX(10px);
+                        opacity: 0.5;
+                    }
+                    50% {
+                        transform: translateY(-40px) translateX(0);
+                        opacity: 0.3;
+                    }
+                    75% {
+                        transform: translateY(-20px) translateX(-10px);
+                        opacity: 0.5;
+                    }
+                    100% {
+                        transform: translateY(0) translateX(0);
+                        opacity: 0.3;
+                    }
+                }
+                
+                /* 3D rotation animation */
+                @keyframes rotate3d {
+                    0% {
+                        transform: rotateY(0deg) rotateX(0deg) translateZ(0px);
+                    }
+                    25% {
+                        transform: rotateY(5deg) rotateX(5deg) translateZ(20px);
+                    }
+                    50% {
+                        transform: rotateY(0deg) rotateX(0deg) translateZ(40px);
+                    }
+                    75% {
+                        transform: rotateY(-5deg) rotateX(-5deg) translateZ(20px);
+                    }
+                    100% {
+                        transform: rotateY(0deg) rotateX(0deg) translateZ(0px);
+                    }
+                }
+                
+                /* 3D translation animation */
+                @keyframes translate3d {
+                    0% {
+                        transform: translateZ(0px);
+                    }
+                    50% {
+                        transform: translateZ(30px);
+                    }
+                    100% {
+                        transform: translateZ(0px);
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+            
+            // Get the datagram container
+            const datagramContainer = document.getElementById('datagram-container');
+            
+            // Add automatic 3D rotation and translation animation
+            datagramContainer.style.animation = 'rotate3d 20s ease-in-out infinite';
+            
+            // Add mouse interaction for 3D control
+            let isDragging = false;
+            let previousMouseX = 0;
+            let previousMouseY = 0;
+            let currentRotationY = 0;
+            let currentRotationX = 0;
+            let currentTranslateZ = 0;
+            
+            // Disable automatic animation on mouse interaction
+            datagramContainer.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                previousMouseX = e.clientX;
+                previousMouseY = e.clientY;
+                datagramContainer.style.animation = 'none';
+            });
+            
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                
+                const deltaX = e.clientX - previousMouseX;
+                const deltaY = e.clientY - previousMouseY;
+                
+                // Update rotation based on mouse movement
+                currentRotationY += deltaX * 0.5;
+                currentRotationX -= deltaY * 0.5;
+                
+                // Apply the rotation and current translation
+                datagramContainer.style.transform = `rotateY(${currentRotationY}deg) rotateX(${currentRotationX}deg) translateZ(${currentTranslateZ}px)`;
+                
+                previousMouseX = e.clientX;
+                previousMouseY = e.clientY;
+            });
+            
+            document.addEventListener('mouseup', () => {
+                isDragging = false;
+            });
+            
+            // Add mouse wheel zoom for Z-axis translation
+            datagramContainer.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                // Adjust translation based on wheel delta
+                currentTranslateZ += e.deltaY * 0.1;
+                // Limit the translation range
+                currentTranslateZ = Math.max(-50, Math.min(100, currentTranslateZ));
+                
+                datagramContainer.style.transform = `rotateY(${currentRotationY}deg) rotateX(${currentRotationX}deg) translateZ(${currentTranslateZ}px)`;
+                datagramContainer.style.animation = 'none';
+            });
+            
+            // Add hover effect to datagram fields with 3D enhancement
+            const fields = document.querySelectorAll('.datagram-field');
+            fields.forEach((field, index) => {
+                field.addEventListener('mouseenter', () => {
+                    field.style.transform = `translateZ(${index * 5 + 20}px) scale(1.02)`;
+                    field.style.zIndex = '10';
+                });
+                
+                field.addEventListener('mouseleave', () => {
+                    field.style.transform = `translateZ(${index * 5}px) scale(1)`;
+                    field.style.zIndex = '1';
+                });
+            });
+            
+            // Add reset button functionality
+            const reset3DView = () => {
+                currentRotationY = 0;
+                currentRotationX = 0;
+                currentTranslateZ = 0;
+                datagramContainer.style.transform = `rotateY(0deg) rotateX(0deg) translateZ(0px)`;
+                datagramContainer.style.animation = 'rotate3d 20s ease-in-out infinite';
+            };
+            
+            // Add reset button
+            const resetButton = document.createElement('button');
+            resetButton.textContent = 'Reset 3D View';
+            resetButton.className = 'mt-4 bg-accent hover:bg-accent/80 text-white px-4 py-2 rounded text-sm transition-all duration-300';
+            resetButton.onclick = reset3DView;
+            
+            // Add button after the datagram container
+            const parentContainer = datagramContainer.parentElement;
+            parentContainer.appendChild(resetButton);
+            
+            // Animate the reset button
+            resetButton.style.opacity = '0';
+            setTimeout(() => {
+                resetButton.style.transition = 'opacity 0.5s ease';
+                resetButton.style.opacity = '1';
+            }, 3000);
+        });
+    </script>
+</body>
+</html>

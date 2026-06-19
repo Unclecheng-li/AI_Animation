@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Uncle Mail - 安全邮件告警中心</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#f6f8fc;--surface:#fff;--surface-hover:#f2f6fc;--border:#dadce0;--text:#202124;--text-secondary:#5f6368;--blue:#1a73e8;--blue-light:#e8f0fe;--red:#d93025;--red-light:#fce8e6;--yellow:#f9ab00;--yellow-light:#fef3e8;--green:#188038;--green-light:#e6f4ea;--purple:#9334e6;--purple-light:#f3e8fd;--orange:#fa7b17;--orange-light:#feefe3}
+body{font-family:"Google Sans",Roboto,RobotoDraft,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden}
+
+/* App Container */
+.app{display:flex;height:100vh}
+
+/* Sidebar */
+.sidebar{width:256px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:8px 0;flex-shrink:0}
+.brand{display:flex;align-items:center;gap:12px;padding:12px 16px 20px}
+.brand-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--blue),#4285f4);border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:700}
+.brand-text{font-size:20px;font-weight:500;color:var(--text);letter-spacing:-.5px}
+.compose-btn{margin:0 16px 16px;padding:14px 24px;background:linear-gradient(135deg,#c2e7ff,#a8d8ff);border:none;border-radius:16px;color:#001d35;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:10px;transition:box-shadow .2s,transform .1s}
+.compose-btn:hover{box-shadow:0 2px 8px rgba(26,115,232,.2);transform:translateY(-1px)}
+.compose-btn svg{width:20px;height:20px}
+.nav-item{display:flex;align-items:center;gap:14px;padding:10px 24px;margin:0 8px;border-radius:0 24px 24px 0;cursor:pointer;transition:background .15s;color:var(--text-secondary);font-size:14px;position:relative}
+.nav-item:hover{background:var(--surface-hover);color:var(--text)}
+.nav-item.active{background:var(--blue-light);color:var(--blue);font-weight:600}
+.nav-item svg{width:20px;height:20px;flex-shrink:0}
+.nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;min-width:24px;text-align:center;animation:pulse-badge 2s infinite}
+.nav-badge.green{background:var(--green)}
+.nav-badge.yellow{background:var(--yellow)}
+@keyframes pulse-badge{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+.nav-label{flex:1}
+.divider{margin:12px 16px;border-top:1px solid var(--border)}
+.nav-section-title{padding:8px 24px;font-size:12px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+
+/* Labels */
+.label-item{display:flex;align-items:center;gap:12px;padding:8px 24px;margin:0 8px;border-radius:0 24px 24px 0;cursor:pointer;transition:background .15s;color:var(--text-secondary);font-size:14px}
+.label-item:hover{background:var(--surface-hover);color:var(--text)}
+.label-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+.label-dot.red{background:var(--red)}.label-dot.yellow{background:var(--yellow)}.label-dot.blue{background:var(--blue)}.label-dot.purple{background:var(--purple)}.label-dot.orange{background:var(--orange)}.label-dot.green{background:var(--green)}
+
+/* Main Content */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+
+/* Top Bar */
+.topbar{height:64px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;gap:16px}
+.search-box{flex:1;max-width:720px;display:flex;align-items:center;gap:12px;background:#eaf1fb;border-radius:24px;padding:10px 20px;transition:background .2s,box-shadow .2s}
+.search-box:focus-within{background:#fff;box-shadow:0 1px 6px rgba(32,33,36,.1)}
+.search-box input{border:none;outline:none;background:transparent;flex:1;font-size:14px;color:var(--text)}
+.search-box svg{color:var(--text-secondary);width:20px;height:20px}
+.topbar-actions{display:flex;gap:8px;align-items:center}
+.topbar-btn{width:40px;height:40px;border-radius:50%;border:none;background:transparent;color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s;position:relative}
+.topbar-btn:hover{background:var(--surface-hover)}
+.topbar-btn .dot{position:absolute;top:8px;right:8px;width:8px;height:8px;background:var(--red);border-radius:50%;border:2px solid var(--surface);animation:pulse-dot 2s infinite}
+@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.5}}
+.avatar{width:36px;height:36px;border-radius:50%;cursor:pointer;object-fit:cover}
+
+/* Security Alert Banner */
+.security-banner{background:linear-gradient(135deg,var(--red-light),#fff);border-bottom:1px solid var(--border);padding:16px 24px;display:flex;align-items:center;gap:16px;position:relative;overflow:hidden}
+.security-banner::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--red)}
+.security-icon{width:44px;height:44px;border-radius:50%;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;animation:shake 3s infinite}
+.security-icon svg{width:24px;height:24px}
+@keyframes shake{0%,100%{transform:rotate(0)}2%{transform:rotate(-10deg)}4%{transform:rotate(10deg)}6%{transform:rotate(-5deg)}8%{transform:rotate(0)}}
+.security-content{flex:1}
+.security-title{font-size:16px;font-weight:600;color:var(--red);margin-bottom:4px}
+.security-desc{font-size:14px;color:var(--text-secondary)}
+.security-actions{display:flex;gap:10px}
+.security-btn{padding:8px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .2s}
+.security-btn.primary{background:var(--red);color:#fff}
+.security-btn.primary:hover{background:#b31412;transform:translateY(-1px)}
+.security-btn.secondary{background:transparent;color:var(--red);border:1px solid var(--red)}
+.security-btn.secondary:hover{background:var(--red-light)}
+
+/* Toolbar */
+.toolbar{height:48px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;gap:8px}
+.toolbar-btn{width:36px;height:36px;border-radius:50%;border:none;background:transparent;color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s}
+.toolbar-btn:hover{background:var(--surface-hover)}
+.toolbar-divider{width:1px;height:24px;background:var(--border);margin:0 4px}
+.toolbar-info{margin-left:auto;font-size:12px;color:var(--text-secondary)}
+
+/* Email List */
+.email-list{flex:1;overflow-y:auto;background:var(--surface)}
+.email-item{display:grid;grid-template-columns:40px 200px 1fr 100px 40px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s,box-shadow .15s;position:relative}
+.email-item:hover{background:var(--surface-hover);box-shadow:0 1px 3px rgba(0,0,0,.05);z-index:1}
+.email-item.unread{background:#fff}
+.email-item.read{background:var(--surface)}
+.email-item.security-alert{background:var(--red-light);border-left:3px solid var(--red)}
+.email-item.security-alert:hover{background:#f9d9d7}
+.email-item.security-warning{background:var(--yellow-light);border-left:3px solid var(--yellow)}
+.email-item.security-warning:hover{background:#fce8cc}
+.email-checkbox{width:18px;height:18px;border:2px solid var(--border);border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.email-checkbox:hover{border-color:var(--blue)}
+.email-checkbox.checked{background:var(--blue);border-color:var(--blue);color:#fff}
+.email-sender{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 8px}
+.email-item.read .email-sender{font-weight:500;color:var(--text-secondary)}
+.email-subject{display:flex;align-items:center;gap:8px;min-width:0}
+.email-subject-text{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.email-item.read .email-subject-text{color:var(--text-secondary)}
+.email-tag{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;flex-shrink:0}
+.tag-x{background:#000;color:#fff}
+.tag-google{background:var(--blue-light);color:var(--blue)}
+.tag-github{background:var(--purple-light);color:var(--purple)}
+.tag-security{background:var(--red-light);color:var(--red);border:1px solid rgba(217,48,37,.2)}
+.tag-warning{background:var(--yellow-light);color:var(--yellow);border:1px solid rgba(249,171,0,.2)}
+.tag-safe{background:var(--green-light);color:var(--green)}
+.email-time{font-size:12px;color:var(--text-secondary);text-align:right;white-space:nowrap}
+.email-star{color:var(--text-secondary);cursor:pointer;transition:color .15s;display:flex;align-items:center;justify-content:center}
+.email-star:hover,.email-star.active{color:var(--yellow)}
+
+/* Security Panel */
+.security-panel{width:360px;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;transition:width .3s}
+.security-panel.collapsed{width:0}
+.panel-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.panel-title{font-size:16px;font-weight:600;display:flex;align-items:center;gap:8px}
+.panel-title svg{color:var(--red)}
+.panel-close{width:32px;height:32px;border-radius:50%;border:none;background:transparent;color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s}
+.panel-close:hover{background:var(--surface-hover)}
+.panel-content{flex:1;overflow-y:auto;padding:16px}
+.security-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;transition:box-shadow .2s,transform .2s;cursor:pointer}
+.security-card:hover{box-shadow:0 4px 12px rgba(0,0,0,.08);transform:translateY(-2px)}
+.security-card.high{border-color:var(--red);background:var(--red-light)}
+.security-card.medium{border-color:var(--yellow);background:var(--yellow-light)}
+.security-card.low{border-color:var(--blue);background:var(--blue-light)}
+.security-card-header{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.security-card-icon{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.security-card-icon svg{width:20px;height:20px}
+.security-card.high .security-card-icon{background:var(--red);color:#fff}
+.security-card.medium .security-card-icon{background:var(--yellow);color:#fff}
+.security-card.low .security-card-icon{background:var(--blue);color:#fff}
+.security-card-title{font-weight:600;font-size:14px}
+.security-card-meta{font-size:12px;color:var(--text-secondary);margin-top:2px}
+.security-card-body{font-size:13px;color:var(--text-secondary);line-height:1.6}
+.security-card-actions{display:flex;gap:8px;margin-top:12px}
+.security-card-btn{flex:1;padding:8px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:none;text-align:center;transition:all .2s}
+.security-card-btn.primary{background:var(--blue);color:#fff}
+.security-card-btn.primary:hover{background:#1557b0}
+.security-card-btn.secondary{background:var(--surface);color:var(--text-secondary);border:1px solid var(--border)}
+.security-card-btn.secondary:hover{background:var(--surface-hover)}
+
+/* Notification Toast */
+.toast-container{position:fixed;top:24px;right:24px;z-index:1000;display:flex;flex-direction:column;gap:12px}
+.toast{background:var(--surface);border-radius:12px;padding:16px 20px;box-shadow:0 8px 32px rgba(0,0,0,.15);display:flex;align-items:flex-start;gap:14px;min-width:360px;max-width:420px;animation:toast-in .4s ease;position:relative;overflow:hidden;border-left:4px solid var(--blue)}
+.toast.security{border-left-color:var(--red)}
+.toast.success{border-left-color:var(--green)}
+@keyframes toast-in{from{opacity:0;transform:translateX(100px)}to{opacity:1;transform:translateX(0)}}
+.toast-out{animation:toast-out .3s ease forwards}
+@keyframes toast-out{to{opacity:0;transform:translateX(100px)}}
+.toast-icon{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.toast-icon svg{width:20px;height:20px}
+.toast.security .toast-icon{background:var(--red-light);color:var(--red)}
+.toast.success .toast-icon{background:var(--green-light);color:var(--green)}
+.toast-content{flex:1}
+.toast-title{font-weight:600;font-size:14px;margin-bottom:4px}
+.toast-desc{font-size:13px;color:var(--text-secondary);line-height:1.5}
+.toast-close{width:24px;height:24px;border-radius:50%;border:none;background:transparent;color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s;flex-shrink:0}
+.toast-close:hover{background:var(--surface-hover)}
+
+/* Empty State */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;text-align:center}
+.empty-icon{width:120px;height:120px;border-radius:50%;background:var(--blue-light);display:flex;align-items:center;justify-content:center;margin-bottom:20px}
+.empty-icon svg{width:48px;height:48px;color:var(--blue)}
+.empty-title{font-size:20px;font-weight:600;margin-bottom:8px}
+.empty-desc{font-size:14px;color:var(--text-secondary);max-width:400px;line-height:1.6}
+
+/* Responsive */
+@media(max-width:1200px){.security-panel{display:none}}
+@media(max-width:900px){.sidebar{width:72px}.brand-text,.nav-label,.nav-section-title,.compose-btn span{display:none}.compose-btn{padding:12px;border-radius:50%;justify-content:center}.nav-item{padding:12px;justify-content:center;border-radius:50%;margin:0 8px}.label-item{padding:8px;justify-content:center}.email-item{grid-template-columns:40px 1fr 80px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-icon">U</div>
+      <div class="brand-text">Uncle Mail</div>
+    </div>
+    <button class="compose-btn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+      <span>写邮件</span>
+    </button>
+
+    <div class="nav-item active" onclick="filterEmails('all')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7l9 4 9-4M3 7v10l9 4 9-4V7"/></svg>
+      <span class="nav-label">收件箱</span>
+      <span class="nav-badge">12</span>
+    </div>
+    <div class="nav-item" onclick="filterEmails('starred')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      <span class="nav-label">星标邮件</span>
+    </div>
+    <div class="nav-item" onclick="filterEmails('snoozed')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <span class="nav-label">稍后处理</span>
+    </div>
+    <div class="nav-item" onclick="filterEmails('sent')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      <span class="nav-label">已发送</span>
+    </div>
+    <div class="nav-item" onclick="filterEmails('drafts')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+      <span class="nav-label">草稿</span>
+    </div>
+
+    <div class="divider"></div>
+    <div class="nav-section-title">安全告警</div>
+    <div class="nav-item" onclick="filterEmails('security')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <span class="nav-label">安全中心</span>
+      <span class="nav-badge">5</span>
+    </div>
+    <div class="nav-item" onclick="filterEmails('x')">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+      <span class="nav-label">X / Twitter</span>
+      <span class="nav-badge yellow">2</span>
+    </div>
+    <div class="nav-item" onclick="filterEmails('google')">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+      <span class="nav-label">Google</span>
+      <span class="nav-badge">1</span>
+    </div>
+    <div class="nav-item" onclick="filterEmails('github')">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+      <span class="nav-label">GitHub</span>
+      <span class="nav-badge green">2</span>
+    </div>
+
+    <div class="divider"></div>
+    <div class="nav-section-title">标签</div>
+    <div class="label-item">
+      <div class="label-dot red"></div>
+      <span class="nav-label">高危安全</span>
+    </div>
+    <div class="label-item">
+      <div class="label-dot yellow"></div>
+      <span class="nav-label">中危警告</span>
+    </div>
+    <div class="label-item">
+      <div class="label-dot blue"></div>
+      <span class="nav-label">登录提醒</span>
+    </div>
+    <div class="label-item">
+      <div class="label-dot purple"></div>
+      <span class="nav-label">双重验证</span>
+    </div>
+    <div class="label-item">
+      <div class="label-dot orange"></div>
+      <span class="nav-label">异常活动</span>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main">
+    <!-- Top Bar -->
+    <div class="topbar">
+      <div class="search-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" placeholder="搜索邮件...">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </div>
+      <div class="topbar-actions">
+        <button class="topbar-btn" onclick="toggleSecurityPanel()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span class="dot"></span>
+        </button>
+        <button class="topbar-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6m4.22-10.22l4.24-4.24M6.34 6.34L2.1 2.1m17.8 17.8l-4.24-4.24M6.34 17.66l-4.24 4.24"/></svg>
+        </button>
+        <button class="topbar-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        </button>
+        <img class="avatar" src="png/head.jpg" alt="用户头像">
+      </div>
+    </div>
+
+    <!-- Security Alert Banner -->
+    <div class="security-banner" id="securityBanner" style="display:none">
+      <div class="security-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      </div>
+      <div class="security-content">
+        <div class="security-title" id="securityBannerTitle">检测到 0 个安全告警需要您的关注</div>
+        <div class="security-desc" id="securityBannerDesc">暂无安全告警</div>
+      </div>
+      <div class="security-actions">
+        <button class="security-btn primary" onclick="showSecurityDetails()">查看详情</button>
+        <button class="security-btn secondary" onclick="dismissBanner()">稍后处理</button>
+      </div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <button class="toolbar-btn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </button>
+      <div class="toolbar-divider"></div>
+      <button class="toolbar-btn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+      </button>
+      <button class="toolbar-btn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      </button>
+      <div class="toolbar-divider"></div>
+      <button class="toolbar-btn" onclick="markAllRead()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 12 18 17 10"/></svg>
+      </button>
+      <div class="toolbar-info" id="toolbarInfo">暂无邮件</div>
+    </div>
+
+    <!-- Email List -->
+    <div class="email-list" id="emailList">
+      <!-- Empty state -->
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7l9 4 9-4M3 7v10l9 4 9-4V7"/></svg>
+        </div>
+        <div class="empty-title">收件箱为空</div>
+        <div class="empty-desc">邮件将自动到达，请稍候...</div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Security Panel -->
+  <aside class="security-panel" id="securityPanel">
+    <div class="panel-header">
+      <div class="panel-title">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        安全告警中心
+      </div>
+      <button class="panel-close" onclick="toggleSecurityPanel()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="panel-content">
+      <div class="security-card high" onclick="showToast('security', 'X 安全告警', '正在跳转到 X 安全设置...')">
+        <div class="security-card-header">
+          <div class="security-card-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+          </div>
+          <div>
+            <div class="security-card-title">X (Twitter) 异常登录</div>
+            <div class="security-card-meta">10:23 · 高危</div>
+          </div>
+        </div>
+        <div class="security-card-body">
+          检测到来自未知设备 (Windows, Chrome, 北京) 的登录尝试。如果这不是您本人操作，请立即更改密码。
+        </div>
+        <div class="security-card-actions">
+          <button class="security-card-btn primary">查看详情</button>
+          <button class="security-card-btn secondary">忽略</button>
+        </div>
+      </div>
+
+      <div class="security-card high" onclick="showToast('security', 'Google 安全提醒', '正在跳转到 Google 账户安全...')">
+        <div class="security-card-header">
+          <div class="security-card-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#fff"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#fff"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#fff"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#fff"/></svg>
+          </div>
+          <div>
+            <div class="security-card-title">Google 新设备登录</div>
+            <div class="security-card-meta">09:45 · 高危</div>
+          </div>
+        </div>
+        <div class="security-card-body">
+          您的 Google 账户从新的 Windows 设备登录，位置：北京。请确认是否为您本人操作。
+        </div>
+        <div class="security-card-actions">
+          <button class="security-card-btn primary">确认是我</button>
+          <button class="security-card-btn secondary">不是我</button>
+        </div>
+      </div>
+
+      <div class="security-card medium" onclick="showToast('security', 'GitHub 安全提醒', '正在跳转到 GitHub 安全日志...')">
+        <div class="security-card-header">
+          <div class="security-card-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+          </div>
+          <div>
+            <div class="security-card-title">GitHub Token 创建</div>
+            <div class="security-card-meta">09:12 · 中危</div>
+          </div>
+        </div>
+        <div class="security-card-body">
+          一个新的 Personal Access Token 已被创建。如果这不是您本人操作，请立即撤销该 Token。
+        </div>
+        <div class="security-card-actions">
+          <button class="security-card-btn primary">查看 Token</button>
+          <button class="security-card-btn secondary">撤销</button>
+        </div>
+      </div>
+
+      <div class="security-card medium" onclick="showToast('security', 'X 双重验证', '正在跳转到 X 2FA 设置...')">
+        <div class="security-card-header">
+          <div class="security-card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </div>
+          <div>
+            <div class="security-card-title">X 双重验证更新</div>
+            <div class="security-card-meta">昨天 · 中危</div>
+          </div>
+        </div>
+        <div class="security-card-body">
+          您的双重验证设置已更改，新的备份验证码已生成。请妥善保存这些验证码。
+        </div>
+        <div class="security-card-actions">
+          <button class="security-card-btn primary">查看设置</button>
+          <button class="security-card-btn secondary">关闭</button>
+        </div>
+      </div>
+
+      <div class="security-card high" onclick="showToast('security', 'GitHub 登录提醒', '正在跳转到 GitHub 登录历史...')">
+        <div class="security-card-header">
+          <div class="security-card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          </div>
+          <div>
+            <div class="security-card-title">GitHub 异地登录</div>
+            <div class="security-card-meta">昨天 · 高危</div>
+          </div>
+        </div>
+        <div class="security-card-body">
+          检测到来自俄罗斯 Moscow 的登录尝试。IP: 185.220.101.xxx。建议立即检查账户安全。
+        </div>
+        <div class="security-card-actions">
+          <button class="security-card-btn primary">查看活动</button>
+          <button class="security-card-btn secondary">更改密码</button>
+        </div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// Toggle checkbox
+function toggleCheckbox(el, event) {
+  event.stopPropagation();
+  el.classList.toggle('checked');
+  if (el.classList.contains('checked')) {
+    el.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>';
+  } else {
+    el.innerHTML = '';
+  }
+}
+
+// Toggle star
+function toggleStar(el, event) {
+  event.stopPropagation();
+  el.classList.toggle('active');
+  el.textContent = el.classList.contains('active') ? '★' : '☆';
+}
+
+// Toggle security panel
+function toggleSecurityPanel() {
+  const panel = document.getElementById('securityPanel');
+  panel.classList.toggle('collapsed');
+}
+
+// Dismiss banner
+function dismissBanner() {
+  const banner = document.getElementById('securityBanner');
+  banner.style.display = 'none';
+  showToast('success', '已延后', '安全提醒已延后 1 小时');
+}
+
+// Show security details
+function showSecurityDetails() {
+  const panel = document.getElementById('securityPanel');
+  panel.classList.remove('collapsed');
+}
+
+// Filter emails
+function filterEmails(category) {
+  const items = document.querySelectorAll('.email-item');
+  const navItems = document.querySelectorAll('.nav-item');
+  
+  navItems.forEach(item => item.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  
+  items.forEach(item => {
+    if (category === 'all') {
+      item.style.display = 'grid';
+    } else if (category === 'starred') {
+      item.style.display = item.querySelector('.email-star.active') ? 'grid' : 'none';
+    } else if (category === 'security') {
+      item.style.display = item.dataset.category.includes('security') ? 'grid' : 'none';
+    } else {
+      item.style.display = item.dataset.category.includes(category) ? 'grid' : 'none';
+    }
+  });
+  
+  updateToolbarInfo();
+}
+
+// Mark all as read
+function markAllRead() {
+  const unreadItems = document.querySelectorAll('.email-item.unread');
+  unreadItems.forEach(item => {
+    item.classList.remove('unread');
+    item.classList.add('read');
+  });
+  showToast('success', '已标记为已读', '所有邮件已标记为已读');
+  updateBadges();
+}
+
+// Update toolbar info
+function updateToolbarInfo() {
+  const visibleItems = document.querySelectorAll('.email-item:not([style*="none"])');
+  document.getElementById('toolbarInfo').textContent = `显示 ${visibleItems.length} 封邮件`;
+}
+
+// Update badges
+function updateBadges() {
+  const unreadCount = document.querySelectorAll('.email-item.unread').length;
+  const securityCount = document.querySelectorAll('.email-item[data-category*="security"].unread').length;
+  
+  const badges = document.querySelectorAll('.nav-badge');
+  if (badges[0]) badges[0].textContent = unreadCount;
+  if (badges[1]) badges[1].textContent = securityCount;
+}
+
+// Show toast notification
+function showToast(type, title, desc) {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  
+  const iconSvg = {
+    security: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
+    success: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>',
+    warning: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
+  };
+  
+  toast.innerHTML = `
+    <div class="toast-icon">${iconSvg[type] || iconSvg.warning}</div>
+    <div class="toast-content">
+      <div class="toast-title">${title}</div>
+      <div class="toast-desc">${desc}</div>
+    </div>
+    <button class="toast-close" onclick="this.parentElement.remove()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  `;
+  
+  container.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.classList.add('toast-out');
+    setTimeout(() => toast.remove(), 300);
+  }, 5000);
+}
+
+// Email data
+const emailQueue = [
+  {
+    sender: 'X (Twitter) Security',
+    subject: '检测到异常登录活动 - 您的账户可能存在风险',
+    category: 'x security',
+    tags: [{text: 'X', class: 'tag-x'}, {text: '高危', class: 'tag-security'}],
+    time: '刚刚',
+    itemClass: 'security-alert unread'
+  },
+  {
+    sender: 'Google 安全中心',
+    subject: '新的登录设备提醒 - Windows, Chrome, 北京',
+    category: 'google security',
+    tags: [{text: 'Google', class: 'tag-google'}, {text: '高危', class: 'tag-security'}],
+    time: '刚刚',
+    itemClass: 'security-alert unread'
+  },
+  {
+    sender: 'GitHub Security',
+    subject: 'Personal access token 已被创建 - 请确认是否为您本人操作',
+    category: 'github security',
+    tags: [{text: 'GitHub', class: 'tag-github'}, {text: '中危', class: 'tag-warning'}],
+    time: '刚刚',
+    itemClass: 'security-warning unread'
+  },
+  {
+    sender: 'X (Twitter)',
+    subject: '双重验证已启用 - 备份验证码已生成',
+    category: 'x security',
+    tags: [{text: 'X', class: 'tag-x'}, {text: '中危', class: 'tag-warning'}],
+    time: '刚刚',
+    itemClass: 'security-warning unread'
+  },
+  {
+    sender: 'GitHub',
+    subject: '检测到来自新位置的登录 - 俄罗斯, Moscow',
+    category: 'github security',
+    tags: [{text: 'GitHub', class: 'tag-github'}, {text: '高危', class: 'tag-security'}],
+    time: '刚刚',
+    itemClass: 'security-alert unread'
+  },
+  {
+    sender: 'Google',
+    subject: '两步验证设置已更改 - 备用验证码已使用',
+    category: 'google security',
+    tags: [{text: 'Google', class: 'tag-google'}, {text: '中危', class: 'tag-warning'}],
+    time: '刚刚',
+    itemClass: 'security-warning unread'
+  },
+  {
+    sender: '阿里云',
+    subject: '您的云服务器 ECS 续费提醒',
+    category: 'normal',
+    tags: [{text: '正常', class: 'tag-safe'}],
+    time: '刚刚',
+    itemClass: 'unread'
+  },
+  {
+    sender: 'GitHub',
+    subject: '[GitHub] A new personal access token was added to your account',
+    category: 'normal',
+    tags: [{text: 'GitHub', class: 'tag-github'}],
+    time: '刚刚',
+    itemClass: 'unread'
+  },
+  {
+    sender: 'Google Workspace',
+    subject: '管理员已更改您的账户设置',
+    category: 'normal',
+    tags: [{text: 'Google', class: 'tag-google'}],
+    time: '刚刚',
+    itemClass: 'unread'
+  },
+  {
+    sender: 'X (Twitter)',
+    subject: '@elonmusk 刚刚发布了一条新推文',
+    category: 'normal',
+    tags: [{text: 'X', class: 'tag-x'}],
+    time: '刚刚',
+    itemClass: 'unread'
+  },
+  {
+    sender: 'GitHub',
+    subject: 'Security alert for your repository: dependency vulnerability detected',
+    category: 'normal',
+    tags: [{text: 'GitHub', class: 'tag-github'}],
+    time: '刚刚',
+    itemClass: 'unread'
+  },
+  {
+    sender: 'Google',
+    subject: '您的 Google 账户月度活动报告',
+    category: 'normal',
+    tags: [{text: 'Google', class: 'tag-google'}],
+    time: '刚刚',
+    itemClass: 'unread'
+  }
+];
+
+let receivedCount = 0;
+let securityCount = 0;
+
+// Create email element
+function createEmailElement(email, index) {
+  const div = document.createElement('div');
+  div.className = `email-item ${email.itemClass}`;
+  div.dataset.category = email.category;
+  div.style.animation = 'email-arrive 0.5s ease';
+  div.style.animationDelay = '0.1s';
+  div.style.animationFillMode = 'both';
+  
+  const tagsHtml = email.tags.map(tag => `<span class="email-tag ${tag.class}">${tag.text}</span>`).join('');
+  
+  div.innerHTML = `
+    <div class="email-checkbox" onclick="toggleCheckbox(this, event)"></div>
+    <div class="email-sender">${email.sender}</div>
+    <div class="email-subject">
+      <span class="email-subject-text">${email.subject}</span>
+      ${tagsHtml}
+    </div>
+    <div class="email-time">${email.time}</div>
+    <div class="email-star" onclick="toggleStar(this, event)">☆</div>
+  `;
+  
+  div.addEventListener('click', function(e) {
+    if (e.target.closest('.email-checkbox') || e.target.closest('.email-star')) return;
+    this.classList.remove('unread');
+    this.classList.add('read');
+    updateBadges();
+  });
+  
+  return div;
+}
+
+// Add email arrive animation
+const emailArriveStyle = document.createElement('style');
+emailArriveStyle.textContent = `
+  @keyframes email-arrive {
+    from { opacity: 0; transform: translateY(-20px); max-height: 0; }
+    to { opacity: 1; transform: translateY(0); max-height: 200px; }
+  }
+`;
+document.head.appendChild(emailArriveStyle);
+
+// Receive email one by one
+function receiveEmail() {
+  if (receivedCount >= emailQueue.length) {
+    // All emails received
+    return;
+  }
+  
+  const email = emailQueue[receivedCount];
+  const emailList = document.getElementById('emailList');
+  const emptyState = document.getElementById('emptyState');
+  
+  // Hide empty state on first email
+  if (emptyState) {
+    emptyState.style.display = 'none';
+  }
+  
+  // Create and add email
+  const emailEl = createEmailElement(email, receivedCount);
+  emailList.insertBefore(emailEl, emailList.firstChild);
+  
+  receivedCount++;
+  
+  // Update counts
+  if (email.category.includes('security')) {
+    securityCount++;
+  }
+  
+  // Update toolbar info
+  document.getElementById('toolbarInfo').textContent = `共 ${receivedCount} 封邮件`;
+  
+  // Update badge
+  const inboxBadge = document.querySelector('.nav-item.active .nav-badge');
+  if (inboxBadge) {
+    inboxBadge.textContent = receivedCount;
+  }
+  
+  // Show security banner if security email
+  if (email.category.includes('security')) {
+    const banner = document.getElementById('securityBanner');
+    const bannerTitle = document.getElementById('securityBannerTitle');
+    const bannerDesc = document.getElementById('securityBannerDesc');
+    
+    banner.style.display = 'flex';
+    bannerTitle.textContent = `检测到 ${securityCount} 个安全告警需要您的关注`;
+    bannerDesc.textContent = '来自 X、Google、GitHub 的登录异常和双重验证提醒';
+    
+    // Update security badge
+    const securityNavItems = document.querySelectorAll('.nav-item');
+    securityNavItems.forEach(item => {
+      const label = item.querySelector('.nav-label');
+      if (label && label.textContent === '安全中心') {
+        const badge = item.querySelector('.nav-badge');
+        if (badge) badge.textContent = securityCount;
+      }
+    });
+    
+    // Show toast for security emails
+    const senderMap = {
+      'x security': 'X',
+      'google security': 'Google',
+      'github security': 'GitHub'
+    };
+    const platform = senderMap[email.category] || '未知';
+    showToast('security', `${platform} 安全告警`, email.subject);
+  }
+  
+  // Schedule next email
+  if (receivedCount < emailQueue.length) {
+    setTimeout(receiveEmail, 2000);
+  }
+}
+
+// Start receiving emails after 1 second delay
+setTimeout(receiveEmail, 1000);
+
+// Email item click
+document.querySelectorAll('.email-item').forEach(item => {
+  item.addEventListener('click', function(e) {
+    if (e.target.closest('.email-checkbox') || e.target.closest('.email-star')) return;
+    this.classList.remove('unread');
+    this.classList.add('read');
+    updateBadges();
+  });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CIFSwitch Linux内核漏洞演示</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700;900&family=Noto+Sans+SC:wght@400;700;900&display=swap');
+
+  :root {
+    --paper: #f4f1ea;
+    --ink: #1a1a1a;
+    --red: #c41e3a;
+    --yellow: #e4a010;
+    --blue: #1e3a5f;
+    --gray: #6b6b6b;
+    --tape: rgba(255,255,255,0.45);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: #2a2a2a;
+    overflow: hidden;
+    font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+  }
+
+  #app {
+    width: 100vw; height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .slide-container {
+    width: 100%; height: 100%;
+    max-width: 1920px; max-height: 1080px;
+    aspect-ratio: 16/9;
+    background: var(--paper);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 0 60px rgba(0,0,0,0.5);
+  }
+
+  /* 报纸纹理背景 */
+  .slide-container::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+      repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 3px),
+      repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(0,0,0,0.02) 2px, rgba(0,0,0,0.02) 3px);
+    pointer-events: none; z-index: 0;
+  }
+
+  .slide {
+    position: absolute; inset: 0;
+    display: none;
+    padding: 60px 80px;
+    z-index: 1;
+  }
+  .slide.active { display: flex; flex-direction: column; }
+
+  /* 动画基础 */
+  .anim-item {
+    opacity: 0;
+    transform: translateY(40px) scale(0.96);
+    transition: all 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .slide.active .anim-item.show {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  /* 便签纸样式 */
+  .sticky-note {
+    background: #fff9c4;
+    box-shadow: 3px 3px 10px rgba(0,0,0,0.15);
+    padding: 24px 28px;
+    position: relative;
+    transform: rotate(-1.5deg);
+  }
+  .sticky-note::before {
+    content: '';
+    position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+    width: 80px; height: 24px;
+    background: var(--tape);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+  .sticky-note.red-note { background: #ffcdd2; transform: rotate(1.2deg); }
+  .sticky-note.blue-note { background: #bbdefb; transform: rotate(-0.8deg); }
+  .sticky-note.yellow-note { background: #fff59d; transform: rotate(2deg); }
+
+  /* 胶带装饰 */
+  .tape {
+    position: absolute;
+    background: var(--tape);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    opacity: 0.7;
+  }
+
+  /* 标题样式 */
+  .headline {
+    font-family: 'Noto Serif SC', serif;
+    font-weight: 900;
+    color: var(--ink);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+
+  .subhead {
+    font-family: 'Noto Sans SC', sans-serif;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1.3;
+  }
+
+  .body-text {
+    font-family: 'Noto Sans SC', sans-serif;
+    font-weight: 400;
+    color: var(--ink);
+    line-height: 1.6;
+  }
+
+  /* 强调样式 */
+  .highlight-red {
+    background: linear-gradient(180deg, transparent 60%, rgba(196,30,58,0.25) 60%);
+    font-weight: 700;
+  }
+  .highlight-yellow {
+    background: linear-gradient(180deg, transparent 60%, rgba(228,160,16,0.35) 60%);
+    font-weight: 700;
+  }
+  .highlight-blue {
+    background: linear-gradient(180deg, transparent 60%, rgba(30,58,95,0.2) 60%);
+    font-weight: 700;
+  }
+  .box-red {
+    display: inline-block;
+    background: var(--red);
+    color: white;
+    padding: 2px 10px;
+    font-weight: 900;
+  }
+  .box-yellow {
+    display: inline-block;
+    background: var(--yellow);
+    color: var(--ink);
+    padding: 2px 10px;
+    font-weight: 900;
+  }
+  .box-blue {
+    display: inline-block;
+    background: var(--blue);
+    color: white;
+    padding: 2px 10px;
+    font-weight: 900;
+  }
+  .underline-wavy {
+    text-decoration: underline;
+    text-decoration-style: wavy;
+    text-decoration-color: var(--red);
+    text-underline-offset: 4px;
+    font-weight: 700;
+  }
+  .italic-em {
+    font-style: italic;
+    font-weight: 700;
+    color: var(--red);
+  }
+
+  /* 图标容器 */
+  .icon-wrap {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 48px; height: 48px;
+    background: var(--ink);
+    color: var(--paper);
+    border-radius: 8px;
+    margin-right: 12px;
+  }
+  .icon-wrap svg { width: 28px; height: 28px; }
+
+  /* 页面指示器 */
+  .page-indicator {
+    position: absolute;
+    bottom: 30px; right: 50px;
+    display: flex; gap: 10px;
+    z-index: 10;
+  }
+  .dot {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.15);
+    transition: all 0.3s;
+    cursor: pointer;
+  }
+  .dot.active { background: var(--red); transform: scale(1.3); }
+
+  .nav-hint {
+    position: absolute;
+    bottom: 30px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 14px;
+    color: var(--gray);
+    opacity: 0.6;
+    z-index: 10;
+    letter-spacing: 2px;
+  }
+
+  /* ===== 封面页 ===== */
+  .slide-cover {
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    position: relative;
+  }
+  .slide-cover .newspaper-header {
+    position: absolute;
+    top: 30px; left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Noto Serif SC', serif;
+    font-size: 18px;
+    letter-spacing: 8px;
+    color: var(--gray);
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 8px;
+    width: 80%;
+    text-align: center;
+  }
+  .slide-cover .main-title {
+    font-size: 120px;
+    font-weight: 900;
+    line-height: 1.05;
+    margin-bottom: 30px;
+    text-transform: uppercase;
+  }
+  .slide-cover .main-title .line1 { display: block; }
+  .slide-cover .main-title .line2 {
+    display: block;
+    color: var(--red);
+    font-size: 140px;
+  }
+  .slide-cover .tagline {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 50px;
+    color: var(--gray);
+  }
+  .slide-cover .badge-group {
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .slide-cover .badge {
+    padding: 16px 32px;
+    font-size: 22px;
+    font-weight: 900;
+    border: 3px solid var(--ink);
+    background: white;
+    transform: rotate(-2deg);
+    box-shadow: 4px 4px 0 var(--ink);
+  }
+  .slide-cover .badge.red {
+    background: var(--red);
+    color: white;
+    border-color: var(--red);
+    transform: rotate(2deg);
+  }
+  .slide-cover .badge.blue {
+    background: var(--blue);
+    color: white;
+    border-color: var(--blue);
+  }
+
+  /* ===== 概览页 ===== */
+  .slide-overview {
+    justify-content: flex-start;
+    padding-top: 80px;
+  }
+  .slide-overview .section-title {
+    font-size: 64px;
+    margin-bottom: 50px;
+    text-align: center;
+  }
+  .slide-overview .cards-row {
+    display: flex;
+    gap: 40px;
+    justify-content: center;
+    align-items: stretch;
+    flex-wrap: wrap;
+    margin-top: 20px;
+  }
+  .slide-overview .info-card {
+    width: 340px;
+    min-height: 380px;
+    padding: 32px;
+    position: relative;
+  }
+  .slide-overview .info-card .card-icon {
+    width: 64px; height: 64px;
+    background: var(--ink);
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 20px;
+  }
+  .slide-overview .info-card .card-icon svg {
+    width: 36px; height: 36px;
+    color: var(--paper);
+  }
+  .slide-overview .info-card .card-title {
+    font-size: 36px;
+    font-weight: 900;
+    margin-bottom: 16px;
+    line-height: 1.2;
+  }
+  .slide-overview .info-card .card-body {
+    font-size: 22px;
+    line-height: 1.7;
+  }
+  .slide-overview .info-card .big-number {
+    font-family: 'Noto Serif SC', serif;
+    font-size: 80px;
+    font-weight: 900;
+    color: var(--red);
+    line-height: 1;
+    margin-bottom: 12px;
+  }
+
+  /* ===== 原理页 ===== */
+  .slide-principle {
+    justify-content: flex-start;
+    padding-top: 70px;
+  }
+  .slide-principle .section-title {
+    font-size: 56px;
+    margin-bottom: 40px;
+    text-align: center;
+  }
+  .slide-principle .compare-area {
+    display: flex;
+    gap: 50px;
+    justify-content: center;
+    align-items: flex-start;
+    margin-top: 20px;
+  }
+  .slide-principle .compare-box {
+    width: 520px;
+    padding: 36px;
+    position: relative;
+  }
+  .slide-principle .compare-box .box-label {
+    font-size: 28px;
+    font-weight: 900;
+    margin-bottom: 20px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .slide-principle .compare-box .box-content {
+    font-size: 24px;
+    line-height: 1.8;
+  }
+  .slide-principle .compare-box .box-content li {
+    margin-bottom: 12px;
+    list-style: none;
+    position: relative;
+    padding-left: 28px;
+  }
+  .slide-principle .compare-box .box-content li::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 14px;
+    width: 12px; height: 12px;
+    background: var(--ink);
+    border-radius: 2px;
+  }
+  .slide-principle .vs-badge {
+    align-self: center;
+    font-size: 48px;
+    font-weight: 900;
+    color: var(--red);
+    font-family: 'Noto Serif SC', serif;
+    background: var(--paper);
+    border: 4px solid var(--red);
+    width: 80px; height: 80px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 2;
+  }
+
+  /* ===== 总结页 ===== */
+  .slide-summary {
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+  }
+  .slide-summary .final-title {
+    font-size: 80px;
+    margin-bottom: 40px;
+  }
+  .slide-summary .conclusion-box {
+    background: white;
+    border: 4px solid var(--ink);
+    padding: 50px 70px;
+    max-width: 1000px;
+    box-shadow: 8px 8px 0 rgba(0,0,0,0.1);
+    transform: rotate(-1deg);
+    margin-bottom: 40px;
+  }
+  .slide-summary .conclusion-box p {
+    font-size: 36px;
+    line-height: 1.6;
+    margin-bottom: 20px;
+  }
+  .slide-summary .conclusion-box p:last-child { margin-bottom: 0; }
+  .slide-summary .risk-badge {
+    display: inline-block;
+    background: var(--red);
+    color: white;
+    font-size: 42px;
+    font-weight: 900;
+    padding: 16px 48px;
+    transform: rotate(-2deg);
+    box-shadow: 4px 4px 0 rgba(0,0,0,0.2);
+  }
+
+  /* 装饰元素 */
+  .deco-circle {
+    position: absolute;
+    border-radius: 50%;
+    border: 3px solid var(--ink);
+    opacity: 0.08;
+    z-index: 0;
+  }
+  .deco-line {
+    position: absolute;
+    height: 3px;
+    background: var(--ink);
+    opacity: 0.1;
+    z-index: 0;
+  }
+
+  /* 响应式 */
+  @media (max-width: 1200px) {
+    .slide { padding: 40px; }
+    .slide-cover .main-title { font-size: 80px; }
+    .slide-cover .main-title .line2 { font-size: 100px; }
+    .slide-overview .info-card { width: 280px; }
+    .slide-principle .compare-box { width: 400px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div class="slide-container">
+
+    <!-- 封面页 -->
+    <div class="slide slide-cover active" data-index="0">
+      <div class="newspaper-header anim-item" data-delay="0">EXTRA EXTRA &nbsp;|&nbsp; 内核安全特刊 &nbsp;|&nbsp; 2026年6月5日</div>
+      <div class="main-title anim-item" data-delay="200">
+        <span class="line1">Linux</span>
+        <span class="line2">CIFSwitch</span>
+      </div>
+      <div class="tagline anim-item" data-delay="400">内核里的身份伪造 &nbsp;·&nbsp; 19年潜伏暗门</div>
+      <div class="badge-group">
+        <div class="badge anim-item" data-delay="600">QVD-2026-29453</div>
+        <div class="badge red anim-item" data-delay="750">CVSS 7.8</div>
+        <div class="badge blue anim-item" data-delay="900">AI Agent 发现</div>
+      </div>
+      <!-- 装饰 -->
+      <div class="deco-circle" style="width:300px;height:300px;top:-80px;right:-80px;"></div>
+      <div class="deco-circle" style="width:200px;height:200px;bottom:60px;left:-60px;"></div>
+    </div>
+
+    <!-- 概览页 -->
+    <div class="slide slide-overview" data-index="1">
+      <div class="section-title headline anim-item" data-delay="0">
+        <span class="highlight-red">漏洞概览</span>
+      </div>
+      <div class="cards-row">
+        <div class="sticky-note info-card anim-item" data-delay="200">
+          <div class="card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <div class="big-number">19年</div>
+          <div class="card-title">潜伏时间</div>
+          <div class="card-body">从 <span class="highlight-yellow">2007年</span> 至今，横跨 <span class="underline-wavy">19年</span> 未被察觉</div>
+        </div>
+        <div class="sticky-note red-note info-card anim-item" data-delay="400">
+          <div class="card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"/><path d="M8.5 8.5v.01"/><path d="M16 15.5v.01"/><path d="M12 12v.01"/></svg>
+          </div>
+          <div class="card-title">发现方式</div>
+          <div class="card-body">非传统 Fuzzing<br>由 <span class="box-yellow">定制 AI Agent</span> 自动挖掘</div>
+        </div>
+        <div class="sticky-note blue-note info-card anim-item" data-delay="600">
+          <div class="card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </div>
+          <div class="card-title">影响范围</div>
+          <div class="card-body">低权限用户登录后<br>即可触发 <span class="box-red">ROOT</span> 权限执行</div>
+        </div>
+      </div>
+      <div class="deco-line" style="width:60%;top:45%;left:20%;"></div>
+    </div>
+
+    <!-- 原理页 -->
+    <div class="slide slide-principle" data-index="2">
+      <div class="section-title headline anim-item" data-delay="0">
+        <span class="highlight-blue">攻击原理对比</span>
+      </div>
+      <div class="compare-area">
+        <div class="sticky-note compare-box anim-item" data-delay="200">
+          <div class="box-label">
+            <span class="icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span>
+            历史漏洞家族
+          </div>
+          <ul class="box-content">
+            <li><span class="highlight-yellow">Copy Fail</span></li>
+            <li><span class="highlight-yellow">Dirty Frag</span></li>
+            <li>攻击目标：<span class="underline-wavy">页面缓存覆写</span></li>
+            <li>最终目的：修改 <span class="box-blue">su</span> 的内存副本</li>
+          </ul>
+        </div>
+        <div class="vs-badge anim-item" data-delay="400">VS</div>
+        <div class="sticky-note red-note compare-box anim-item" data-delay="600">
+          <div class="box-label">
+            <span class="icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+            CIFSwitch
+          </div>
+          <ul class="box-content">
+            <li><span class="italic-em">完全不碰</span> 页面缓存</li>
+            <li>攻击路径：<span class="box-red">身份混淆</span></li>
+            <li>让 root 帮手程序 <span class="underline-wavy">误信</span> 攻击者代码</li>
+            <li>结果：<span class="highlight-red">执行任意代码</span></li>
+          </ul>
+        </div>
+      </div>
+      <div class="deco-circle" style="width:400px;height:400px;bottom:-150px;right:-100px;"></div>
+    </div>
+
+    <!-- 总结页 -->
+    <div class="slide slide-summary" data-index="3">
+      <div class="final-title headline anim-item" data-delay="0">
+        <span class="highlight-red">核心结论</span>
+      </div>
+      <div class="conclusion-box anim-item" data-delay="300">
+        <p>两个漏洞，两个平台</p>
+        <p>共同问题：<span class="box-red">信任边界失效</span></p>
+        <p>低权限用户 &rarr; 让高权限进程 <span class="underline-wavy">乖乖执行</span> 恶意代码</p>
+      </div>
+      <div class="risk-badge anim-item" data-delay="600">
+        高危 · 立即修复
+      </div>
+      <div class="deco-circle" style="width:250px;height:250px;top:40px;left:40px;"></div>
+      <div class="deco-circle" style="width:180px;height:180px;bottom:100px;right:80px;"></div>
+    </div>
+
+    <!-- 导航 -->
+    <div class="page-indicator">
+      <div class="dot active" data-goto="0"></div>
+      <div class="dot" data-goto="1"></div>
+      <div class="dot" data-goto="2"></div>
+      <div class="dot" data-goto="3"></div>
+    </div>
+    <div class="nav-hint">点击或按方向键切换</div>
+
+  </div>
+</div>
+
+<script>
+(function() {
+  const slides = document.querySelectorAll('.slide');
+  const dots = document.querySelectorAll('.dot');
+  let current = 0;
+  const total = slides.length;
+
+  function showSlide(index) {
+    slides.forEach((s, i) => {
+      s.classList.toggle('active', i === index);
+      if (i === index) {
+        // 触发动画
+        const items = s.querySelectorAll('.anim-item');
+        items.forEach(item => {
+          item.classList.remove('show');
+          const delay = parseInt(item.dataset.delay || 0);
+          setTimeout(() => item.classList.add('show'), delay);
+        });
+      }
+    });
+    dots.forEach((d, i) => d.classList.toggle('active', i === index));
+    current = index;
+  }
+
+  function next() { showSlide((current + 1) % total); }
+  function prev() { showSlide((current - 1 + total) % total); }
+
+  // 点击切换
+  document.querySelector('.slide-container').addEventListener('click', (e) => {
+    if (e.target.closest('.dot')) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    if (x > rect.width / 2) next(); else prev();
+  });
+
+  // 键盘切换
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') next();
+    if (e.key === 'ArrowLeft') prev();
+  });
+
+  // 指示器点击
+  dots.forEach(d => d.addEventListener('click', (e) => {
+    e.stopPropagation();
+    showSlide(parseInt(d.dataset.goto));
+  }));
+
+  // 初始化第一页动画
+  showSlide(0);
+})();
+</script>
+
+</body>
+</html>

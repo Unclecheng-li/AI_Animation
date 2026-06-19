@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>路由器路由表演示</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    
+    <!-- 配置Tailwind自定义颜色和字体 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#0f172a',
+                        darker: '#020617',
+                        'dark-card': '#1e293b',
+                        accent: '#ec4899', // 粉红色点缀
+                        'accent-light': '#f472b6',
+                        'network-blue': '#3b82f6',
+                        'network-green': '#10b981',
+                        'network-purple': '#8b5cf6'
+                    },
+                    fontFamily: {
+                        cyber: ['Orbitron', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .glow {
+                box-shadow: 0 0 15px theme('colors.accent');
+            }
+            .glow-blue {
+                box-shadow: 0 0 10px theme('colors.network-blue');
+            }
+            .text-shadow {
+                text-shadow: 0 0 8px theme('colors.accent-light');
+            }
+            .grid-bg {
+                background-size: 40px 40px;
+                background-image: 
+                    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+            }
+            
+            /* 动画效果类 */
+            .animate-fade-in {
+                opacity: 0;
+                animation: fadeIn 0.7s forwards;
+            }
+            .animate-slide-up {
+                opacity: 0;
+                transform: translateY(20px);
+                animation: slideUp 0.7s forwards;
+            }
+            .animate-slide-left {
+                opacity: 0;
+                transform: translateX(-20px);
+                animation: slideLeft 0.7s forwards;
+            }
+            .animate-slide-right {
+                opacity: 0;
+                transform: translateX(20px);
+                animation: slideRight 0.7s forwards;
+            }
+            .animate-scale {
+                opacity: 0;
+                transform: scale(0.95);
+                animation: scaleIn 0.7s forwards;
+            }
+            
+            @keyframes fadeIn {
+                to { opacity: 1; }
+            }
+            @keyframes slideUp {
+                to { 
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+            @keyframes slideLeft {
+                to { 
+                    opacity: 1;
+                    transform: translateX(0);
+                }
+            }
+            @keyframes slideRight {
+                to { 
+                    opacity: 1;
+                    transform: translateX(0);
+                }
+            }
+            @keyframes scaleIn {
+                to { 
+                    opacity: 1;
+                    transform: scale(1);
+                }
+            }
+        }
+    </style>
+    
+    <!-- 添加Google字体 -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-darker text-gray-200 min-h-screen grid-bg font-sans">
+    <!-- 页面标题 - 淡入效果 -->
+    <header class="py-6 px-4 md:px-8 border-b border-gray-800 animate-fade-in" style="animation-delay: 0.1s;">
+        <div class="container mx-auto">
+            <h1 class="text-[clamp(1.5rem,3vw,2.5rem)] font-cyber font-bold text-white">
+                <i class="fa fa-random mr-3 text-accent"></i>路由器路由表
+                <span class="text-accent text-shadow">演示</span>
+            </h1>
+            <p class="text-gray-400 mt-2">网络数据包转发路径可视化展示</p>
+        </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="container mx-auto px-4 md:px-8 py-8">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- 左侧：路由表格 - 从左侧滑入 -->
+            <div class="lg:col-span-2 animate-slide-left" style="animation-delay: 0.3s;">
+                <div class="bg-dark-card rounded-lg p-5 border border-gray-700 transform transition-all duration-300 hover:border-accent/50 animate-scale" style="animation-delay: 0.4s;">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-cyber font-semibold">
+                            <i class="fa fa-table mr-2 text-accent"></i>路由表信息
+                        </h2>
+                        <span class="px-3 py-1 bg-accent/20 text-accent text-sm rounded-full">
+                            动态更新中
+                        </span>
+                    </div>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-gray-700">
+                                    <th class="py-3 px-4 text-left font-semibold text-gray-300">目的网络</th>
+                                    <th class="py-3 px-4 text-left font-semibold text-gray-300">子网掩码</th>
+                                    <th class="py-3 px-4 text-left font-semibold text-gray-300">网关</th>
+                                    <th class="py-3 px-4 text-left font-semibold text-gray-300">接口</th>
+                                    <th class="py-3 px-4 text-left font-semibold text-gray-300">跃点数</th>
+                                    <th class="py-3 px-4 text-left font-semibold text-gray-300">状态</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr class="border-b border-gray-800 hover:bg-gray-800/30 transition-colors">
+                                    <td class="py-3 px-4 text-network-blue">192.168.1.0</td>
+                                    <td class="py-3 px-4">255.255.255.0</td>
+                                    <td class="py-3 px-4">-</td>
+                                    <td class="py-3 px-4">eth0</td>
+                                    <td class="py-3 px-4">0</td>
+                                    <td class="py-3 px-4"><span class="px-2 py-1 bg-network-green/20 text-network-green rounded-full text-xs">直连</span></td>
+                                </tr>
+                                <tr class="border-b border-gray-800 hover:bg-gray-800/30 transition-colors">
+                                    <td class="py-3 px-4 text-network-blue">10.0.0.0</td>
+                                    <td class="py-3 px-4">255.0.0.0</td>
+                                    <td class="py-3 px-4">192.168.1.254</td>
+                                    <td class="py-3 px-4">eth0</td>
+                                    <td class="py-3 px-4">1</td>
+                                    <td class="py-3 px-4"><span class="px-2 py-1 bg-accent/20 text-accent rounded-full text-xs">静态</span></td>
+                                </tr>
+                                <tr class="border-b border-gray-800 hover:bg-gray-800/30 transition-colors">
+                                    <td class="py-3 px-4 text-network-blue">172.16.0.0</td>
+                                    <td class="py-3 px-4">255.240.0.0</td>
+                                    <td class="py-3 px-4">192.168.1.1</td>
+                                    <td class="py-3 px-4">eth0</td>
+                                    <td class="py-3 px-4">2</td>
+                                    <td class="py-3 px-4"><span class="px-2 py-1 bg-network-purple/20 text-network-purple rounded-full text-xs">OSPF</span></td>
+                                </tr>
+                                <tr class="border-b border-gray-800 hover:bg-gray-800/30 transition-colors">
+                                    <td class="py-3 px-4 text-network-blue">0.0.0.0</td>
+                                    <td class="py-3 px-4">0.0.0.0</td>
+                                    <td class="py-3 px-4">203.0.113.1</td>
+                                    <td class="py-3 px-4">eth1</td>
+                                    <td class="py-3 px-4">10</td>
+                                    <td class="py-3 px-4"><span class="px-2 py-1 bg-accent/20 text-accent rounded-full text-xs">默认</span></td>
+                                </tr>
+                                <tr class="hover:bg-gray-800/30 transition-colors">
+                                    <td class="py-3 px-4 text-network-blue">198.51.100.0</td>
+                                    <td class="py-3 px-4">255.255.255.0</td>
+                                    <td class="py-3 px-4">203.0.113.1</td>
+                                    <td class="py-3 px-4">eth1</td>
+                                    <td class="py-3 px-4">11</td>
+                                    <td class="py-3 px-4"><span class="px-2 py-1 bg-network-purple/20 text-network-purple rounded-full text-xs">BGP</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 右侧：网络拓扑图 - 从右侧滑入 -->
+            <div class="lg:col-span-1 animate-slide-right" style="animation-delay: 0.5s;">
+                <div class="bg-dark-card rounded-lg p-5 border border-gray-700 h-full transform transition-all duration-300 hover:border-accent/50 animate-scale" style="animation-delay: 0.6s;">
+                    <h2 class="text-xl font-cyber font-semibold mb-6">
+                        <i class="fa fa-sitemap mr-2 text-accent"></i>网络拓扑
+                    </h2>
+                    
+                    <!-- 网络拓扑SVG图 - 延迟显示以创建层次感 -->
+                    <div class="w-full h-[350px] relative opacity-0" id="topology-svg">
+                        <svg class="w-full h-full" viewBox="0 0 400 350">
+                            <!-- 背景网格 -->
+                            <pattern id="smallGrid" width="20" height="20" patternUnits="userSpaceOnUse">
+                                <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#374151" stroke-width="0.5"/>
+                            </pattern>
+                            <rect width="100%" height="100%" fill="url(#smallGrid)" />
+                            
+                            <!-- 连接线 -->
+                            <path d="M 200,150 L 100,250" stroke="#64748b" stroke-width="2" stroke-dasharray="5,3" />
+                            <path d="M 200,150 L 300,250" stroke="#64748b" stroke-width="2" />
+                            <path d="M 200,150 L 200,50" stroke="#64748b" stroke-width="2" />
+                            <path d="M 200,50 L 100,50" stroke="#64748b" stroke-width="2" />
+                            <path d="M 200,50 L 300,50" stroke="#64748b" stroke-width="2" />
+                            
+                            <!-- 数据流动画 -->
+                            <circle id="packet1" cx="200" cy="150" r="4" fill="#ec4899">
+                                <animate attributeName="cx" from="200" to="100" dur="3s" repeatCount="indefinite" />
+                                <animate attributeName="cy" from="150" to="250" dur="3s" repeatCount="indefinite" />
+                            </circle>
+                            <circle id="packet2" cx="300" cy="250" r="4" fill="#3b82f6">
+                                <animate attributeName="cx" from="300" to="200" dur="4s" repeatCount="indefinite" />
+                                <animate attributeName="cy" from="250" to="150" dur="4s" repeatCount="indefinite" />
+                            </circle>
+                            
+                            <!-- 路由器 -->
+                            <g transform="translate(200, 150)">
+                                <rect x="-40" y="-30" width="80" height="60" rx="5" fill="#1e293b" stroke="#ec4899" stroke-width="2" class="glow" />
+                                <text x="0" y="5" text-anchor="middle" fill="white" font-size="12" font-family="Orbitron">Router</text>
+                                <text x="0" y="25" text-anchor="middle" fill="#ec4899" font-size="10">RT-01</text>
+                            </g>
+                            
+                            <!-- 内部网络 -->
+                            <g transform="translate(100, 250)">
+                                <rect x="-40" y="-25" width="80" height="50" rx="5" fill="#1e293b" stroke="#10b981" stroke-width="2" />
+                                <text x="0" y="5" text-anchor="middle" fill="white" font-size="12">LAN</text>
+                                <text x="0" y="22" text-anchor="middle" fill="#10b981" font-size="10">192.168.1.0/24</text>
+                            </g>
+                            
+                            <!-- 外部网络/互联网 -->
+                            <g transform="translate(300, 250)">
+                                <rect x="-40" y="-25" width="80" height="50" rx="5" fill="#1e293b" stroke="#3b82f6" stroke-width="2" />
+                                <text x="0" y="5" text-anchor="middle" fill="white" font-size="12">Internet</text>
+                                <text x="0" y="22" text-anchor="middle" fill="#3b82f6" font-size="10">0.0.0.0/0</text>
+                            </g>
+                            
+                            <!-- 其他网络1 -->
+                            <g transform="translate(100, 50)">
+                                <rect x="-40" y="-25" width="80" height="50" rx="5" fill="#1e293b" stroke="#8b5cf6" stroke-width="2" />
+                                <text x="0" y="5" text-anchor="middle" fill="white" font-size="12">Network A</text>
+                                <text x="0" y="22" text-anchor="middle" fill="#8b5cf6" font-size="10">10.0.0.0/8</text>
+                            </g>
+                            
+                            <!-- 其他网络2 -->
+                            <g transform="translate(300, 50)">
+                                <rect x="-40" y="-25" width="80" height="50" rx="5" fill="#1e293b" stroke="#8b5cf6" stroke-width="2" />
+                                <text x="0" y="5" text-anchor="middle" fill="white" font-size="12">Network B</text>
+                                <text x="0" y="22" text-anchor="middle" fill="#8b5cf6" font-size="10">172.16.0.0/12</text>
+                            </g>
+                        </svg>
+                    </div>
+                    
+                    <!-- 拓扑图图例 - 延迟显示 -->
+                    <div class="mt-4 text-sm text-gray-400 opacity-0" id="topology-legend">
+                        <p><i class="fa fa-circle text-accent text-xs mr-2"></i>数据包流动动画</p>
+                        <p class="mt-1"><i class="fa fa-info-circle text-network-blue text-xs mr-2"></i>显示路由器与各网络的连接关系</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+       
+
+
+    <script>
+        // 初始化路由协议分布图表并添加动画效果
+        document.addEventListener('DOMContentLoaded', function() {
+            // 表格行逐一出现动画
+            const tableRows = document.querySelectorAll('tbody tr');
+            tableRows.forEach((row, index) => {
+                row.style.opacity = '0';
+                row.style.transform = 'translateX(-10px)';
+                row.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                
+                setTimeout(() => {
+                    row.style.opacity = '1';
+                    row.style.transform = 'translateX(0)';
+                }, 600 + (index * 150));
+            });
+            
+            // 拓扑图SVG延迟显示
+            setTimeout(() => {
+                const svgContainer = document.getElementById('topology-svg');
+                svgContainer.style.transition = 'opacity 1s ease';
+                svgContainer.style.opacity = '1';
+                
+                // 图例延迟显示
+                setTimeout(() => {
+                    const legend = document.getElementById('topology-legend');
+                    legend.style.transition = 'opacity 0.5s ease';
+                    legend.style.opacity = '1';
+                }, 500);
+            }, 800);
+            
+            // 图表容器延迟显示
+            setTimeout(() => {
+                const chartContainer = document.getElementById('chart-container');
+                chartContainer.style.transition = 'opacity 0.8s ease';
+                chartContainer.style.opacity = '1';
+                
+                // 初始化图表
+                const ctx = document.getElementById('routingChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['直连路由', '静态路由', 'OSPF', 'BGP'],
+                        datasets: [{
+                            data: [1, 2, 5, 3],
+                            backgroundColor: [
+                                '#10b981',  // 绿色 - 直连
+                                '#ec4899',  // 粉红色 - 静态
+                                '#8b5cf6',  // 紫色 - OSPF
+                                '#3b82f6'   // 蓝色 - BGP
+                            ],
+                            borderColor: '#1e293b',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                                labels: {
+                                    color: '#e2e8f0',
+                                    font: {
+                                        family: 'Orbitron'
+                                    }
+                                }
+                            }
+                        },
+                        cutout: '65%',
+                        animation: {
+                            animateScale: true,
+                            animateRotate: true,
+                            duration: 2000
+                        }
+                    }
+                });
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
+    
