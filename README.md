@@ -37,31 +37,31 @@
 <table>
 <tr>
 <td width="50%" valign="top" align="center">
-<a href="#ppt-animation"><img src="<!-- IMAGE:ppt-animation-preview -->" alt="ppt-animation preview" width="100%"></a>
+<a href="#ppt-animation"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/3cf633d6-70a6-498c-8280-7e0b994a0a55" /></a>
 <br/><a href="#ppt-animation"><strong>ppt-animation</strong></a>
 <br/><sub>PPT 演示 / 翻页动画</sub>
 </td>
 <td width="50%" valign="top" align="center">
-<a href="#flowchart"><img src="<!-- IMAGE:flowchart-preview -->" alt="flowchart preview" width="100%"></a>
+<a href="#flowchart"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/f9051300-6d61-451c-bb21-3453d8dc1491" /></a>
 <br/><a href="#flowchart"><strong>flowchart</strong></a>
 <br/><sub>流程图 / 概念图 / 原理演示</sub>
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top" align="center">
-<a href="#network-protocol-viz"><img src="<!-- IMAGE:network-protocol-viz-preview -->" alt="network-protocol-viz preview" width="100%"></a>
+<a href="#network-protocol-viz"><img width="2532" height="1440" alt="image" src="https://github.com/user-attachments/assets/65aabdbf-085a-4c6c-be3f-d30a494d1da0" /></a>
 <br/><a href="#network-protocol-viz"><strong>network-protocol-viz</strong></a>
 <br/><sub>网络协议 / 数据包演示</sub>
 </td>
 <td width="50%" valign="top" align="center">
-<a href="#dynami-carchify"><img src="<!-- IMAGE:dynami-carchify-preview -->" alt="dynami-carchify preview" width="100%"></a>
+<a href="#dynami-carchify"><img width="2536" height="1440" alt="image" src="https://github.com/user-attachments/assets/0b1a3093-4dc7-4e51-80cc-a53eace31da2" /></a>
 <br/><a href="#dynami-carchify"><strong>dynami-carchify</strong></a>
 <br/><sub>动态架构图 / 流程图 / 时序图</sub>
 </td>
 </tr>
 <tr>
 <td colspan="2" valign="top" align="center">
-<a href="#scholar-notes"><img src="<!-- IMAGE:scholar-notes-preview -->" alt="scholar-notes preview" width="50%"></a>
+<a href="#scholar-notes"><img width="2534" height="1440" alt="image" src="https://github.com/user-attachments/assets/e7bd4d61-37d3-4c5c-b47a-94114f609aa3" /></a>
 <br/><a href="#scholar-notes"><strong>scholar-notes</strong></a>
 <br/><sub>学霸笔记 / 手写笔记本风格</sub>
 </td>
