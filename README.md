@@ -169,7 +169,7 @@ Links: [README](./skills/flowchart/README.md) · [SKILL.md](./skills/flowchart/S
 <td align="center" width="25%"><a href="./skills/network-protocol-viz/README.md#协议列表"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/d662e835-b5ef-4b10-8868-d5cb80e988ee" />
 </a><br /><sub><code>TCP</code><br />PPP数据帧结构</sub></td>
 <td align="center" width="25%"><a href="./skills/network-protocol-viz/README.md#协议列表"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/8df81e98-25d0-4260-b0b5-79de5ece3a15" /></a><br /><sub><code>IPv4</code><br />IPv4 数据报 3D</sub></td>
-<td align="center" width="25%"><a href="./skills/network-protocol-viz/README.md#协议列表"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/f7c533b5-aca8-451b-99e2-3b21ff14e480" /></a><br /><sub><code>Routing</code><br />HTTPS 应用层加密</sub></td>
+<td align="center" width="25%"><a href="./skills/network-protocol-viz/README.md#协议列表"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/467041cb-875f-44e1-b13c-6cab35b89f80" /></a><br /><sub><code>Routing</code><br />HTTPS 应用层加密</sub></td>
 <td align="center" width="25%"><a href="./skills/network-protocol-viz/README.md#协议列表"><img width="2531" height="1440" alt="image" src="https://github.com/user-attachments/assets/9f9c0069-30fc-479b-a40f-dc21c96659e6" /></a><br /><sub><code>HTTPS</code><br />DHCP ACK报文</sub></td>
 </tr>
 </table>
