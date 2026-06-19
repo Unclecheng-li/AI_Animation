@@ -185,7 +185,7 @@ Links: [README](./skills/network-protocol-viz/README.md) · [SKILL.md](./skills/
 #### `dynami-carchify`
 
 <a href="./skills/dynami-carchify">
-<img src="<!-- IMAGE:dynami-carchify-banner -->" alt="dynami-carchify Skill" width="100%">
+<img width="2535" height="1440" alt="image" src="https://github.com/user-attachments/assets/a7d16dc3-a01b-4762-89e5-065ffb144be5" />
 </a>
 
 **分类:** 动态架构图 / 流程图 / 时序图 / 数据流图 / 状态机
@@ -203,11 +203,12 @@ Links: [README](./skills/network-protocol-viz/README.md) · [SKILL.md](./skills/
 
 <table>
 <tr>
-<td align="center" width="20%"><a href="./skills/dynami-carchify/README.md#支持的图表类型"><img src="<!-- IMAGE:arch-architecture -->" alt="architecture preview" /></a><br /><sub><code>architecture</code><br />系统架构图</sub></td>
-<td align="center" width="20%"><a href="./skills/dynami-carchify/README.md#支持的图表类型"><img src="<!-- IMAGE:arch-workflow -->" alt="workflow preview" /></a><br /><sub><code>workflow</code><br />工作流图</sub></td>
-<td align="center" width="20%"><a href="./skills/dynami-carchify/README.md#支持的图表类型"><img src="<!-- IMAGE:arch-sequence -->" alt="sequence preview" /></a><br /><sub><code>sequence</code><br />时序图</sub></td>
-<td align="center" width="20%"><a href="./skills/dynami-carchify/README.md#支持的图表类型"><img src="<!-- IMAGE:arch-dataflow -->" alt="dataflow preview" /></a><br /><sub><code>dataflow</code><br />数据流图</sub></td>
-<td align="center" width="20%"><a href="./skills/dynami-carchify/README.md#支持的图表类型"><img src="<!-- IMAGE:arch-lifecycle -->" alt="lifecycle preview" /></a><br /><sub><code>lifecycle</code><br />状态机</sub></td>
+<td align="center" width="20%"><a href="./skills/dynami-carchify/README.md#支持的图表类型"><img width="2537" height="1440" alt="image" src="https://github.com/user-attachments/assets/e2ce7b4f-356a-4f99-93d1-bd391eafbea2" /></a><br /><sub><code>architecture</code><br />系统架构图</sub></td>
+<td align="center" width="20%"><a href="./skills/dynami-carchify/README.md#支持的图表类型"><img width="2533" height="1440" alt="image" src="https://github.com/user-attachments/assets/b2435e86-04b3-4825-83b8-122fd8c6490a" /></a><br /><sub><code>workflow</code><br />工作流图</sub></td>
+<td align="center" width="20%"><a href="./skills/dynami-carchify/README.md#支持的图表类型"><img width="2535" height="1440" alt="image" src="https://github.com/user-attachments/assets/d8acd7f3-7a93-4c4d-a4b9-a42e6264b909" /></a><br /><sub><code>sequence</code><br />时序图</sub></td>
+<td align="center" width="20%"><a href="./skills/dynami-carchify/README.md#支持的图表类型"><img width="2532" height="1440" alt="image" src="https://github.com/user-attachments/assets/1702a0f6-4ba6-42b7-bcb6-aa182f7cabf8" />
+</a><br /><sub><code>dataflow</code><br />数据流图</sub></td>
+<td align="center" width="20%"><a href="./skills/dynami-carchify/README.md#支持的图表类型"><img width="2536" height="1440" alt="image" src="https://github.com/user-attachments/assets/26dcdd9e-0c93-40a8-a7fc-42032f0e68a7" /></a><br /><sub><code>lifecycle</code><br />状态机</sub></td>
 </tr>
 </table>
 
