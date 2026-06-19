@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTTP/2 攻击链笔记</title>
+    <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@300;400;700&family=Ma+Shan+Zheng&family=Zeyada&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    <style>
+        :root {
+            --paper-color: #fdfbf7;
+            --paper-shadow: #e8e4dc;
+            --ink-color: #2c2c2c;
+            --ink-light: #4a4a4a;
+            --accent-blue: #2b6cb0;
+            --accent-red: #c53030;
+            --highlight: rgba(255, 255, 0, 0.4);
+            --highlight-pink: rgba(255, 105, 180, 0.3);
+            --line-color: #a4b0be;
+            --margin-line: #ff6b6b;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Kalam', 'Ma Shan Zheng', cursive;
+            background: #3d3d3d;
+            background-image:
+                radial-gradient(circle at 20% 50%, rgba(255,255,255,0.05) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(255,255,255,0.03) 0%, transparent 50%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        .notebook {
+            width: 900px;
+            max-width: 95vw;
+            background: #8b4513;
+            background-image:
+                repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px),
+                linear-gradient(180deg, #8b4513 0%, #6b3410 100%);
+            border-radius: 12px 18px 18px 12px;
+            padding: 25px 20px 25px 35px;
+            box-shadow:
+                0 0 0 2px #5c2e0b,
+                0 20px 60px rgba(0,0,0,0.6),
+                inset 0 1px 0 rgba(255,255,255,0.1);
+            position: relative;
+            transform-style: preserve-3d;
+            perspective: 1500px;
+        }
+
+        .notebook::before {
+            content: '';
+            position: absolute;
+            left: 25px;
+            top: 15px;
+            bottom: 15px;
+            width: 3px;
+            background: linear-gradient(180deg,
+                rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.1) 20%,
+                rgba(0,0,0,0.3) 40%, rgba(0,0,0,0.1) 60%,
+                rgba(0,0,0,0.3) 80%, rgba(0,0,0,0.1) 100%);
+            border-radius: 2px;
+        }
+
+        .rings {
+            position: absolute;
+            left: 8px;
+            top: 0;
+            bottom: 0;
+            width: 30px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-evenly;
+            z-index: 10;
+        }
+
+        .ring {
+            width: 24px;
+            height: 14px;
+            background: linear-gradient(180deg, #c0c0c0 0%, #808080 50%, #a0a0a0 100%);
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.3);
+            position: relative;
+        }
+
+        .ring::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: -3px;
+            width: 8px;
+            height: 20px;
+            background: linear-gradient(90deg, #d0d0d0 0%, #909090 50%, #b0b0b0 100%);
+            border-radius: 4px;
+            transform: translateX(-50%);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+
+        .pages-container {
+            position: relative;
+            width: 100%;
+            min-height: 700px;
+        }
+
+        .page {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            min-height: 700px;
+            background: var(--paper-color);
+            background-image:
+                repeating-linear-gradient(transparent, transparent 31px, var(--line-color) 31px, var(--line-color) 32px);
+            background-size: 100% 32px;
+            background-position: 0 48px;
+            border-radius: 4px 12px 12px 4px;
+            padding: 40px 50px 40px 60px;
+            box-shadow: 2px 2px 8px rgba(0,0,0,0.15), inset 0 0 60px rgba(139, 69, 19, 0.03);
+            transform-origin: left center;
+            transition: transform 0.8s cubic-bezier(0.645, 0.045, 0.355, 1), opacity 0.6s ease;
+            opacity: 0;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .page.active { opacity: 1; pointer-events: all; transform: rotateY(0deg); z-index: 5; }
+        .page.flipped { transform: rotateY(-140deg); opacity: 0; pointer-events: none; }
+
+        .page::before {
+            content: '';
+            position: absolute;
+            left: 50px;
+            top: 0;
+            bottom: 0;
+            width: 1px;
+            background: var(--margin-line);
+            opacity: 0.4;
+        }
+
+        .page::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+            pointer-events: none;
+            opacity: 0.6;
+        }
+
+        .page.cover {
+            background: #f5f0e8;
+            background-image: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            cursor: pointer;
+        }
+        .page.cover::before { display: none; }
+
+        .cover-decoration {
+            position: absolute;
+            top: 30px;
+            right: 40px;
+            font-size: 4rem;
+            opacity: 0.15;
+            transform: rotate(-15deg);
+        }
+
+        .cover-title {
+            font-family: 'Ma Shan Zheng', cursive;
+            font-size: 3.5rem;
+            color: var(--accent-red);
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+            position: relative;
+            display: inline-block;
+        }
+        .cover-title::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: -10%;
+            width: 120%;
+            height: 3px;
+            background: var(--accent-red);
+            opacity: 0.3;
+            border-radius: 2px;
+        }
+
+        .cover-subtitle {
+            font-size: 1.4rem;
+            color: var(--ink-light);
+            margin-bottom: 40px;
+            font-style: italic;
+        }
+
+        .cover-doodle {
+            width: 200px;
+            height: 150px;
+            margin: 20px 0;
+            opacity: 0.6;
+        }
+
+        .cover-hint {
+            position: absolute;
+            bottom: 40px;
+            font-size: 1rem;
+            color: var(--ink-light);
+            opacity: 0.7;
+            animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+
+        .content-wrapper { position: relative; z-index: 1; }
+
+        .page-header {
+            font-family: 'Ma Shan Zheng', cursive;
+            font-size: 2rem;
+            color: var(--accent-red);
+            margin-bottom: 16px;
+            padding-bottom: 6px;
+            border-bottom: 2px solid var(--accent-red);
+            opacity: 0.7;
+            display: inline-block;
+        }
+
+        .handwriting {
+            font-size: 1.15rem;
+            line-height: 32px;
+            color: var(--ink-color);
+            text-align: justify;
+            margin-bottom: 12px;
+            position: relative;
+        }
+
+        .highlight {
+            background: linear-gradient(180deg, transparent 60%, var(--highlight) 60%);
+            padding: 0 2px;
+            font-weight: bold;
+        }
+
+        .highlight-pink {
+            background: linear-gradient(180deg, transparent 60%, var(--highlight-pink) 60%);
+            padding: 0 2px;
+            font-weight: bold;
+        }
+
+        .underline-wavy {
+            text-decoration: underline;
+            text-decoration-style: wavy;
+            text-decoration-color: var(--accent-red);
+            text-underline-offset: 3px;
+            font-weight: bold;
+        }
+
+        .key-term {
+            color: var(--accent-blue);
+            font-weight: bold;
+            border-bottom: 1px dashed var(--accent-blue);
+        }
+
+        .warning-text {
+            color: var(--accent-red);
+            font-weight: bold;
+        }
+
+        .diagram-container {
+            background: rgba(255,255,255,0.6);
+            border: 2px dashed var(--line-color);
+            border-radius: 12px;
+            padding: 16px;
+            margin: 12px 0;
+            position: relative;
+        }
+
+        .diagram-title {
+            font-family: 'Ma Shan Zheng', cursive;
+            font-size: 1.2rem;
+            color: var(--accent-red);
+            margin-bottom: 12px;
+            text-align: center;
+        }
+
+        .demo-controls {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn-handdrawn {
+            padding: 6px 16px;
+            background: #fff;
+            border: 2px solid var(--ink-color);
+            border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+            font-family: 'Kalam', cursive;
+            font-size: 0.95rem;
+            color: var(--ink-color);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 2px 2px 0 rgba(0,0,0,0.1);
+        }
+
+        .btn-handdrawn:hover {
+            transform: translateY(-2px) rotate(-1deg);
+            box-shadow: 3px 3px 0 rgba(0,0,0,0.15);
+            background: #fff9e6;
+        }
+
+        .btn-handdrawn:active {
+            transform: translateY(0) rotate(0);
+            box-shadow: 1px 1px 0 rgba(0,0,0,0.1);
+        }
+
+        .page-number {
+            position: absolute;
+            bottom: 15px;
+            right: 30px;
+            font-size: 0.9rem;
+            color: var(--ink-light);
+            opacity: 0.6;
+        }
+
+        .doodle {
+            position: absolute;
+            opacity: 0.12;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .doodle-1 {
+            top: 80px;
+            right: 40px;
+            font-size: 3rem;
+            transform: rotate(20deg);
+        }
+
+        .sketch-diagram {
+            margin: 12px 0;
+            text-align: center;
+        }
+        .sketch-diagram svg {
+            max-width: 100%;
+            height: auto;
+        }
+
+        .key-point-box {
+            background: linear-gradient(135deg, #fff9e6 0%, #fff5d6 100%);
+            border: 2px solid var(--accent-red);
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin: 12px 0;
+            position: relative;
+            box-shadow: 2px 2px 0 rgba(0,0,0,0.06);
+        }
+
+        .key-point-box::before {
+            content: '\2605';
+            position: absolute;
+            top: -10px;
+            left: 12px;
+            background: var(--paper-color);
+            padding: 0 6px;
+            color: var(--accent-red);
+            font-size: 1rem;
+        }
+
+        .key-point-box .box-title {
+            font-family: 'Ma Shan Zheng', cursive;
+            font-size: 1.1rem;
+            color: var(--accent-red);
+            margin-bottom: 6px;
+        }
+
+        .key-point-box .box-content {
+            font-size: 1rem;
+            line-height: 1.6;
+            color: var(--ink-color);
+        }
+
+        .concept-cards {
+            display: flex;
+            gap: 12px;
+            margin: 12px 0;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .concept-card {
+            background: #fff;
+            border: 2px solid var(--ink-light);
+            border-radius: 10px;
+            padding: 12px 16px;
+            text-align: center;
+            box-shadow: 2px 2px 0 rgba(0,0,0,0.08);
+            flex: 1;
+            min-width: 120px;
+            max-width: 200px;
+        }
+
+        .concept-card .card-icon {
+            font-size: 1.8rem;
+            margin-bottom: 6px;
+            color: var(--accent-red);
+        }
+
+        .concept-card .card-title {
+            font-family: 'Ma Shan Zheng', cursive;
+            font-size: 1.1rem;
+            color: var(--accent-red);
+            margin-bottom: 4px;
+        }
+
+        .concept-card .card-desc {
+            font-size: 0.85rem;
+            color: var(--ink-light);
+            line-height: 1.4;
+        }
+
+        .flow-steps {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin: 12px 0;
+            flex-wrap: wrap;
+        }
+
+        .flow-step {
+            background: #fff;
+            border: 2px solid var(--line-color);
+            border-radius: 8px;
+            padding: 8px 12px;
+            text-align: center;
+            font-size: 0.9rem;
+            box-shadow: 1px 1px 0 rgba(0,0,0,0.06);
+        }
+
+        .flow-step .step-num {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            background: var(--accent-red);
+            color: white;
+            border-radius: 50%;
+            font-size: 0.75rem;
+            line-height: 20px;
+            margin-right: 4px;
+        }
+
+        .flow-arrow {
+            font-size: 1.2rem;
+            color: var(--accent-red);
+        }
+
+        .sticky-note {
+            position: absolute;
+            background: #fffacd;
+            padding: 12px;
+            box-shadow: 2px 4px 8px rgba(0,0,0,0.15);
+            transform: rotate(-3deg);
+            font-size: 0.85rem;
+            max-width: 160px;
+            z-index: 10;
+        }
+
+        .sticky-note::before {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 12px;
+            background: rgba(255,255,255,0.4);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        .sticky-note.top-right {
+            top: 20px;
+            right: 20px;
+            transform: rotate(3deg);
+        }
+
+        /* 防御绕过表格 */
+        .bypass-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 12px 0;
+            font-size: 0.95rem;
+        }
+
+        .bypass-table th,
+        .bypass-table td {
+            border: 2px solid var(--line-color);
+            padding: 8px 12px;
+            text-align: left;
+        }
+
+        .bypass-table th {
+            background: #fff9e6;
+            color: var(--accent-red);
+            font-family: 'Ma Shan Zheng', cursive;
+            font-size: 1.05rem;
+        }
+
+        .bypass-table td {
+            background: #fff;
+        }
+
+        .bypass-table .bypass-yes {
+            color: var(--accent-red);
+            font-weight: bold;
+        }
+
+        /* 影响范围统计 */
+        .impact-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin: 12px 0;
+        }
+
+        .impact-card {
+            background: #fff;
+            border: 2px solid var(--line-color);
+            border-radius: 10px;
+            padding: 14px;
+            text-align: center;
+            box-shadow: 2px 2px 0 rgba(0,0,0,0.08);
+        }
+
+        .impact-card .impact-num {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--accent-red);
+            font-family: monospace;
+            margin: 4px 0;
+        }
+
+        .impact-card .impact-label {
+            font-size: 0.9rem;
+            color: var(--ink-light);
+        }
+
+        /* 代码块样式 */
+        .code-block {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            border-radius: 10px;
+            padding: 16px;
+            margin: 12px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            overflow-x: auto;
+            box-shadow: 3px 3px 0 rgba(0,0,0,0.15);
+            position: relative;
+        }
+
+        .code-block::before {
+            content: 'bash';
+            position: absolute;
+            top: 6px;
+            right: 12px;
+            font-size: 0.75rem;
+            color: #75715e;
+            font-family: 'Kalam', cursive;
+        }
+
+        .code-block .comment {
+            color: #75715e;
+        }
+
+        .code-block .cmd {
+            color: #66d9ef;
+        }
+
+        .code-block .arg {
+            color: #a6e22e;
+        }
+
+        .code-block .val {
+            color: #e6db74;
+        }
+
+        /* 攻击链动画 */
+        .attack-chain {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin: 16px 0;
+            flex-wrap: wrap;
+        }
+
+        .chain-node {
+            background: #fff;
+            border: 3px solid var(--accent-red);
+            border-radius: 50%;
+            width: 80px;
+            height: 80px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-size: 0.8rem;
+            box-shadow: 2px 2px 0 rgba(0,0,0,0.1);
+            position: relative;
+        }
+
+        .chain-node .node-icon {
+            font-size: 1.4rem;
+            color: var(--accent-red);
+            margin-bottom: 2px;
+        }
+
+        .chain-node .node-label {
+            font-family: 'Ma Shan Zheng', cursive;
+            font-size: 0.85rem;
+            color: var(--accent-red);
+        }
+
+        .chain-arrow {
+            font-size: 1.5rem;
+            color: var(--accent-red);
+        }
+
+        .chain-result {
+            background: linear-gradient(135deg, #fff5f5 0%, #fed7d7 100%);
+            border: 2px solid var(--accent-red);
+            border-radius: 10px;
+            padding: 10px 16px;
+            font-size: 1rem;
+            color: var(--accent-red);
+            font-weight: bold;
+            box-shadow: 2px 2px 0 rgba(0,0,0,0.1);
+        }
+
+        @media (max-width: 768px) {
+            .notebook { padding: 20px 15px 20px 30px; }
+            .page { padding: 30px 25px 30px 45px; min-height: 500px; }
+            .cover-title { font-size: 2.5rem; }
+            .handwriting { font-size: 1rem; line-height: 28px; }
+            .concept-cards { flex-direction: column; align-items: center; }
+            .concept-card { max-width: 100%; width: 100%; }
+            .impact-grid { grid-template-columns: 1fr; }
+            .attack-chain { flex-direction: column; }
+            .chain-arrow { transform: rotate(90deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="notebook">
+        <div class="rings">
+            <div class="ring"></div>
+            <div class="ring"></div>
+            <div class="ring"></div>
+            <div class="ring"></div>
+            <div class="ring"></div>
+            <div class="ring"></div>
+            <div class="ring"></div>
+            <div class="ring"></div>
+        </div>
+
+        <div class="pages-container" id="pagesContainer">
+            <!-- 封面 -->
+            <div class="page cover active" data-page="0">
+                <div class="cover-decoration"><i class="ri-shield-flash-line"></i></div>
+                <div class="cover-title">HTTP/2 攻击链笔记</div>
+                <div class="cover-subtitle">防御绕过与影响范围分析</div>
+                <svg class="cover-doodle" viewBox="0 0 200 150">
+                    <path d="M30,75 Q60,30 100,75 T170,75" fill="none" stroke="#c53030" stroke-width="2" stroke-dasharray="5,5" opacity="0.5"/>
+                    <rect x="40" y="45" width="35" height="45" fill="none" stroke="#2c2c2c" stroke-width="1.5" rx="3"/>
+                    <rect x="125" y="35" width="35" height="55" fill="none" stroke="#2c2c2c" stroke-width="1.5" rx="3"/>
+                    <text x="50" y="72" font-size="14" fill="#c53030">A</text>
+                    <text x="135" y="68" font-size="14" fill="#2b6cb0">T</text>
+                    <path d="M75,68 L125,65" stroke="#c53030" stroke-width="1.5" marker-end="url(#arrowhead2)"/>
+                    <path d="M125,85 L75,88" stroke="#c53030" stroke-width="1.5" stroke-dasharray="3,3" marker-end="url(#arrowhead2)"/>
+                    <defs>
+                        <marker id="arrowhead2" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#c53030"/>
+                        </marker>
+                    </defs>
+                </svg>
+                <div style="font-size: 1rem; color: var(--ink-light); margin-top: 20px;">
+                    <span style="display: block; margin: 5px 0;"><i class="ri-check-line"></i> 攻击链组合</span>
+                    <span style="display: block; margin: 5px 0;"><i class="ri-check-line"></i> 防御绕过</span>
+                    <span style="display: block; margin: 5px 0;"><i class="ri-check-line"></i> 影响范围</span>
+                </div>
+                <div class="cover-hint">点击翻页开始阅读 ↓</div>
+            </div>
+
+            <!-- 第1页：攻击链 -->
+            <div class="page" data-page="1">
+                <div class="content-wrapper">
+                    <div class="page-header">一、攻击链组合</div>
+
+                    <div class="sticky-note top-right">
+                        致命！<br>
+                        组合攻击<br>
+                        效果翻倍
+                    </div>
+
+                    <p class="handwriting" id="text1"></p>
+
+                    <!-- 攻击链可视化 -->
+                    <div class="attack-chain">
+                        <div class="chain-node">
+                            <div class="node-icon"><i class="ri-bomb-line"></i></div>
+                            <div class="node-label">HPACK<br>炸弹</div>
+                        </div>
+                        <div class="chain-arrow">→</div>
+                        <div class="chain-node">
+                            <div class="node-icon"><i class="ri-lock-line"></i></div>
+                            <div class="node-label">窗口<br>停滞</div>
+                        </div>
+                        <div class="chain-arrow">→</div>
+                        <div class="chain-result">
+                            <i class="ri-skull-line"></i> 内存永久锁定
+                        </div>
+                    </div>
+
+                    <!-- 核心概念卡片 -->
+                    <div class="concept-cards">
+                        <div class="concept-card">
+                            <div class="card-icon"><i class="ri-upload-cloud-2-line"></i></div>
+                            <div class="card-title">极小流量</div>
+                            <div class="card-desc">攻击者仅需发送少量数据</div>
+                        </div>
+                        <div class="concept-card">
+                            <div class="card-icon"><i class="ri-database-2-line"></i></div>
+                            <div class="card-title">大量内存</div>
+                            <div class="card-desc">触发服务器大量内存分配</div>
+                        </div>
+                        <div class="concept-card">
+                            <div class="card-icon"><i class="ri-forbid-line"></i></div>
+                            <div class="card-title">无法释放</div>
+                            <div class="card-desc">窗口为0导致内存永不回收</div>
+                        </div>
+                    </div>
+
+                    <div class="key-point-box">
+                        <div class="box-title">攻击核心逻辑</div>
+                        <div class="box-content">
+                            <span class="highlight">HPACK 炸弹</span>触发服务器分配大量内存，
+                            <span class="highlight">窗口停滞</span>让这些内存永远无法释放。
+                            持续攻击将<span class="underline-wavy">迅速耗尽服务器内存</span>，导致服务完全瘫痪！
+                        </div>
+                    </div>
+                </div>
+                <div class="page-number">1</div>
+            </div>
+
+            <!-- 第2页：防御绕过 -->
+            <div class="page" data-page="2">
+                <div class="content-wrapper">
+                    <div class="page-header">二、防御绕过分析</div>
+
+                    <p class="handwriting" id="text2"></p>
+
+                    <!-- 防御绕过表格 -->
+                    <div class="diagram-container">
+                        <div class="diagram-title">传统防御机制绕过情况</div>
+                        <table class="bypass-table">
+                            <thead>
+                                <tr>
+                                    <th>防御机制</th>
+                                    <th>绕过结果</th>
+                                    <th>绕过原因</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>头部数量限制</td>
+                                    <td class="bypass-yes"><i class="ri-close-circle-line"></i> 绕过</td>
+                                    <td>解码后服务器认为只有 <span class="highlight">1个</span> 合并后的 Cookie 头部</td>
+                                </tr>
+                                <tr>
+                                    <td>头部大小限制</td>
+                                    <td class="bypass-yes"><i class="ri-close-circle-line"></i> 绕过</td>
+                                    <td>解码后单个头部值大小在 <span class="highlight">正常范围</span> 内，放大来源于重复引用</td>
+                                </tr>
+                                <tr>
+                                    <td>请求阈值防御</td>
+                                    <td class="bypass-yes"><i class="ri-close-circle-line"></i> 绕过</td>
+                                    <td>攻击的请求 <span class="highlight">体积和频率</span> 都非常低，与正常流量难以区分</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="key-point-box" style="border-color: var(--accent-red);">
+                        <div class="box-title" style="color: var(--accent-red);"><i class="ri-alert-line"></i> 防御失效</div>
+                        <div class="box-content">
+                            <span class="warning-text">WAF？无效。</span> 
+                            <span class="warning-text">基于请求特征的检测？无效。</span><br>
+                            传统安全设备完全无法识别这种攻击模式！
+                        </div>
+                    </div>
+                </div>
+                <div class="page-number">2</div>
+            </div>
+
+            <!-- 第3页：影响范围 -->
+            <div class="page" data-page="3">
+                <div class="content-wrapper">
+                    <div class="page-header">三、影响范围</div>
+
+                    <p class="handwriting" id="text3"></p>
+
+                    <!-- 受影响服务器列表 -->
+                    <div class="diagram-container">
+                        <div class="diagram-title">受影响服务器列表</div>
+                        <div class="concept-cards">
+                            <div class="concept-card">
+                                <div class="card-icon"><i class="ri-server-line"></i></div>
+                                <div class="card-title">NGINX</div>
+                            </div>
+                            <div class="concept-card">
+                                <div class="card-icon"><i class="ri-server-line"></i></div>
+                                <div class="card-title">Apache httpd</div>
+                            </div>
+                            <div class="concept-card">
+                                <div class="card-icon"><i class="ri-server-line"></i></div>
+                                <div class="card-title">Microsoft IIS</div>
+                            </div>
+                            <div class="concept-card">
+                                <div class="card-icon"><i class="ri-server-line"></i></div>
+                                <div class="card-title">Envoy</div>
+                            </div>
+                            <div class="concept-card">
+                                <div class="card-icon"><i class="ri-server-line"></i></div>
+                                <div class="card-title">Cloudflare Pingora</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 统计数据 -->
+                    <div class="impact-grid">
+                        <div class="impact-card">
+                            <div class="impact-label">全球暴露服务器</div>
+                            <div class="impact-num">88万+</div>
+                            <div class="impact-label">Shodan 扫描数据</div>
+                        </div>
+                        <div class="impact-card">
+                            <div class="impact-label">国内高校漏洞</div>
+                            <div class="impact-num">58/200</div>
+                            <div class="impact-label">200多所高校实测</div>
+                        </div>
+                    </div>
+
+                    <div class="key-point-box">
+                        <div class="box-title">影响评估</div>
+                        <div class="box-content">
+                            几乎所有主流 HTTP/2 服务器均受影响。
+                            国内 <span class="underline-wavy">29%</span> 的高校网站确认存在漏洞，
+                            全球 <span class="highlight">88万台</span> 服务器暴露在风险中！
+                        </div>
+                    </div>
+                </div>
+                <div class="page-number">3</div>
+            </div>
+
+            <!-- 第4页：利用代码 -->
+            <div class="page" data-page="4">
+                <div class="content-wrapper">
+                    <div class="page-header">四、利用代码</div>
+
+                    <p class="handwriting" id="text4"></p>
+
+                    <div class="diagram-container">
+                        <div class="diagram-title">一行命令锁定服务器内存</div>
+                        <div class="code-block">
+<span class="cmd">python3</span> <span class="arg">exploit/exploit.py</span> <span class="arg">--host</span> <span class="val">127.0.0.1</span> <span class="arg">--port</span> <span class="val">443</span> <span class="arg">--hold-seconds</span> <span class="val">30</span>
+                        </div>
+
+                        <div class="flow-steps" style="margin-top: 16px;">
+                            <div class="flow-step">
+                                <span class="step-num">1</span>指定目标
+                            </div>
+                            <span class="flow-arrow">→</span>
+                            <div class="flow-step">
+                                <span class="step-num">2</span>保持30秒
+                            </div>
+                            <span class="flow-arrow">→</span>
+                            <div class="flow-step">
+                                <span class="step-num">3</span>内存锁死
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="key-point-box" style="border-color: var(--accent-red);">
+                        <div class="box-title" style="color: var(--accent-red);"><i class="ri-alert-line"></i> 攻击成本极低</div>
+                        <div class="box-content">
+                            仅需 <span class="underline-wavy">一行 Python 命令</span>，
+                            指定目标并保持 30 秒，服务器内存即被<span class="warning-text">永久锁死</span>。
+                            攻击门槛之低，防御难度之大，令人震惊！
+                        </div>
+                    </div>
+
+                    <div class="doodle doodle-1"><i class="ri-terminal-box-line"></i></div>
+                </div>
+                <div class="page-number">4</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentPage = 0;
+        const totalPages = 5;
+        const pages = document.querySelectorAll('.page');
+
+        const texts = {
+            1: `攻击链的核心逻辑：<span class="highlight">HPACK 炸弹</span>触发服务器分配大量内存，再用<span class="highlight">窗口停滞</span>让这些内存永远无法释放。
+
+攻击者只用<span class="underline-wavy">极小的网络流量</span>，就能触发服务器大量的内存分配，并让内存无法回收。持续攻击会迅速耗尽服务器内存，导致<span class="warning-text">服务完全瘫痪</span>。`,
+
+            2: `更恐怖的是，这种攻击能<span class="highlight-pink">绕过大多数传统防御</span>。
+
+头部数量限制？绕过，因为解码后服务器认为只有 1 个合并后的 Cookie 头部。头部大小限制？绕过，因为解码后单个头部值大小在正常范围内。请求阈值防御？绕过，因为攻击的请求体积和频率都非常低。`,
+
+            3: `影响范围极其广泛。
+
+受影响的服务器包括 <span class="key-term">NGINX</span>、<span class="key-term">Apache httpd</span>、<span class="key-term">Microsoft IIS</span>、<span class="key-term">Envoy</span>、<span class="key-term">Cloudflare Pingora</span>。
+
+根据 Shodan 扫描，全球有 <span class="highlight">88万台</span> 服务器暴露在风险中。国内实测，200多所高校网站中，有 <span class="underline-wavy">58所</span> 确认存在漏洞。`,
+
+            4: `利用代码极其简单。
+
+就这一行命令。指定目标，保持 30 秒，服务器内存就被锁死了。攻击门槛之低，令人震惊。`
+        };
+
+        function showTextImmediate(pageNum) {
+            const textId = 'text' + pageNum;
+            const textEl = document.getElementById(textId);
+            if (textEl && texts[pageNum]) {
+                textEl.innerHTML = texts[pageNum];
+            }
+        }
+
+        function showPage(pageNum) {
+            pages.forEach((page, index) => {
+                page.classList.remove('active', 'flipped');
+                if (index < pageNum) {
+                    page.classList.add('flipped');
+                } else if (index === pageNum) {
+                    page.classList.add('active');
+                    showTextImmediate(pageNum);
+                }
+            });
+            currentPage = pageNum;
+        }
+
+        function nextPage() {
+            if (currentPage < totalPages - 1) {
+                showPage(currentPage + 1);
+            }
+        }
+
+        function prevPage() {
+            if (currentPage > 0) {
+                showPage(currentPage - 1);
+            }
+        }
+
+        document.querySelector('.page.cover').addEventListener('click', nextPage);
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === ' ') {
+                nextPage();
+            } else if (e.key === 'ArrowLeft') {
+                prevPage();
+            }
+        });
+
+        showPage(0);
+    </script>
+</body>
+</html>

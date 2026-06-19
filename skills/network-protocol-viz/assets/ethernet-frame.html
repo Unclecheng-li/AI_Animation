@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ethernet Frame Visualization</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#121212',
+                        darker: '#0a0a0a',
+                        primary: '#1e1e2e',
+                        secondary: '#2d2d44',
+                        accent: '#ff2e93',
+                        highlight: '#ff7eb3',
+                        neutral: '#8a8aa0',
+                    },
+                    fontFamily: {
+                        mono: ['Fira Code', 'Consolas', 'monospace'],
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'glow': 'glow 2s ease-in-out infinite alternate',
+                        'flow': 'flow 8s linear infinite',
+                        'fade-in-up': 'fadeInUp 0.8s ease-out forwards',
+                    },
+                    keyframes: {
+                        glow: {
+                            '0%': { boxShadow: '0 0 5px rgba(255, 46, 147, 0.5)' },
+                            '100%': { boxShadow: '0 0 20px rgba(255, 46, 147, 0.8)' },
+                        },
+                        flow: {
+                            '0%': { backgroundPosition: '0% 0%' },
+                            '100%': { backgroundPosition: '100% 0%' },
+                        },
+                        fadeInUp: {
+                            '0%': {
+                                opacity: 0,
+                                transform: 'translateY(20px) scale(0.95)',
+                            },
+                            '100%': {
+                                opacity: 1,
+                                transform: 'translateY(0) scale(1)',
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .text-shadow {
+                text-shadow: 0 0 8px rgba(255, 46, 147, 0.6);
+            }
+            .frame-field {
+                @apply border border-neutral/30 transition-all duration-500 hover:border-accent hover:bg-secondary/50 relative overflow-hidden flex items-center justify-center opacity-0 scale-95;
+            }
+            .frame-field::before {
+                content: '';
+                @apply absolute top-0 left-0 w-full h-full bg-accent/5 opacity-0 transition-opacity duration-300;
+            }
+            .frame-field:hover::before {
+                @apply opacity-100;
+            }
+            .tooltip {
+                @apply invisible absolute bg-darker text-white text-xs rounded py-1 px-2 z-10 w-64 -mt-24 ml-8 transform -translate-x-1/2 opacity-0 transition-all duration-300 pointer-events-none;
+            }
+            .frame-field:hover .tooltip {
+                @apply visible opacity-100;
+            }
+            .tooltip::after {
+                content: '';
+                @apply absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-darker;
+            }
+            .data-flow {
+                @apply absolute top-0 left-0 h-full w-1/3 bg-accent/10 transform -translate-x-full;
+                background: linear-gradient(90deg, transparent, rgba(255, 46, 147, 0.1), transparent);
+                background-size: 200% 100%;
+            }
+        }
+    </style>
+</head>
+<body class="bg-dark text-gray-200 min-h-screen font-mono">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <header class="mb-12 text-center">
+            <h1 class="text-[clamp(1.8rem,5vw,3rem)] font-bold mb-2 text-white text-shadow animate-fade-in-up">
+                Ethernet <span class="text-accent">Frame</span> Format
+            </h1>
+            <p class="text-neutral max-w-2xl mx-auto animate-fade-in-up" style="animation-delay: 200ms;">A visual representation of the Ethernet II frame structure with accurate byte proportions</p>
+        </header>
+
+        <div class="relative">
+            <!-- Ethernet Frame Visualization -->
+            <div class="bg-primary rounded-lg p-6 border border-secondary animate-glow">
+                <!-- Byte length indicator -->
+                <div class="flex justify-between mb-4 text-xs text-neutral opacity-0" id="byte-indicator">
+                    <span>0 bytes</span>
+                    <span>15 bytes</span>
+                    <span>30 bytes</span>
+                    <span>45 bytes</span>
+                    <span>60+ bytes</span>
+                </div>
+                
+                <div class="flex flex-col gap-2">
+                    <!-- Preamble & SFD (修正比例：7:1) -->
+                    <div class="flex h-12">
+                        <div id="field-preamble" class="frame-field w-[87.5%] bg-secondary/20" style="min-width: 280px;">
+                            <span>Preamble<br/>(7 bytes)</span>
+                            <div class="tooltip">7-byte sequence of alternating 0s and 1s (10101010) to synchronize receiver</div>
+                        </div>
+                        <div id="field-sfd" class="frame-field w-[12.5%] border-accent" style="min-width: 40px;">
+                            <span>SFD<br/>(1 byte)</span>
+                            <div class="tooltip">Start Frame Delimiter (10101011) indicating end of preamble</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Destination MAC -->
+                    <div class="flex h-14">
+                        <div id="field-dest-mac" class="frame-field w-[100%] border-accent" style="min-height: 60px;">
+                            <span>Destination MAC Address<br/>(6 bytes)</span>
+                            <div class="tooltip">6-byte (48-bit) hardware address of the receiving node</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Source MAC -->
+                    <div class="flex h-14">
+                        <div id="field-src-mac" class="frame-field w-[100%] border-accent" style="min-height: 60px;">
+                            <span>Source MAC Address<br/>(6 bytes)</span>
+                            <div class="tooltip">6-byte (48-bit) hardware address of the sending node</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Type/Length -->
+                    <div class="flex h-14">
+                        <div id="field-type" class="frame-field w-[16.67%] border-accent" style="min-width: 100px;">
+                            <span>Type/Length<br/>(2 bytes)</span>
+                            <div class="tooltip">EtherType (for >1500: protocol type like IPv4=0x0800) or frame length (for ≤1500)</div>
+                        </div>
+                        <div id="field-data" class="frame-field w-[83.33%] relative overflow-hidden" style="min-height: 60px;">
+                            <span>Data/Payload<br/>(46-1500 bytes)</span>
+                            <div class="data-flow animate-flow"></div>
+                            <div class="tooltip">Upper layer protocol data (minimum 46 bytes, maximum 1500 bytes)</div>
+                        </div>
+                    </div>
+                    
+                    <!-- FCS -->
+                    <div class="flex h-14">
+                        <div id="field-fcs" class="frame-field w-[100%] bg-secondary/20" style="min-height: 60px;">
+                            <span>FCS<br/>(4 bytes)</span>
+                            <div class="tooltip">Frame Check Sequence - 32-bit CRC for error detection</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Interframe Gap (修正比例：与前导码+SFD保持12:8的字节比例) -->
+                    <div class="flex h-10 mt-4">
+                        <div id="field-ifg" class="frame-field w-[100%] bg-accent/10 border-dashed" style="min-height: 36px;">
+                            <span>Interframe Gap<br/>(12 bytes)</span>
+                            <div class="tooltip">Minimum idle time between frames (96 bit times, approximately 12 bytes)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Decorative elements -->
+            <div class="absolute -top-6 -left-6 w-12 h-12 bg-accent/20 rounded-full blur-md"></div>
+            <div class="absolute -bottom-8 -right-8 w-16 h-16 bg-accent/30 rounded-full blur-lg"></div>
+            <div class="absolute top-1/2 left-1/2 w-64 h-64 bg-accent/5 rounded-full blur-3xl -z-10 transform -translate-x-1/2 -translate-y-1/2"></div>
+        </div>
+        
+        <!-- Legend -->
+        <div class="mt-10 bg-primary/50 rounded-lg p-4 border border-secondary/50 opacity-0" id="legend">
+            <h3 class="text-accent text-lg mb-3 font-semibold">Field Legend</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                <div class="flex items-center"><span class="w-3 h-3 bg-accent rounded-sm mr-2"></span> Address and type fields</div>
+                <div class="flex items-center"><span class="w-3 h-3 bg-secondary/20 rounded-sm mr-2"></span> Control and synchronization fields</div>
+                <div class="flex items-center"><span class="w-3 h-3 border border-accent/50 bg-transparent rounded-sm mr-2"></span> Data payload section</div>
+                <div class="flex items-center"><span class="w-3 h-3 border border-accent/30 border-dashed bg-accent/10 rounded-sm mr-2"></span> Inter-frame spacing</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Animate frame fields sequentially in the order they appear in the frame
+            const fields = [
+                'byte-indicator',
+                'field-preamble',
+                'field-sfd',
+                'field-dest-mac',
+                'field-src-mac',
+                'field-type',
+                'field-data',
+                'field-fcs',
+                'field-ifg',
+                'legend'
+            ];
+            
+            function animateFields() {
+                fields.forEach((fieldId, index) => {
+                    setTimeout(() => {
+                        const field = document.getElementById(fieldId);
+                        // For the byte indicator and legend, use a simpler fade in
+                        if (fieldId === 'byte-indicator' || fieldId === 'legend') {
+                            field.style.animation = 'fadeInUp 0.8s ease-out forwards';
+                        } else {
+                            field.classList.add('animate-fade-in-up');
+                        }
+                    }, index * 300); // Delay each field by 300ms for sequential appearance
+                });
+            }
+            
+            // Start the animation after a short delay to let the page load
+            setTimeout(animateFields, 500);
+
+            // Add floating particles
+            const container = document.querySelector('.container');
+            
+            for (let i = 0; i < 12; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'fixed rounded-full bg-accent/10 pointer-events-none';
+                particle.style.width = `${Math.random() * 6 + 2}px`;
+                particle.style.height = particle.style.width;
+                particle.style.left = `${Math.random() * 100}vw`;
+                particle.style.top = `${Math.random() * 100}vh`;
+                particle.style.animation = `float ${Math.random() * 25 + 15}s linear infinite`;
+                particle.style.animationDelay = `${Math.random() * 10}s`;
+                container.appendChild(particle);
+            }
+            
+            // Add floating animation
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes float {
+                    0% {
+                        transform: translateY(0) translateX(0);
+                        opacity: 0.2;
+                    }
+                    25% {
+                        transform: translateY(-30px) translateX(15px);
+                        opacity: 0.4;
+                    }
+                    50% {
+                        transform: translateY(-60px) translateX(0);
+                        opacity: 0.2;
+                    }
+                    75% {
+                        transform: translateY(-30px) translateX(-15px);
+                        opacity: 0.4;
+                    }
+                    100% {
+                        transform: translateY(0) translateX(0);
+                        opacity: 0.2;
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+            
+            // Add hover effects
+            const frameFields = document.querySelectorAll('.frame-field');
+            frameFields.forEach(field => {
+                field.addEventListener('mouseenter', () => {
+                    field.style.transform = 'scale(1.01)';
+                    field.style.zIndex = '10';
+                });
+                
+                field.addEventListener('mouseleave', () => {
+                    field.style.transform = 'scale(1)';
+                    field.style.zIndex = '1';
+                });
+            });
+        });
+    </script>
+</body>
+</html>

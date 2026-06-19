@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seedance 2.0 - 原生多镜头叙事引擎</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; color: #fff; overflow: hidden; position: relative;
+            /* 设置左下角和右上角为蓝色，其他部分为黑色，增大左下角蓝色块的大小 */
+            background: 
+                radial-gradient(circle at bottom left, #001f54 0%, transparent 50%),
+                radial-gradient(circle at top right, #001f54 0%, transparent 30%),
+                #000000;
+            animation: gradientShift 15s ease infinite;
+        }
+        /* 背景渐变动画 */
+        @keyframes gradientShift {
+            0% {
+                background-size: 100% 100%;
+            }
+            50% {
+                background-size: 110% 110%;
+            }
+            100% {
+                background-size: 100% 100%;
+            }
+        }
+        /* 噪点纹理层 - 略微提高透明度适配深色背景 */
+        body::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            opacity: 0.15; /* 略提高噪点透明度，在深色背景更明显 */
+            mix-blend-mode: overlay;
+            animation: noiseMove 20s linear infinite;
+        }
+        /* 噪点纹理动画 */
+        @keyframes noiseMove {
+            0% {
+                transform: translate(0, 0) scale(1.1);
+            }
+            25% {
+                transform: translate(-2%, -2%) scale(1.05);
+            }
+            50% {
+                transform: translate(0, 0) scale(1.1);
+            }
+            75% {
+                transform: translate(2%, 2%) scale(1.05);
+            }
+            100% {
+                transform: translate(0, 0) scale(1.1);
+            }
+        }
+        .container { width: 100vw; height: 100vh; position: relative; }
+        .particles-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+        /* 右上角logo - 适配深色背景调整颜色 */
+        .logo {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: #fff;
+            font-family: sans-serif;
+            text-align: right;
+            z-index: 100;
+        }
+        .logo svg {
+            width: 32px;
+            height: 32px;
+            margin-bottom: 4px;
+        }
+        .logo-text {
+            font-size: 12px;
+            letter-spacing: 1px;
+        }
+        .slide { position: absolute; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1); padding: 60px; background: transparent !important; }
+        .slide.active { opacity: 1; visibility: visible; }
+        .slide-content { max-width: 1400px; width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; }
+        .text-section { z-index: 2; }
+        .visual-section { position: relative; height: 500px; display: flex; align-items: center; justify-content: center; }
+        
+        /* 增大字体 - 适合录屏演示 */
+        h1 { font-size: 5rem; font-weight: 800; margin-bottom: 25px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-shadow: 0 0 60px rgba(102,126,234,0.3); }
+        h2 { font-size: 3.2rem; font-weight: 700; margin-bottom: 35px; color: #fff; text-shadow: 0 2px 20px rgba(0,0,0,0.5); }
+        h3 { font-size: 2rem; font-weight: 600; margin-bottom: 25px; color: #a0a0ff; letter-spacing: 2px; }
+        p { font-size: 1.4rem; line-height: 2; color: #d0d0e0; margin-bottom: 25px; font-weight: 400; }
+        
+        /* 文本样式增强 */
+        .highlight { 
+            color: #667eea; 
+            font-weight: 700; 
+            background: linear-gradient(135deg, rgba(102,126,234,0.15) 0%, rgba(118,75,162,0.15) 100%);
+            padding: 2px 10px;
+            border-radius: 6px;
+            border-bottom: 3px solid #667eea;
+        }
+        .highlight-box {
+            background: linear-gradient(135deg, rgba(102,126,234,0.2) 0%, rgba(118,75,162,0.2) 100%);
+            padding: 4px 12px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            font-weight: 700;
+            color: #fff;
+        }
+        .text-bold { font-weight: 700; color: #fff; }
+        .text-italic { font-style: italic; color: #c0c0ff; }
+        .text-underline { 
+            text-decoration: underline; 
+            text-decoration-color: #667eea; 
+            text-decoration-thickness: 3px;
+            text-underline-offset: 6px;
+        }
+        .text-bg {
+            background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(102,126,234,0.15) 100%);
+            padding: 20px 25px;
+            border-radius: 12px;
+            border: 1px solid rgba(102,126,234,0.3);
+            font-size: 1.3rem;
+        }
+        
+        .feature-list { list-style: none; margin-top: 35px; }
+        .feature-list li { 
+            padding: 18px 0; 
+            padding-left: 40px; 
+            position: relative; 
+            font-size: 1.3rem; 
+            color: #e0e0f0; 
+            font-weight: 500;
+            background: rgba(102,126,234,0.05);
+            margin-bottom: 12px;
+            border-radius: 8px;
+            border-left: 3px solid transparent;
+            transition: all 0.3s ease;
+        }
+        .feature-list li:hover {
+            background: rgba(102,126,234,0.1);
+            border-left-color: #667eea;
+            padding-left: 45px;
+        }
+        .feature-list li::before { 
+            content: '▸'; 
+            position: absolute; 
+            left: 15px; 
+            color: #667eea; 
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+        
+
+        
+        /* Stagger Animation Classes */
+        .animate-item { opacity: 0; transform: translateY(30px); transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .slide.active .animate-item { opacity: 1; transform: translateY(0); }
+        .slide.active .animate-item:nth-child(1) { transition-delay: 0.1s; }
+        .slide.active .animate-item:nth-child(2) { transition-delay: 0.2s; }
+        .slide.active .animate-item:nth-child(3) { transition-delay: 0.3s; }
+        .slide.active .animate-item:nth-child(4) { transition-delay: 0.4s; }
+        .slide.active .animate-item:nth-child(5) { transition-delay: 0.5s; }
+        .slide.active .animate-item:nth-child(6) { transition-delay: 0.6s; }
+        .slide.active .animate-item:nth-child(7) { transition-delay: 0.7s; }
+        .slide.active .animate-item:nth-child(8) { transition-delay: 0.8s; }
+        
+        .animate-fade-left { opacity: 0; transform: translateX(-50px); transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .animate-fade-right { opacity: 0; transform: translateX(50px); transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .animate-fade-up { opacity: 0; transform: translateY(40px); transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .animate-fade-scale { opacity: 0; transform: scale(0.8); transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .slide.active .animate-fade-left { opacity: 1; transform: translateX(0); }
+        .slide.active .animate-fade-right { opacity: 1; transform: translateX(0); }
+        .slide.active .animate-fade-up { opacity: 1; transform: translateY(0); }
+        .slide.active .animate-fade-scale { opacity: 1; transform: scale(1); }
+        
+        .slide.active .delay-1 { transition-delay: 0.1s; }
+        .slide.active .delay-2 { transition-delay: 0.2s; }
+        .slide.active .delay-3 { transition-delay: 0.3s; }
+        .slide.active .delay-4 { transition-delay: 0.4s; }
+        .slide.active .delay-5 { transition-delay: 0.5s; }
+        .slide.active .delay-6 { transition-delay: 0.6s; }
+        .slide.active .delay-7 { transition-delay: 0.7s; }
+        .slide.active .delay-8 { transition-delay: 0.8s; }
+        
+        /* Slide 1 - Cover */
+        .slide-1 .slide-content { grid-template-columns: 1fr; text-align: center; }
+        .slide-1 h1 { font-size: 7rem; margin-bottom: 30px; letter-spacing: 4px; }
+        .slide-1 .subtitle { font-size: 2.2rem; color: #a0a0ff; margin-bottom: 50px; font-weight: 500; letter-spacing: 8px; }
+        .hero-visual { position: relative; width: 700px; height: 450px; margin: 0 auto; }
+        .film-strip { position: absolute; width: 100%; height: 100%; display: flex; gap: 15px; justify-content: center; align-items: center; }
+        .film-frame { width: 220px; height: 340px; background: linear-gradient(135deg, rgba(102,126,234,0.13) 0%, rgba(118,75,162,0.13) 100%); border: 3px solid rgba(102,126,234,0.4); border-radius: 12px; position: relative; overflow: hidden; animation: float 3s ease-in-out infinite; }
+        .film-frame:nth-child(2) { animation-delay: 0.2s; transform: scale(1.1); z-index: 2; }
+        .film-frame:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
+        .film-frame::before { content: ''; position: absolute; top: 15px; left: 15px; right: 15px; bottom: 15px; background: linear-gradient(135deg, rgba(102,126,234,0.25) 0%, rgba(118,75,162,0.25) 100%); border-radius: 8px; }
+        .film-frame::after { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 50px; height: 50px; border: 4px solid rgba(102,126,234,0.6); border-radius: 50%; border-top-color: transparent; animation: spin 2s linear infinite; }
+        @keyframes spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+        .tagline { margin-top: 50px; font-size: 1.4rem; color: #8080a0; font-weight: 500; letter-spacing: 4px; }
+        
+        /* Slide 2 - Semantic Analysis */
+        .brain-visual { position: relative; width: 450px; height: 450px; }
+        .brain-core { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 140px; height: 140px; background: radial-gradient(circle, #667eea 0%, #764ba2 100%); border-radius: 50%; box-shadow: 0 0 80px rgba(102,126,234,0.6); animation: pulse 2s ease-in-out infinite; }
+        @keyframes pulse { 0%, 100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.1); } }
+        .orbit-ring { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); border: 2px solid rgba(102,126,234,0.3); border-radius: 50%; }
+        .orbit-ring:nth-child(2) { width: 220px; height: 220px; }
+        .orbit-ring:nth-child(3) { width: 310px; height: 310px; }
+        .orbit-ring:nth-child(4) { width: 400px; height: 400px; }
+        .orbit-particle { position: absolute; width: 14px; height: 14px; background: #667eea; border-radius: 50%; box-shadow: 0 0 25px rgba(102,126,234,0.9); }
+        .text-particle { position: absolute; padding: 10px 20px; background: rgba(102,126,234,0.25); border: 2px solid rgba(102,126,234,0.5); border-radius: 25px; font-size: 1rem; color: #fff; font-weight: 600; white-space: nowrap; }
+        
+        /* Slide 3 - Viewpoint Coordinates */
+        .coordinate-system { position: relative; width: 500px; height: 500px; }
+        .grid-bg { position: absolute; width: 100%; height: 100%; background-image: linear-gradient(rgba(102,126,234,0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(102,126,234,0.15) 1px, transparent 1px); background-size: 35px 35px; border: 2px solid rgba(102,126,234,0.3); }
+        .axis { position: absolute; background: rgba(102,126,234,0.7); }
+        .axis-x { width: 100%; height: 2px; top: 50%; left: 0; }
+        .axis-y { width: 2px; height: 100%; left: 50%; top: 0; }
+        .viewpoint { position: absolute; width: 24px; height: 24px; background: #667eea; border-radius: 50%; box-shadow: 0 0 40px rgba(102,126,234,0.9); animation: blink 1.5s ease-in-out infinite; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .viewpoint-label { position: absolute; font-size: 1rem; color: #fff; font-weight: 600; white-space: nowrap; background: rgba(0,0,0,0.6); padding: 5px 12px; border-radius: 15px; }
+        
+        /* Slide 4 - Shot Types */
+        .shot-sequence { display: flex; gap: 25px; align-items: center; justify-content: center; }
+        .shot-box { position: relative; border: 3px solid rgba(102,126,234,0.5); border-radius: 16px; overflow: hidden; transition: all 0.5s ease; }
+        .shot-box.wide { width: 320px; height: 200px; }
+        .shot-box.medium { width: 250px; height: 200px; }
+        .shot-box.close { width: 180px; height: 200px; }
+        .shot-box::before { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(102,126,234,0.25) 0%, rgba(118,75,162,0.25) 100%); }
+        .shot-label { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); padding: 8px 18px; background: rgba(0,0,0,0.7); border-radius: 20px; font-size: 1rem; color: #fff; font-weight: 600; }
+        .shot-arrow { font-size: 2.5rem; color: #667eea; animation: slideRight 1s ease-in-out infinite; font-weight: bold; }
+        @keyframes slideRight { 0%, 100% { transform: translateX(0); opacity: 0.5; } 50% { transform: translateX(10px); opacity: 1; } }
+        .subject-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 70px; height: 70px; background: radial-gradient(circle, #667eea 0%, #764ba2 100%); border-radius: 50%; opacity: 0.7; }
+        .shot-box.close .subject-icon { width: 110px; height: 110px; }
+        
+        /* Slide 5 - Consistency */
+        .consistency-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 25px; }
+        .consistency-card { padding: 40px 30px; background: rgba(102,126,234,0.12); border: 2px solid rgba(102,126,234,0.35); border-radius: 20px; text-align: center; transition: all 0.3s ease; }
+        .consistency-card:hover { transform: translateY(-8px); background: rgba(102,126,234,0.2); border-color: rgba(102,126,234,0.6); box-shadow: 0 10px 40px rgba(102,126,234,0.2); }
+        .card-icon { font-size: 3.5rem; margin-bottom: 20px; }
+        .card-title { font-size: 1.4rem; color: #fff; margin-bottom: 12px; font-weight: 700; }
+        .card-desc { font-size: 1.1rem; color: #a0a0c0; font-weight: 500; }
+        
+        /* Slide 6 - Workflow */
+        .workflow-diagram { display: flex; align-items: center; justify-content: center; gap: 35px; }
+        .workflow-step { text-align: center; }
+        .step-icon { width: 120px; height: 120px; background: linear-gradient(135deg, rgba(102,126,234,0.25) 0%, rgba(118,75,162,0.25) 100%); border: 3px solid rgba(102,126,234,0.5); border-radius: 24px; display: flex; align-items: center; justify-content: center; font-size: 3rem; margin-bottom: 20px; transition: all 0.3s ease; font-weight: bold; }
+        .workflow-step:hover .step-icon { transform: scale(1.1); box-shadow: 0 0 50px rgba(102,126,234,0.5); }
+        .step-label { font-size: 1.2rem; color: #fff; font-weight: 600; }
+        .workflow-arrow { color: #667eea; font-size: 2rem; animation: flowRight 1.5s ease-in-out infinite; font-weight: bold; }
+        @keyframes flowRight { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+        
+        @media (max-width: 1024px) { 
+            .slide-content { grid-template-columns: 1fr; gap: 40px; } 
+            h1 { font-size: 3.5rem; } 
+            h2 { font-size: 2.2rem; } 
+            h3 { font-size: 1.5rem; }
+            p { font-size: 1.1rem; }
+            .visual-section { height: 300px; } 
+            .hero-visual { width: 100%; max-width: 400px; height: 300px; } 
+            .film-frame { width: 140px; height: 220px; } 
+            .brain-visual, .coordinate-system { width: 300px; height: 300px; } 
+            .shot-sequence { flex-wrap: wrap; } 
+            .shot-box.wide { width: 200px; height: 140px; }
+            .shot-box.medium { width: 160px; height: 140px; }
+            .shot-box.close { width: 120px; height: 140px; }
+            .consistency-grid { grid-template-columns: 1fr; } 
+            .workflow-diagram { flex-wrap: wrap; } 
+            .step-icon { width: 80px; height: 80px; font-size: 2rem; }
+        }
+    </style>
+</head>
+<body>
+<div class="logo">
+    <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <!-- 调整logo颜色适配蓝色背景 -->
+        <circle cx="50" cy="30" r="12" fill="#60a5fa"/>
+        <path d="M35 45 Q50 70 65 45" stroke="#60a5fa" stroke-width="4" fill="none"/>
+        <path d="M30 60 Q50 90 70 60" stroke="#60a5fa" stroke-width="4" fill="none"/>
+    </svg>
+    <div class="logo-text">NetworkNoob</div>
+</div>
+<div class="container">
+    <canvas class="particles-canvas" id="particlesCanvas"></canvas>
+    <!-- Slide 1: Cover -->
+    <div class="slide slide-1 active" data-index="0">
+        <div class="slide-content">
+            <div>
+                <h1 class="animate-fade-up delay-1">Seedance 2.0</h1>
+                <p class="subtitle animate-fade-up delay-2"><span class="text-italic">原生多镜头叙事引擎</span></p>
+                <div class="hero-visual animate-fade-scale delay-3">
+                    <div class="film-strip">
+                        <div class="film-frame"></div>
+                        <div class="film-frame"></div>
+                        <div class="film-frame"></div>
+                    </div>
+                </div>
+                <p class="tagline animate-fade-up delay-4"><span class="text-bold">长序列时空规划</span> · <span class="highlight-box">智能叙事分镜</span> · <span class="text-underline">影视级一致性</span></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Slide 2: Semantic Analysis -->
+    <div class="slide slide-2" data-index="1">
+        <div class="slide-content">
+            <div class="text-section">
+                <h3 class="animate-fade-left delay-1">核心突破</h3>
+                <h2 class="animate-fade-left delay-2">语义逻辑拆解</h2>
+                <p class="animate-fade-left delay-3 text-bg">不同于只能生成单一动作片段的传统模型，<span class="highlight">Seedance 2.0</span> 内置了<span class="text-bold">智能叙事分镜引擎</span>。</p>
+                <p class="animate-fade-left delay-4">在接收到长文本指令后，模型的<span class="text-italic">第一步</span>不是生成像素，而是进行<span class="highlight text-underline">语义逻辑拆解</span>。</p>
+                <ul class="feature-list">
+                    <li class="animate-item delay-5">深度理解剧情描述中的<span class="text-bold">时空关系</span></li>
+                    <li class="animate-item delay-6">识别<span class="highlight-box">场景转换</span>与情绪节奏</li>
+                    <li class="animate-item delay-7">提取关键视觉元素与<span class="text-underline">动作序列</span></li>
+                </ul>
+            </div>
+            <div class="visual-section">
+                <div class="brain-visual animate-fade-right delay-3">
+                    <div class="brain-core"></div>
+                    <div class="orbit-ring"><div class="orbit-particle" style="top: -7px; left: 50%; transform: translateX(-50%);"></div></div>
+                    <div class="orbit-ring"><div class="orbit-particle" style="top: 50%; right: -7px; transform: translateY(-50%);"></div><div class="text-particle" style="top: 20%; left: 5%;">场景分析</div><div class="text-particle" style="bottom: 20%; right: 0%;">情感识别</div></div>
+                    <div class="orbit-ring"><div class="orbit-particle" style="bottom: -7px; left: 30%;"></div><div class="text-particle" style="top: 10%; right: 5%;">动作提取</div><div class="text-particle" style="bottom: 15%; left: 0%;">时空建模</div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Slide 3: Viewpoint Coordinates -->
+    <div class="slide slide-3" data-index="2">
+        <div class="slide-content">
+            <div class="text-section">
+                <h3 class="animate-fade-left delay-1">技术架构</h3>
+                <h2 class="animate-fade-left delay-2">视角坐标系统</h2>
+                <p class="animate-fade-left delay-3 text-bg">模型根据内置的<span class="highlight">影视工业参数</span>，自动规划出一组连续的<span class="text-bold text-italic">视角坐标</span>（Viewpoint Coordinates）。</p>
+                <p class="animate-fade-left delay-4">每个坐标点代表一个镜头的<span class="text-underline">空间位置、角度和焦距</span>，形成完整的拍摄蓝图。</p>
+                <ul class="feature-list">
+                    <li class="animate-item delay-5"><span class="highlight-box">X-Y-Z</span> 三维空间定位</li>
+                    <li class="animate-item delay-6">俯仰角与偏航角<span class="text-bold">精确控制</span></li>
+                    <li class="animate-item delay-7">焦距与景深<span class="text-italic">参数预设</span></li>
+                    <li class="animate-item delay-8">动态运动<span class="highlight">轨迹规划</span></li>
+                </ul>
+            </div>
+            <div class="visual-section">
+                <div class="coordinate-system animate-fade-scale delay-3">
+                    <div class="grid-bg"></div>
+                    <div class="axis axis-x"></div>
+                    <div class="axis axis-y"></div>
+                    <div class="viewpoint animate-fade-up delay-4" style="top: 30%; left: 30%;"><span class="viewpoint-label" style="top: -30px; left: -15px;">远景</span></div>
+                    <div class="viewpoint animate-fade-up delay-5" style="top: 50%; left: 55%;"><span class="viewpoint-label" style="top: -30px; left: -15px;">中景</span></div>
+                    <div class="viewpoint animate-fade-up delay-6" style="top: 70%; left: 75%;"><span class="viewpoint-label" style="top: -30px; left: -15px;">特写</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Slide 4: Shot Types -->
+    <div class="slide slide-4" data-index="3">
+        <div class="slide-content">
+            <div class="text-section">
+                <h3 class="animate-fade-left delay-1">镜头设计</h3>
+                <h2 class="animate-fade-left delay-2">远景-中景-特写</h2>
+                <p class="animate-fade-left delay-3 text-bg">模型会在同一个计算周期内，预先排布好<span class="highlight text-bold">"远景-中景-特写"</span>的切换逻辑。</p>
+                <p class="animate-fade-left delay-4">通过<span class="text-underline">精确的景别控制</span>，确保画面叙事节奏清晰，观众视线自然引导。</p>
+                <ul class="feature-list">
+                    <li class="animate-item delay-5"><span class="highlight-box">远景</span>：建立环境与空间关系</li>
+                    <li class="animate-item delay-6"><span class="text-bold">中景</span>：展现角色与环境互动</li>
+                    <li class="animate-item delay-7"><span class="text-italic">特写</span>：传递情绪与细节信息</li>
+                </ul>
+            </div>
+            <div class="visual-section">
+                <div class="shot-sequence">
+                    <div class="shot-box wide animate-fade-scale delay-3"><div class="subject-icon"></div><div class="shot-label">远景 Wide Shot</div></div>
+                    <span class="shot-arrow animate-fade-up delay-4">→</span>
+                    <div class="shot-box medium animate-fade-scale delay-5"><div class="subject-icon"></div><div class="shot-label">中景 Medium Shot</div></div>
+                    <span class="shot-arrow animate-fade-up delay-6">→</span>
+                    <div class="shot-box close animate-fade-scale delay-7"><div class="subject-icon"></div><div class="shot-label">特写 Close-up</div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Slide 5: Consistency -->
+    <div class="slide slide-5" data-index="4">
+        <div class="slide-content">
+            <div class="text-section">
+                <h3 class="animate-fade-left delay-1">核心优势</h3>
+                <h2 class="animate-fade-left delay-2">全时空一致性</h2>
+                <p class="animate-fade-left delay-3 text-bg">由于这些镜头是在同一个<span class="highlight text-bold">全局时空蓝图</span>下生成的，场景的纵深、光影的色温以及角色的动作在不同镜头之间具备<span class="text-underline">极高的统计一致性</span>。</p>
+                <p class="animate-fade-left delay-4">你只需要输入一段<span class="text-italic">剧情描述</span>，AI 就能自动完成符合<span class="highlight-box">视听语言规律</span>的运镜与转场。</p>
+            </div>
+            <div class="visual-section">
+                <div class="consistency-grid">
+                    <div class="consistency-card animate-fade-up delay-3">
+                        <div class="card-icon">[镜头]</div>
+                        <div class="card-title">场景纵深</div>
+                        <div class="card-desc">空间透视关系一致</div>
+                    </div>
+                    <div class="consistency-card animate-fade-up delay-4">
+                        <div class="card-icon">[灯泡]</div>
+                        <div class="card-title">光影色温</div>
+                        <div class="card-desc">光照方向与色彩统一</div>
+                    </div>
+                    <div class="consistency-card animate-fade-up delay-5">
+                        <div class="card-icon">[人物]</div>
+                        <div class="card-title">角色动作</div>
+                        <div class="card-desc">动作轨迹连贯自然</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Slide 6: Workflow -->
+    <div class="slide slide-6" data-index="5">
+        <div class="slide-content">
+            <div class="text-section">
+                <h3 class="animate-fade-left delay-1">工作流程</h3>
+                <h2 class="animate-fade-left delay-2">一键生成完整影片</h2>
+                <p class="animate-fade-left delay-3 text-bg">从<span class="text-bold">文本输入</span>到<span class="text-bold">最终输出</span>，Seedance 2.0 完成<span class="highlight">全流程自动化</span>处理。</p>
+                <p class="animate-fade-left delay-4">无需专业影视知识，只需描述你的<span class="text-italic text-underline">创意</span>，AI 即可生成<span class="highlight-box">专业级镜头序列</span>。</p>
+            </div>
+            <div class="visual-section">
+                <div class="workflow-diagram">
+                    <div class="workflow-step animate-fade-up delay-3">
+                        <div class="step-icon">[文]</div>
+                        <div class="step-label">输入文本</div>
+                    </div>
+                    <span class="workflow-arrow animate-fade-up delay-4">→</span>
+                    <div class="workflow-step animate-fade-up delay-5">
+                        <div class="step-icon">[脑]</div>
+                        <div class="step-label">语义分析</div>
+                    </div>
+                    <span class="workflow-arrow animate-fade-up delay-6">→</span>
+                    <div class="workflow-step animate-fade-up delay-7">
+                        <div class="step-icon">[尺]</div>
+                        <div class="step-label">镜头规划</div>
+                    </div>
+                    <span class="workflow-arrow animate-fade-up delay-8">→</span>
+                    <div class="workflow-step animate-fade-up delay-8" style="transition-delay: 0.9s;">
+                        <div class="step-icon">[影]</div>
+                        <div class="step-label">生成影片</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+<script>
+    let currentSlide = 0;
+    const totalSlides = 6;
+    const slides = document.querySelectorAll('.slide');
+
+    function goToSlide(index) {
+        if (index < 0) index = totalSlides - 1;
+        if (index >= totalSlides) index = 0;
+        
+        slides.forEach(s => s.classList.remove('active'));
+        slides[index].classList.add('active');
+        currentSlide = index;
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowLeft') goToSlide(currentSlide - 1);
+        if (e.key === 'ArrowRight') goToSlide(currentSlide + 1);
+    });
+
+    // Particles Animation
+    class Particles {
+        constructor() {
+            this.canvas = document.getElementById('particlesCanvas');
+            this.ctx = this.canvas.getContext('2d');
+            this.particles = [];
+            this.colors = [
+                '#60a5fa', '#3b82f6', '#2563eb', '#1d4ed8',
+                '#1e40af', '#1e3a8a', '#3b82f6', '#60a5fa'
+            ];
+            this.resizeCanvas();
+            this.createParticles();
+            this.animate();
+            window.addEventListener('resize', () => this.resizeCanvas());
+        }
+
+        resizeCanvas() {
+            this.canvas.width = window.innerWidth;
+            this.canvas.height = window.innerHeight;
+        }
+
+        createParticles() {
+            this.particles = [];
+            const particleCount = Math.floor(window.innerWidth * window.innerHeight / 15000);
+            
+            for (let i = 0; i < particleCount; i++) {
+                this.particles.push({
+                    x: Math.random() * this.canvas.width,
+                    y: Math.random() * this.canvas.height,
+                    size: Math.random() * 3 + 1,
+                    speedX: (Math.random() - 0.5) * 0.8,
+                    speedY: (Math.random() - 0.5) * 0.8,
+                    color: this.colors[Math.floor(Math.random() * this.colors.length)],
+                    opacity: Math.random() * 0.5 + 0.1,
+                    pulse: Math.random() * Math.PI * 2
+                });
+            }
+        }
+
+        updateParticles() {
+            this.particles.forEach(particle => {
+                particle.x += particle.speedX;
+                particle.y += particle.speedY;
+                particle.pulse += 0.02;
+
+                if (particle.x < 0 || particle.x > this.canvas.width) {
+                    particle.speedX *= -1;
+                }
+                if (particle.y < 0 || particle.y > this.canvas.height) {
+                    particle.speedY *= -1;
+                }
+            });
+        }
+
+        drawParticles() {
+            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            
+            this.particles.forEach(particle => {
+                const pulseFactor = 0.8 + Math.sin(particle.pulse) * 0.2;
+                
+                this.ctx.save();
+                this.ctx.globalAlpha = particle.opacity;
+                this.ctx.fillStyle = particle.color;
+                this.ctx.beginPath();
+                this.ctx.arc(particle.x, particle.y, particle.size * pulseFactor, 0, Math.PI * 2);
+                this.ctx.fill();
+                
+                // Draw glow effect
+                this.ctx.shadowColor = particle.color;
+                this.ctx.shadowBlur = 15;
+                this.ctx.fill();
+                this.ctx.shadowBlur = 0;
+                
+                this.ctx.restore();
+            });
+        }
+
+        animate() {
+            this.updateParticles();
+            this.drawParticles();
+            requestAnimationFrame(() => this.animate());
+        }
+    }
+
+    // Initialize particles when DOM is loaded
+    document.addEventListener('DOMContentLoaded', () => {
+        new Particles();
+    });
+</script>
+</body>
+</html>

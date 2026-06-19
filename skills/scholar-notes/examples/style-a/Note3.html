@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CIFSwitch 漏洞笔记 - 影响与修复</title>
+<link href="https://fonts.googleapis.com/css2?family=Kalam:wght@300;400;700&family=Patrick+Hand&family=Zeyada&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper-bg: #fdf6e3;
+    --paper-dark: #f5ecd3;
+    --paper-line: #e8e0cc;
+    --ink-black: #2c2c2c;
+    --ink-red: #c0392b;
+    --ink-blue: #2980b9;
+    --ink-green: #27ae60;
+    --ink-purple: #8e44ad;
+    --ink-orange: #e67e22;
+    --highlight-yellow: rgba(255, 235, 59, 0.35);
+    --highlight-pink: rgba(255, 105, 180, 0.25);
+    --highlight-green: rgba(46, 204, 113, 0.2);
+    --highlight-orange: rgba(255, 152, 0, 0.2);
+    --tape: rgba(255, 255, 255, 0.45);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #3d3d3d;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 40px 20px;
+    font-family: 'Kalam', cursive;
+    overflow-x: hidden;
+  }
+
+  .desk {
+    position: relative;
+    width: 100%;
+    max-width: 920px;
+  }
+
+  .notebook {
+    position: relative;
+    background: var(--paper-bg);
+    background-image:
+      linear-gradient(90deg, transparent 79px, #e8d5b5 79px, #e8d5b5 81px, transparent 81px),
+      linear-gradient(var(--paper-line) 1px, transparent 1px);
+    background-size: 100% 100%, 100% 2.4rem;
+    background-position: 0 0, 0 0;
+    border-radius: 4px;
+    box-shadow:
+      0 1px 2px rgba(0,0,0,0.15),
+      0 4px 8px rgba(0,0,0,0.12),
+      0 8px 16px rgba(0,0,0,0.1),
+      0 16px 32px rgba(0,0,0,0.08),
+      15px 25px 40px rgba(0,0,0,0.15);
+    padding: 3rem 2.5rem 3rem 6rem;
+    line-height: 2.4rem;
+    color: var(--ink-black);
+    transform: rotate(-0.4deg);
+    animation: paperFloat 6s ease-in-out infinite;
+  }
+
+  @keyframes paperFloat {
+    0%, 100% { transform: rotate(-0.4deg) translateY(0); }
+    50% { transform: rotate(-0.2deg) translateY(-3px); }
+  }
+
+  .spiral-holes {
+    position: absolute;
+    left: 20px;
+    top: 0;
+    bottom: 0;
+    width: 50px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    padding: 2rem 0;
+  }
+
+  .hole {
+    width: 14px;
+    height: 14px;
+    background: #3d3d3d;
+    border-radius: 50%;
+    box-shadow: inset 1px 1px 2px rgba(0,0,0,0.5);
+    position: relative;
+  }
+
+  .hole::after {
+    content: '';
+    position: absolute;
+    top: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 28px;
+    height: 6px;
+    background: linear-gradient(180deg, #888 0%, #bbb 50%, #888 100%);
+    border-radius: 3px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  }
+
+  .tape {
+    position: absolute;
+    width: 120px;
+    height: 35px;
+    background: var(--tape);
+    opacity: 0.6;
+    transform: rotate(-3deg);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    backdrop-filter: blur(1px);
+  }
+
+  .tape.top-left {
+    top: -12px;
+    left: 40px;
+    transform: rotate(-4deg);
+  }
+
+  .tape.top-right {
+    top: -10px;
+    right: 60px;
+    transform: rotate(3deg);
+    width: 100px;
+  }
+
+  .paperclip {
+    position: absolute;
+    top: 40px;
+    right: 30px;
+    width: 30px;
+    height: 70px;
+    border: 3px solid #b0b0b0;
+    border-radius: 0 0 15px 15px;
+    border-top: none;
+    transform: rotate(-5deg);
+    box-shadow: 2px 2px 4px rgba(0,0,0,0.15);
+    z-index: 10;
+  }
+
+  .paperclip::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 6px;
+    width: 12px;
+    height: 25px;
+    border: 3px solid #b0b0b0;
+    border-bottom: none;
+    border-radius: 15px 15px 0 0;
+  }
+
+  .title {
+    font-family: 'Zeyada', cursive;
+    font-size: 3.2rem;
+    font-weight: 700;
+    color: var(--ink-black);
+    margin-bottom: 0.5rem;
+    line-height: 1.2;
+    position: relative;
+    display: inline-block;
+  }
+
+  .title-underline {
+    position: absolute;
+    bottom: 2px;
+    left: -5px;
+    right: -10px;
+    height: 8px;
+    background: var(--highlight-yellow);
+    z-index: -1;
+    border-radius: 4px;
+    transform: rotate(-1deg);
+  }
+
+  .subtitle {
+    font-family: 'Patrick Hand', cursive;
+    font-size: 1.3rem;
+    color: var(--ink-blue);
+    margin-bottom: 1.5rem;
+    transform: rotate(-0.5deg);
+  }
+
+  .section {
+    margin-bottom: 2rem;
+    position: relative;
+  }
+
+  .section-title {
+    font-family: 'Patrick Hand', cursive;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--ink-red);
+    margin-bottom: 0.5rem;
+    display: inline-block;
+    position: relative;
+  }
+
+  .section-title .marker-underline {
+    position: absolute;
+    bottom: 0;
+    left: -3px;
+    right: -5px;
+    height: 4px;
+    background: var(--ink-red);
+    opacity: 0.3;
+    border-radius: 2px;
+  }
+
+  .content {
+    font-size: 1.15rem;
+    text-align: justify;
+    position: relative;
+  }
+
+  .highlight {
+    background: var(--highlight-yellow);
+    padding: 0 3px;
+    border-radius: 2px;
+  }
+
+  .highlight-pink {
+    background: var(--highlight-pink);
+    padding: 0 3px;
+    border-radius: 2px;
+  }
+
+  .highlight-green {
+    background: var(--highlight-green);
+    padding: 0 3px;
+    border-radius: 2px;
+  }
+
+  .highlight-orange {
+    background: var(--highlight-orange);
+    padding: 0 3px;
+    border-radius: 2px;
+  }
+
+  .red-text {
+    color: var(--ink-red);
+    font-weight: 700;
+  }
+
+  .blue-text {
+    color: var(--ink-blue);
+  }
+
+  .green-text {
+    color: var(--ink-green);
+  }
+
+  .purple-text {
+    color: var(--ink-purple);
+  }
+
+  .orange-text {
+    color: var(--ink-orange);
+    font-weight: 700;
+  }
+
+  .code-term {
+    font-family: 'Courier New', monospace;
+    font-size: 0.95em;
+    background: rgba(0,0,0,0.06);
+    padding: 0 4px;
+    border-radius: 3px;
+    border-bottom: 1.5px solid var(--ink-purple);
+  }
+
+  .code-block {
+    display: block;
+    margin: 0.8rem 0;
+    padding: 0.8rem 1rem;
+    background: #2d2d2d;
+    color: #f8f8f2;
+    border-radius: 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    overflow-x: auto;
+    box-shadow: 3px 3px 8px rgba(0,0,0,0.2);
+    transform: rotate(0.3deg);
+    position: relative;
+  }
+
+  .code-block::before {
+    content: '';
+    position: absolute;
+    top: -6px;
+    left: 15px;
+    width: 50px;
+    height: 12px;
+    background: rgba(255,255,255,0.3);
+    border: 1px solid rgba(0,0,0,0.1);
+    transform: rotate(-2deg);
+  }
+
+  .code-comment {
+    color: #75715e;
+  }
+
+  .code-keyword {
+    color: #66d9ef;
+  }
+
+  .code-string {
+    color: #a6e22e;
+  }
+
+  .big-warning {
+    margin: 1.5rem 0;
+    padding: 1rem 1.5rem;
+    background: repeating-linear-gradient(
+      45deg,
+      rgba(255,235,59,0.15),
+      rgba(255,235,59,0.15) 10px,
+      rgba(255,235,59,0.25) 10px,
+      rgba(255,235,59,0.25) 20px
+    );
+    border: 2px solid var(--ink-red);
+    border-radius: 8px;
+    text-align: center;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--ink-red);
+    transform: rotate(0.5deg);
+    position: relative;
+  }
+
+  .big-warning::before,
+  .big-warning::after {
+    content: '!!!';
+    position: absolute;
+    font-size: 1rem;
+    color: var(--ink-red);
+    opacity: 0.6;
+  }
+
+  .big-warning::before { top: 5px; left: 10px; }
+  .big-warning::after { bottom: 5px; right: 10px; }
+
+  .side-note {
+    position: absolute;
+    right: -40px;
+    top: 0;
+    width: 140px;
+    padding: 0.6rem;
+    background: #fff9c4;
+    border: 1px solid #f0e68c;
+    box-shadow: 3px 3px 8px rgba(0,0,0,0.12);
+    font-size: 0.9rem;
+    line-height: 1.4;
+    color: var(--ink-black);
+    transform: rotate(4deg);
+    z-index: 5;
+  }
+
+  .side-note::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 14px;
+    background: rgba(255,255,255,0.5);
+    border: 1px solid rgba(0,0,0,0.08);
+  }
+
+  .side-note.left {
+    right: auto;
+    top: 100px;
+    left: 150px;
+    transform: rotate(-3deg);
+    background: #ffcdd2;
+    border-color: #ef9a9a;
+  }
+
+  .side-note.green {
+    top: 220px;
+    background: #c8e6c9;
+    border-color: #a5d6a7;
+    transform: rotate(2deg);
+  }
+
+  .side-note.blue {
+    top: 180px;
+    background: #bbdefb;
+    border-color: #90caf9;
+    transform: rotate(-2deg);
+  }
+
+  .os-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+    margin: 0.8rem 0;
+    padding: 0.8rem;
+    background: rgba(255,255,255,0.4);
+    border: 2px dashed var(--ink-red);
+    border-radius: 8px;
+    transform: rotate(0.3deg);
+  }
+
+  .os-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.4rem 0.3rem;
+    background: #fff;
+    border: 1.5px solid var(--ink-black);
+    border-radius: 6px;
+    font-size: 0.95rem;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.1);
+    text-align: center;
+  }
+
+  .os-item.danger {
+    border-color: var(--ink-red);
+    color: var(--ink-red);
+    font-weight: 700;
+  }
+
+  .safe-box {
+    margin: 1rem 0;
+    padding: 1rem 1.2rem;
+    background: linear-gradient(135deg, rgba(39,174,96,0.08) 0%, rgba(46,204,113,0.05) 100%);
+    border-left: 4px solid var(--ink-green);
+    border-radius: 0 8px 8px 0;
+    transform: rotate(-0.2deg);
+  }
+
+  .safe-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    margin-bottom: 0.5rem;
+    font-size: 1.05rem;
+  }
+
+  .safe-row:last-child { margin-bottom: 0; }
+
+  .safe-check {
+    color: var(--ink-green);
+    font-weight: 700;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+  }
+
+  .coffee-stain {
+    position: absolute;
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    border: 3px solid rgba(139, 90, 43, 0.12);
+    box-shadow:
+      0 0 0 8px rgba(139, 90, 43, 0.06),
+      0 0 0 16px rgba(139, 90, 43, 0.03);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .coffee-stain.one { bottom: 60px; right: 40px; }
+  .coffee-stain.two { top: 200px; left: 100px; opacity: 0.5; }
+
+  .folded-corner {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(135deg, transparent 50%, var(--paper-dark) 50%);
+    border-bottom-right-radius: 4px;
+    box-shadow: -2px -2px 4px rgba(0,0,0,0.08);
+  }
+
+  .doodle {
+    position: absolute;
+    pointer-events: none;
+    opacity: 0.7;
+  }
+
+  .doodle.skull {
+    top: 80px;
+    right: 80px;
+    font-size: 2rem;
+    transform: rotate(15deg);
+    opacity: 0.15;
+  }
+
+  .doodle.bug {
+    bottom: 150px;
+    left: 70px;
+    font-size: 1.8rem;
+    transform: rotate(-10deg);
+    opacity: 0.12;
+  }
+
+  .write-in {
+    opacity: 0;
+    transform: translateY(8px);
+    animation: writeIn 0.6s ease forwards;
+  }
+
+  @keyframes writeIn {
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .underline-wavy {
+    text-decoration: underline;
+    text-decoration-style: wavy;
+    text-decoration-color: var(--ink-red);
+    text-underline-offset: 3px;
+  }
+
+  .double-underline {
+    border-bottom: 3px double var(--ink-red);
+    padding-bottom: 1px;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    background: var(--ink-red);
+    color: #fff;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    margin-right: 0.3rem;
+  }
+
+  .badge.blue {
+    background: var(--ink-blue);
+  }
+
+  .badge.green {
+    background: var(--ink-green);
+  }
+
+  .badge.purple {
+    background: var(--ink-purple);
+  }
+
+  .fix-box {
+    margin: 1rem 0;
+    padding: 1rem 1.2rem;
+    background: linear-gradient(135deg, rgba(41,128,185,0.08) 0%, rgba(52,152,219,0.05) 100%);
+    border-left: 4px solid var(--ink-blue);
+    border-radius: 0 8px 8px 0;
+    transform: rotate(0.2deg);
+  }
+
+  .fix-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    margin-bottom: 0.5rem;
+    font-size: 1.05rem;
+  }
+
+  .fix-row:last-child { margin-bottom: 0; }
+
+  .fix-icon {
+    color: var(--ink-blue);
+    font-weight: 700;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+  }
+
+  .urgent-box {
+    margin: 1.5rem 0;
+    padding: 1rem 1.5rem;
+    background: repeating-linear-gradient(
+      -45deg,
+      rgba(231,76,60,0.1),
+      rgba(231,76,60,0.1) 10px,
+      rgba(231,76,60,0.2) 10px,
+      rgba(231,76,60,0.2) 20px
+    );
+    border: 3px solid var(--ink-red);
+    border-radius: 8px;
+    text-align: center;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--ink-red);
+    transform: rotate(-0.5deg);
+    position: relative;
+  }
+
+  @media (max-width: 768px) {
+    .notebook {
+      padding: 2rem 1.5rem 2rem 4rem;
+      background-position: 0 0, 0 0;
+      background-image:
+        linear-gradient(90deg, transparent 59px, #e8d5b5 59px, #e8d5b5 61px, transparent 61px),
+        linear-gradient(var(--paper-line) 1px, transparent 1px);
+    }
+    .title { font-size: 2.2rem; }
+    .content { font-size: 1rem; }
+    .side-note, .side-note.left, .side-note.green, .side-note.blue {
+      position: relative;
+      right: auto;
+      left: auto;
+      width: 100%;
+      margin: 0.5rem 0;
+      transform: rotate(1deg);
+    }
+    .os-grid { grid-template-columns: repeat(2, 1fr); }
+    .spiral-holes { left: 12px; width: 40px; }
+    .hole { width: 10px; height: 10px; }
+    .hole::after { width: 22px; height: 5px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="desk">
+  <div class="notebook">
+    <div class="spiral-holes">
+      <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+      <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+      <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+      <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+      <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+      <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+      <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+    </div>
+
+    <div class="tape top-left"></div>
+    <div class="tape top-right"></div>
+    <div class="paperclip"></div>
+    <div class="coffee-stain one"></div>
+    <div class="coffee-stain two"></div>
+    <div class="folded-corner"></div>
+    <div class="doodle skull">&#9760;</div>
+    <div class="doodle bug">&#128027;</div>
+
+    <div class="title write-in" style="animation-delay:0.1s">
+      CIFSwitch 漏洞笔记
+      <div class="title-underline"></div>
+    </div>
+
+    <div class="subtitle write-in" style="animation-delay:0.3s">
+      影响范围 · 利用代码 · 修复方案
+    </div>
+
+    <div class="section">
+      <div class="section-title write-in" style="animation-delay:0.5s">
+        1. 受影响的发行版
+        <div class="marker-underline"></div>
+      </div>
+      <div class="content write-in" style="animation-delay:0.6s">
+        受影响的发行版<span class="red-text">不少</span>：
+      </div>
+      <div class="os-grid write-in" style="animation-delay:0.7s">
+        <span class="os-item danger">Linux Mint</span>
+        <span class="os-item danger">CentOS Stream 9</span>
+        <span class="os-item danger">Rocky Linux 9</span>
+        <span class="os-item danger">Kali</span>
+        <span class="os-item danger">AlmaLinux</span>
+        <span class="os-item danger">SUSE</span>
+      </div>
+      <div class="content write-in" style="animation-delay:0.8s">
+        只要装了 <span class="code-term">cifs-utils</span> 并且<span class="highlight">允许非特权 user namespace</span>，就在<span class="red-text">射程内</span>。
+      </div>
+      <div class="side-note write-in" style="animation-delay:0.9s">
+        两个条件缺一不可！
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title write-in" style="animation-delay:1.0s">
+        2. 容器场景
+        <div class="marker-underline"></div>
+      </div>
+      <div class="content write-in" style="animation-delay:1.1s">
+        容器场景同样要注意，如果一个容器里能触发 <span class="code-term">cifs.upcall</span>，就可能<span class="underline-wavy">从容器内拿到宿主机 root</span>。
+      </div>
+      <div class="side-note left write-in" style="animation-delay:1.2s">
+        容器逃逸！
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title write-in" style="animation-delay:1.3s">
+        3. 默认安全的系统
+        <div class="marker-underline"></div>
+      </div>
+      <div class="content write-in" style="animation-delay:1.4s">
+        好消息是前置条件相对<span class="green-text">苛刻</span>，没装 <span class="code-term">cifs-utils</span> 或者禁用了 user namespace 的系统默认<span class="green-text">不受影响</span>。
+      </div>
+      <div class="safe-box write-in" style="animation-delay:1.5s">
+        <div class="safe-row">
+          <span class="safe-check">&#10003;</span>
+          <span><span class="code-term">Ubuntu</span> 默认不装 cifs-utils</span>
+        </div>
+        <div class="safe-row">
+          <span class="safe-check">&#10003;</span>
+          <span><span class="code-term">Debian</span> 默认禁用非特权 user namespace</span>
+        </div>
+      </div>
+      <div class="content write-in" style="animation-delay:1.6s">
+        这些系统<span class="green-text">默认是安全的</span>。
+      </div>
+      <div class="side-note green write-in" style="animation-delay:1.7s">
+        Ubuntu & Debian 用户松口气
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title write-in" style="animation-delay:1.9s">
+        4. 利用代码
+        <div class="marker-underline"></div>
+      </div>
+      <div class="content write-in" style="animation-delay:2.0s">
+        来，看看利用代码：
+      </div>
+      <div class="code-block write-in" style="animation-delay:2.1s">
+        python3 exploit/exp.py && sudo -n /bin/bash -p
+      </div>
+      <div class="big-warning write-in" style="animation-delay:2.2s">
+        一条命令，root 到手
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title write-in" style="animation-delay:2.4s">
+        5. 官方修复
+        <div class="marker-underline"></div>
+      </div>
+      <div class="content write-in" style="animation-delay:2.5s">
+        补丁已经出了。上游在 <span class="highlight">5 月底</span>合入了修复，给 <span class="code-term">cifs.spnego key type</span> 加上了 <span class="code-term">vet_description</span> 校验。
+      </div>
+      <div class="fix-box write-in" style="animation-delay:2.6s">
+        <div class="fix-row">
+          <span class="fix-icon">&#128295;</span>
+          <span>从此内核能区分<span class="green-text">真正的 CIFS 请求</span>和<span class="red-text">用户伪造的请求</span></span>
+        </div>
+      </div>
+      <div class="side-note blue write-in" style="animation-delay:2.7s">
+        终于补上 vet_description 了！
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title write-in" style="animation-delay:2.9s">
+        6. 临时缓解
+        <div class="marker-underline"></div>
+      </div>
+      <div class="content write-in" style="animation-delay:3.0s">
+        临时缓解也有一条命令的办法，那就是<span class="red-text">直接禁掉</span>非特权用户创建 namespace 的能力：
+      </div>
+      <div class="code-block write-in" style="animation-delay:3.1s">
+        sysctl user.max_user_namespaces=0
+      </div>
+      <div class="content write-in" style="animation-delay:3.2s">
+        或者<span class="blue-text">卸载 cifs-utils</span>、<span class="blue-text">禁用 cifs 模块</span>，都能断掉利用链。
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="urgent-box write-in" style="animation-delay:3.4s">
+        这个漏洞已经被公开，PoC 在网络上随手可得，要抓紧时间了哦！
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.style.animationPlayState = 'running';
+        }
+      });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.write-in').forEach(el => {
+      el.style.animationPlayState = 'paused';
+      observer.observe(el);
+    });
+
+    setTimeout(() => {
+      document.querySelectorAll('.write-in').forEach(el => {
+        el.style.animationPlayState = 'running';
+      });
+    }, 100);
+  });
+</script>
+
+</body>
+</html>

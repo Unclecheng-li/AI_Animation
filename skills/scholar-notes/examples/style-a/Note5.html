@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notepad++ RCE 漏洞笔记 - 利用与收束</title>
+<link href="https://fonts.googleapis.com/css2?family=Kalam:wght@300;400;700&family=Patrick+Hand&family=Zeyada&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper-bg: #fdf6e3;
+    --paper-dark: #f5ecd3;
+    --paper-line: #e8e0cc;
+    --ink-black: #2c2c2c;
+    --ink-red: #c0392b;
+    --ink-blue: #2980b9;
+    --ink-green: #27ae60;
+    --ink-purple: #8e44ad;
+    --ink-orange: #e67e22;
+    --highlight-yellow: rgba(255, 235, 59, 0.35);
+    --highlight-pink: rgba(255, 105, 180, 0.25);
+    --highlight-green: rgba(46, 204, 113, 0.2);
+    --highlight-orange: rgba(255, 152, 0, 0.2);
+    --tape: rgba(255, 255, 255, 0.45);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #3d3d3d;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 40px 20px;
+    font-family: 'Kalam', cursive;
+    overflow-x: hidden;
+  }
+
+  .desk {
+    position: relative;
+    width: 100%;
+    max-width: 920px;
+  }
+
+  .notebook {
+    position: relative;
+    background: var(--paper-bg);
+    background-image:
+      linear-gradient(90deg, transparent 79px, #e8d5b5 79px, #e8d5b5 81px, transparent 81px),
+      linear-gradient(var(--paper-line) 1px, transparent 1px);
+    background-size: 100% 100%, 100% 2.4rem;
+    background-position: 0 0, 0 0;
+    border-radius: 4px;
+    box-shadow:
+      0 1px 2px rgba(0,0,0,0.15),
+      0 4px 8px rgba(0,0,0,0.12),
+      0 8px 16px rgba(0,0,0,0.1),
+      0 16px 32px rgba(0,0,0,0.08),
+      15px 25px 40px rgba(0,0,0,0.15);
+    padding: 3rem 2.5rem 3rem 6rem;
+    line-height: 2.4rem;
+    color: var(--ink-black);
+    transform: rotate(0.5deg);
+    animation: paperFloat 6s ease-in-out infinite;
+  }
+
+  @keyframes paperFloat {
+    0%, 100% { transform: rotate(0.5deg) translateY(0); }
+    50% { transform: rotate(0.3deg) translateY(-3px); }
+  }
+
+  .spiral-holes {
+    position: absolute;
+    left: 20px;
+    top: 0;
+    bottom: 0;
+    width: 50px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    padding: 2rem 0;
+  }
+
+  .hole {
+    width: 14px;
+    height: 14px;
+    background: #3d3d3d;
+    border-radius: 50%;
+    box-shadow: inset 1px 1px 2px rgba(0,0,0,0.5);
+    position: relative;
+  }
+
+  .hole::after {
+    content: '';
+    position: absolute;
+    top: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 28px;
+    height: 6px;
+    background: linear-gradient(180deg, #888 0%, #bbb 50%, #888 100%);
+    border-radius: 3px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  }
+
+  .tape {
+    position: absolute;
+    width: 120px;
+    height: 35px;
+    background: var(--tape);
+    opacity: 0.6;
+    transform: rotate(-3deg);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    backdrop-filter: blur(1px);
+  }
+
+  .tape.top-left {
+    top: -12px;
+    left: 40px;
+    transform: rotate(-4deg);
+  }
+
+  .tape.top-right {
+    top: -10px;
+    right: 60px;
+    transform: rotate(3deg);
+    width: 100px;
+  }
+
+  .paperclip {
+    position: absolute;
+    top: 40px;
+    right: 30px;
+    width: 30px;
+    height: 70px;
+    border: 3px solid #b0b0b0;
+    border-radius: 0 0 15px 15px;
+    border-top: none;
+    transform: rotate(-5deg);
+    box-shadow: 2px 2px 4px rgba(0,0,0,0.15);
+    z-index: 10;
+  }
+
+  .paperclip::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 6px;
+    width: 12px;
+    height: 25px;
+    border: 3px solid #b0b0b0;
+    border-bottom: none;
+    border-radius: 15px 15px 0 0;
+  }
+
+  .title {
+    font-family: 'Zeyada', cursive;
+    font-size: 3.2rem;
+    font-weight: 700;
+    color: var(--ink-black);
+    margin-bottom: 0.5rem;
+    line-height: 1.2;
+    position: relative;
+    display: inline-block;
+  }
+
+  .title-underline {
+    position: absolute;
+    bottom: 2px;
+    left: -5px;
+    right: -10px;
+    height: 8px;
+    background: var(--highlight-yellow);
+    z-index: -1;
+    border-radius: 4px;
+    transform: rotate(-1deg);
+  }
+
+  .subtitle {
+    font-family: 'Patrick Hand', cursive;
+    font-size: 1.3rem;
+    color: var(--ink-blue);
+    margin-bottom: 1.5rem;
+    transform: rotate(-0.5deg);
+  }
+
+  .section {
+    margin-bottom: 2rem;
+    position: relative;
+  }
+
+  .section-title {
+    font-family: 'Patrick Hand', cursive;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--ink-red);
+    margin-bottom: 0.5rem;
+    display: inline-block;
+    position: relative;
+  }
+
+  .section-title .marker-underline {
+    position: absolute;
+    bottom: 0;
+    left: -3px;
+    right: -5px;
+    height: 4px;
+    background: var(--ink-red);
+    opacity: 0.3;
+    border-radius: 2px;
+  }
+
+  .content {
+    font-size: 1.15rem;
+    text-align: justify;
+    position: relative;
+  }
+
+  .highlight {
+    background: var(--highlight-yellow);
+    padding: 0 3px;
+    border-radius: 2px;
+  }
+
+  .highlight-pink {
+    background: var(--highlight-pink);
+    padding: 0 3px;
+    border-radius: 2px;
+  }
+
+  .highlight-green {
+    background: var(--highlight-green);
+    padding: 0 3px;
+    border-radius: 2px;
+  }
+
+  .highlight-orange {
+    background: var(--highlight-orange);
+    padding: 0 3px;
+    border-radius: 2px;
+  }
+
+  .red-text {
+    color: var(--ink-red);
+    font-weight: 700;
+  }
+
+  .blue-text {
+    color: var(--ink-blue);
+  }
+
+  .green-text {
+    color: var(--ink-green);
+  }
+
+  .purple-text {
+    color: var(--ink-purple);
+  }
+
+  .orange-text {
+    color: var(--ink-orange);
+    font-weight: 700;
+  }
+
+  .code-term {
+    font-family: 'Courier New', monospace;
+    font-size: 0.95em;
+    background: rgba(0,0,0,0.06);
+    padding: 0 4px;
+    border-radius: 3px;
+    border-bottom: 1.5px solid var(--ink-purple);
+  }
+
+  .code-block {
+    display: block;
+    margin: 0.8rem 0;
+    padding: 0.8rem 1rem;
+    background: #2d2d2d;
+    color: #f8f8f2;
+    border-radius: 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    overflow-x: auto;
+    box-shadow: 3px 3px 8px rgba(0,0,0,0.2);
+    transform: rotate(0.3deg);
+    position: relative;
+  }
+
+  .code-block::before {
+    content: '';
+    position: absolute;
+    top: -6px;
+    left: 15px;
+    width: 50px;
+    height: 12px;
+    background: rgba(255,255,255,0.3);
+    border: 1px solid rgba(0,0,0,0.1);
+    transform: rotate(-2deg);
+  }
+
+  .big-warning {
+    margin: 1.5rem 0;
+    padding: 1rem 1.5rem;
+    background: repeating-linear-gradient(
+      45deg,
+      rgba(255,235,59,0.15),
+      rgba(255,235,59,0.15) 10px,
+      rgba(255,235,59,0.25) 10px,
+      rgba(255,235,59,0.25) 20px
+    );
+    border: 2px solid var(--ink-red);
+    border-radius: 8px;
+    text-align: center;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--ink-red);
+    transform: rotate(0.5deg);
+    position: relative;
+  }
+
+  .big-warning::before,
+  .big-warning::after {
+    content: '!!!';
+    position: absolute;
+    font-size: 1rem;
+    color: var(--ink-red);
+    opacity: 0.6;
+  }
+
+  .big-warning::before { top: 5px; left: 10px; }
+  .big-warning::after { bottom: 5px; right: 10px; }
+
+  .side-note {
+    position: absolute;
+    right: -40px;
+    top: 0;
+    width: 140px;
+    padding: 0.6rem;
+    background: #fff9c4;
+    border: 1px solid #f0e68c;
+    box-shadow: 3px 3px 8px rgba(0,0,0,0.12);
+    font-size: 0.9rem;
+    line-height: 1.4;
+    color: var(--ink-black);
+    transform: rotate(4deg);
+    z-index: 5;
+  }
+
+  .side-note::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 14px;
+    background: rgba(255,255,255,0.5);
+    border: 1px solid rgba(0,0,0,0.08);
+  }
+
+  .side-note.left {
+    right: auto;
+    top: 100px;
+    left: 350px;
+    transform: rotate(-3deg);
+    background: #ffcdd2;
+    border-color: #ef9a9a;
+  }
+
+  .side-note.green {
+    top: 150px;
+    background: #c8e6c9;
+    border-color: #a5d6a7;
+    transform: rotate(2deg);
+  }
+
+  .side-note.blue {
+    background: #bbdefb;
+    border-color: #90caf9;
+    transform: rotate(-2deg);
+  }
+
+  .side-note.purple {
+    background: #e1bee7;
+    border-color: #ce93d8;
+    transform: rotate(3deg);
+  }
+
+  .flow-box {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin: 0.8rem 0;
+    padding: 0.6rem 1rem;
+    background: rgba(255,255,255,0.4);
+    border: 2px dashed var(--ink-blue);
+    border-radius: 8px;
+    transform: rotate(0.5deg);
+  }
+
+  .flow-item {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    background: #fff;
+    border: 1.5px solid var(--ink-black);
+    border-radius: 6px;
+    font-size: 1rem;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.1);
+    position: relative;
+  }
+
+  .flow-arrow {
+    font-size: 1.3rem;
+    color: var(--ink-red);
+  }
+
+  .attack-path {
+    margin: 1rem 0;
+    padding: 1rem 1.2rem;
+    background: linear-gradient(135deg, rgba(192,57,43,0.08) 0%, rgba(231,76,60,0.05) 100%);
+    border-left: 4px solid var(--ink-red);
+    border-radius: 0 8px 8px 0;
+    transform: rotate(-0.2deg);
+  }
+
+  .attack-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    margin-bottom: 0.6rem;
+    font-size: 1.05rem;
+  }
+
+  .attack-row:last-child { margin-bottom: 0; }
+
+  .attack-icon {
+    color: var(--ink-red);
+    font-weight: 700;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+  }
+
+  .divider {
+    margin: 2rem 0;
+    text-align: center;
+    position: relative;
+  }
+
+  .divider::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 20%;
+    right: 20%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--ink-red), transparent);
+  }
+
+  .divider-text {
+    display: inline-block;
+    padding: 0 1rem;
+    background: var(--paper-bg);
+    position: relative;
+    font-family: 'Zeyada', cursive;
+    font-size: 1.6rem;
+    color: var(--ink-red);
+    font-weight: 700;
+  }
+
+  .summary-box {
+    margin: 1.5rem 0;
+    padding: 1.5rem;
+    background: linear-gradient(135deg, rgba(41,128,185,0.08) 0%, rgba(52,152,219,0.05) 100%);
+    border: 2px solid var(--ink-blue);
+    border-radius: 8px;
+    transform: rotate(0.3deg);
+  }
+
+  .summary-title {
+    font-family: 'Patrick Hand', cursive;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--ink-blue);
+    margin-bottom: 0.8rem;
+    text-align: center;
+  }
+
+  .trust-triangle {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    margin: 1rem 0;
+    flex-wrap: wrap;
+  }
+
+  .trust-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.6rem 1rem;
+    background: #fff;
+    border: 2px solid var(--ink-black);
+    border-radius: 8px;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.1);
+    min-width: 100px;
+  }
+
+  .trust-label {
+    font-size: 0.85rem;
+    color: #666;
+    margin-bottom: 0.2rem;
+  }
+
+  .trust-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--ink-red);
+  }
+
+  .coffee-stain {
+    position: absolute;
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    border: 3px solid rgba(139, 90, 43, 0.12);
+    box-shadow:
+      0 0 0 8px rgba(139, 90, 43, 0.06),
+      0 0 0 16px rgba(139, 90, 43, 0.03);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .coffee-stain.one { bottom: 60px; right: 40px; }
+  .coffee-stain.two { top: 200px; left: 100px; opacity: 0.5; }
+
+  .folded-corner {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(135deg, transparent 50%, var(--paper-dark) 50%);
+    border-bottom-right-radius: 4px;
+    box-shadow: -2px -2px 4px rgba(0,0,0,0.08);
+  }
+
+  .doodle {
+    position: absolute;
+    pointer-events: none;
+    opacity: 0.7;
+  }
+
+  .doodle.skull {
+    top: 80px;
+    right: 80px;
+    font-size: 2rem;
+    transform: rotate(15deg);
+    opacity: 0.15;
+  }
+
+  .doodle.bug {
+    bottom: 150px;
+    left: 70px;
+    font-size: 1.8rem;
+    transform: rotate(-10deg);
+    opacity: 0.12;
+  }
+
+  .doodle.shield {
+    top: 300px;
+    right: 60px;
+    font-size: 1.5rem;
+    transform: rotate(5deg);
+    opacity: 0.1;
+  }
+
+  .write-in {
+    opacity: 0;
+    transform: translateY(8px);
+    animation: writeIn 0.6s ease forwards;
+  }
+
+  @keyframes writeIn {
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .underline-wavy {
+    text-decoration: underline;
+    text-decoration-style: wavy;
+    text-decoration-color: var(--ink-red);
+    text-underline-offset: 3px;
+  }
+
+  .double-underline {
+    border-bottom: 3px double var(--ink-red);
+    padding-bottom: 1px;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    background: var(--ink-red);
+    color: #fff;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    margin-right: 0.3rem;
+  }
+
+  .badge.blue {
+    background: var(--ink-blue);
+  }
+
+  .badge.green {
+    background: var(--ink-green);
+  }
+
+  .badge.purple {
+    background: var(--ink-purple);
+  }
+
+  .update-box {
+    margin: 1rem 0;
+    padding: 1rem 1.2rem;
+    background: linear-gradient(135deg, rgba(39,174,96,0.08) 0%, rgba(46,204,113,0.05) 100%);
+    border-left: 4px solid var(--ink-green);
+    border-radius: 0 8px 8px 0;
+    transform: rotate(0.2deg);
+  }
+
+  @media (max-width: 768px) {
+    .notebook {
+      padding: 2rem 1.5rem 2rem 4rem;
+      background-position: 0 0, 0 0;
+      background-image:
+        linear-gradient(90deg, transparent 59px, #e8d5b5 59px, #e8d5b5 61px, transparent 61px),
+        linear-gradient(var(--paper-line) 1px, transparent 1px);
+    }
+    .title { font-size: 2.2rem; }
+    .content { font-size: 1rem; }
+    .side-note, .side-note.left, .side-note.green, .side-note.blue, .side-note.purple {
+      position: relative;
+      right: auto;
+      left: auto;
+      width: 100%;
+      margin: 0.5rem 0;
+      transform: rotate(1deg);
+    }
+    .trust-triangle { flex-direction: column; }
+    .spiral-holes { left: 12px; width: 40px; }
+    .hole { width: 10px; height: 10px; }
+    .hole::after { width: 22px; height: 5px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="desk">
+  <div class="notebook">
+    <div class="spiral-holes">
+      <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+      <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+      <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+      <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+      <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+      <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+      <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+    </div>
+
+    <div class="tape top-left"></div>
+    <div class="tape top-right"></div>
+    <div class="paperclip"></div>
+    <div class="coffee-stain one"></div>
+    <div class="coffee-stain two"></div>
+    <div class="folded-corner"></div>
+    <div class="doodle skull">&#9760;</div>
+    <div class="doodle bug">&#128027;</div>
+    <div class="doodle shield">&#128737;</div>
+
+    <div class="title write-in" style="animation-delay:0.1s">
+      Notepad++ RCE 漏洞笔记
+      <div class="title-underline"></div>
+    </div>
+
+    <div class="subtitle write-in" style="animation-delay:0.3s">
+      利用方式 · 修复方案 · 收束总结
+    </div>
+
+    <div class="section">
+      <div class="content write-in" style="animation-delay:0.5s">
+        所以攻击者只要做一件事：把 <span class="code-term">commandLineInterpreter</span> 从 <span class="code-term">cmd.exe</span> 换成<span class="red-text">自己想执行的任何东西</span>。
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title write-in" style="animation-delay:0.7s">
+        PoC 演示
+        <div class="marker-underline"></div>
+      </div>
+      <div class="content write-in" style="animation-delay:0.8s">
+        PoC 长这样：
+      </div>
+      <div class="code-block write-in" style="animation-delay:0.9s">
+        &lt;GUIConfig name="commandLineInterpreter"&gt;<span style="color:#a6e22e;">calc.exe</span>&lt;/GUIConfig&gt;
+      </div>
+      <div class="content write-in" style="animation-delay:1.0s">
+        就这一行。把 <span class="code-term">cmd.exe</span> 换成 <span class="code-term">calc.exe</span>。用户点「打开文件夹 → cmd」，弹出来的是<span class="highlight">计算器</span>。
+      </div>
+      <div class="big-warning write-in" style="animation-delay:1.1s">
+        算是最温和的演示
+      </div>
+      <div class="content write-in" style="animation-delay:1.2s; margin-top:0.5rem;">
+        换个恶意程序呢？<span class="red-text">反向 shell</span>、<span class="red-text">勒索软件</span>、<span class="red-text">凭据窃取</span>，都随攻击者选。
+      </div>
+      <div class="side-note write-in" style="animation-delay:1.3s">
+        计算器只是演示，恶意程序才是真相
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title write-in" style="animation-delay:1.5s">
+        攻击前提：如何污染 config.xml
+        <div class="marker-underline"></div>
+      </div>
+      <div class="content write-in" style="animation-delay:1.6s">
+        当然这个漏洞有个前提：攻击者得先能改到你的 <span class="code-term">config.xml</span>。常见路径有这么几种——
+      </div>
+      <div class="attack-path write-in" style="animation-delay:1.7s">
+        <div class="attack-row">
+          <span class="attack-icon">1</span>
+          <span><span class="highlight">本地权限</span>够的时候直接改配置文件</span>
+        </div>
+        <div class="attack-row">
+          <span class="attack-icon">2</span>
+          <span>通过 <span class="code-term">OneDrive</span> 或 <span class="code-term">Dropbox</span> 之类的<span class="highlight-pink">云同步</span>把恶意配置同步下来</span>
+        </div>
+        <div class="attack-row">
+          <span class="attack-icon">3</span>
+          <span>或者最阴的——<span class="red-text">社工</span>：给你发个项目压缩包，里面夹带一个替换过的 config.xml</span>
+        </div>
+      </div>
+      <div class="side-note left write-in" style="animation-delay:1.8s">
+        社工最防不胜防！
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="content write-in" style="animation-delay:2.0s">
+        一旦配置被污染，只要做一次<span class="underline-wavy">再普通不过的菜单操作</span>——打开文件夹、点 cmd——就触发。
+      </div>
+      <div class="question-box write-in" style="animation-delay:2.1s; background:rgba(192,57,43,0.08); border-color:var(--ink-red);">
+        谁会怀疑自己编辑器的「打开命令行」功能呢？
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="content write-in" style="animation-delay:2.3s">
+        Notepad++ <span class="orange-text">全球下载量过亿</span>，只要版本不超过 <span class="code-term">8.9.6</span>，都受影响。
+      </div>
+      <div class="side-note purple write-in" style="animation-delay:2.4s">
+        过亿用户！影响巨大！
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title write-in" style="animation-delay:2.6s">
+        修复版本
+        <div class="marker-underline"></div>
+      </div>
+      <div class="update-box write-in" style="animation-delay:2.7s">
+        <div style="font-size:1.1rem; margin-bottom:0.5rem;">
+          <span class="green-text" style="font-weight:700;">修复版本：8.9.6.1</span>
+        </div>
+        <div style="font-size:1rem;">
+          加了<span class="highlight-green">白名单校验</span>，<span class="code-term">commandLineInterpreter</span> 只允许指定的几个合法程序。
+        </div>
+      </div>
+      <div class="content write-in" style="animation-delay:2.8s; margin-top:0.5rem;">
+        还在用老版本的，<span class="red-text">建议立即更新</span>。
+      </div>
+      <div class="side-note green write-in" style="animation-delay:2.9s">
+        升级就安全了！
+      </div>
+    </div>
+
+    <div class="divider write-in" style="animation-delay:3.1s">
+      <span class="divider-text">收 束</span>
+    </div>
+
+    <div class="section">
+      <div class="content write-in" style="animation-delay:3.3s">
+        那么我们这期视频两个漏洞，一个 <span class="red-text">Linux 内核提权</span>，一个 <span class="red-text">Windows 应用 RCE</span>。
+      </div>
+      <div class="content write-in" style="animation-delay:3.4s; margin-top:0.5rem;">
+        原因都是<span class="highlight">程序对输入的信任边界的度的问题</span>。
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="summary-box write-in" style="animation-delay:3.6s">
+        <div class="summary-title">安全设计的三个问题</div>
+        <div class="trust-triangle">
+          <div class="trust-item">
+            <span class="trust-label">信任谁</span>
+            <span class="trust-value">Who</span>
+          </div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="trust-item">
+            <span class="trust-label">信什么</span>
+            <span class="trust-value">What</span>
+          </div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="trust-item">
+            <span class="trust-label">信多少</span>
+            <span class="trust-value">How much</span>
+          </div>
+        </div>
+        <div style="text-align:center; margin-top:0.8rem; font-size:1.05rem; color:var(--ink-red); font-weight:700;">
+          但凡有一个没答清楚，就是在给攻击者留门
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="content write-in" style="animation-delay:3.9s; text-align:center; margin-top:1.5rem; font-size:1.1rem; color:#666;">
+        —— 以上就是本期笔记的全部内容了 ——
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.style.animationPlayState = 'running';
+        }
+      });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.write-in').forEach(el => {
+      el.style.animationPlayState = 'paused';
+      observer.observe(el);
+    });
+
+    setTimeout(() => {
+      document.querySelectorAll('.write-in').forEach(el => {
+        el.style.animationPlayState = 'running';
+      });
+    }, 100);
+  });
+</script>
+
+</body>
+</html>
