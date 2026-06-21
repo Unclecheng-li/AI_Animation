@@ -1,4 +1,4 @@
-# dynami-carchify
+# dynamic-archify
 
 > 动态架构图 / 流程图 / 时序图 / 数据流图 / 状态机生成 Skill
 
@@ -6,7 +6,7 @@
 
 生成专业级技术图表的单文件 HTML，包含内联 SVG、暗/亮主题切换、流动动画效果、一键导出（PNG / JPEG / WebP / SVG / GIF / WebM）。接受自然语言描述或粘贴的 Mermaid 代码，从零开始布局。
 
-源自 [archify](https://github.com/Cocoon-AI/architecture-diagram-generator)（MIT），在 AI-Animation 集合中命名为 `dynami-carchify`，强调其动态动画特性。
+源自 [archify](https://github.com/Cocoon-AI/architecture-diagram-generator)（MIT），在 AI-Animation 集合中命名为 `dynamic-archify`，强调其动态动画特性。
 
 ## 支持的图表类型
 
@@ -21,15 +21,15 @@
 ## 使用方式
 
 ```
-用 dynami-carchify 画一个微服务架构图，包含 API Gateway、3 个微服务、Redis 和 PostgreSQL
+用 dynamic-archify 画一个微服务架构图，包含 API Gateway、3 个微服务、Redis 和 PostgreSQL
 ```
 
 ```
-用 dynami-carchify 生成一个 CI/CD 发布流程的 workflow 图
+用 dynamic-archify 生成一个 CI/CD 发布流程的 workflow 图
 ```
 
 ```
-用 dynami-carchify 把这段 Mermaid 转成专业图表：
+用 dynamic-archify 把这段 Mermaid 转成专业图表：
 sequenceDiagram
     Client->>Gateway: GET /api/data
     Gateway->>Service: forward
@@ -65,14 +65,14 @@ sequenceDiagram
 ## Setup（仅渲染器需要）
 
 ```bash
-cd skills/dynami-carchify
+cd skills/dynamic-archify
 npm install
 ```
 
 ## 目录结构
 
 ```
-dynami-carchify/
+dynamic-archify/
 ├── SKILL.md              ← Agent 执行指令
 ├── README.md             ← 本文档
 ├── LICENSE
