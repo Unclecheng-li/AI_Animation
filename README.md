@@ -54,8 +54,8 @@
 <br/><sub>网络协议 / 数据包演示</sub>
 </td>
 <td width="50%" valign="top" align="center">
-<a href="#dynami-carchify"><img width="2537" height="1440" alt="image" src="https://github.com/user-attachments/assets/61e42d50-1dfb-487a-9e5a-29e956a10e7f" /></a>
-<br/><a href="#dynami-carchify"><strong>dynami-carchify</strong></a>
+<a href="#dynamic-archify"><img width="2537" height="1440" alt="image" src="https://github.com/user-attachments/assets/61e42d50-1dfb-487a-9e5a-29e956a10e7f" /></a>
+<br/><a href="#dynamic-archify"><strong>dynamic-archify</strong></a>
 <br/><sub>动态架构图 / 流程图 / 时序图</sub>
 </td>
 </tr>
@@ -119,7 +119,7 @@ Links: [README](./skills/ppt-animation/README.md) · [SKILL.md](./skills/ppt-ani
 **分类:** 流程图 / 概念图 / 原理演示
 **适用于:** 视频科普、技术讲解、PPT 配图——需要动画流程图、概念对比、原理演示的场景。
 
-`flowchart` 生成教育/科普类流程图与原理演示的动画 HTML。暗色科技风格，节点发光、箭头流动、数据粒子效果。不只是 AI 模型——任何概念、流程、对比、交互都能用动画呈现。与 `dynami-carchify` 互补：flowchart 偏教育演示（好看 + 直观），dynami-carchify 偏工程架构（精确 + 可导出）。
+`flowchart` 生成教育/科普类流程图与原理演示的动画 HTML。暗色科技风格，节点发光、箭头流动、数据粒子效果。不只是 AI 模型——任何概念、流程、对比、交互都能用动画呈现。与 `dynamic-archify` 互补：flowchart 偏教育演示（好看 + 直观），dynamic-archify 偏工程架构（精确 + 可导出）。
 
 亮点:
 - 7 种图表类型：流程图 / 概念图 / 原理演示 / 时序图 / 对比图 / 时间线 / 系统概览
@@ -182,16 +182,16 @@ Links: [README](./skills/network-protocol-viz/README.md) · [SKILL.md](./skills/
 
 <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
 
-#### `dynami-carchify`
+#### `dynamic-archify`
 
-<a href="./skills/dynami-carchify">
+<a href="./skills/dynamic-archify">
 <img width="2535" height="1440" alt="image" src="https://github.com/user-attachments/assets/a7d16dc3-a01b-4762-89e5-065ffb144be5" />
 </a>
 
 **分类:** 动态架构图 / 流程图 / 时序图 / 数据流图 / 状态机
 **适用于:** 技术文档、系统设计评审、安全分析、CI/CD 可视化——需要专业级技术图表（带流动动画 + 多格式导出）的场景。
 
-`dynami-carchify` 生成专业级技术图表的单文件 HTML，包含内联 SVG、暗/亮主题切换、连接线流动动画、沿路径移动的发光粒子。接受自然语言描述或粘贴的 Mermaid 代码，从零开始布局。支持 5 种图表类型：架构图、工作流图、时序图、数据流图、状态机。内置 Node.js 渲染器 + JSON Schema 验证，也支持无 Node 环境的手动 SVG 模式。
+`dynamic-archify` 生成专业级技术图表的单文件 HTML，包含内联 SVG、暗/亮主题切换、连接线流动动画、沿路径移动的发光粒子。接受自然语言描述或粘贴的 Mermaid 代码，从零开始布局。支持 5 种图表类型：架构图、工作流图、时序图、数据流图、状态机。内置 Node.js 渲染器 + JSON Schema 验证，也支持无 Node 环境的手动 SVG 模式。
 
 亮点:
 - 5 种图表类型：`architecture` / `workflow` / `sequence` / `dataflow` / `lifecycle`
@@ -203,17 +203,17 @@ Links: [README](./skills/network-protocol-viz/README.md) · [SKILL.md](./skills/
 
 <table>
 <tr>
-<td align="center" width="20%"><a href="./skills/dynami-carchify/README.md#支持的图表类型"><img width="2537" height="1440" alt="image" src="https://github.com/user-attachments/assets/e2ce7b4f-356a-4f99-93d1-bd391eafbea2" /></a><br /><sub><code>architecture</code><br />系统架构图</sub></td>
-<td align="center" width="20%"><a href="./skills/dynami-carchify/README.md#支持的图表类型"><img width="2533" height="1440" alt="image" src="https://github.com/user-attachments/assets/b2435e86-04b3-4825-83b8-122fd8c6490a" /></a><br /><sub><code>workflow</code><br />工作流图</sub></td>
-<td align="center" width="20%"><a href="./skills/dynami-carchify/README.md#支持的图表类型"><img width="2535" height="1440" alt="image" src="https://github.com/user-attachments/assets/d8acd7f3-7a93-4c4d-a4b9-a42e6264b909" /></a><br /><sub><code>sequence</code><br />时序图</sub></td>
-<td align="center" width="20%"><a href="./skills/dynami-carchify/README.md#支持的图表类型"><img width="2537" height="1440" alt="image" src="https://github.com/user-attachments/assets/e400f2a4-2eb6-4be5-ac6b-18c49b353060" /></a><br /><sub><code>dataflow</code><br />数据流图</sub></td>
-<td align="center" width="20%"><a href="./skills/dynami-carchify/README.md#支持的图表类型"><img width="2536" height="1440" alt="image" src="https://github.com/user-attachments/assets/26dcdd9e-0c93-40a8-a7fc-42032f0e68a7" /></a><br /><sub><code>lifecycle</code><br />状态机</sub></td>
+<td align="center" width="20%"><a href="./skills/dynamic-archify/README.md#支持的图表类型"><img width="2537" height="1440" alt="image" src="https://github.com/user-attachments/assets/e2ce7b4f-356a-4f99-93d1-bd391eafbea2" /></a><br /><sub><code>architecture</code><br />系统架构图</sub></td>
+<td align="center" width="20%"><a href="./skills/dynamic-archify/README.md#支持的图表类型"><img width="2533" height="1440" alt="image" src="https://github.com/user-attachments/assets/b2435e86-04b3-4825-83b8-122fd8c6490a" /></a><br /><sub><code>workflow</code><br />工作流图</sub></td>
+<td align="center" width="20%"><a href="./skills/dynamic-archify/README.md#支持的图表类型"><img width="2535" height="1440" alt="image" src="https://github.com/user-attachments/assets/d8acd7f3-7a93-4c4d-a4b9-a42e6264b909" /></a><br /><sub><code>sequence</code><br />时序图</sub></td>
+<td align="center" width="20%"><a href="./skills/dynamic-archify/README.md#支持的图表类型"><img width="2537" height="1440" alt="image" src="https://github.com/user-attachments/assets/e400f2a4-2eb6-4be5-ac6b-18c49b353060" /></a><br /><sub><code>dataflow</code><br />数据流图</sub></td>
+<td align="center" width="20%"><a href="./skills/dynamic-archify/README.md#支持的图表类型"><img width="2536" height="1440" alt="image" src="https://github.com/user-attachments/assets/26dcdd9e-0c93-40a8-a7fc-42032f0e68a7" /></a><br /><sub><code>lifecycle</code><br />状态机</sub></td>
 </tr>
 </table>
 
-<sub>↑ 5 种图表类型预览 — <a href="./skills/dynami-carchify/README.md#支持的图表类型"><b>查看完整说明</b></a>。</sub>
+<sub>↑ 5 种图表类型预览 — <a href="./skills/dynamic-archify/README.md#支持的图表类型"><b>查看完整说明</b></a>。</sub>
 
-Links: [README](./skills/dynami-carchify/README.md) · [SKILL.md](./skills/dynami-carchify/SKILL.md)
+Links: [README](./skills/dynamic-archify/README.md) · [SKILL.md](./skills/dynamic-archify/SKILL.md)
 
 ---
 
@@ -270,7 +270,7 @@ npx skills add https://github.com/Unclecheng-li/AI_Animation
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/ppt-animation
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/flowchart
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/network-protocol-viz
-npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/dynami-carchify
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/dynamic-archify
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/scholar-notes
 ```
 
@@ -316,7 +316,7 @@ git clone https://github.com/Unclecheng-li/AI_Animation.git
 ```
 
 ```
-用 dynami-carchify 画一个微服务架构图，带流动动画
+用 dynamic-archify 画一个微服务架构图，带流动动画
 ```
 
 ```
@@ -344,7 +344,7 @@ ai-animation-skills/
 │   │   ├── README.md
 │   │   ├── references/
 │   │   └── assets/
-│   ├── dynami-carchify/
+│   ├── dynamic-archify/
 │   │   ├── SKILL.md
 │   │   ├── README.md
 │   │   ├── renderers/           ← 5 种图表渲染器
@@ -380,7 +380,7 @@ A collection of AI Agent skills for generating stunning HTML animation pages. Ea
 | [`ppt-animation`](./skills/ppt-animation) | PPT-style slideshow animations with 5 built-in themes | 30+ |
 | [`flowchart`](./skills/flowchart) | Animated flowcharts, concept maps, process diagrams, AI model viz | 7 types + 7 examples |
 | [`network-protocol-viz`](./skills/network-protocol-viz) | Network protocol animations (TCP, IPv4, routing, etc.) | 10+ |
-| [`dynami-carchify`](./skills/dynami-carchify) | Animated architecture/workflow/sequence/dataflow/lifecycle diagrams | 5 types |
+| [`dynamic-archify`](./skills/dynamic-archify) | Animated architecture/workflow/sequence/dataflow/lifecycle diagrams | 5 types |
 | [`scholar-notes`](./skills/scholar-notes) | Handwritten notebook-style HTML learning notes | 2 styles |
 
 ### Installation
@@ -391,7 +391,7 @@ npx skills add https://github.com/Unclecheng-li/AI_Animation
 
 # Install a single skill
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/ppt-animation
-npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/dynami-carchify
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/dynamic-archify
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/scholar-notes
 ```
 

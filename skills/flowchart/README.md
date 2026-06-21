@@ -54,9 +54,9 @@
 以 assets/LSTM-Introduce.html 为参考风格，生成 Transformer 注意力机制演示
 ```
 
-## 与 dynami-carchify 的区别
+## 与 dynamic-archify 的区别
 
-| | flowchart | dynami-carchify |
+| | flowchart | dynamic-archify |
 |---|---|---|
 | **定位** | 教育/科普，面向视频演示 | 工程/架构，面向技术文档 |
 | **风格** | 轻量化、好看、直观 | 专业级、精确、可导出 |

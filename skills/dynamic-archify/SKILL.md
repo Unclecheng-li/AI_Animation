@@ -1,5 +1,5 @@
 ---
-name: "dynami-carchify"
+name: "dynamic-archify"
 description: "Create professional architecture, workflow, sequence, data-flow, and lifecycle/state diagrams as standalone animated HTML files with SVG graphics, flowing animation effects, a built-in dark/light theme toggle, and one-click export to PNG / JPEG / WebP / SVG / GIF / WebM. Accepts plain-language descriptions or pasted Mermaid code and lays the diagram out from scratch. Use when the user asks for system architecture diagrams, infrastructure diagrams, cloud architecture visualizations, security diagrams, network topology, technical workflows, approval flows, runbooks, CI/CD flows, process diagrams, API call sequences, request lifecycles, data pipelines, ETL/ELT maps, PII boundaries, data lineage, state machines, lifecycle diagrams, status transitions, or asks to convert/beautify a Mermaid diagram."
 version: "2.6"
 license: MIT
@@ -12,7 +12,7 @@ triggers:
   - "architecture diagram"
   - "workflow diagram"
   - "sequence diagram"
-  - "dynami-carchify"
+  - "dynamic-archify"
 metadata:
   author: tt-a1i
   based_on: Cocoon-AI/architecture-diagram-generator (MIT, v1.0)
