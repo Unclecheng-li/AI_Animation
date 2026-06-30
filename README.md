@@ -113,7 +113,7 @@ Links: [README](./skills/ppt-animation/README.md) · [SKILL.md](./skills/ppt-ani
 #### `flowchart`
 
 <a href="./skills/flowchart">
-<img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/130f278e-3978-433d-b9f2-5fb79dcab3c3" />
+<img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/0cefab32-b583-4342-b25d-39b5b8c4bf83" />
 </a>
 
 **分类:** 流程图 / 概念图 / 原理演示
