@@ -1,4 +1,4 @@
-<div align="center">
+<img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/ae7eedc3-e3ea-4966-8002-5c393d265cd8" /><div align="center">
 
 # AI Animation Skills
 
@@ -260,7 +260,7 @@ Links: [README](./skills/scholar-notes/README.md) · [SKILL.md](./skills/scholar
 #### `card-theater`
 
 <a href="./skills/card-theater">
-<!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="card-theater preview" src="https://via.placeholder.com/2560x1440/0a0a0a/30D158?text=card-theater" />
+<!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/4c33fb59-6b1f-43f5-83fe-2785d30b264e" />
 </a>
 
 **分类:** 侧边栏叙事 + 3D 卡片轮播演示
@@ -278,11 +278,11 @@ Links: [README](./skills/scholar-notes/README.md) · [SKILL.md](./skills/scholar
 
 <table>
 <tr>
-<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="scroll-3d-tilt" src="https://via.placeholder.com/2560x1440/030508/00E096?text=scroll-3d-tilt" /></td>
-<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="apple-aurora-track" src="https://via.placeholder.com/2560x1440/000000/0A84FF?text=apple-aurora" /></td>
-<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="coverflow-classic" src="https://via.placeholder.com/2560x1440/000000/30D158?text=coverflow-classic" /></td>
-<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="coverflow-watermark" src="https://via.placeholder.com/2560x1440/000000/BF5AF2?text=coverflow-watermark" /></td>
-<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="coverflow-focus" src="https://via.placeholder.com/2560x1440/000000/FFD60A?text=coverflow-focus" /></td>
+<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2526" height="1440" alt="image" src="https://github.com/user-attachments/assets/4191ddf3-7b9d-4f35-9ed3-ad4162da5c12" /></td>
+<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/09b2d9bc-c3a1-4914-9fb5-e9315cd4986a" /></td>
+<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/d7ac9061-43b1-4f81-8ba7-bf4892015abe" /></td>
+<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/da0c020b-889a-4453-ba86-9b722442bbfc" /></td>
+<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/ac9722fd-74e2-4cc9-b379-3223afd4063b" /></td>
 </tr>
 <tr>
 <td align="center"><sub><code>scroll-3d-tilt</code><br />滚动 3D 倾斜</sub></td>
