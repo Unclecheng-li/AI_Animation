@@ -260,7 +260,7 @@ Links: [README](./skills/scholar-notes/README.md) · [SKILL.md](./skills/scholar
 #### `card-theater`
 
 <a href="./skills/card-theater">
-<!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/4c33fb59-6b1f-43f5-83fe-2785d30b264e" />
+<!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/834e8f89-abff-4a20-82cf-bdeb1f0c5756" />
 </a>
 
 **分类:** 侧边栏叙事 + 3D 卡片轮播演示
