@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](./LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](#contributing)
-[![Skills count](https://img.shields.io/badge/Skills-5-orange?style=flat-square)](#skills-gallery)
+[![Skills count](https://img.shields.io/badge/Skills-6-orange?style=flat-square)](#skills-gallery)
 [![Spec](https://img.shields.io/badge/Spec-SKILL.md-black?style=flat-square)](https://agentskills.io)
 
 [中文](#中文) · [English](#english)
@@ -27,6 +27,7 @@
 - 🌐 **网络协议可视化** — TCP/IP、IPv4、以太帧、路由、DHCP 等
 - 🏗️ **动态架构图** — 系统架构、流程图、时序图、数据流图、状态机，带流动动画 + 多格式导出
 - 📝 **学霸笔记** — 手写笔记本风格的精美 HTML 学习笔记，两种模板风格
+- 🎴 **卡片剧场** — 侧边栏叙事 + 3D 卡片轮播，协议流程 / 产品特性 / 分步讲解的叙事感演示
 
 <div align="center">
 
@@ -36,34 +37,38 @@
 
 <table>
 <tr>
-<td width="50%" valign="top" align="center">
+<td width="25%" valign="top" align="center">
 <a href="#ppt-animation"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/a6576e08-210b-4fda-867c-c0bd1a847d13" /></a>
 <br/><a href="#ppt-animation"><strong>ppt-animation</strong></a>
 <br/><sub>PPT 演示 / 翻页动画</sub>
 </td>
-<td width="50%" valign="top" align="center">
+<td width="25%" valign="top" align="center">
 <a href="#flowchart"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/90414d79-80a5-47bc-bc5b-ee567160d021" /></a>
 <br/><a href="#flowchart"><strong>flowchart</strong></a>
 <br/><sub>流程图 / 概念图 / 原理演示</sub>
 </td>
-</tr>
-<tr>
-<td width="50%" valign="top" align="center">
+<td width="25%" valign="top" align="center">
 <a href="#network-protocol-viz"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/39d12d3d-3c15-4e83-b2f4-0186fc9e5e2e" /></a>
 <br/><a href="#network-protocol-viz"><strong>network-protocol-viz</strong></a>
 <br/><sub>网络协议 / 数据包演示</sub>
 </td>
-<td width="50%" valign="top" align="center">
+<td width="25%" valign="top" align="center">
 <a href="#dynamic-archify"><img width="2537" height="1440" alt="image" src="https://github.com/user-attachments/assets/61e42d50-1dfb-487a-9e5a-29e956a10e7f" /></a>
 <br/><a href="#dynamic-archify"><strong>dynamic-archify</strong></a>
 <br/><sub>动态架构图 / 流程图 / 时序图</sub>
 </td>
 </tr>
 <tr>
-<td colspan="2" valign="top" align="center">
+<td colspan="2" width="50%" valign="top" align="center">
 <a href="#scholar-notes"><img width="2534" height="1440" alt="image" src="https://github.com/user-attachments/assets/e7bd4d61-37d3-4c5c-b47a-94114f609aa3" /></a>
 <br/><a href="#scholar-notes"><strong>scholar-notes</strong></a>
 <br/><sub>学霸笔记 / 手写笔记本风格</sub>
+</td>
+<td colspan="2" valign="top" align="center">
+<!-- TODO: 补充预览图 -->
+<a href="#card-theater"><img width="2560" height="1440" alt="card-theater" src="https://via.placeholder.com/2560x1440/0a0a0a/30D158?text=card-theater" /></a>
+<br/><a href="#card-theater"><strong>card-theater</strong></a>
+<br/><sub>卡片剧场 / 3D 卡片轮播</sub>
 </td>
 </tr>
 </table>
@@ -252,6 +257,50 @@ Links: [README](./skills/scholar-notes/README.md) · [SKILL.md](./skills/scholar
 
 <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
 
+#### `card-theater`
+
+<a href="./skills/card-theater">
+<!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="card-theater preview" src="https://via.placeholder.com/2560x1440/0a0a0a/30D158?text=card-theater" />
+</a>
+
+**分类:** 侧边栏叙事 + 3D 卡片轮播演示
+**适用于:** 协议流程演示、产品特性展示、分步讲解——需要"侧边栏解说 + 3D 卡片轮播 + 模式切换"的叙事型演示场景。
+
+`card-theater` 生成侧边栏叙事 + 3D 卡片轮播的演示动画 HTML。左侧叙事栏逐步解说，右侧 3D 玻璃拟态卡片以 Coverflow / 轨道 / 滚动方式排列。支持模式切换（动态插入/移除卡片）、荧光笔高亮、水印图标等效果。内置 5 种模板：滚动 3D 倾斜、Apple 极光轨道、经典 Coverflow、水印图标版、Focus 展开版。
+
+亮点:
+- 5 种内置模板：`scroll-3d-tilt` / `apple-aurora-track` / `coverflow-classic` / `coverflow-watermark` / `coverflow-focus`
+- 侧边栏叙事：标题 + 解说文字 + 关键要点，随卡片切换同步更新
+- 模式切换：动态插入/移除卡片（如传输模式 ↔ 隧道模式），带过渡动画
+- 荧光笔高亮：选中卡片的关键字段播放划线动画
+- 3D 交互：Coverflow 旋转 / 轨道平移 / 滚动翻页 / 鼠标 3D 倾斜
+- 键盘 ←→ / 鼠标滚轮 / 点击卡片，多种导航方式
+
+<table>
+<tr>
+<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="scroll-3d-tilt" src="https://via.placeholder.com/2560x1440/030508/00E096?text=scroll-3d-tilt" /></td>
+<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="apple-aurora-track" src="https://via.placeholder.com/2560x1440/000000/0A84FF?text=apple-aurora" /></td>
+<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="coverflow-classic" src="https://via.placeholder.com/2560x1440/000000/30D158?text=coverflow-classic" /></td>
+<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="coverflow-watermark" src="https://via.placeholder.com/2560x1440/000000/BF5AF2?text=coverflow-watermark" /></td>
+<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="coverflow-focus" src="https://via.placeholder.com/2560x1440/000000/FFD60A?text=coverflow-focus" /></td>
+</tr>
+<tr>
+<td align="center"><sub><code>scroll-3d-tilt</code><br />滚动 3D 倾斜</sub></td>
+<td align="center"><sub><code>apple-aurora-track</code><br />Apple 极光轨道</sub></td>
+<td align="center"><sub><code>coverflow-classic</code><br />经典 Coverflow</sub></td>
+<td align="center"><sub><code>coverflow-watermark</code><br />水印图标版</sub></td>
+<td align="center"><sub><code>coverflow-focus</code><br />Focus 展开版</sub></td>
+</tr>
+</table>
+
+<sub>↑ 5 种模板预览 — <a href="./skills/card-theater/README.md#5-种模板"><b>查看完整说明</b></a>。</sub>
+
+Links: [README](./skills/card-theater/README.md) · [SKILL.md](./skills/card-theater/SKILL.md)
+
+---
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
 ### 安装
 
 | # | 方式 | 适用于 | 指定版本? |
@@ -272,6 +321,7 @@ npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/fl
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/network-protocol-viz
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/dynamic-archify
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/scholar-notes
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/card-theater
 ```
 
 > **默认安装 `main` 分支最新版本。** CLI 会从源码树直接读取每个 Skill 的最新 `SKILL.md`。
@@ -323,6 +373,10 @@ git clone https://github.com/Unclecheng-li/AI_Animation.git
 把以上内容做成学霸笔记，Style A 风格
 ```
 
+```
+用 card-theater 演示 IPsec 数据流转过程，需要模式切换（传输模式 / 隧道模式）
+```
+
 ### 目录结构
 
 ```text
@@ -351,12 +405,17 @@ ai-animation-skills/
 │   │   ├── schemas/             ← JSON Schema 验证
 │   │   ├── examples/            ← 示例 JSON
 │   │   └── assets/              ← 模板 + GIF 导出库
-│   └── scholar-notes/
+│   ├── scholar-notes/
 │       ├── SKILL.md
 │       ├── README.md
 │       ├── assets/              ← Style A + Style B 模板
 │       ├── references/          ← 布局库 + 组件手册 + checklist
 │       └── examples/            ← Style A/B 示例（8 个）
+│   ├── card-theater/
+│       ├── SKILL.md
+│       ├── README.md
+│       ├── assets/              ← 5 种模板 HTML
+│       └── references/          ← Prompt 参考
 ├── web_animation/               ← 原始示例 HTML（历史存档）
 ├── UI/                          ← UI 设计参考图
 ├── prompt.md                    ← Prompt 模板集合
@@ -382,6 +441,7 @@ A collection of AI Agent skills for generating stunning HTML animation pages. Ea
 | [`network-protocol-viz`](./skills/network-protocol-viz) | Network protocol animations (TCP, IPv4, routing, etc.) | 10+ |
 | [`dynamic-archify`](./skills/dynamic-archify) | Animated architecture/workflow/sequence/dataflow/lifecycle diagrams | 5 types |
 | [`scholar-notes`](./skills/scholar-notes) | Handwritten notebook-style HTML learning notes | 2 styles |
+| [`card-theater`](./skills/card-theater) | Sidebar narrative + 3D card carousel presentations | 5 templates |
 
 ### Installation
 
@@ -393,6 +453,7 @@ npx skills add https://github.com/Unclecheng-li/AI_Animation
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/ppt-animation
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/dynamic-archify
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/scholar-notes
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/card-theater
 ```
 
 ### Contributing
