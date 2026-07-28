@@ -1,3 +1,5 @@
+<div align="center">
+  
 # AI Animation Skills
 
 **一套用 AI 生成炫酷 HTML 动画的 [Agent Skills](https://support.claude.com/en/articles/12512176-what-are-skills) 集合 · A collection of skills for generating cool HTML animations with AI**
