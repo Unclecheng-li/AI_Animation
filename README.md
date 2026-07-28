@@ -66,7 +66,7 @@
 </td>
 <td colspan="2" valign="top" align="center">
 <!-- TODO: 补充预览图 -->
-<a href="#card-theater"><img width="2560" height="1440" alt="card-theater" src="https://via.placeholder.com/2560x1440/0a0a0a/30D158?text=card-theater" /></a>
+<a href="#card-theater"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/51ace25a-fde6-45db-97f5-3c30582fb85f" /></a>
 <br/><a href="#card-theater"><strong>card-theater</strong></a>
 <br/><sub>卡片剧场 / 3D 卡片轮播</sub>
 </td>
