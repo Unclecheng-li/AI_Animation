@@ -75,7 +75,7 @@
 <tr>
 <td colspan="4" valign="top" align="center">
 <!-- TODO: 补充预览图 -->
-<a href="#video-shot-demos"><img width="2560" height="1440" alt="video-shot-demos" src="https://via.placeholder.com/2560x1440/0d1526/2dd4ee?text=video-shot-demos" /></a>
+<a href="#video-shot-demos"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/ee93829f-91c5-48df-925e-342cd2be4557" /></a>
 <br/><a href="#video-shot-demos"><strong>video-shot-demos</strong></a>
 <br/><sub>视频分镜演示 / 电影级镜头动画</sub>
 </td>
@@ -313,7 +313,7 @@ Links: [README](./skills/card-theater/README.md) · [SKILL.md](./skills/card-the
 #### `video-shot-demos`
 
 <a href="./skills/video-shot-demos">
-<!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="video-shot-demos preview" src="https://via.placeholder.com/2560x1440/0d1526/2dd4ee?text=video-shot-demos" />
+<!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/ee93829f-91c5-48df-925e-342cd2be4557" />
 </a>
 
 **分类:** 视频分镜演示 / 电影级镜头动画
@@ -332,11 +332,11 @@ Links: [README](./skills/card-theater/README.md) · [SKILL.md](./skills/card-the
 
 <table>
 <tr>
-<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="复古报纸头条" src="https://via.placeholder.com/2560x1440/efe8d5/b53929?text=shot-0-1" /></td>
-<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="嘉年华老虎机" src="https://via.placeholder.com/2560x1440/0b1020/ffd23f?text=shot-2-5" /></td>
-<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="像素平台跳跃" src="https://via.placeholder.com/2560x1440/111927/34f5a5?text=shot-2-7" /></td>
-<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="审讯室软木板" src="https://via.placeholder.com/2560x1440/2a1f14/d8b45a?text=shot-2-6" /></td>
-<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="机场安检" src="https://via.placeholder.com/2560x1440/0d1a2b/4a9eff?text=shot-2-11" /></td>
+<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/ee93829f-91c5-48df-925e-342cd2be4557" /></td>
+<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/cce72cdc-b63b-4c2e-ac90-cd25defff624" /></td>
+<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1437" alt="image" src="https://github.com/user-attachments/assets/1724eb62-98a6-488c-9353-9229d8cfbe35" /></td>
+<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/c2bce877-db80-44a9-993a-897432c58ae1" /></td>
+<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/6906eeeb-e202-46cb-a3a2-b51d6eb9137e" /></td>
 </tr>
 <tr>
 <td align="center"><sub><code>复古报纸头条</code><br />震撼数字宣告</sub></td>
