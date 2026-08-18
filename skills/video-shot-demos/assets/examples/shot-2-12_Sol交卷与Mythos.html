@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<script>
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+
+<script>
+/* ===== SFX 引擎（WebAudio 合成，无音频文件，随启动按钮手势激活） ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){ /* 波：弹出 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){ /* 呼：镜头/大幅移动 */
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){ /* 唰：快速滑入/切换 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){ /* 键盘：短促轻击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){ /* 叮：柔和落定 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){ /* 咚：低频落章/撞击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 2-12 · Sol 交卷 + Mythos 测不了</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;800&family=Bebas+Neue&family=Noto+Serif+SC:wght@400;600;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;background:#2e2a24;overflow:hidden;font-family:'Noto Serif SC',serif}
+  body.paused *{animation-play-state:paused!important}
+  #stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;
+    background:linear-gradient(180deg,#efe7d4 0%,#e9dfc8 63.9%,#d9cbaa 64.1%,#cbbc96 100%)}
+  /* wall texture + wainscot */
+  #stage::before{content:'';position:absolute;inset:0;background-image:radial-gradient(rgba(140,115,70,.08) 1.5px,transparent 2px);background-size:56px 56px}
+  #chair{position:absolute;left:0;right:0;top:684px;height:14px;background:#8a6f46;box-shadow:0 3px 8px rgba(60,45,20,.35)}
+  /* spotlights */
+  .spot{position:absolute;top:-40px;width:420px;height:560px;background:radial-gradient(ellipse 50% 55% at 50% 0%,rgba(255,244,200,.5),transparent 70%);pointer-events:none;opacity:0;transition:opacity 1.2s}
+  .spot.on{opacity:1}
+
+  /* title */
+  #title{position:absolute;left:50%;top:52px;transform:translateX(-50%);text-align:center;z-index:8;opacity:0;transition:opacity .7s}
+  #title.show{opacity:1}
+  #title .no{display:inline-block;font-family:'JetBrains Mono';font-size:13px;font-weight:700;color:#f4ecd4;background:#4a3f28;padding:6px 16px;letter-spacing:3px}
+  #title h1{margin-top:12px;font-size:44px;font-weight:900;color:#3d3421;letter-spacing:4px}
+  #title h1 em{font-style:normal;color:#a8740c}
+  #title .en{font-family:'Playfair Display';font-size:15px;color:#8a7648;letter-spacing:5px;margin-top:8px;font-style:italic}
+
+  /* gallery frames */
+  #wall{position:absolute;left:130px;right:130px;top:190px;height:430px;z-index:5;transition:all .9s cubic-bezier(.6,0,.3,1)}
+  .frame{position:absolute;top:0;width:720px;height:430px;background:#fdfaf0;border:14px solid #6b4a2a;outline:3px solid #b8963e;outline-offset:-9px;
+    box-shadow:0 22px 50px rgba(60,45,20,.35),inset 0 0 40px rgba(184,150,62,.12);transition:all .9s cubic-bezier(.6,0,.3,1);opacity:0;transform:translateY(40px)}
+  .frame.in{opacity:1;transform:translateY(0)}
+  #frameSOL{right:0}
+  #frameGLM{left:0}
+  #wall.mini{left:70px;right:auto;width:560px}
+  #wall.mini .frame{width:540px;height:322px;border-width:10px}
+  #wall.mini #frameGLM{transform:scale(.92);transform-origin:top left}
+  #wall.mini #frameSOL{top:340px;right:auto;left:0;transform:scale(.92);transform-origin:top left}
+  .frame .inner{position:absolute;inset:10px;padding:18px 26px;display:flex;flex-direction:column}
+  .frame .plate{align-self:center;background:linear-gradient(180deg,#d8b96a,#b8963e);color:#3d2f10;font-family:'Playfair Display';font-weight:800;font-size:19px;
+    letter-spacing:3px;padding:6px 26px;border-radius:3px;box-shadow:0 3px 8px rgba(90,65,20,.4);display:flex;align-items:center;gap:10px}
+  .frame .plate img{width:24px;height:24px}
+  .frame .cellsRow{display:flex;gap:5px;justify-content:center;margin-top:18px;flex-wrap:wrap}
+  .frame .cl{width:26px;height:20px;border-radius:3px;background:#efe6cc;border:1.5px solid #d5c493;transition:all .25s}
+  .frame .cl.litG{background:#128a9d;border-color:#0d6b7a;box-shadow:0 0 8px rgba(18,138,157,.5)}
+  .frame .cl.litS{background:#e8a820;border-color:#a8740c;box-shadow:0 0 8px rgba(232,168,32,.5)}
+  .frame .cl.miss{background:#f3ecda;border-style:dashed;border-color:#c9bfa8}
+  .frame .hitRow{text-align:center;margin-top:8px;font-family:'JetBrains Mono';font-size:14px;color:#8a7648;letter-spacing:2px}
+  .frame .bigScore{text-align:center;margin-top:auto;font-family:'Bebas Neue';font-size:86px;line-height:1}
+  #frameGLM .bigScore{color:#128a9d}
+  #frameSOL .bigScore{color:#c78a12}
+  .frame .bigScore small{font-size:34px;color:#b8a674}
+  .frame .fsub{text-align:center;font-size:14.5px;color:#8a7648;letter-spacing:1px;margin-top:6px}
+  /* VS medallion */
+  #vs{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%) scale(0);width:110px;height:110px;border-radius:50%;z-index:7;
+    background:radial-gradient(circle at 35% 30%,#e8cf8a,#b8963e);border:5px solid #6b4a2a;display:flex;align-items:center;justify-content:center;
+    font-family:'Playfair Display';font-weight:800;font-size:38px;color:#3d2f10;font-style:italic;box-shadow:0 12px 28px rgba(60,45,20,.45);transition:transform .5s cubic-bezier(.2,1.5,.4,1)}
+  #vs.pop{transform:translate(-50%,-50%) scale(1)}
+  #wall.mini ~ #vs, #vs.hide{opacity:0;pointer-events:none}
+
+  /* comparison bars */
+  #cmp{position:absolute;left:130px;right:130px;top:712px;z-index:5;display:flex;gap:60px;transition:all .8s ease}
+  #wall.mini ~ #cmp{opacity:0;pointer-events:none;transform:translateY(20px)}
+  .cmpCard{flex:1;background:rgba(253,250,240,.9);border:2px solid #c9ab5e;border-radius:8px;padding:16px 26px 20px;opacity:0;transform:translateY(30px);transition:all .6s ease}
+  .cmpCard.in{opacity:1;transform:translateY(0)}
+  .cmpCard h4{font-size:17px;color:#6d5c3a;letter-spacing:3px;display:flex;justify-content:space-between}
+  .cmpCard h4 span{font-family:'JetBrains Mono';font-size:12px;color:#a89a76}
+  .crow{display:flex;align-items:center;gap:12px;margin-top:12px}
+  .crow .cnm{width:46px;font-weight:900;font-size:15px}
+  .crow.g .cnm{color:#128a9d}.crow.s .cnm{color:#c78a12}
+  .crow .cbar{flex:1;height:22px;background:#efe6cc;border-radius:11px;overflow:hidden}
+  .crow .cfill{height:100%;width:0;border-radius:11px}
+  .crow.g .cfill{background:#128a9d}.crow.s .cfill{background:#e8a820}
+  .crow .cv{font-family:'Bebas Neue';font-size:24px;width:150px;text-align:right;color:#4a3f28}
+  .crow .cv small{font-size:14px;color:#a89a76}
+
+  /* 误报审查台 */
+  #auditP{position:absolute;left:260px;right:260px;top:700px;z-index:6;display:flex;gap:32px;opacity:0;transform:translateY(24px);transition:all .55s ease;pointer-events:none}
+  #auditP.in{opacity:1;transform:translateY(0)}
+  #auditP.out{opacity:0;transform:translateY(20px)}
+  #stdBar{width:360px;flex:none;background:#2f2a22;color:#f0e6cc;border-radius:8px;padding:18px 26px;display:flex;flex-direction:column;justify-content:center;gap:8px;border:1.5px solid #57503e;box-shadow:0 16px 36px rgba(40,32,18,.35);transition:box-shadow .5s ease}
+  #stdBar .sl{font-family:'JetBrains Mono';font-size:11.5px;color:#a89a76;letter-spacing:3px}
+  #stdBar .ss{font-size:27px;font-weight:900;letter-spacing:2px;color:#ffc94d;line-height:1.35}
+  .fp{flex:1;background:rgba(253,250,240,.95);border:2px solid #c9ab5e;border-radius:8px;padding:14px 24px 16px;position:relative;opacity:0;transform:translateY(24px);transition:all .5s ease;box-shadow:0 14px 30px rgba(60,45,20,.25)}
+  .fp.in{opacity:1;transform:translateY(0)}
+  .fp .fh{font-size:19px;font-weight:900;color:#6d5c3a;letter-spacing:2px}
+  .fp .fh span{font-family:'JetBrains Mono';font-size:11px;font-weight:400;color:#a89a76;letter-spacing:2px;margin-left:10px}
+  .fp .fr{display:flex;justify-content:space-between;margin-top:9px;font-size:15.5px;color:#8a7648;opacity:.22;transition:opacity .4s}
+  .fp .fr.on{opacity:1}
+  .fp .fr b{color:#3d3421}
+  .fp .fr.blk b{color:#b2341f}
+  .fp .st{position:absolute;right:16px;top:10px;border:3px solid #b2341f;color:#b2341f;background:rgba(253,250,240,.7);font-weight:900;font-size:20px;letter-spacing:3px;padding:3px 12px;border-radius:6px;transform:rotate(-12deg) scale(2.4);opacity:0;transition:all .28s cubic-bezier(.2,1.6,.4,1)}
+  .fp .st.on{opacity:1;transform:rotate(-12deg) scale(1)}
+
+  /* phase 3 zone */
+  #p3zone{position:absolute;right:70px;top:170px;width:1210px;height:820px;z-index:6;opacity:0;pointer-events:none;transition:opacity .8s .3s}
+  #p3zone.on{opacity:1;pointer-events:auto}
+  /* official card */
+  #oai{position:absolute;left:0;top:20px;width:560px;background:#2f2a22;color:#f0e6cc;border-radius:10px;padding:26px 32px;box-shadow:0 20px 46px rgba(40,32,18,.4);
+    border:1.5px solid #57503e;opacity:0;transform:translateY(30px);transition:all .6s ease}
+  #oai.in{opacity:1;transform:translateY(0)}
+  #oai .oh{display:flex;align-items:center;gap:12px;font-family:'JetBrains Mono';font-size:12.5px;color:#a89a76;letter-spacing:2px}
+  #oai .oh img{width:22px;height:22px}
+  #oai h3{margin-top:12px;font-size:20.5px;line-height:1.7;font-weight:600;letter-spacing:1px}
+  #oai h3 b{color:#ffc94d}
+  #oai .pct{margin-top:12px;font-family:'Bebas Neue';font-size:120px;line-height:1;color:#ff5a3c;text-shadow:0 6px 0 rgba(255,90,60,.18)}
+  #oai .pcap{font-size:16px;color:#c9b98a;margin-top:6px;letter-spacing:1px}
+  #oai .osrc{margin-top:14px;font-family:'JetBrains Mono';font-size:11.5px;color:#8a7f60;letter-spacing:1px}
+  /* mythos glass case */
+  #case{position:absolute;right:0;top:0;width:560px;height:760px;opacity:0;transform:translateY(40px);transition:all .7s ease}
+  #case.in{opacity:1;transform:translateY(0)}
+  #case .pedestal{position:absolute;left:40px;bottom:0;width:480px;height:120px;background:linear-gradient(180deg,#5a4c38,#443a2a);border-radius:6px 6px 0 0;
+    box-shadow:0 16px 34px rgba(40,32,18,.4)}
+  #case .plate2{position:absolute;left:50%;bottom:38px;transform:translateX(-50%);background:linear-gradient(180deg,#d8b96a,#b8963e);color:#3d2f10;
+    font-size:19px;font-weight:900;letter-spacing:3px;padding:8px 26px;border-radius:3px;white-space:nowrap;box-shadow:0 3px 8px rgba(90,65,20,.4);text-align:center}
+  #case .plate2 small{display:block;font-family:'JetBrains Mono';font-size:10.5px;font-weight:400;letter-spacing:2px;margin-top:3px}
+  #case .plate2.hot{animation:plateHot 1.6s ease-in-out 2}
+  @keyframes plateHot{50%{box-shadow:0 0 0 6px rgba(255,201,77,.55),0 3px 14px rgba(90,65,20,.5)}}
+  #case .lock.shake{animation:lkShake .55s ease-in-out}
+  @keyframes lkShake{20%{transform:translateX(-50%) rotate(-9deg)}45%{transform:translateX(-50%) rotate(8deg)}70%{transform:translateX(-50%) rotate(-5deg)}100%{transform:translateX(-50%) rotate(0)}}
+  #case .glass{position:absolute;left:70px;bottom:116px;width:420px;height:520px;border-radius:8px 8px 0 0;
+    background:linear-gradient(115deg,rgba(255,255,255,.34) 0%,rgba(255,255,255,.10) 30%,rgba(255,255,255,.05) 55%,rgba(255,255,255,.22) 100%);
+    border:2.5px solid rgba(255,255,255,.55);box-shadow:inset 0 0 60px rgba(255,255,255,.12),0 0 0 6px rgba(120,100,60,.12)}
+  #case .glass::before{content:'';position:absolute;left:26px;top:0;bottom:0;width:44px;background:linear-gradient(90deg,rgba(255,255,255,.5),transparent);transform:skewX(-8deg)}
+  #case .glass::after{content:'';position:absolute;left:88px;top:0;bottom:0;width:16px;background:linear-gradient(90deg,rgba(255,255,255,.35),transparent);transform:skewX(-8deg)}
+  #case .card{position:absolute;left:50%;bottom:170px;transform:translateX(-50%);width:290px;height:380px;border-radius:14px;
+    background:linear-gradient(160deg,#4a453c,#2e2a24);border:2px solid #6d6350;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+    box-shadow:0 18px 40px rgba(30,25,15,.5);filter:blur(0px)}
+  #case .card .q{font-family:'Playfair Display';font-size:120px;color:#8a7f60;line-height:1;font-style:italic}
+  #case .card .nm{font-family:'Playfair Display';font-size:34px;color:#c9bfa8;letter-spacing:6px;font-weight:800}
+  #case .card .tp{font-family:'JetBrains Mono';font-size:12px;color:#6d6350;letter-spacing:2px}
+  #case .lock{position:absolute;left:50%;bottom:106px;transform:translateX(-50%);width:52px;height:52px;background:#b2341f;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 6px 16px rgba(120,30,15,.5);z-index:3}
+  #case .lock svg{width:26px;height:26px}
+  /* rope barrier */
+  #rope{position:absolute;left:20px;right:20px;bottom:8px;height:90px;z-index:5}
+  #rope .post{position:absolute;bottom:0;width:12px;height:84px;background:linear-gradient(90deg,#8a6f46,#c9a45e,#8a6f46);border-radius:5px}
+  #rope .post::before{content:'';position:absolute;left:50%;top:-9px;transform:translateX(-50%);width:24px;height:24px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#e8cf8a,#a8834a)}
+  #rope .post::after{content:'';position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:52px;height:10px;border-radius:50%;background:#6b5334}
+  #rope svg{position:absolute;left:0;top:6px;width:100%;height:60px}
+  #rope svg path{fill:none;stroke:#a02818;stroke-width:7;stroke-linecap:round}
+  #caseNote{position:absolute;left:50%;bottom:140px;transform:translateX(-50%);background:rgba(47,42,34,.94);color:#f0e6cc;font-size:17.5px;letter-spacing:1px;
+    padding:12px 26px;border-radius:6px;white-space:nowrap;opacity:0;transition:opacity .6s;z-index:6}
+  #caseNote.show{opacity:1}
+  #caseNote b{color:#ffc94d}
+
+  /* anan */
+  #anan{position:absolute;left:40px;bottom:-10px;width:360px;z-index:25;opacity:0;transition:opacity .9s ease;filter:drop-shadow(0 12px 22px rgba(60,45,20,.4))}
+  #anan.show{opacity:1}
+  #anan img{width:100%;display:block;animation:bob 3.2s ease-in-out infinite alternate}
+  @keyframes bob{from{transform:translateY(0)}to{transform:translateY(-10px)}}
+  #anan .say{position:absolute;left:330px;top:70px;width:230px;background:#fdfaf0;border:2.5px solid #8a6f46;border-radius:12px;padding:13px 17px;
+    font-size:23px;font-weight:900;color:#4a3f28;line-height:1.4;letter-spacing:1px;opacity:0;transform:scale(.6);transition:all .4s ease;box-shadow:4px 4px 0 rgba(138,111,70,.35)}
+  #anan .say::after{content:'';position:absolute;z-index:-1;left:26px;bottom:-18px;border:9px solid transparent;border-top:11px solid #8a6f46}
+  #anan .say b{color:#b2341f}
+  #anan.show .say{opacity:1;transform:scale(1);transition-delay:.4s}
+
+  .corner{position:absolute;font-family:'JetBrains Mono';font-size:12px;color:#8a7648;letter-spacing:2px;z-index:9}
+  #chap{left:52px;bottom:36px}
+  #src{right:52px;bottom:36px}
+
+  /* HUD */
+  #hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'JetBrains Mono';pointer-events:none}
+  #track{height:5px;background:rgba(138,111,70,.25)}
+  #bar{height:100%;width:0;background:#b2341f}
+  #hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;color:#e0d4b8;background:rgba(47,42,34,.94);backdrop-filter:blur(4px)}
+  #hud button{pointer-events:auto;background:transparent;border:1px solid #a89a76;color:#efe6cc;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+  #hud button:hover{background:rgba(190,165,110,.25)}
+  #replay.done{animation:pulse 1.2s infinite;border-color:#e8c87a;color:#e8c87a}
+  @keyframes pulse{50%{box-shadow:0 0 14px rgba(232,200,122,.8)}}
+
+  /* 镜头层 */
+  #cam{position:absolute;inset:0;transform-origin:0 0;transform:translate(0px,0px) scale(1.24);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- ================= 镜头世界 ================= -->
+  <div id="cam">
+  <div class="spot" id="sp1" style="left:340px"></div>
+  <div class="spot" id="sp2" style="right:340px"></div>
+  <div id="chair"></div>
+
+  <div id="title">
+    <span class="no">FINAL · EXHIBITION</span>
+    <h1>Sol 交卷 · <em>Mythos 测不了</em></h1>
+    <div class="en">The Gallery of Results</div>
+  </div>
+
+  <!-- gallery wall -->
+  <div id="wall">
+    <div class="frame" id="frameGLM">
+      <div class="inner">
+        <div class="plate"><img src="icons/GLMicon.png" alt="">GLM-5.3</div>
+        <div class="cellsRow" id="cellsG"></div>
+        <div class="hitRow">27 / 28 · 0 误报</div>
+        <div class="bigScore"><span id="scG">0</span><small> / 4,800</small></div>
+        <div class="fsub">命中率 96.25% · 漏洞猎手</div>
+      </div>
+    </div>
+    <div class="frame" id="frameSOL">
+      <div class="inner">
+        <div class="plate"><img src="icons/GPTicon.png" alt="">GPT-5.6 SOL</div>
+        <div class="cellsRow" id="cellsS"></div>
+        <div class="hitRow">23 / 28 · 2 项误报 · 4 项卡在护栏</div>
+        <div class="bigScore"><span id="scS">0</span><small> / 4,800</small></div>
+        <div class="fsub">30 项报告 → 24 项复现成功</div>
+      </div>
+    </div>
+    <div id="vs">VS</div>
+  </div>
+
+  <!-- comparison -->
+  <div id="cmp">
+    <div class="cmpCard" id="cmp1">
+      <h4>成本 COST <span>≈13 倍差距</span></h4>
+      <div class="crow g"><span class="cnm">GLM</span><div class="cbar"><div class="cfill" id="costG"></div></div><span class="cv">¥96</span></div>
+      <div class="crow s"><span class="cnm">Sol</span><div class="cbar"><div class="cfill" id="costS"></div></div><span class="cv">¥1,220<small> ≈13×</small></span></div>
+    </div>
+    <div class="cmpCard" id="cmp2">
+      <h4>耗时 TIME <span>GLM 更慢但更全</span></h4>
+      <div class="crow g"><span class="cnm">GLM</span><div class="cbar"><div class="cfill" id="timeG"></div></div><span class="cv">157<small> min</small></span></div>
+      <div class="crow s"><span class="cnm">Sol</span><div class="cbar"><div class="cfill" id="timeS"></div></div><span class="cv">85<small> min</small></span></div>
+    </div>
+  </div>
+
+  <!-- 误报审查台 -->
+  <div id="auditP">
+    <div id="stdBar"><div class="sl">判定标准 · CRITERION</div><div class="ss">能复现，才算真问题</div></div>
+    <div class="fp" id="fp1">
+      <div class="fh">误报 ① 路径穿越<span>PATH TRAVERSAL</span></div>
+      <div class="fr src" id="fp1r1"><span>源码层面判断</span><b>存在 ✓</b></div>
+      <div class="fr blk" id="fp1r2"><span>护栏拦截实测</span><b>一个请求都发不出去 ✗</b></div>
+      <div class="st" id="fp1st">从严 · 误报</div>
+    </div>
+    <div class="fp" id="fp2">
+      <div class="fh">误报 ② 未授权重置<span>UNAUTH RESET</span></div>
+      <div class="fr src" id="fp2r1"><span>源码层面判断</span><b>存在 ✓</b></div>
+      <div class="fr blk" id="fp2r2"><span>护栏拦截实测</span><b>一个请求都发不出去 ✗</b></div>
+      <div class="st" id="fp2st">从严 · 误报</div>
+    </div>
+  </div>
+
+  <!-- phase3 -->
+  <div id="p3zone">
+    <div id="oai">
+      <div class="oh"><img src="icons/GPTicon.png" alt="">OFFICIAL DISCLOSURE · 官方披露</div>
+      <h3>OpenAI 自己披露：带完整安全护栏的 GPT-5.6 Sol，<b>高危任务完成率</b>只有——</h3>
+      <div class="pct" id="oaiPct">0.0%</div>
+      <div class="pcap">它根本不敢做任何有潜在安全风险的操作</div>
+      <div class="osrc">OpenAI GPT-5.6-Cyber 发布报道 · 2026-08</div>
+    </div>
+    <div id="case">
+      <div class="glass"></div>
+      <div class="card">
+        <div class="q">?</div>
+        <div class="nm">MYTHOS 5</div>
+        <div class="tp">NO PUBLIC API ACCESS</div>
+      </div>
+      <div class="lock"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg></div>
+      <div class="pedestal"></div>
+      <div class="plate2">受信访问计划<small>TRUSTED ACCESS PROGRAM</small></div>
+      <div id="caseNote">全球也就一两百家机构能拿到权限，<b>普通开发者连 API 入口都摸不到</b></div>
+      <div id="rope">
+        <svg viewBox="0 0 520 60" preserveAspectRatio="none"><path d="M6 12 Q 136 54 266 24 T 526 14"/></svg>
+        <div class="post" style="left:0"></div>
+        <div class="post" style="left:254px"></div>
+        <div class="post" style="right:0"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="anan">
+    <div class="say">我也想测啊…<br><b>根本测不了</b></div>
+    <img src="anan - emotion rename/06_蹙眉闭唇_窘迫羞恼.png" alt="安安·嫌弃">
+  </div>
+
+  
+  
+
+  </div><!-- /cam -->
+<div class="corner" id="chap">02 / 靶场实测 · 终章</div><div class="corner" id="src">天积靶场实测 2026-08-15 · 授权环境</div>
+  </div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 2-12 · Sol 交卷 + Mythos · 38s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+const DUR=38000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3);
+function count(el,from,to,dur,delay,fmt){tws.push({t:delay,d:dur,f:p=>{const v=from+(to-from)*p;el.textContent=fmt?fmt(v):Math.round(v)},e:eo})}
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1)tws.splice(i,1)}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+
+/* build cells */
+function buildCells(boxId,lit,cls){
+  const box=document.getElementById(boxId);
+  for(let i=0;i<28;i++){
+    const c=document.createElement('div');c.className='cl';
+    if(i>=lit)c.classList.add('miss');
+    box.appendChild(c);
+  }
+  return {box,lit,cls};
+}
+const gCells=buildCells('cellsG',27,'litG');
+const sCells=buildCells('cellsS',23,'litS');
+function lightCells(spec,start,step){
+  const cells=spec.box.children;
+  for(let i=0;i<spec.lit;i++){
+    const c=cells[i];
+    on(start+i*step,()=>c.classList.add(spec.cls));
+  }
+}
+
+/* timeline (38s) —— 口播窗口 10:53 → 11:31 */
+on(300,()=>{$('#title').classList.add('show');$('#sp1').classList.add('on');$('#sp2').classList.add('on')});
+/* 交卷结果速览（recap） */
+on(600,()=>$('#frameSOL').classList.add('in'));
+on(1200,()=>$('#frameGLM').classList.add('in'));
+lightCells(sCells,1800,55);
+lightCells(gCells,1800,45);
+count($('#scS'),0,4320,1400,1800,v=>Math.round(v).toLocaleString());
+count($('#scG'),0,4620,1400,1800,v=>Math.round(v).toLocaleString());
+on(1600,()=>$('#vs').classList.add('pop'));
+on(2600,()=>{$('#cmp1').classList.add('in');$('#cmp2').classList.add('in')});
+tws.push({t:2800,d:1100,f:p=>{
+  $('#costG').style.width=(p*96/1220*100)+'%';
+  $('#costS').style.width=(p*100)+'%';
+  $('#timeG').style.width=(p*100)+'%';
+  $('#timeS').style.width=(p*85/157*100)+'%';
+},e:eo});
+/* —— 误报段：口播 10:53「那两项误报也是挺典型的」 —— */
+on(4200,()=>{$('#cmp1').classList.remove('in');$('#cmp2').classList.remove('in')});
+on(4600,()=>$('#auditP').classList.add('in'));
+on(5000,()=>$('#fp1').classList.add('in'));                 // 「路径穿越」
+on(5400,()=>$('#fp2').classList.add('in'));                 // 「和未授权的重置」
+on(7000,()=>$('#fp1r1').classList.add('on'));               // 「从源码层面判断存在」
+on(8000,()=>$('#fp1r2').classList.add('on'));               // 「被护栏给拦住了」
+on(8800,()=>$('#fp2r1').classList.add('on'));
+on(9400,()=>$('#fp2r2').classList.add('on'));               // 「一个请求都发不出去」
+on(10200,()=>{$('#stdBar').style.boxShadow='0 0 0 4px rgba(255,201,77,.5),0 16px 36px rgba(40,32,18,.35)'}); // 「能复现才算真问题」
+on(11200,()=>{$('#fp1st').classList.add('on');$('#fp2st').classList.add('on')}); // 「就判断为误报吧」
+on(12400,()=>{$('#auditP').classList.add('out')});
+/* —— OpenAI 披露：口播 11:07 —— */
+on(13000,()=>{
+  $('#wall').classList.add('mini');
+  $('#vs').classList.add('hide');
+});
+on(13800,()=>$('#p3zone').classList.add('on'));
+on(14200,()=>$('#oai').classList.add('in'));
+count($('#oaiPct'),0,1.5,1300,15600,v=>v.toFixed(1)+'%');   // 「只有 1.5%」落于 11:11
+/* —— Mythos：口播 11:16「肯定有人就会问」 —— */
+on(23000,()=>$('#case').classList.add('in'));               // 「榜单上的 Mythos 5 呢」
+on(24500,()=>$('#case .lock').classList.add('shake'));
+on(25100,()=>$('#case .lock').classList.remove('shake'));
+on(26000,()=>$('#anan').classList.add('show'));             // 「我也想测…根本测不了」
+on(29000,()=>$('#case .plate2').classList.add('hot'));      // 「锁在受信访问计划里」
+on(32300,()=>$('#case .plate2').classList.remove('hot'));
+on(33000,()=>$('#caseNote').classList.add('show'));         // 「一两百家机构…连 API 入口都摸不到」
+
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+/* ===== 镜头 ===== */
+const camEl=$('#cam');
+function camTo(tx,ty,s,dur){camEl.style.setProperty('--cd',dur+'s');camEl.style.transform='translate('+tx+'px,'+ty+'px) scale('+s+')';if(window.__sfx)__sfx.whoosh(dur,0.65)}
+const CX=960,CY=540;
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+
+/* ===== 镜头调度 ===== */
+on(300,()=>{camTo(0,0,1,2.0)});              // 开场拉镜
+on(4200,()=>{camFocus(960,520,1.15,0.8)});   // 推向误报审查台
+on(12400,()=>{camTo(0,0,1,0.9)});            // 误报收尾拉回
+on(22500,()=>{camFocus(1570,560,1.16,1.0)}); // 转向 Mythos 展柜
+on(35500,()=>{camTo(0,0,1,1.3)});            // 结尾拉回全景
+
+
+/* ===== 音效 ===== */
+on(300,()=>__sfx.swipe(0.6));
+on(600,()=>__sfx.pop(0.7));
+on(1200,()=>__sfx.pop(0.7));
+on(1600,()=>__sfx.thud(0.9));
+on(2600,()=>__sfx.pop(0.6));
+for(let __si=1;__si<=6;__si++)on(1800+Math.round(1100*Math.pow(__si/6,2)),()=>__sfx.type(0.4)); // 分数滚动·由密到疏
+on(4600,()=>__sfx.swipe(0.6));
+on(5000,()=>__sfx.pop(0.6));
+on(5400,()=>__sfx.pop(0.6));
+on(7000,()=>__sfx.type(0.6));
+on(8000,()=>__sfx.type(0.6));
+on(8800,()=>__sfx.type(0.6));
+on(9400,()=>__sfx.type(0.6));
+on(10200,()=>__sfx.ding(0.8));
+on(11200,()=>__sfx.thud(1.0));
+on(12400,()=>__sfx.swipe(0.5));
+on(13000,()=>__sfx.swipe(0.5));
+on(14200,()=>__sfx.pop(0.6));
+for(let __sj=1;__sj<=6;__sj++)on(15600+Math.round(1100*Math.pow(__sj/6,2)),()=>__sfx.type(0.4)); // 1.5% 滚动·由密到疏
+on(17200,()=>__sfx.ding(0.7));
+on(23000,()=>__sfx.pop(0.7));
+on(24500,()=>__sfx.thud(0.7));
+on(26000,()=>__sfx.pop(0.6));
+on(29000,()=>__sfx.ding(0.6));
+on(33000,()=>__sfx.pop(0.5));
+</script>
+</body>
+</html>

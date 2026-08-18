@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](./LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](#contributing)
-[![Skills count](https://img.shields.io/badge/Skills-6-orange?style=flat-square)](#skills-gallery)
+[![Skills count](https://img.shields.io/badge/Skills-7-orange?style=flat-square)](#skills-gallery)
 [![Spec](https://img.shields.io/badge/Spec-SKILL.md-black?style=flat-square)](https://agentskills.io)
 
 [中文](#中文) · [English](#english)
@@ -28,6 +28,7 @@
 - 🏗️ **动态架构图** — 系统架构、流程图、时序图、数据流图、状态机，带流动动画 + 多格式导出
 - 📝 **学霸笔记** — 手写笔记本风格的精美 HTML 学习笔记，两种模板风格
 - 🎴 **卡片剧场** — 侧边栏叙事 + 3D 卡片轮播，协议流程 / 产品特性 / 分步讲解的叙事感演示
+- 🎬 **视频分镜演示** — 电影级"一个镜头一个 HTML"演示动画：29 种风格轮换、镜头推拉、WebAudio 音效、角色表情吐槽，全屏录屏即成片
 
 <div align="center">
 
@@ -69,6 +70,14 @@
 <a href="#card-theater"><img width="2560" height="1440" alt="card-theater" src="https://via.placeholder.com/2560x1440/0a0a0a/30D158?text=card-theater" /></a>
 <br/><a href="#card-theater"><strong>card-theater</strong></a>
 <br/><sub>卡片剧场 / 3D 卡片轮播</sub>
+</td>
+</tr>
+<tr>
+<td colspan="4" valign="top" align="center">
+<!-- TODO: 补充预览图 -->
+<a href="#video-shot-demos"><img width="2560" height="1440" alt="video-shot-demos" src="https://via.placeholder.com/2560x1440/0d1526/2dd4ee?text=video-shot-demos" /></a>
+<br/><a href="#video-shot-demos"><strong>video-shot-demos</strong></a>
+<br/><sub>视频分镜演示 / 电影级镜头动画</sub>
 </td>
 </tr>
 </table>
@@ -301,6 +310,51 @@ Links: [README](./skills/card-theater/README.md) · [SKILL.md](./skills/card-the
 
 <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
 
+#### `video-shot-demos`
+
+<a href="./skills/video-shot-demos">
+<!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="video-shot-demos preview" src="https://via.placeholder.com/2560x1440/0d1526/2dd4ee?text=video-shot-demos" />
+</a>
+
+**分类:** 视频分镜演示 / 电影级镜头动画
+**适用于:** 视频配套演示动画、录屏成片、技术实测复盘、产品发布可视化——需要"一个镜头一个 HTML、风格轮换、镜头推拉、同步音效"的电影化演示场景。
+
+`video-shot-demos` 把视频分镜做成可全屏录屏当成片的网页动画：一个镜头 = 一个独立 HTML。整辑共享电影化播放器底盘（黑场起手 + 虚拟时钟 + 悬停唤出 HUD + 暂停重播），每个镜头却用完全不同的视觉风格创作。内置 29 个成片级样板页（复古报纸 / 便利店 POS / 像素游戏 / 武功秘籍 / 机场安检…）、安安 15 张情绪立绘、WebAudio 合成音效引擎、镜头调度系统（推拉摇移 / 跟拍 / 黑边慢放）与无头截图质检工具。
+
+亮点:
+- 电影化播放器：黑场「启动播放」起手，虚拟时钟让 CSS 动画与 JS cue 永不漂移，录屏干净零闪跳
+- 镜头语言：开场拉镜 / 关键推近 / 跟拍 / Ken Burns 缓推 / 冲击快推，慢放段落自动配黑边 + 暗角 + 毫秒计数
+- WebAudio 合成音效：零音频文件，6 原语（pop/whoosh/swipe/type/ding/thud），镜头运动自动挂呼啸声
+- 29 种视觉风格库：每种风格配字体组合 + 适用内容 + 成片级活样板，连续镜头绝不同风格
+- 角色表情特写：安安 15 张情绪立绘按叙事节拍选图，400px 特写 + 吐槽气泡淡入登场
+- 字幕条逐句对齐口播稿，关键词高亮；数据角注出处，跨页比分连续滚动
+- 无头截图质检：虚拟时钟快进到任意毫秒截帧，逐张排查重叠遮挡 / 动画穿帮
+
+<table>
+<tr>
+<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="复古报纸头条" src="https://via.placeholder.com/2560x1440/efe8d5/b53929?text=shot-0-1" /></td>
+<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="嘉年华老虎机" src="https://via.placeholder.com/2560x1440/0b1020/ffd23f?text=shot-2-5" /></td>
+<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="像素平台跳跃" src="https://via.placeholder.com/2560x1440/111927/34f5a5?text=shot-2-7" /></td>
+<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="审讯室软木板" src="https://via.placeholder.com/2560x1440/2a1f14/d8b45a?text=shot-2-6" /></td>
+<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="机场安检" src="https://via.placeholder.com/2560x1440/0d1a2b/4a9eff?text=shot-2-11" /></td>
+</tr>
+<tr>
+<td align="center"><sub><code>复古报纸头条</code><br />震撼数字宣告</sub></td>
+<td align="center"><sub><code>嘉年华老虎机</code><br />★镜头推进典范</sub></td>
+<td align="center"><sub><code>像素平台跳跃</code><br />★镜头推进典范</sub></td>
+<td align="center"><sub><code>审讯室软木板</code><br />证据链追查</sub></td>
+<td align="center"><sub><code>机场安检</code><br />拦截与合规</sub></td>
+</tr>
+</table>
+
+<sub>↑ 5 / 29 种风格示例 — <a href="./skills/video-shot-demos/README.md"><b>打开完整风格库</b></a>（29 个成片样板可直接运行）。</sub>
+
+Links: [README](./skills/video-shot-demos/README.md) · [SKILL.md](./skills/video-shot-demos/SKILL.md)
+
+---
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
 ### 安装
 
 | # | 方式 | 适用于 | 指定版本? |
@@ -322,6 +376,7 @@ npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/ne
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/dynamic-archify
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/scholar-notes
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/card-theater
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/video-shot-demos
 ```
 
 > **默认安装 `main` 分支最新版本。** CLI 会从源码树直接读取每个 Skill 的最新 `SKILL.md`。
@@ -377,6 +432,10 @@ git clone https://github.com/Unclecheng-li/AI_Animation.git
 用 card-theater 演示 IPsec 数据流转过程，需要模式切换（传输模式 / 隧道模式）
 ```
 
+```
+用 video-shot-demos 把这期视频的口播稿做成分镜演示动画，每个镜头一个 HTML，输出到 demo/
+```
+
 ### 目录结构
 
 ```text
@@ -416,6 +475,13 @@ ai-animation-skills/
 │       ├── README.md
 │       ├── assets/              ← 5 种模板 HTML
 │       └── references/          ← Prompt 参考
+│   ├── video-shot-demos/
+│       ├── SKILL.md             ← 工作流 + 交付标准
+│       ├── README.md
+│       ├── references/          ← 播放器/镜头/音效/风格库/角色 五份规范
+│       ├── assets/              ← 起步骨架 template.html
+│       │   └── examples/        ← 29 个成片样板 + 安安表情 + 图标
+│       └── scripts/             ← 无头截图质检工具
 ├── web_animation/               ← 原始示例 HTML（历史存档）
 ├── UI/                          ← UI 设计参考图
 ├── prompt.md                    ← Prompt 模板集合
@@ -442,6 +508,7 @@ A collection of AI Agent skills for generating stunning HTML animation pages. Ea
 | [`dynamic-archify`](./skills/dynamic-archify) | Animated architecture/workflow/sequence/dataflow/lifecycle diagrams | 5 types |
 | [`scholar-notes`](./skills/scholar-notes) | Handwritten notebook-style HTML learning notes | 2 styles |
 | [`card-theater`](./skills/card-theater) | Sidebar narrative + 3D card carousel presentations | 5 templates |
+| [`video-shot-demos`](./skills/video-shot-demos) | Cinematic per-shot HTML demo animations with rotating styles, camera moves & WebAudio SFX | 29 examples |
 
 ### Installation
 
@@ -454,6 +521,7 @@ npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/pp
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/dynamic-archify
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/scholar-notes
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/card-theater
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/video-shot-demos
 ```
 
 ### Contributing

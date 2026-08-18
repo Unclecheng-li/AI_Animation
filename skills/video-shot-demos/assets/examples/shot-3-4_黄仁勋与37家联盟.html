@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<script>
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+
+<script>
+/* ===== SFX 引擎（WebAudio 合成，无音频文件，随启动按钮手势激活） ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){ /* 波：弹出 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){ /* 呼：镜头/大幅移动 */
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){ /* 唰：快速滑入/切换 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){ /* 键盘：短促轻击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){ /* 叮：柔和落定 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){ /* 咚：低频落章/撞击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 3-4 · 黄仁勋一句话 + 37 家联盟</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800&family=Bebas+Neue&family=Noto+Serif+SC:wght@400;600;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;background:#3c4a42;overflow:hidden;font-family:'Noto Serif SC',serif}
+  body.paused *{animation-play-state:paused!important}
+  #stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;
+    background:linear-gradient(180deg,#eef2ea 0%,#e6ece1 100%)}
+  #stage::before{content:'';position:absolute;inset:0;background-image:radial-gradient(rgba(90,110,95,.1) 2px,transparent 2.5px);background-size:46px 46px}
+
+  #title{position:absolute;left:64px;top:44px;z-index:9;opacity:0;transform:translateY(-16px);transition:all .6s ease}
+  #title.show{opacity:1;transform:translateY(0)}
+  #title .no{display:inline-block;font-family:'Archivo';font-weight:800;font-size:14px;color:#eef2ea;background:#2e4a38;padding:6px 16px;letter-spacing:3px}
+  #title h1{margin-top:10px;font-size:40px;font-weight:900;color:#22301f;letter-spacing:2px}
+  #title h1 em{font-style:normal;color:#3e7d4e}
+
+  /* quote zone */
+  #quoteZone{position:absolute;left:90px;top:170px;width:660px;z-index:6;opacity:0;transform:translateX(-40px);transition:all .7s ease}
+  #quoteZone.in{opacity:1;transform:translateX(0)}
+  #portrait{position:absolute;left:0;top:0;width:200px;height:240px;background:#dce6d8;border:3px solid #2e4a38;box-shadow:8px 8px 0 rgba(46,74,56,.8);overflow:hidden}
+  #portrait svg{position:absolute;left:50%;bottom:-6px;transform:translateX(-50%);width:170px}
+  #portrait .ptag{position:absolute;left:0;right:0;bottom:0;background:#2e4a38;color:#dce6d8;font-size:13.5px;letter-spacing:2px;text-align:center;padding:5px 0;font-family:'JetBrains Mono'}
+  #qcard{position:absolute;left:230px;top:0;width:430px;min-height:240px;background:#fff;border:3px solid #2e4a38;box-shadow:8px 8px 0 rgba(46,74,56,.8);padding:26px 30px}
+  #qcard .qmark{position:absolute;left:14px;top:-30px;font-family:'Playfair Display',serif;font-size:120px;color:#3e7d4e;line-height:1}
+  #qtext{position:relative;margin-top:26px;font-size:27px;font-weight:900;color:#22301f;line-height:1.75;letter-spacing:1px}
+  #qtext .em2{color:#3e7d4e;border-bottom:4px solid #3e7d4e}
+  #qtext .em3{color:#a33f2e}
+  #qwho{margin-top:18px;text-align:right;font-size:17px;color:#5a6b52;letter-spacing:2px;opacity:0;transition:opacity .6s}
+  #qwho.show{opacity:1}
+  #qwho b{color:#22301f}
+
+  /* logo wall */
+  #wallZone{position:absolute;right:80px;top:150px;width:1000px;z-index:5}
+  #wallHead{display:flex;align-items:baseline;justify-content:space-between;opacity:0;transition:opacity .6s}
+  #wallHead.show{opacity:1}
+  #wallHead b{font-size:27px;color:#22301f;letter-spacing:3px}
+  #wallHead span{font-family:'JetBrains Mono';font-size:13px;color:#5a6b52;letter-spacing:1px}
+  #wallGrid{margin-top:16px;display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
+  .tile{background:#fff;border:2.5px solid #b9c6b4;border-radius:8px;height:74px;display:flex;align-items:center;justify-content:center;text-align:center;
+    font-family:'Archivo';font-weight:800;font-size:15.5px;color:#8a9684;letter-spacing:.5px;padding:0 8px;line-height:1.25;
+    opacity:0;transform:scale(.6);transition:all .35s cubic-bezier(.2,1.4,.4,1);filter:grayscale(1)}
+  .tile.lit{opacity:1;transform:scale(1);filter:none;color:#2e4a38;border-color:#2e4a38;box-shadow:0 6px 14px rgba(46,74,56,.16)}
+  .tile.nv{grid-column:span 2;grid-row:span 1;background:#0f2c1c;color:#9fdcae;border-color:#0f2c1c;font-size:20px;filter:none;
+    box-shadow:0 10px 24px rgba(15,44,28,.4)}
+  .tile.nv small{display:block;font-family:'JetBrains Mono';font-size:10.5px;font-weight:400;color:#6da87e;letter-spacing:2px;margin-top:2px}
+
+  /* empty chairs */
+  #chairs{position:absolute;left:50%;bottom:70px;transform:translateX(-50%);z-index:8;display:flex;gap:90px;opacity:0;transition:opacity .7s}
+  #chairs.show{opacity:1}
+  .chair{position:relative;width:190px;text-align:center}
+  .chair svg{width:150px}
+  .chair .tag{position:absolute;left:50%;top:6px;transform:translateX(-50%) rotate(-4deg) scale(0);background:#fff;border:2.5px solid #a33f2e;color:#a33f2e;
+    font-family:'Archivo';font-weight:800;font-size:17px;letter-spacing:1px;padding:6px 16px;border-radius:6px;box-shadow:0 6px 14px rgba(80,40,30,.2);transition:transform .4s cubic-bezier(.2,1.6,.4,1);white-space:nowrap}
+  .chair.tagged .tag{transform:translateX(-50%) rotate(-4deg) scale(1)}
+  .chair .absent{margin-top:8px;display:inline-block;font-size:14.5px;color:#a33f2e;font-weight:900;letter-spacing:2px;border:2px dashed #a33f2e;border-radius:4px;padding:3px 12px;opacity:0;transition:opacity .5s}
+  .chair.tagged .absent{opacity:1}
+  #chairCap{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);z-index:8;font-size:19px;color:#5a2c22;letter-spacing:2px;opacity:0;transition:opacity .6s;white-space:nowrap;font-weight:700}
+  #chairCap.show{opacity:1}
+
+  /* dim overlay when chairs featured */
+  #spotDim{position:absolute;inset:0;background:rgba(34,48,31,0);pointer-events:none;transition:background .8s;z-index:7}
+  #spotDim.on{background:rgba(34,48,31,.18)}
+
+  /* anan */
+  #anan{position:absolute;right:30px;bottom:-10px;width:350px;z-index:25;opacity:0;transition:opacity .9s ease;filter:drop-shadow(0 12px 22px rgba(46,74,56,.4))}
+  #anan.show{opacity:1}
+  #anan img{width:100%;display:block;animation:bob 3.1s ease-in-out infinite alternate}
+  @keyframes bob{from{transform:translateY(0)}to{transform:translateY(-10px)}}
+  #anan .say{position:absolute;left:-196px;top:56px;width:206px;background:#fff;border:2.5px solid #2e4a38;border-radius:12px;padding:12px 16px;
+    font-size:22px;font-weight:900;color:#22301f;line-height:1.4;letter-spacing:1px;opacity:0;transform:scale(.6);transition:all .4s ease;box-shadow:4px 4px 0 rgba(46,74,56,.35)}
+  #anan .say::after{content:'';position:absolute;z-index:-1;right:26px;bottom:-18px;border:9px solid transparent;border-top:11px solid #2e4a38}
+  #anan .say b{color:#a33f2e}
+  #anan.show .say{opacity:1;transform:scale(1);transition-delay:.4s}
+
+  .corner{position:absolute;font-family:'JetBrains Mono';font-size:12px;color:#7a8a72;letter-spacing:2px;z-index:9}
+  #chap{left:52px;bottom:36px}
+  #src{right:52px;bottom:36px}
+
+  /* HUD */
+  #hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'JetBrains Mono';pointer-events:none}
+  #track{height:5px;background:rgba(46,74,56,.2)}
+  #bar{height:100%;width:0;background:#3e7d4e}
+  #hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;color:#d8e4d4;background:rgba(34,48,31,.94);backdrop-filter:blur(4px)}
+  #hud button{pointer-events:auto;background:transparent;border:1px solid #8aa88e;color:#e8f2e4;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+  #hud button:hover{background:rgba(120,170,125,.25)}
+  #replay.done{animation:pulse 1.2s infinite;border-color:#bfe3a0;color:#bfe3a0}
+  @keyframes pulse{50%{box-shadow:0 0 14px rgba(190,227,160,.8)}}
+
+  /* 镜头层 */
+  #cam{position:absolute;inset:0;transform-origin:0 0;transform:translate(0px,0px) scale(1.22);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- ================= 镜头世界 ================= -->
+  <div id="cam">
+  <div id="title">
+    <span class="no">OSAA · 2026-07-28</span>
+    <h1>黄仁勋一句话 + <em>37 家联盟</em></h1>
+  </div>
+
+  <!-- quote -->
+  <div id="quoteZone">
+    <div id="portrait">
+      <svg viewBox="0 0 170 200">
+        <circle cx="85" cy="62" r="34" fill="#8a9684"/>
+        <path d="M40 200 C40 132 62 108 85 108 C108 108 130 132 130 200 Z" fill="#5a6b52"/>
+        <path d="M58 200 C58 150 70 122 85 122 C100 122 112 150 112 200 Z" fill="#3c4a38"/>
+        <path d="M74 120 L85 138 L96 120" fill="none" stroke="#dce6d8" stroke-width="4" stroke-linecap="round"/>
+      </svg>
+      <div class="ptag">J. HUANG · NVIDIA</div>
+    </div>
+    <div id="qcard">
+      <div class="qmark">"</div>
+      <div id="qtext"></div>
+      <div id="qwho">—— <b>NVIDIA · 黄仁勋</b></div>
+    </div>
+  </div>
+
+  <!-- logo wall -->
+  <div id="wallZone">
+    <div id="wallHead"><b>开放安全 AI 联盟 · 成员墙</b><span>37 家机构 · NVIDIA 牵头</span></div>
+    <div id="wallGrid"></div>
+  </div>
+
+  <div id="spotDim"></div>
+
+  <!-- empty chairs -->
+  <div id="chairs">
+    <div class="chair" id="ch1">
+      <div class="tag">OpenAI</div>
+      <svg viewBox="0 0 150 170"><path d="M30 10 h90 v70 h-90z" fill="none" stroke="#7a6a5a" stroke-width="7"/><path d="M30 80 h90 l-8 34 h-74z" fill="#d9d2c2" stroke="#7a6a5a" stroke-width="6" stroke-linejoin="round"/><path d="M42 114 v46 M108 114 v46 M42 146 h66" stroke="#7a6a5a" stroke-width="7" stroke-linecap="round" fill="none"/></svg>
+      <div><span class="absent">缺席</span></div>
+    </div>
+    <div class="chair" id="ch2">
+      <div class="tag">Anthropic</div>
+      <svg viewBox="0 0 150 170"><path d="M30 10 h90 v70 h-90z" fill="none" stroke="#7a6a5a" stroke-width="7"/><path d="M30 80 h90 l-8 34 h-74z" fill="#d9d2c2" stroke="#7a6a5a" stroke-width="6" stroke-linejoin="round"/><path d="M42 114 v46 M108 114 v46 M42 146 h66" stroke="#7a6a5a" stroke-width="7" stroke-linecap="round" fill="none"/></svg>
+      <div><span class="absent">缺席</span></div>
+    </div>
+    <div class="chair" id="ch3">
+      <div class="tag">Google</div>
+      <svg viewBox="0 0 150 170"><path d="M30 10 h90 v70 h-90z" fill="none" stroke="#7a6a5a" stroke-width="7"/><path d="M30 80 h90 l-8 34 h-74z" fill="#d9d2c2" stroke="#7a6a5a" stroke-width="6" stroke-linejoin="round"/><path d="M42 114 v46 M108 114 v46 M42 146 h66" stroke="#7a6a5a" stroke-width="7" stroke-linecap="round" fill="none"/></svg>
+      <div><span class="absent">缺席</span></div>
+    </div>
+  </div>
+  <div id="chairCap">这几家闭源巨头，一个都没在名单里</div>
+
+  <div id="anan">
+    <div class="say">哼，<br><b>一个都没来</b></div>
+    <img src="anan - emotion rename/06_蹙眉闭唇_窘迫羞恼.png" alt="安安·嫌弃">
+  </div>
+
+  
+  
+
+  </div><!-- /cam -->
+<div class="corner" id="chap">03 / 开源的盾 · 联盟</div><div class="corner" id="src">OSAA 开放安全 AI 联盟 · 2026-07-28 · NVIDIA 牵头</div>
+  </div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 3-4 · 黄仁勋 + 37 家联盟 · 16s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+const DUR=16000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[];
+function typerSeg(el,segs,dur,delay){
+  const plain=segs.map(s=>s[0]).join('');
+  tws.push({t:performance.now()-t0+delay,d:dur,f:p=>{
+    const n=Math.floor(p*(plain.length+1));
+    let used=0,out='';
+    for(const [txt,cls] of segs){
+      if(used>=n)break;
+      const take=Math.min(txt.length,n-used);
+      const part=txt.slice(0,take);
+      out+=cls?'<span class="'+cls+'">'+part+'</span>':part;
+      used+=take;
+    }
+    el.innerHTML=out;
+  }});
+}
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(q);if(q>=1)tws.splice(i,1)}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+
+/* build logo wall: NVIDIA center-ish big tile + 36 others */
+const logos=['NVIDIA','Microsoft','IBM','SpaceX','Intel','Cisco','CrowdStrike','Palo Alto','Cloudflare','Salesforce','Linux Fdn','Red Hat','SUSE','Canonical','Mozilla','Apache','Eclipse','GitLab','Docker','HashiCorp','Akamai','Fastly','Okta','Atlassian','Arm','AMD','Qualcomm','Dell','HPE','Lenovo','Siemens','Bosch','Sony','Samsung','SAP','VMware','NetApp'];
+const grid=document.getElementById('wallGrid');
+logos.forEach((nm,i)=>{
+  const t=document.createElement('div');
+  t.className='tile'+(i===0?' nv lit':'');
+  t.id='lt'+i;
+  if(i===0)t.innerHTML=nm+'<small>FOUNDING CHAIR</small>';else t.textContent=nm;
+  if(i===0)t.style.opacity='1',t.style.transform='scale(1)';
+  grid.appendChild(t);
+});
+
+/* timeline (16s) —— 口播窗口 13:02 → 13:18 */
+on(300,()=>$('#title').classList.add('show'));                        // 「黄仁勋当时是这么说的」
+on(700,()=>$('#quoteZone').classList.add('in'));
+on(2000,()=>typerSeg($('#qtext'),[['闭源模型','em3'],['阻碍了关键取证，',null],['开源模型','em2'],['帮助控制了事态。',null]],3200,0));  // 13:04 闭源 → 13:06 开源
+on(5600,()=>$('#qwho').classList.add('show'));                        // 13:08「促成了英伟达牵头」
+on(6600,()=>$('#wallHead').classList.add('show'));                    // 13:10「37家机构加入的开放安全AI联盟」
+/* logos light staggered */
+for(let i=1;i<logos.length;i++){
+  on(7000+i*55,()=>{const t=document.getElementById('lt'+i);t.classList.add('lit')});
+}
+/* chairs feature */
+on(10600,()=>{$('#spotDim').classList.add('on');$('#chairs').classList.add('show')});  // 13:13「这几家闭源巨头」
+on(11200,()=>$('#ch1').classList.add('tagged'));
+on(11800,()=>$('#ch2').classList.add('tagged'));
+on(12400,()=>$('#ch3').classList.add('tagged'));
+on(14400,()=>$('#chairCap').classList.add('show'));                   // 13:17「一个都没在这个名单里面」
+on(14800,()=>$('#anan').classList.add('show'));
+on(16400,()=>$('#anan').classList.remove('show'));
+
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+/* ===== 镜头 ===== */
+const camEl=$('#cam');
+function camTo(tx,ty,s,dur){camEl.style.setProperty('--cd',dur+'s');camEl.style.transform='translate('+tx+'px,'+ty+'px) scale('+s+')';if(window.__sfx)__sfx.whoosh(dur,0.65)}
+const CX=960,CY=540;
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+
+/* ===== 镜头调度 ===== */
+on(300,()=>{camTo(0,0,1,2.0)});             // 开场拉镜
+on(6800,()=>{camFocus(1340,420,1.16,1.2)}); // 37 家 logo 墙逐个点亮
+on(10200,()=>{camTo(0,0,1,1.0)});           // 暗场椅子前拉回
+
+
+/* ===== 音效 ===== */
+on(300,()=>__sfx.swipe(0.6));
+on(700,()=>__sfx.pop(0.7));
+for(let __si=0;__si<24;__si++)on(2000+__si*133,()=>__sfx.type(0.4));   // 引言打字 2.0→5.2s
+on(5600,()=>__sfx.pop(0.6));
+on(6600,()=>__sfx.pop(0.6));
+for(let __si=0;__si<37;__si++)on(7000+__si*55,()=>__sfx.type(0.28));   // logo 点亮连击 7.0→9.0s
+on(10600,()=>__sfx.whoosh(0.7,0.6));
+on(11200,()=>__sfx.thud(0.55));
+on(11800,()=>__sfx.thud(0.55));
+on(12400,()=>__sfx.thud(0.55));
+on(14400,()=>__sfx.pop(0.5));
+on(14800,()=>__sfx.pop(0.6));
+</script>
+</body>
+</html>

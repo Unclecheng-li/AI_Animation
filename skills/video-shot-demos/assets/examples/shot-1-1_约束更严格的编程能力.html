@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<script>
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+
+<script>
+/* ===== SFX 引擎（WebAudio 合成，无音频文件，随启动按钮手势激活） ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){ /* 波：弹出 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){ /* 呼：镜头/大幅移动 */
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){ /* 唰：快速滑入/切换 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){ /* 键盘：短促轻击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){ /* 叮：柔和落定 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){ /* 咚：低频落章/撞击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 1-1 · 网安能力 = 约束更严格的编程能力</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;900&family=Noto+Sans+SC:wght@400;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;background:#f2ede1;overflow:hidden;font-family:'Noto Serif SC',serif}
+  body.paused *{animation-play-state:paused!important}
+  #stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:#f4efe4;
+    background-image:radial-gradient(rgba(120,90,30,.06) 1px,transparent 1px);background-size:26px 26px}
+  #stage::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 30%,transparent 50%,rgba(120,95,40,.14))}
+  .rule-line{position:absolute;left:110px;right:110px;height:1px;background:rgba(60,45,15,.25)}
+  .rl1{top:104px}.rl2{bottom:104px}
+
+  #kicker{position:absolute;left:50%;top:140px;transform:translateX(-50%);font-family:'JetBrains Mono';font-size:19px;color:#a8542e;letter-spacing:6px;opacity:0}
+  #kicker.show{animation:fade .7s ease forwards}
+  @keyframes fade{to{opacity:1}}
+
+  #quote{position:absolute;left:50%;top:205px;transform:translateX(-50%);width:1500px;text-align:center;opacity:0}
+  #quote.show{animation:qIn 1s cubic-bezier(.16,1,.3,1) forwards}
+  @keyframes qIn{from{opacity:0;transform:translateX(-50%) translateY(36px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+  #quote .q{font-size:76px;font-weight:900;color:#1d2433;line-height:1.5;letter-spacing:2px}
+  #quote .hl{position:relative;color:#c0392b;white-space:nowrap}
+  #quote .hl::after{content:'';position:absolute;left:0;right:0;bottom:2px;height:14px;background:rgba(192,57,43,.22);transform:scaleX(0);transform-origin:left;transition:transform .9s cubic-bezier(.2,.8,.2,1) .2s;z-index:-1}
+  #quote.marked .hl::after{transform:scaleX(1)}
+  #quote .attr{margin-top:26px;font-size:22px;color:#8a7a56;letter-spacing:3px}
+
+  /* flow chain */
+  #chain{position:absolute;left:50%;top:530px;transform:translateX(-50%);display:flex;align-items:center;gap:0}
+  .cnode{text-align:center;opacity:0;transform:translateY(26px);transition:all .55s cubic-bezier(.34,1.4,.64,1)}
+  .cnode.lit{opacity:1;transform:translateY(0)}
+  .cnode .ic{width:86px;height:86px;margin:0 auto;border-radius:50%;background:#fffdf6;border:2.5px solid #1d2433;display:flex;align-items:center;justify-content:center;box-shadow:4px 4px 0 rgba(29,36,51,.9)}
+  .cnode .ic svg{width:40px;height:40px}
+  .cnode b{display:block;margin-top:16px;font-size:26px;color:#1d2433;letter-spacing:2px}
+  .clink{width:64px;height:3px;background:repeating-linear-gradient(90deg,#1d2433 0 8px,transparent 8px 14px);margin:0 10px 44px;opacity:0;transition:opacity .4s}
+  .clink.lit{opacity:.7}
+
+  /* compare cards */
+  #cmp{position:absolute;left:50%;bottom:180px;transform:translateX(-50%);display:flex;align-items:center;gap:30px}
+  .ccard{width:430px;background:#fffdf6;border:2px solid #1d2433;border-radius:4px;padding:24px 30px;box-shadow:6px 6px 0 rgba(29,36,51,.85);opacity:0}
+  .ccard.l{transform:translateX(-70px)}.ccard.r{transform:translateX(70px)}
+  .ccard.in{animation:ccIn .7s cubic-bezier(.16,1,.3,1) forwards}
+  @keyframes ccIn{to{opacity:1;transform:translateX(0)}}
+  .ccard h3{font-size:23px;color:#1d2433;letter-spacing:2px}
+  .ccard p{margin-top:8px;font-size:19px;color:#5f5744;font-family:'Noto Sans SC'}
+  #eq{font-family:'JetBrains Mono';font-size:24px;font-weight:700;color:#c0392b;white-space:nowrap;opacity:0;transform:scale(.6);transition:all .5s cubic-bezier(.34,1.6,.64,1)}
+  #eq.in{opacity:1;transform:scale(1)}
+
+  #warn{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);background:#1d2433;color:#f4efe4;font-size:26px;padding:16px 44px;letter-spacing:2px;opacity:0;font-family:'Noto Sans SC';box-shadow:0 14px 40px rgba(29,36,51,.3)}
+  #warn b{color:#ff6b81;font-weight:900}
+  #warn.show{animation:wIn .5s cubic-bezier(.2,1.3,.4,1) forwards}
+  @keyframes wIn{from{opacity:0;transform:translateX(-50%) scale(1.5)}to{opacity:1;transform:translateX(-50%) scale(1)}}
+
+  .corner{position:absolute;font-size:17px;color:#a3946e;letter-spacing:2px;font-family:'JetBrains Mono'}
+  #chap{left:110px;bottom:76px}#tc{right:110px;top:76px}#src{right:110px;bottom:76px;font-size:15px}
+
+  #hud{position:fixed;left:0;right:0;bottom:0;z-index:50;font-family:'JetBrains Mono';pointer-events:none}
+  #track{height:5px;background:rgba(0,0,0,.12)}
+  #bar{height:100%;width:0;background:#c0392b}
+  #hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;color:#6b6250;background:rgba(244,239,228,.9)}
+  #hud button{pointer-events:auto;background:transparent;border:1px solid #c0392b;color:#c0392b;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+  #replay.show{animation:pulse 1.2s infinite}
+  @keyframes pulse{50%{box-shadow:0 0 14px #c0392b}}
+
+  /* 镜头层 */
+  #cam{position:absolute;inset:0;transform-origin:0 0;transform:translate(-240px,0px) scale(1.25);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- ================= 镜头世界 ================= -->
+  <div id="cam">
+  <div class="rule-line rl1"></div><div class="rule-line rl2"></div>
+  <div id="kicker">智谱 · 官方原话</div>
+  <div id="quote">
+    <div class="q">网络安全能力，本质是<br><span class="hl">约束更严格</span>的编程能力</div>
+    <div class="attr">挖洞，跟程序员啃陌生仓库、修跨模块 bug，是同一套动作</div>
+  </div>
+
+  <div id="chain">
+    <div class="cnode"><div class="ic"><svg viewBox="0 0 40 40"><path d="M8 6h18l6 6v22H8z" fill="none" stroke="#1d2433" stroke-width="2.4"/><path d="M14 20h12M14 26h12M14 14h7" stroke="#c0392b" stroke-width="2.4" stroke-linecap="round"/></svg></div><b>读懂代码</b></div>
+    <div class="clink"></div>
+    <div class="cnode"><div class="ic"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="13" fill="none" stroke="#1d2433" stroke-width="2.4"/><path d="M20 11v9l6 4" stroke="#c0392b" stroke-width="2.4" stroke-linecap="round" fill="none"/></svg></div><b>还原逻辑</b></div>
+    <div class="clink"></div>
+    <div class="cnode"><div class="ic"><svg viewBox="0 0 40 40"><path d="M6 32L20 8l14 24z" fill="none" stroke="#1d2433" stroke-width="2.4" stroke-linejoin="round"/><path d="M20 17v7" stroke="#c0392b" stroke-width="2.6" stroke-linecap="round"/><circle cx="20" cy="28" r="1.8" fill="#c0392b"/></svg></div><b>找异常路径</b></div>
+    <div class="clink"></div>
+    <div class="cnode"><div class="ic"><svg viewBox="0 0 40 40"><circle cx="18" cy="18" r="10" fill="none" stroke="#1d2433" stroke-width="2.4"/><path d="M26 26l8 8" stroke="#1d2433" stroke-width="2.8" stroke-linecap="round"/><path d="M13 18l4 4 7-8" stroke="#c0392b" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg></div><b>触发验证</b></div>
+    <div class="clink"></div>
+    <div class="cnode"><div class="ic"><svg viewBox="0 0 40 40"><path d="M8 32V16M20 32V8M32 32V22" stroke="#1d2433" stroke-width="3" stroke-linecap="round"/><path d="M6 34h28" stroke="#c0392b" stroke-width="2.6" stroke-linecap="round"/></svg></div><b>评估影响</b></div>
+  </div>
+
+  <div id="cmp">
+    <div class="ccard l" id="ccL"><h3>程序员</h3><p>啃陌生仓库 · 修跨模块 bug</p></div>
+    <div id="eq">= 同一套动作</div>
+    <div class="ccard r" id="ccR"><h3>安全研究员</h3><p>在别人的系统里挖漏洞</p></div>
+  </div>
+
+  <div id="warn">但网安要求更严：代码必须<b>真能跑出问题</b>，不能靠猜</div>
+
+  
+  
+  
+
+  </div><!-- /cam -->
+<div class="corner" id="chap">01 / 全球第一的实力</div><div class="corner" id="tc">01:10</div><div class="corner" id="src">来源：智谱官方发布 · 2026-08-14</div>
+  </div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 1-1 · 网安能力 = 约束更严格的编程能力 · 22s</span><span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+const DUR=22000, OFFSET=70;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=OFFSET+el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('show');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+
+const cnodes=[...document.querySelectorAll('.cnode')],clinks=[...document.querySelectorAll('.clink')];
+/* timeline 1:10-1:32 */
+on(400, ()=>$('#kicker').classList.add('show'));
+on(1100,()=>$('#quote').classList.add('show'));
+on(2400,()=>$('#quote').classList.add('marked'));
+cnodes.forEach((n,i)=>{on(4300+i*650,()=>{n.classList.add('lit');if(clinks[i-1])clinks[i-1].classList.add('lit')})});
+on(8800,()=>clinks[4]&&clinks[4].classList.add('lit'));
+on(10000,()=>{$('#ccL').classList.add('in');$('#ccR').classList.add('in')});
+on(11500,()=>$('#eq').classList.add('in'));
+on(13600,()=>$('#warn').classList.add('show'));
+
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+/* ===== 镜头 ===== */
+const camEl=$('#cam');
+function camTo(tx,ty,s,dur){camEl.style.setProperty('--cd',dur+'s');camEl.style.transform='translate('+tx+'px,'+ty+'px) scale('+s+')';if(window.__sfx)__sfx.whoosh(dur,0.65)}
+const CX=960,CY=540;
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+
+/* ===== 镜头调度 ===== */
+on(400,()=>{camTo(0,0,1,2.0)});             // 开场拉镜
+on(4300,()=>{camFocus(960,560,1.14,1.2)});  // 链条逐节点点亮
+on(9200,()=>{camTo(0,0,1,1.1)});            // 拉回
+on(13550,()=>{camFocus(960,980,1.22,0.8)}); // 警告条收尾定格
+
+
+/* ===== 音效 ===== */
+on(400,()=>__sfx.pop(0.6));
+on(1100,()=>__sfx.swipe(0.6));
+on(2400,()=>__sfx.swipe(0.4));
+on(4300,()=>__sfx.pop(0.55));
+on(4950,()=>__sfx.pop(0.55));
+on(5600,()=>__sfx.pop(0.55));
+on(6250,()=>__sfx.pop(0.55));
+on(6900,()=>__sfx.pop(0.55));
+on(7550,()=>__sfx.pop(0.5));
+on(8800,()=>__sfx.swipe(0.4));
+on(10000,()=>__sfx.pop(0.8));
+on(11500,()=>__sfx.pop(0.8));
+on(13600,()=>__sfx.thud(0.8));
+</script>
+</body>
+</html>

@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<script>
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+
+<script>
+/* ===== SFX 引擎（WebAudio 合成，无音频文件，随启动按钮手势激活） ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){ /* 波：弹出 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){ /* 呼：镜头/大幅移动 */
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){ /* 唰：快速滑入/切换 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){ /* 键盘：短促轻击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){ /* 叮：柔和落定 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){ /* 咚：低频落章/撞击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 3-1 · 转折：强，但我们用不上</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,600&family=Noto+Serif+SC:wght@400;600;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;background:#e6e0d2;overflow:hidden;font-family:'Noto Serif SC',serif}
+  body.paused *{animation-play-state:paused!important}
+  #stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;
+    background:#f8f4e9;perspective:2200px}
+  /* magazine spread fold */
+  #fold{position:absolute;left:50%;top:0;bottom:0;width:3px;background:linear-gradient(90deg,rgba(90,75,45,.28),rgba(90,75,45,.06),rgba(90,75,45,.28));z-index:2}
+  #fold::before,#fold::after{content:'';position:absolute;top:0;bottom:0;width:70px}
+  #fold::before{right:3px;background:linear-gradient(270deg,rgba(90,75,45,.10),transparent)}
+  #fold::after{left:3px;background:linear-gradient(90deg,rgba(90,75,45,.10),transparent)}
+
+  /* chapter tab */
+  #chapTab{position:absolute;left:50%;top:44px;transform:translateX(-50%);z-index:8;background:#1e3a5f;color:#f4efdf;font-size:19px;font-weight:600;
+    letter-spacing:6px;padding:10px 34px;opacity:0;transition:opacity .6s;box-shadow:0 6px 18px rgba(30,58,95,.3)}
+  #chapTab.show{opacity:1}
+  #chapTab small{font-family:'JetBrains Mono';font-size:11.5px;letter-spacing:2px;color:#9fb8d4;margin-left:14px}
+
+  /* left page (gray) */
+  #pageL{position:absolute;left:110px;top:150px;width:800px;height:770px;z-index:3;background:#efeee9;border:1px solid #d8d5c9;
+    box-shadow:-18px 22px 44px rgba(80,70,45,.18);opacity:0;transform:translateX(-50px);transition:all .7s ease}
+  #pageL.in{opacity:1;transform:translateX(0)}
+  #pageL .ph{padding:34px 44px;border-bottom:2px solid #d8d5c9;display:flex;justify-content:space-between;align-items:center}
+  #pageL .ph b{font-size:21px;color:#6f6c60;letter-spacing:3px;font-weight:600}
+  #pageL .ph span{font-family:'JetBrains Mono';font-size:12px;color:#a5a296}
+  #pageL .q1{padding:56px 54px 0;font-size:44px;font-weight:900;color:#5c594e;letter-spacing:2px;line-height:1.5;opacity:0;transform:translateY(20px);transition:all .6s ease}
+  #pageL .q1.in{opacity:1;transform:translateY(0)}
+  #pageL .q1 .ans{color:#8a877a;font-size:56px;margin-left:18px}
+  #pageL .q2{padding:30px 54px 0;font-size:44px;font-weight:900;color:#494639;letter-spacing:2px;line-height:1.5;opacity:0;transform:translateY(20px);transition:all .6s ease}
+  #pageL .q2.in{opacity:1;transform:translateY(0)}
+  #pageL .q2 .no{color:#a33f2e;border-bottom:6px solid #a33f2e;padding-bottom:2px}
+  /* queue + lock row */
+  #pageL .queue{margin:44px 54px 0;display:flex;align-items:center;gap:20px;opacity:0;transition:opacity .6s}
+  #pageL .queue.in{opacity:1}
+  #pageL .queue .qp{display:flex;flex-direction:column;align-items:center;gap:8px;color:#8a877a}
+  #pageL .queue .qp svg{width:44px;height:44px}
+  #pageL .queue .qp span{font-size:13px;letter-spacing:1px}
+  #pageL .queue .arr2{color:#b5b2a4}
+  #pageL .lockBox{margin-left:8px;background:#f3e9e6;border:2.5px solid #a33f2e;border-radius:10px;padding:14px 22px;display:flex;align-items:center;gap:12px;color:#a33f2e}
+  #pageL .lockBox svg{width:34px;height:34px}
+  #pageL .lockBox b{font-size:19px;letter-spacing:2px}
+  #pageL .lockBox small{display:block;font-size:12px;color:#b07a6e;font-weight:400;letter-spacing:1px}
+
+  /* right page (ink blue) — flips in */
+  #pageR{position:absolute;right:110px;top:150px;width:800px;height:770px;z-index:4;background:#fdfbf4;border:1px solid #ddd6c2;
+    box-shadow:18px 22px 44px rgba(80,70,45,.18);transform-origin:left center;transform:rotateY(-84deg);opacity:0;transition:transform 1s cubic-bezier(.4,0,.2,1),opacity .5s}
+  #pageR.in{transform:rotateY(0);opacity:1}
+  #pageR .ph{padding:34px 44px;border-bottom:2px solid #1e3a5f;display:flex;justify-content:space-between;align-items:center}
+  #pageR .ph b{font-size:21px;color:#1e3a5f;letter-spacing:3px;font-weight:900}
+  #pageR .ph span{font-family:'JetBrains Mono';font-size:12px;color:#7d94b0}
+  #pageR .big{padding:60px 54px 0;font-size:47px;font-weight:900;color:#1e3a5f;line-height:1.62;letter-spacing:2px}
+  #pageR .big .hl{background:linear-gradient(transparent 62%,rgba(212,168,60,.55) 62%);padding:0 4px}
+  #pageR .big .u{border-bottom:6px solid #1e3a5f}
+  #pageR .sig{margin:40px 54px 0;display:flex;align-items:center;gap:14px;color:#7d94b0;font-size:16px;letter-spacing:2px;opacity:0;transition:opacity .6s}
+  #pageR .sig.in{opacity:1}
+  #pageR .sig img{width:30px;height:30px}
+
+  /* shield slam overlay */
+  #shieldOv{position:absolute;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;pointer-events:none;
+    background:rgba(248,244,233,0);transition:background .6s}
+  #shieldOv.on{background:rgba(248,244,233,.86)}
+  #shieldCore{position:relative;text-align:center;opacity:0;transform:scale(2.4)}
+  #shieldOv.on #shieldCore{animation:shIn .55s cubic-bezier(.2,1.3,.4,1) forwards}
+  @keyframes shIn{to{opacity:1;transform:scale(1)}}
+  #shieldSvg{width:250px;margin:0 auto;position:relative;z-index:2;filter:drop-shadow(0 18px 36px rgba(30,58,95,.35))}
+  .ray{position:absolute;left:50%;top:44%;transform-origin:left center;z-index:1;opacity:0}
+  #shieldOv.on .ray{animation:rayOut 1s .45s cubic-bezier(.2,.9,.3,1) forwards}
+  @keyframes rayOut{from{opacity:0;transform:rotate(var(--r)) scaleX(.1)}to{opacity:1;transform:rotate(var(--r)) scaleX(1)}}
+  .ray .beam{width:400px;height:4px;background:linear-gradient(90deg,#1e3a5f,rgba(30,58,95,0))}
+  .ray .rlab{position:absolute;left:270px;top:-56px;background:#1e3a5f;color:#f4efdf;font-size:19px;letter-spacing:2px;padding:9px 20px;border-radius:4px;
+    transform:rotate(calc(var(--r) * -1));white-space:nowrap;display:flex;align-items:center;gap:9px}
+  .ray .rlab svg{width:21px;height:21px}
+  #shieldTitle{margin-top:26px;font-size:104px;font-weight:900;color:#1e3a5f;letter-spacing:22px;text-indent:22px;line-height:1}
+  #shieldTitle em{font-style:normal;color:#b2812a}
+  #shieldSub{margin-top:16px;font-family:'JetBrains Mono';font-size:14px;color:#7d94b0;letter-spacing:4px}
+
+  .corner{position:absolute;font-family:'JetBrains Mono';font-size:12px;color:#a5a08c;letter-spacing:2px;z-index:9}
+  #chap{left:52px;bottom:36px}
+  #src{right:52px;bottom:36px}
+
+  /* HUD */
+  #hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'JetBrains Mono';pointer-events:none}
+  #track{height:5px;background:rgba(30,58,95,.16)}
+  #bar{height:100%;width:0;background:#1e3a5f}
+  #hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;color:#d6e2ee;background:rgba(24,42,66,.94);backdrop-filter:blur(4px)}
+  #hud button{pointer-events:auto;background:transparent;border:1px solid #7d94b0;color:#e6eef7;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+  #hud button:hover{background:rgba(130,165,205,.25)}
+  #replay.done{animation:pulse 1.2s infinite;border-color:#d4a83c;color:#d4a83c}
+  @keyframes pulse{50%{box-shadow:0 0 14px rgba(212,168,60,.8)}}
+
+  /* 镜头层 */
+  #cam{position:absolute;inset:0;transform-origin:0 0;transform:translate(0px,-107px) scale(1.22);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- ================= 镜头世界 ================= -->
+  <div id="cam">
+  <div id="fold"></div>
+  <div id="chapTab">第三章 · 开源的盾<small>CHAPTER 03</small></div>
+
+  <!-- left gray page -->
+  <div id="pageL">
+    <div class="ph"><b>现状 · 闭源前沿</b><span>P.12</span></div>
+    <div class="q1" id="lq1">国外闭源模型强不强？<br><span class="ans">强。</span></div>
+    <div class="q2" id="lq2">但我们<span class="no">大概率用不上</span></div>
+    <div class="queue" id="lqu">
+      <div class="qp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3 2.9-4.6 5.5-4.6s4.9 1.6 5.5 4.6"/></svg><span>排队</span></div>
+      <div class="qp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M5 8l7-5 7 5M7 21h10"/></svg><span>审批</span></div>
+      <div class="qp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2.5"/></svg><span>等待</span></div>
+      <span class="arr2">——›</span>
+      <div class="lockBox">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>
+        <div><b>受信访问</b><small>TRUSTED ACCESS ONLY</small></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- right ink page -->
+  <div id="pageR">
+    <div class="ph"><b>转折 · 这次不一样</b><span>P.13</span></div>
+    <div class="big" id="rbig"></div>
+    <div class="sig" id="rsig"><img src="icons/GLMicon.png" alt="GLM">智谱 · 2026-08-14 · 连同配套工具一起</div>
+  </div>
+
+  <!-- shield slam -->
+  <div id="shieldOv">
+    <div id="shieldCore">
+      <div class="ray" style="--r:-24deg"><div class="beam"></div><div class="rlab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.8-3.8"/></svg>OpenVuln 审计</div></div>
+      <div class="ray" style="--r:0deg"><div class="beam"></div><div class="rlab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7H4a2 2 0 00-2 2v8a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>免费额度</div></div>
+      <div class="ray" style="--r:24deg"><div class="beam"></div><div class="rlab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6l-6 6 6 6M16 6l6 6-6 6"/></svg>ZCode 审计</div></div>
+      <svg id="shieldSvg" viewBox="0 0 200 220">
+        <path d="M100 8 L182 44 V110 C182 164 146 198 100 212 C54 198 18 164 18 110 V44 Z" fill="#1e3a5f"/>
+        <path d="M100 26 L166 56 V108 C166 152 136 182 100 194 C64 182 34 152 34 108 V56 Z" fill="#2c5282"/>
+        <path d="M100 26 L166 56 V108 C166 152 136 182 100 194 Z" fill="#3567a0"/>
+        <path d="M70 108 l20 20 l42 -44" fill="none" stroke="#f4efdf" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div id="shieldTitle">开源的<em>盾</em></div>
+      <div id="shieldSub">OPEN-SOURCED SHIELD · 智谱「开源的盾」计划</div>
+    </div>
+  </div>
+
+  
+  
+
+  </div><!-- /cam -->
+<div class="corner" id="chap">03 / 开源的盾</div><div class="corner" id="src">智谱「开源的盾」计划 · 2026-08-14</div>
+  </div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 3-1 · 转折 · 20s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+const DUR=20000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[];
+function typerSeg(el,segs,dur,delay){
+  const plain=segs.map(s=>s[0]).join('');
+  tws.push({t:performance.now()-t0+delay,d:dur,f:p=>{
+    const n=Math.floor(p*(plain.length+1));
+    let used=0,out='';
+    for(const [txt,cls] of segs){
+      if(used>=n)break;
+      const take=Math.min(txt.length,n-used);
+      const part=txt.slice(0,take).replace(/\n/g,'<br>');
+      out+=cls?'<span class="'+cls+'">'+part+'</span>':part;
+      used+=take;
+    }
+    el.innerHTML=out;
+  }});
+}
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(q);if(q>=1)tws.splice(i,1)}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+
+/* timeline (20s) */
+on(300,()=>$('#chapTab').classList.add('show'));
+on(800,()=>$('#pageL').classList.add('in'));
+on(2000,()=>$('#lq1').classList.add('in'));
+on(3400,()=>$('#lq2').classList.add('in'));
+on(4400,()=>$('#lqu').classList.add('in'));
+on(5800,()=>$('#pageR').classList.add('in'));
+on(7000,()=>{
+  typerSeg($('#rbig'),[['智谱这次干的事',null],['不一样','u'],['——\n把',null],['全球第一','hl'],['的漏洞发现能力，\n连着配套工具，',null],['一起开源','hl'],['出来',null]],2200,0);
+});
+on(9600,()=>$('#rsig').classList.add('in'));
+on(11200,()=>$('#shieldOv').classList.add('on'));
+
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+/* ===== 镜头 ===== */
+const camEl=$('#cam');
+function camTo(tx,ty,s,dur){camEl.style.setProperty('--cd',dur+'s');camEl.style.transform='translate('+tx+'px,'+ty+'px) scale('+s+')';if(window.__sfx)__sfx.whoosh(dur,0.65)}
+const CX=960,CY=540;
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+
+/* ===== 镜头调度 ===== */
+on(300,()=>{camTo(0,0,1,2.0)});             // 开场拉镜：书页摊开
+on(11200,()=>{camFocus(960,540,1.24,0.9)}); // 开源之盾定格收尾
+
+
+/* ===== 音效 ===== */
+on(300,()=>__sfx.pop(0.6));
+on(800,()=>__sfx.whoosh(0.8,0.6));
+on(2000,()=>__sfx.pop(0.6));
+on(3400,()=>__sfx.pop(0.6));
+on(4400,()=>__sfx.pop(0.6));
+on(5800,()=>__sfx.whoosh(0.8,0.6));
+on(7000,()=>__sfx.pop(0.6));
+on(9600,()=>__sfx.pop(0.6));
+on(11200,()=>__sfx.ding(1));
+</script>
+</body>
+</html>

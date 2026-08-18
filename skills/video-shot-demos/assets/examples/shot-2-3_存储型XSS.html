@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<script>
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+
+<script>
+/* ===== SFX 引擎（WebAudio 合成，无音频文件，随启动按钮手势激活） ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){ /* 波：弹出 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){ /* 呼：镜头/大幅移动 */
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){ /* 唰：快速滑入/切换 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){ /* 键盘：短促轻击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){ /* 叮：柔和落定 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){ /* 咚：低频落章/撞击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 2-3 · 漏洞① 存储型 XSS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=ZCOOL+KuaiLe&family=Noto+Sans+SC:wght@400;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;background:#e8d9b8;overflow:hidden;font-family:'Noto Sans SC',sans-serif}
+  body.paused *{animation-play-state:paused!important}
+  #stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;
+    background:#fdf3dd;background-image:radial-gradient(rgba(30,25,15,.14) 1.6px,transparent 2.2px);background-size:26px 26px}
+  .ink{font-family:'Bangers';letter-spacing:3px}
+
+  #title{position:absolute;left:64px;top:44px;z-index:9;opacity:0;transform:translateY(-16px) rotate(-1.5deg);transition:all .6s cubic-bezier(.34,1.5,.64,1)}
+  #title.show{opacity:1;transform:translateY(0) rotate(-1.5deg)}
+  #title .no{display:inline-block;font-family:'Bangers';font-size:22px;letter-spacing:4px;color:#fdf3dd;background:#1d1d1d;padding:5px 16px;transform:rotate(1deg)}
+  #title h1{margin-top:10px;font-family:'ZCOOL KuaiLe';font-size:46px;color:#1d1d1d;letter-spacing:2px}
+  #title h1 em{font-style:normal;color:#e23e3e;text-shadow:2px 2px 0 #ffd23f}
+  #title .en{font-family:'Bangers';font-size:19px;color:#7a6a4a;margin-top:2px;letter-spacing:4px}
+
+  /* mini scoreboard */
+  #miniScore{position:absolute;right:64px;top:48px;z-index:20;display:flex;align-items:center;gap:10px;background:#fff;border:3px solid #1d1d1d;border-radius:14px;padding:7px 16px;opacity:0;transform:translateY(-16px);transition:all .6s cubic-bezier(.34,1.5,.64,1);box-shadow:5px 5px 0 #1d1d1d}
+  #miniScore.show{opacity:1;transform:translateY(0)}
+  #miniScore img{width:26px;height:26px;border-radius:7px}
+  #miniScore b{font-family:'Bangers';font-size:26px;color:#1d1d1d;letter-spacing:1px}
+  #miniScore small{font-family:'Bangers';font-size:15px;color:#7a6a4a;letter-spacing:1px}
+  #miniScore .lbl{font-size:12.5px;color:#7a6a4a}
+  #msFloat{position:absolute;left:50%;top:-8px;transform:translateX(-50%) scale(.5);font-family:'Bangers';font-size:30px;color:#e23e3e;opacity:0;letter-spacing:2px;white-space:nowrap;text-shadow:2px 2px 0 #ffd23f}
+  #msFloat.go{animation:floatUp 1.6s cubic-bezier(.2,.8,.3,1) forwards}
+  @keyframes floatUp{0%{opacity:0;transform:translateX(-50%) translateY(10px) scale(.5)}25%{opacity:1;transform:translateX(-50%) translateY(-14px) scale(1.15)}70%{opacity:1}100%{opacity:0;transform:translateX(-50%) translateY(-52px) scale(1)}}
+
+  .phase{position:absolute;inset:0;opacity:0;transition:opacity .45s}
+  .phase.on{opacity:1}
+  .plabel{position:absolute;left:64px;top:170px;font-family:'Bangers';font-size:17px;letter-spacing:3px;color:#fdf3dd;background:#e23e3e;padding:4px 14px;transform:rotate(-2deg);z-index:5}
+
+  /* ===== Phase 1 : chain ===== */
+  #chain{position:absolute;left:50%;top:370px;transform:translateX(-50%);display:flex;align-items:center;gap:10px}
+  .lk{width:390px;background:#fff;border:4px solid #1d1d1d;border-radius:18px;padding:28px 30px;text-align:center;box-shadow:8px 8px 0 #1d1d1d;opacity:0;transform:translateY(50px) scale(.85)}
+  .lk.in{animation:lkIn .55s cubic-bezier(.34,1.6,.64,1) forwards}
+  @keyframes lkIn{to{opacity:1;transform:translateY(0) scale(1)}}
+  .lk .ic{width:74px;height:74px;margin:0 auto;border-radius:16px;border:3px solid #1d1d1d;display:flex;align-items:center;justify-content:center}
+  .lk .ic svg{width:40px;height:40px}
+  .lk b{display:block;margin-top:14px;font-family:'ZCOOL KuaiLe';font-size:27px;color:#1d1d1d;letter-spacing:2px}
+  .lk i{display:block;margin-top:6px;font-style:normal;font-size:16.5px;color:#7a6a4a}
+  .lk.hot{background:#ffd23f}
+  .lk.hot b{color:#c22f2f}
+  .arr{width:70px;flex:none;opacity:0;transform:translateX(-24px)}
+  .arr.in{animation:arrIn .45s ease forwards}
+  @keyframes arrIn{to{opacity:1;transform:translateX(0)}}
+  #noteP1{position:absolute;left:50%;top:770px;transform:translateX(-50%);width:1240px;background:#fff;border:4px solid #1d1d1d;border-radius:16px;box-shadow:8px 8px 0 #1d1d1d;padding:24px 34px;font-size:20px;color:#3a3226;line-height:1.8;opacity:0;transition:all .6s}
+  #noteP1.show{opacity:1}
+  #noteP1 b{color:#e23e3e}
+  #noteP1 code{font-family:'JetBrains Mono';font-size:17px;background:#f1e6c8;border:2px solid #d8c9a0;border-radius:6px;padding:1px 9px;color:#8a5a1a}
+
+  /* ===== Phase 2 : wall ===== */
+  #wallZone{position:absolute;left:50%;top:210px;transform:translateX(-50%);width:1500px;height:640px}
+  #wall{position:absolute;left:150px;top:40px;width:1200px;height:520px;border:5px solid #1d1d1d;border-radius:10px;box-shadow:10px 10px 0 #1d1d1d;overflow:hidden;
+    background:#c96a4a;background-image:
+      linear-gradient(#a34c30 4px,transparent 4px),
+      linear-gradient(90deg,#a34c30 4px,transparent 4px),
+      linear-gradient(#d97b58 0 100%);
+    background-size:100% 74px,148px 74px,100% 100%;
+    opacity:0;transform:translateY(60px)}
+  #wall.in{animation:lkIn .6s cubic-bezier(.34,1.5,.64,1) forwards}
+  #wallGap{position:absolute;right:60px;top:110px;width:150px;height:280px;background:#fdf3dd;border:4px dashed #1d1d1d;border-radius:12px;display:flex;align-items:center;justify-content:center;opacity:0}
+  #wallGap.in{animation:fade .5s ease forwards}
+  @keyframes fade{to{opacity:1}}
+  #wallGap span{font-family:'ZCOOL KuaiLe';color:#7a6a4a;font-size:19px;writing-mode:vertical-rl;letter-spacing:6px}
+  .seal{position:absolute;background:#f1e6c8;border:3px solid #1d1d1d;border-radius:10px;padding:10px 18px;font-family:'JetBrains Mono';font-weight:700;font-size:21px;color:#5a4a30;box-shadow:5px 5px 0 rgba(29,29,29,.7);opacity:0;transform:scale(.5) rotate(-4deg)}
+  .seal.in{animation:sealIn .45s cubic-bezier(.34,1.8,.64,1) forwards}
+  @keyframes sealIn{to{opacity:1;transform:scale(1) rotate(-4deg)}}
+  .seal::after{content:'✗ 封印';position:absolute;right:-18px;top:-20px;font-family:'ZCOOL KuaiLe';font-size:16px;background:#e23e3e;color:#fff;padding:3px 10px;border:2px solid #1d1d1d;border-radius:999px;transform:rotate(6deg)}
+  #wallCap{position:absolute;left:150px;top:-6px;font-family:'ZCOOL KuaiLe';font-size:24px;color:#1d1d1d;background:#ffd23f;border:3px solid #1d1d1d;border-radius:10px;padding:6px 18px;box-shadow:5px 5px 0 #1d1d1d;opacity:0}
+  #wallCap.in{animation:fade .5s ease forwards}
+  /* payloads */
+  .ball{position:absolute;left:-130px;top:190px;width:104px;height:104px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#7de9f5,#00b3c7 60%,#0a7d94);border:4px solid #1d1d1d;z-index:6;display:flex;align-items:center;justify-content:center;box-shadow:6px 6px 0 rgba(29,29,29,.6)}
+  .ball img{width:64px;height:64px;border-radius:50%}
+  .ball .tag{position:absolute;top:-44px;left:50%;transform:translateX(-50%);white-space:nowrap;font-family:'JetBrains Mono';font-weight:700;font-size:19px;background:#1d1d1d;color:#7de9f5;padding:5px 14px;border-radius:8px}
+  #ball1{transition:left 1.15s cubic-bezier(.3,.6,.4,1),top 1.15s cubic-bezier(.3,.6,.4,1),opacity .3s}
+  #ball2{transition:left 1.3s cubic-bezier(.25,.5,.3,1),top 1.3s cubic-bezier(.25,.5,.3,1)}
+  .burst{position:absolute;z-index:8;font-family:'Bangers';color:#e23e3e;opacity:0;transform:scale(.3) rotate(-8deg);pointer-events:none;text-shadow:3px 3px 0 #ffd23f,6px 6px 0 #1d1d1d}
+  .burst.pop{animation:burstPop .5s cubic-bezier(.2,1.6,.4,1) forwards}
+  @keyframes burstPop{to{opacity:1;transform:scale(1) rotate(-8deg)}}
+  #p2cap{position:absolute;left:50%;bottom:60px;transform:translateX(-50%);background:#fff;border:4px solid #1d1d1d;border-radius:14px;box-shadow:8px 8px 0 #1d1d1d;padding:16px 34px;font-size:21px;color:#3a3226;opacity:0;transition:all .5s;white-space:nowrap}
+  #p2cap.show{opacity:1}
+  #p2cap code{font-family:'JetBrains Mono';font-weight:700;font-size:19px;background:#d8f3ef;color:#0a7d94;border:2px solid #0a7d94;border-radius:6px;padding:1px 10px}
+
+  /* ===== Phase 3 : screens ===== */
+  #screens{position:absolute;left:64px;top:150px;right:64px;bottom:150px;display:flex;gap:36px}
+  .scr{flex:1;background:#fff;border:4px solid #1d1d1d;border-radius:16px;box-shadow:9px 9px 0 #1d1d1d;overflow:hidden;opacity:0;transform:translateY(46px)}
+  .scr.in{animation:lkIn .6s cubic-bezier(.16,1,.3,1) forwards}
+  .scr .sh{height:48px;background:#1d1d1d;display:flex;align-items:center;padding:0 18px;gap:10px}
+  .scr .sh i{width:12px;height:12px;border-radius:50%}
+  .scr .sh i:nth-child(1){background:#ff5f57}.scr .sh i:nth-child(2){background:#febc2e}.scr .sh i:nth-child(3){background:#28c840}
+  .scr .sh span{font-family:'JetBrains Mono';font-size:14px;color:#c9c2b4;margin-left:6px}
+  .scr .bd{padding:24px 30px;position:relative;height:calc(100% - 48px)}
+  .frm label{display:block;font-size:15.5px;color:#7a6a4a;margin:14px 0 6px;font-weight:700}
+  .frm .inp{border:3px solid #1d1d1d;border-radius:10px;background:#fffdf4;font-family:'JetBrains Mono';font-size:17px;color:#1d1d1d;padding:12px 16px;min-height:52px}
+  .frm .inp.evil{border-color:#e23e3e;background:#fff0ee;color:#c22f2f;font-weight:700}
+  .frm .inp .caret{display:inline-block;width:10px;height:22px;background:#e23e3e;vertical-align:-4px;animation:blink .8s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+  #saveBtn{display:inline-block;margin-top:22px;background:#2f6bff;color:#fff;font-weight:900;font-size:19px;letter-spacing:2px;border:3px solid #1d1d1d;border-radius:12px;padding:12px 34px;box-shadow:5px 5px 0 #1d1d1d;transition:all .15s}
+  #saveBtn.press{transform:translate(4px,4px);box-shadow:1px 1px 0 #1d1d1d}
+  #toast{position:absolute;left:50%;top:18px;transform:translateX(-50%) translateY(-70px);background:#14915f;color:#fff;font-weight:700;font-size:17px;border:3px solid #1d1d1d;border-radius:10px;padding:10px 24px;box-shadow:4px 4px 0 #1d1d1d;transition:transform .4s cubic-bezier(.34,1.6,.64,1);z-index:5}
+  #toast.in{transform:translateX(-50%) translateY(0)}
+  .searchRow{display:flex;gap:14px;margin-top:6px}
+  .searchRow .inp{flex:1;display:flex;align-items:center}
+  #goBtn{background:#e23e3e;color:#fff;font-weight:900;font-size:19px;border:3px solid #1d1d1d;border-radius:10px;padding:12px 30px;box-shadow:5px 5px 0 #1d1d1d;transition:all .15s;letter-spacing:2px}
+  #goBtn.press{transform:translate(4px,4px);box-shadow:1px 1px 0 #1d1d1d}
+  .ritem{display:flex;align-items:center;gap:14px;border:3px solid #e5d5bd;border-radius:12px;background:#fffdf4;padding:13px 18px;margin-top:16px;font-size:18px;color:#3a3226;opacity:0;transform:translateX(-30px)}
+  .ritem.in{animation:arrIn .4s ease forwards}
+  .ritem .pth{width:46px;height:46px;border-radius:10px;background:#ffe1b8;display:flex;align-items:center;justify-content:center;color:#b03a24;flex:none}
+  .ritem .pth svg{width:26px;height:26px}
+  .ritem.evil{border-color:#e23e3e;background:#fff0ee}
+  .ritem.evil .pth{background:#ffd2cc;color:#c22f2f}
+  .mq{flex:1;overflow:hidden;white-space:nowrap;font-family:'JetBrains Mono';font-weight:700;font-size:17px;color:#c22f2f}
+  .mq span{display:inline-block;animation:mq 4.5s linear infinite}
+  @keyframes mq{from{transform:translateX(105%)}to{transform:translateX(-105%)}}
+  #sideNote{position:absolute;right:-6px;bottom:-6px;width:390px;background:#ffd23f;border:4px solid #1d1d1d;border-radius:14px;box-shadow:7px 7px 0 #1d1d1d;padding:18px 22px;font-size:16.5px;line-height:1.75;color:#3a3226;transform:rotate(2deg) scale(.6);opacity:0;transition:all .5s cubic-bezier(.34,1.6,.64,1);z-index:6}
+  #sideNote.show{opacity:1;transform:rotate(2deg) scale(1)}
+  #sideNote b{color:#c22f2f}
+
+  /* alert popup */
+  #alertWrap{position:absolute;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;pointer-events:none}
+  #bam{position:absolute;font-family:'Bangers';font-size:150px;color:#e23e3e;letter-spacing:6px;opacity:0;transform:scale(.2) rotate(-10deg);text-shadow:5px 5px 0 #ffd23f,10px 10px 0 #1d1d1d}
+  #bam.pop{animation:bamIn .45s cubic-bezier(.2,1.8,.4,1) forwards}
+  @keyframes bamIn{to{opacity:1;transform:scale(1) rotate(-10deg)}}
+  #alertBox{position:relative;width:520px;background:#fdf3dd;border:5px solid #1d1d1d;border-radius:14px;box-shadow:12px 12px 0 #1d1d1d;opacity:0;transform:scale(.4);z-index:2}
+  #alertBox.pop{animation:alertIn .5s cubic-bezier(.2,1.7,.4,1) forwards}
+  @keyframes alertIn{to{opacity:1;transform:scale(1)}}
+  #alertBox .ah{height:44px;background:#1d1d1d;border-radius:8px 8px 0 0;display:flex;align-items:center;padding:0 16px;gap:8px}
+  #alertBox .ah i{width:12px;height:12px;border-radius:50%}
+  #alertBox .ah i:nth-child(1){background:#ff5f57}#alertBox .ah i:nth-child(2){background:#febc2e}#alertBox .ah i:nth-child(3){background:#28c840}
+  #alertBox .ah span{font-family:'JetBrains Mono';font-size:14px;color:#c9c2b4;margin-left:6px}
+  #alertBox .ab{padding:34px 30px;text-align:center}
+  #alertBox .ab .big{font-family:'JetBrains Mono';font-weight:700;font-size:44px;color:#1d1d1d}
+  #alertBox .ab p{margin-top:10px;font-size:16px;color:#7a6a4a}
+  #alertBox .ok{margin:22px auto 0;width:130px;background:#2f6bff;color:#fff;font-weight:900;font-size:18px;border:3px solid #1d1d1d;border-radius:10px;padding:9px 0;box-shadow:4px 4px 0 #1d1d1d}
+
+  /* An An */
+  #anan{position:absolute;left:-20px;bottom:-16px;width:440px;z-index:25;opacity:0;transition:opacity .9s ease;filter:drop-shadow(0 14px 26px rgba(60,40,15,.35))}
+  #anan.show{opacity:1}
+  #anan img{width:100%;display:block;animation:bob 3.2s ease-in-out infinite alternate}
+  @keyframes bob{from{transform:translateY(0)}to{transform:translateY(-13px)}}
+  #anan .say{position:absolute;right:-190px;top:110px;width:225px;background:#fff;border:3px solid #1d1d1d;border-radius:16px;padding:14px 18px;font-family:'ZCOOL KuaiLe';font-size:29px;color:#1d1d1d;line-height:1.4;letter-spacing:1px;opacity:0;transform:scale(.6);transition:all .45s cubic-bezier(.34,1.6,.64,1);box-shadow:5px 5px 0 #1d1d1d}
+  #anan .say::after{content:'';position:absolute;z-index:-1;left:26px;bottom:-22px;border:11px solid transparent;border-top:13px solid #1d1d1d}
+  #anan.show .say{opacity:1;transform:scale(1);transition-delay:.45s}
+
+  .corner{position:absolute;font-family:'JetBrains Mono';font-size:15px;color:#8a7a58;letter-spacing:2px;z-index:9}
+  #chap{left:52px;bottom:34px}
+  #src{right:52px;bottom:34px;font-size:14px}
+
+  /* HUD */
+  #hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'JetBrains Mono';pointer-events:none}
+  #track{height:5px;background:rgba(29,29,29,.15)}
+  #bar{height:100%;width:0;background:#e23e3e}
+  #hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;color:#e8dcc0;background:rgba(29,29,29,.92);backdrop-filter:blur(4px)}
+  #hud button{pointer-events:auto;background:transparent;border:1px solid #e8dcc0;color:#f5ecd8;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+  #hud button:hover{background:rgba(230,200,130,.18)}
+  #replay.done{animation:pulse 1.2s infinite;border-color:#ffd23f;color:#ffd23f}
+  @keyframes pulse{50%{box-shadow:0 0 14px rgba(255,210,63,.8)}}
+
+  /* 镜头层 */
+  #cam{position:absolute;inset:0;transform-origin:0 0;transform:translate(-160px,-60px) scale(1.18);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- ================= 镜头世界 ================= -->
+  <div id="cam">
+
+  <div id="title">
+    <span class="no">VULN #01</span>
+    <h1>存储型 XSS：<em>冷门标签</em>绕黑名单</h1>
+    <div class="en">STORED XSS · BLACKLIST BYPASS</div>
+  </div>
+
+  <div id="miniScore">
+    <div id="msFloat">+150</div>
+    <img src="icons/GLMicon.png" alt="GLM">
+    <span class="lbl">靶场计分</span><b id="msTotal">0</b><small>/ 4800</small>
+  </div>
+
+  <!-- ============ PHASE 1 原理 ============ -->
+  <div class="phase" id="p1">
+    <div class="plabel">PANEL 01 · 原理</div>
+    <div id="chain">
+      <div class="lk" id="lk1"><div class="ic" style="background:#eef0ff;color:#4f46e5"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></div><b>商户填商品名</b><i>商品名进入表单</i></div>
+      <svg class="arr" id="ar1" viewBox="0 0 70 40"><path d="M4 20h52M42 8l16 12-16 12" fill="none" stroke="#1d1d1d" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div class="lk" id="lk2"><div class="ic" style="background:#fff4e0;color:#e8a020"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/><path d="M4 11.5v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg></div><b>存进数据库</b><i>原样落库 · 无转义</i></div>
+      <svg class="arr" id="ar2" viewBox="0 0 70 40"><path d="M4 20h52M42 8l16 12-16 12" fill="none" stroke="#1d1d1d" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div class="lk hot" id="lk3"><div class="ic" style="background:#ffd2cc;color:#c22f2f;border-color:#c22f2f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.8-3.8"/></svg></div><b>用户搜索时渲染</b><i>innerHTML 直接上屏</i></div>
+    </div>
+    <div id="noteP1">正常网站会把特殊符号<b>转义</b>；这个系统是<b>黑名单过滤</b>——只拦 <code>&lt;img&gt;</code> <code>&lt;script&gt;</code> <code>&lt;svg&gt;</code> 几个常见标签。那名单之外的呢？</div>
+  </div>
+
+  <!-- ============ PHASE 2 黑名单墙 ============ -->
+  <div class="phase" id="p2">
+    <div class="plabel">PANEL 02 · 撞墙与穿墙</div>
+    <div id="wallZone">
+      <div id="wallCap">黑名单防火墙 · 只认名单里的标签</div>
+      <div id="wall">
+        <div class="seal" id="sl1" style="left:90px;top:70px">&lt;img&gt;</div>
+        <div class="seal" id="sl2" style="left:400px;top:150px">&lt;script&gt;</div>
+        <div class="seal" id="sl3" style="left:180px;top:300px">&lt;svg&gt;</div>
+        <div class="seal" id="sl4" style="left:560px;top:340px">&lt;iframe&gt;</div>
+        <div class="seal" id="sl5" style="left:660px;top:60px">&lt;onload&gt;</div>
+      </div>
+      <div id="wallGap"><span>名单外的缝</span></div>
+      <div class="ball" id="ball1"><span class="tag">&lt;img onerror=alert(1)&gt;</span><img src="icons/GLMicon.png" alt="GLM"></div>
+      <div class="ball" id="ball2" style="top:420px"><span class="tag" style="color:#ffd23f">&lt;marquee onstart=alert(9)&gt;</span><img src="icons/GLMicon.png" alt="GLM"></div>
+      <div class="burst" id="burst1" style="left:330px;top:200px;font-size:88px">梆！</div>
+      <div class="burst" id="burst2" style="left:1120px;top:430px;font-size:72px;color:#14915f;text-shadow:3px 3px 0 #fff,6px 6px 0 #1d1d1d">嗖～穿了！</div>
+    </div>
+    <div id="p2cap">两个冷门标签根本不在黑名单里：<code>&lt;marquee&gt;</code> 和 <code>&lt;video&gt;</code></div>
+  </div>
+
+  <!-- ============ PHASE 3 录屏实证 ============ -->
+  <div class="phase" id="p3">
+    <div class="plabel">PANEL 03 · 实证</div>
+    <div id="screens">
+      <div class="scr" id="scrA">
+        <div class="sh"><i></i><i></i><i></i><span>merchant.heasec-lab.cn — 商户后台 · 添加商品</span></div>
+        <div class="bd">
+          <div id="toast">✓ 商品添加成功，已上架</div>
+          <div class="frm">
+            <label>商品名称</label>
+            <div class="inp evil" id="payloadInp"><span id="payloadTxt"></span><span class="caret"></span></div>
+            <label>商品价格</label>
+            <div class="inp">¥ 9.90</div>
+            <label>商品分类</label>
+            <div class="inp">测试专区</div>
+            <div id="saveBtn">保存并上架</div>
+          </div>
+        </div>
+      </div>
+      <div class="scr" id="scrB">
+        <div class="sh"><i></i><i></i><i></i><span>mall.heasec-lab.cn — 用户视角 · 搜索</span></div>
+        <div class="bd">
+          <div class="searchRow">
+            <div class="inp" id="searchInp"><span id="searchTxt"></span><span class="caret" style="background:#2f6bff"></span></div>
+            <div id="goBtn">搜索</div>
+          </div>
+          <div class="ritem" id="rs1"><div class="pth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14v-2a8 8 0 0116 0v2"/><rect x="2" y="14" width="5" height="7" rx="2"/><rect x="17" y="14" width="5" height="7" rx="2"/></svg></div><span>降噪耳机 · ¥299</span></div>
+          <div class="ritem evil" id="rs2"><div class="pth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg></div><div class="mq"><span>&lt;marquee onstart=alert(9)&gt;xss9 —— 商品名在页面上跑起来了</span></div></div>
+          <div id="sideNote">存进去的脚本，<b>一搜索就执行</b>。换成恶意代码——比如窃取账号——搜索的人就会中招。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- alert -->
+  <div id="alertWrap">
+    <div id="bam">XSS!</div>
+    <div id="alertBox">
+      <div class="ah"><i></i><i></i><i></i><span>mall.heasec-lab.cn 显示</span></div>
+      <div class="ab"><div class="big">alert( 9 )</div><p>存进去的脚本，真的在别人的浏览器里执行了</p><div class="ok">确定</div></div>
+    </div>
+  </div>
+
+  <div id="anan">
+    <div class="say">嘿嘿，<br>进去了…</div>
+    <img src="anan - emotion rename/13_掩袖低眸_羞怯暗思.png" alt="安安·暗思">
+  </div>
+
+  
+  
+
+  </div><!-- /cam -->
+<div class="corner" id="chap">02 / 靶场实测 · VULN ①</div><div class="corner" id="src">天积靶场实测 2026-08-15 · 授权环境</div>
+  </div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 2-3 · 漏洞① 存储型 XSS · 57s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+const DUR=57000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3);
+function count(el,from,to,dur,delay){tws.push({t:performance.now()-t0+delay,d:dur,f:p=>{el.textContent=Math.round(from+(to-from)*p)},e:eo})}
+function typer(el,text,dur,delay){tws.push({t:performance.now()-t0+delay,d:dur,f:p=>{el.textContent=text.slice(0,Math.floor(p*(text.length+1)))}})}
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1)tws.splice(i,1)}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+
+/* ===== Phase 1 · 原理链路（口播 3:26-3:47） ===== */
+on(300,()=>{$('#title').classList.add('show');$('#miniScore').classList.add('show');$('#p1').classList.add('on')});
+on(6500,()=>$('#lk1').classList.add('in'));                       // 「上架商品要贴名字的」
+on(9500,()=>$('#ar1').classList.add('in'));
+on(11000,()=>$('#lk2').classList.add('in'));                     // 「存进数据库里面」
+on(13000,()=>$('#ar2').classList.add('in'));
+on(14000,()=>$('#lk3').classList.add('in'));                     // 「搜索的时候再渲染在页面上」
+on(16500,()=>$('#noteP1').classList.add('show'));                // 「正常网站会转义…黑名单」
+
+/* ===== Phase 2 · 黑名单墙（口播 3:47-4:03） ===== */
+on(21000,()=>{$('#p1').classList.remove('on');$('#p2').classList.add('on')}); // 「过滤比较粗糙」
+on(23000,()=>{$('#wall').classList.add('in');$('#wallCap').classList.add('in')}); // 「是个黑名单」
+['sl1','sl2','sl3','sl4','sl5'].forEach((id,i)=>on(24000+i*300,()=>$('#'+id).classList.add('in'))); // 「只拦 img script svg」
+/* ball1: bonk 常见标签被拦 */
+on(26000,()=>{const b=$('#ball1');b.style.left='280px';b.style.top='160px'});
+on(27250,()=>{$('#burst1').classList.add('pop');const b=$('#ball1');b.style.left='60px';b.style.top='330px';b.style.opacity='0'});
+on(28500,()=>$('#wallGap').classList.add('in'));                 // 「名单外的缝」
+/* ball2: marquee 穿墙 */
+on(30000,()=>{const b=$('#ball2');b.style.left='1130px';b.style.top='430px'});
+on(31200,()=>{$('#burst2').classList.add('pop')});
+on(31500,()=>{const b=$('#ball2');b.style.left='1420px';b.style.opacity='0'});
+on(32500,()=>$('#p2cap').classList.add('show'));                 // 「marquee 和 video」
+
+/* ===== Phase 3 · 录屏实证（口播 4:03-4:20） ===== */
+on(37000,()=>{$('#p2').classList.remove('on');$('#p3').classList.add('on')}); // 「存进去…证明真的能执行」
+on(37800,()=>$('#scrA').classList.add('in'));
+on(38600,()=>typer($('#payloadTxt'),'<marquee onstart=alert(9)>xss9',2600,0)); // 「改成 marquee onstart alert」
+on(41500,()=>$('#saveBtn').classList.add('press'));
+on(41750,()=>$('#saveBtn').classList.remove('press'));
+on(42100,()=>$('#toast').classList.add('in'));                   // 「存进去」
+on(43500,()=>$('#scrB').classList.add('in'));                    // 「我用浏览器一搜索」
+on(44500,()=>typer($('#searchTxt'),'xss',900,0));
+on(45600,()=>$('#goBtn').classList.add('press'));
+on(45850,()=>$('#goBtn').classList.remove('press'));
+on(46100,()=>$('#rs1').classList.add('in'));
+on(46600,()=>$('#rs2').classList.add('in'));
+on(47500,()=>{$('#bam').classList.add('pop');$('#alertBox').classList.add('pop')}); // 「弹窗真的弹出来了」
+on(49200,()=>$('#sideNote').classList.add('show'));              // 「换成恶意代码…窃取账号」
+on(50000,()=>$('#anan').classList.add('show'));
+
+/* ===== 计分（口播 4:20「最恐怖的地方」） ===== */
+on(53500,()=>{
+  $('#msFloat').classList.add('go');
+  count($('#msTotal'),0,150,1400,200);
+});
+
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+/* ===== 镜头 ===== */
+const camEl=$('#cam');
+function camTo(tx,ty,s,dur){camEl.style.setProperty('--cd',dur+'s');camEl.style.transform='translate('+tx+'px,'+ty+'px) scale('+s+')';if(window.__sfx)__sfx.whoosh(dur,0.65)}
+const CX=960,CY=540;
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+
+/* ===== 镜头调度 ===== */
+on(300,()=>{camTo(0,0,1,2.0)});             // 开场拉镜
+on(21500,()=>{camFocus(750,300,1.15,1.2)}); // 推向黑名单墙
+on(37000,()=>{camTo(0,0,1,1.0)});           // P2→P3 切换拉回
+on(47500,()=>{camFocus(960,540,1.22,0.7)}); // BAM 弹窗爆发冲击
+on(50500,()=>{camTo(0,0,1,1.2)});           // 高潮后拉回
+
+
+/* ===== 音效 ===== */
+on(300,()=>__sfx.swipe(0.6));
+on(6500,()=>__sfx.pop(0.6));
+on(9500,()=>__sfx.swipe(0.5));
+on(11000,()=>__sfx.pop(0.6));
+on(13000,()=>__sfx.swipe(0.5));
+on(14000,()=>__sfx.pop(0.6));
+on(16500,()=>__sfx.pop(0.5));
+on(21000,()=>__sfx.swipe(0.7));
+on(23000,()=>__sfx.pop(0.7));
+on(24000,()=>__sfx.pop(0.5));
+on(24300,()=>__sfx.pop(0.5));
+on(24600,()=>__sfx.pop(0.5));
+on(24900,()=>__sfx.pop(0.5));
+on(25200,()=>__sfx.pop(0.5));
+on(26000,()=>__sfx.whoosh(0.8,0.6));
+on(27250,()=>__sfx.thud(0.9));
+on(28500,()=>__sfx.pop(0.6));
+on(30000,()=>__sfx.whoosh(0.8,0.6));
+on(31200,()=>__sfx.pop(0.7));
+on(32500,()=>__sfx.pop(0.5));
+on(37000,()=>__sfx.swipe(0.7));
+on(37800,()=>__sfx.pop(0.6));
+for(let __si=0;__si<30;__si++)on(38600+__si*86,()=>__sfx.type(0.45));
+on(41500,()=>__sfx.type(0.7));
+on(42100,()=>__sfx.pop(0.7));
+on(43500,()=>__sfx.pop(0.6));
+for(let __si=0;__si<3;__si++)on(44500+__si*300,()=>__sfx.type(0.5));
+on(45600,()=>__sfx.type(0.7));
+on(46100,()=>__sfx.pop(0.6));
+on(46600,()=>__sfx.pop(0.6));
+on(47500,()=>__sfx.thud(1.1));
+on(49200,()=>__sfx.pop(0.5));
+on(50000,()=>__sfx.pop(0.6));
+for(let __sj=1;__sj<=8;__sj++)on(53700+Math.round(1200*Math.pow(__sj/8,2)),()=>__sfx.type(0.4)); // 计分滚动·由密到疏
+on(55200,()=>__sfx.ding(0.7));
+</script>
+</body>
+</html>

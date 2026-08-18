@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<script>
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+
+<script>
+/* ===== SFX 引擎（WebAudio 合成，无音频文件，随启动按钮手势激活） ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){ /* 波：弹出 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){ /* 呼：镜头/大幅移动 */
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){ /* 唰：快速滑入/切换 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){ /* 键盘：短促轻击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){ /* 叮：柔和落定 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){ /* 咚：低频落章/撞击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 3-5 · 矛与盾：安全能力成为公共品</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@600;700&family=Noto+Serif+SC:wght@600;900&family=Zhi+Mang+Xing&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;background:#e5dcc4;overflow:hidden;font-family:'Noto Serif SC',serif}
+  body.paused *{animation-play-state:paused!important}
+  #stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:#f4edda}
+  /* risograph halftone + misregistration */
+  #stage::before{content:'';position:absolute;inset:0;background-image:radial-gradient(rgba(58,62,140,.09) 1.6px,transparent 2.1px);background-size:30px 30px;pointer-events:none}
+  #grain{position:absolute;inset:0;z-index:40;pointer-events:none;opacity:.5;mix-blend-mode:multiply}
+  #inner{position:absolute;inset:-14px}
+
+  #title{position:absolute;left:64px;top:46px;z-index:9;opacity:0;transform:translateY(-16px);transition:all .6s ease}
+  #title.show{opacity:1;transform:translateY(0)}
+  #title .no{display:inline-block;font-family:'Zilla Slab';font-weight:700;font-size:14px;color:#f4edda;background:#3a3e8c;padding:6px 16px;letter-spacing:3px;box-shadow:4px 4px 0 rgba(58,62,140,.3)}
+  #title h1{margin-top:12px;font-size:38px;font-weight:900;color:#2c2a26;letter-spacing:2px}
+  #title h1 em{font-style:normal;color:#3a3e8c}
+
+  /* ===== left: spear in glass safe ===== */
+  #spearZone{position:absolute;left:110px;top:220px;width:430px;height:560px;z-index:5}
+  #case{position:absolute;left:40px;top:0;width:350px;height:470px;border:5px solid #2c2a26;border-radius:14px;
+    background:linear-gradient(115deg,rgba(210,225,235,.55) 0%,rgba(190,205,220,.28) 45%,rgba(225,235,240,.5) 100%);
+    box-shadow:10px 10px 0 rgba(58,62,140,.22);opacity:0;transform:translateY(30px);transition:all .6s ease}
+  #case.in{opacity:1;transform:translateY(0)}
+  #case::after{content:'';position:absolute;left:30px;top:-10px;width:60px;height:490px;background:rgba(255,255,255,.35);transform:rotate(8deg);border-radius:30px}
+  #case .plate{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);font-family:'JetBrains Mono';font-size:12px;letter-spacing:3px;color:#2c2a26;border:2px solid #2c2a26;padding:4px 14px;background:#f4edda;white-space:nowrap}
+  #spear{position:absolute;left:60px;top:-460px;width:230px;height:440px;transition:top .65s cubic-bezier(.5,0,.8,.4);z-index:2}
+  #spear.in{top:16px}
+  #spear svg{width:100%;height:100%;filter:drop-shadow(6px 6px 0 rgba(214,69,51,.25))}
+  #lock{position:absolute;right:6px;top:180px;width:120px;z-index:6;transform:scale(0) rotate(-30deg);transition:transform .45s cubic-bezier(.2,1.8,.4,1)}
+  #lock.on{transform:scale(1) rotate(0)}
+  #lock svg{width:100%;filter:drop-shadow(5px 5px 0 rgba(44,42,38,.3))}
+  #lock .ltag{position:absolute;left:50%;top:-40px;transform:translateX(-50%) rotate(-4deg);background:#d64533;color:#f4edda;
+    font-family:'JetBrains Mono';font-weight:700;font-size:15px;letter-spacing:2px;padding:5px 14px;white-space:nowrap;box-shadow:4px 4px 0 rgba(214,69,51,.3)}
+  #spearCap{position:absolute;left:0;right:0;bottom:-4px;text-align:center;font-size:19px;color:#6a6355;letter-spacing:2px;opacity:0;transition:opacity .6s;font-weight:600}
+  #spearCap.show{opacity:1}
+  #spearCap b{color:#d64533}
+
+  /* ===== right: big shield + audience ===== */
+  #shieldZone{position:absolute;right:110px;top:180px;width:580px;height:620px;z-index:5}
+  #bigShield{position:absolute;left:50%;top:0;width:250px;transform:translateX(-50%) scale(0);transition:transform .6s cubic-bezier(.2,1.6,.4,1);z-index:3}
+  #bigShield.in{transform:translateX(-50%) scale(1)}
+  #bigShield svg{width:100%;filter:drop-shadow(8px 8px 0 rgba(29,154,168,.28));animation:hoverS 3s ease-in-out infinite alternate}
+  @keyframes hoverS{from{margin-top:0}to{margin-top:-12px}}
+  #shieldCap{position:absolute;left:0;right:0;top:262px;text-align:center;font-size:19px;color:#6a6355;letter-spacing:2px;opacity:0;transition:opacity .6s;font-weight:600}
+  #shieldCap.show{opacity:1}
+  #shieldCap b{color:#1d8a98}
+  .aud{position:absolute;top:400px;width:160px;text-align:center;z-index:2;opacity:0;transform:translateY(36px);transition:all .55s ease}
+  .aud.in{opacity:1;transform:translateY(0)}
+  .aud .card{width:150px;height:150px;margin:0 auto;background:#fffdf4;border:4px solid #3a3e8c;border-radius:16px;display:flex;align-items:center;justify-content:center;box-shadow:6px 6px 0 rgba(58,62,140,.22);transition:all .4s}
+  .aud svg{width:78px;height:78px;stroke:#3a3e8c;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;transition:all .4s}
+  .aud .lab{margin-top:12px;font-size:20px;font-weight:900;color:#2c2a26;letter-spacing:2px}
+  .aud.lit .card{border-color:#1d8a98;background:#eaf6f4;box-shadow:6px 6px 0 rgba(29,154,168,.3)}
+  .aud.lit svg{stroke:#157a86}
+  .fly{position:absolute;width:46px;z-index:8;transition:transform .6s cubic-bezier(.3,.7,.3,1),opacity .3s;opacity:0}
+  .fly svg{width:100%;filter:drop-shadow(3px 3px 0 rgba(29,154,168,.3))}
+  .fly.settled{animation:bobF 2.6s ease-in-out infinite alternate}
+  @keyframes bobF{from{margin-top:0}to{margin-top:-7px}}
+
+  /* ===== quote overlay ===== */
+  #dim{position:absolute;inset:0;background:rgba(44,42,38,0);pointer-events:none;transition:background .7s;z-index:10}
+  #dim.on{background:rgba(44,42,38,.52)}
+  #quote{position:absolute;left:0;right:0;top:330px;z-index:12;text-align:center;transition:transform .8s ease}
+  .qline{opacity:0;transform:scale(2.4);transition:transform .5s cubic-bezier(.16,1.5,.3,1),opacity .3s}
+  .qline.slam{opacity:1;transform:scale(1)}
+  .qline svg text{font-family:'Noto Serif SC',serif;font-weight:900;letter-spacing:4px}
+  #qtag{margin-top:26px;font-family:'JetBrains Mono';font-size:16px;color:#f4edda;letter-spacing:3px;opacity:0;transition:opacity .6s}
+  #qtag.show{opacity:.9}
+  #qtag b{color:#ffd9a8}
+  .burst{position:absolute;left:50%;top:50%;width:80px;height:80px;border:6px solid rgba(244,237,218,.9);border-radius:50%;
+    transform:translate(-50%,-50%) scale(.2);opacity:0;pointer-events:none;z-index:11}
+  .burst.go{animation:burstA .6s ease-out forwards}
+  @keyframes burstA{0%{opacity:.95;transform:translate(-50%,-50%) scale(.2)}100%{opacity:0;transform:translate(-50%,-50%) scale(7)}}
+  #inner.shake{animation:shk .4s ease}
+  @keyframes shk{0%,100%{transform:translate(0,0)}20%{transform:translate(-7px,3px)}45%{transform:translate(6px,-4px)}70%{transform:translate(-4px,-2px)}}
+
+  /* anan */
+  #anan{position:absolute;right:24px;bottom:-8px;width:330px;z-index:25;opacity:0;transition:opacity .9s ease;filter:drop-shadow(0 12px 22px rgba(44,42,38,.35))}
+  #anan.show{opacity:1}
+  #anan img{width:100%;display:block;animation:bob 3s ease-in-out infinite alternate}
+  @keyframes bob{from{transform:translateY(0)}to{transform:translateY(-10px)}}
+  #anan .say{position:absolute;left:-200px;top:40px;width:210px;background:#fffdf4;border:3px solid #3a3e8c;border-radius:12px;padding:12px 16px;
+    font-size:21px;font-weight:900;color:#2c2a26;line-height:1.45;letter-spacing:1px;opacity:0;transform:scale(.6);transition:all .4s ease;box-shadow:5px 5px 0 rgba(58,62,140,.3)}
+  #anan .say::after{content:'';position:absolute;z-index:-1;right:26px;bottom:-18px;border:9px solid transparent;border-top:11px solid #3a3e8c}
+  #anan .say b{color:#157a86}
+  #anan.show .say{opacity:1;transform:scale(1);transition-delay:.4s}
+
+  .corner{position:absolute;font-family:'JetBrains Mono';font-size:12px;color:#8a8272;letter-spacing:2px;z-index:9}
+  #chap{left:52px;bottom:36px}
+  #src{right:52px;bottom:36px;z-index:14}
+
+  /* HUD */
+  #hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'JetBrains Mono';pointer-events:none}
+  #track{height:5px;background:rgba(58,62,140,.18)}
+  #bar{height:100%;width:0;background:#3a3e8c}
+  #hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;color:#e8e2ce;background:rgba(44,42,38,.94);backdrop-filter:blur(4px)}
+  #hud button{pointer-events:auto;background:transparent;border:1px solid #9a92b8;color:#eee8d4;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+  #hud button:hover{background:rgba(140,135,190,.25)}
+  #replay.done{animation:pulse 1.2s infinite;border-color:#c5c0ea;color:#c5c0ea}
+  @keyframes pulse{50%{box-shadow:0 0 14px rgba(197,192,234,.8)}}
+
+  /* 镜头层 */
+  #cam{position:absolute;inset:0;transform-origin:0 0;transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- ================= 镜头世界 ================= -->
+  <div id="cam">
+<div id="inner">
+    <div id="title">
+      <span class="no">CHAPTER 3 · 金句</span>
+      <h1>矛被锁进柜子，<em>盾要发到手上</em></h1>
+    </div>
+
+    <!-- spear in safe -->
+    <div id="spearZone">
+      <div id="spear">
+        <svg viewBox="0 0 230 440">
+          <g transform="rotate(24 115 220)">
+            <path d="M115 8 L138 66 L115 118 L92 66 Z" fill="#d64533" stroke="#8f2418" stroke-width="5" stroke-linejoin="round"/>
+            <rect x="106" y="118" width="18" height="252" rx="8" fill="#b53929" stroke="#8f2418" stroke-width="5"/>
+            <rect x="88" y="112" width="54" height="20" rx="8" fill="#8f2418"/>
+            <path d="M106 370 L124 370 L124 402 Q115 414 106 402 Z" fill="#8f2418"/>
+            <path d="M115 26 L128 62 L115 96 Z" fill="#ef7a63"/>
+          </g>
+        </svg>
+      </div>
+      <div id="case">
+        <div class="plate">VAULT · TOP-TIER OFFENSE</div>
+      </div>
+      <div id="lock">
+        <div class="ltag">受信访问</div>
+        <svg viewBox="0 0 120 130">
+          <path id="shackle" d="M32 58 V42 a28 28 0 0 1 56 0 V58" fill="none" stroke="#2c2a26" stroke-width="11" stroke-linecap="round"/>
+          <rect x="18" y="56" width="84" height="62" rx="12" fill="#d64533" stroke="#8f2418" stroke-width="5"/>
+          <circle cx="60" cy="82" r="9" fill="#f4edda"/>
+          <rect x="56" y="86" width="8" height="16" rx="3" fill="#f4edda"/>
+        </svg>
+      </div>
+      <div id="spearCap">最强的矛 · <b>锁进少数人的保险柜</b></div>
+    </div>
+
+    <!-- shield + audience -->
+    <div id="shieldZone">
+      <div id="bigShield">
+        <svg viewBox="0 0 250 280">
+          <path d="M125 8 L232 44 V138 C232 208 188 252 125 272 C62 252 18 208 18 138 V44 Z" fill="#27aebd" stroke="#0f6b76" stroke-width="7" stroke-linejoin="round"/>
+          <path d="M125 34 L206 62 V136 C206 190 172 226 125 244 C78 226 44 190 44 136 V62 Z" fill="#e6f6f4"/>
+          <path d="M125 78 L141 114 L180 118 L151 144 L160 182 L125 161 L90 182 L99 144 L70 118 L109 114 Z" fill="#27aebd" stroke="#0f6b76" stroke-width="5" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div id="shieldCap">最好的盾 · <b>复制成千百面发出去</b></div>
+      <div class="aud" id="a1" style="left:0">
+        <div class="card"><svg viewBox="0 0 24 24"><path d="M4 9l1.2-4.5h13.6L20 9"/><path d="M4 9h16v10H4z"/><path d="M9.5 19v-6h5v6"/><path d="M4 9a2.4 2.4 0 0 0 4.8 0A2.4 2.4 0 0 0 13.6 9a2.4 2.4 0 0 0 4.8 0"/></svg></div>
+        <div class="lab">中小企业</div>
+      </div>
+      <div class="aud" id="a2" style="left:210px">
+        <div class="card"><svg viewBox="0 0 24 24"><path d="M8 6l-4.5 6L8 18"/><path d="M16 6l4.5 6L16 18"/><path d="M13.2 4.5l-2.4 15"/></svg></div>
+        <div class="lab">开源维护者</div>
+      </div>
+      <div class="aud" id="a3" style="left:420px">
+        <div class="card"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="11" rx="1.6"/><path d="M2 19.5h20"/><path d="M9.5 8.5l2.4 2.4-2.4 2.4"/><path d="M13.5 13.5h3"/></svg></div>
+        <div class="lab">个人开发者</div>
+      </div>
+    </div>
+
+    <div id="dim"></div>
+    <div class="burst" id="b1"></div>
+    <div class="burst" id="b2"></div>
+
+    <!-- quote -->
+    <div id="quote">
+      <div class="qline" id="q1">
+        <svg width="1400" height="110" viewBox="0 0 1400 110"><text x="700" y="78" text-anchor="middle" font-size="72" fill="#3a3e8c" stroke="#fdf8e8" stroke-width="14" paint-order="stroke">当最强的矛被锁在少数人手里，</text></svg>
+      </div>
+      <div class="qline" id="q2">
+        <svg width="1400" height="118" viewBox="0 0 1400 118"><text x="700" y="82" text-anchor="middle" font-size="76" fill="#3a3e8c" stroke="#fdf8e8" stroke-width="15" paint-order="stroke">最好的盾必须属于所有人。</text></svg>
+      </div>
+      <div id="qtag">—— <b>智谱官方</b> ·「开源的盾」公告原话</div>
+    </div>
+
+    <div id="anan">
+      <div class="say">这面盾，<br><b>交到每个人手上了</b></div>
+      <img src="anan - emotion rename/15_平举素纸_认真以待.png" alt="安安·严肃燃">
+    </div>
+
+    <div class="corner" id="chap">03 / 开源的盾 · 金句</div>
+    <div class="corner" id="src">智谱「开源的盾」官方公告 · 2026-08-14</div>
+  </div><!-- /inner -->
+  <svg id="grain" xmlns="http://www.w3.org/2000/svg"><filter id="gz"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2"/><feColorMatrix values="0 0 0 0 0.25 0 0 0 0 0.24 0 0 0 0 0.2 0 0 0 .06 0"/></filter><rect width="100%" height="100%" filter="url(#gz)"/></svg>
+  </div><!-- /cam -->
+  </div><!-- /stage -->
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 3-5 · 矛与盾：安全能力成为公共品 · 6s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+const DUR=6000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+
+/* ===== 镜头 ===== */
+const camEl=$('#cam');
+function camTo(tx,ty,s,dur){camEl.style.setProperty('--cd',dur+'s');camEl.style.transform='translate('+tx+'px,'+ty+'px) scale('+s+')';if(window.__sfx)__sfx.whoosh(dur,0.65)}
+const CX=960,CY=540;
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+
+/* flying mini shields */
+const shieldSVG='<svg viewBox="0 0 250 280"><path d="M125 8 L232 44 V138 C232 208 188 252 125 272 C62 252 18 208 18 138 V44 Z" fill="#27aebd" stroke="#0f6b76" stroke-width="10" stroke-linejoin="round"/><path d="M125 78 L141 114 L180 118 L151 144 L160 182 L125 161 L90 182 L99 144 L70 118 L109 114 Z" fill="#e6f6f4"/></svg>';
+const inner=document.getElementById('inner');
+/* zone global coords: right:110 top:180 width:580 → left edge = 1920-110-580 = 1230 */
+const zx=1230, zy=180;
+const spawn={x:zx+290, y:zy+128};
+const audCenters=[{x:zx+75,y:zy+475},{x:zx+285,y:zy+475},{x:zx+495,y:zy+475}];
+const flies=[];
+for(let i=0;i<15;i++){
+  const d=document.createElement('div');
+  d.className='fly';d.innerHTML=shieldSVG;
+  d.style.left=(spawn.x-23)+'px';d.style.top=(spawn.y-25)+'px';
+  inner.appendChild(d);flies.push(d);
+}
+function launchShield(i){
+  const d=flies[i];
+  const c=audCenters[i%3];
+  const jx=(Math.sin(i*7.3)*46)|0, jy=(Math.cos(i*5.1)*34)|0;
+  const dx=c.x+jx-spawn.x, dy=c.y+jy-spawn.y;
+  const rot=((i*53)%40)-20;
+  d.style.opacity='1';
+  requestAnimationFrame(()=>{d.style.transform='translate('+dx+'px,'+dy+'px) rotate('+rot+'deg)';});
+  setTimeout(()=>{if(!paused)d.classList.add('settled')},620);
+}
+
+/* timeline (6s · 对齐口播 13:18→13:24) */
+on(100,()=>$('#title').classList.add('show'));
+on(150,()=>$('#case').classList.add('in'));
+on(250,()=>$('#bigShield').classList.add('in'));
+on(350,()=>$('#spear').classList.add('in'));
+on(800,()=>$('#lock').classList.add('on'));
+on(1000,()=>{$('#spearCap').classList.add('show');$('#shieldCap').classList.add('show')});
+on(1150,()=>{['#a1','#a2','#a3'].forEach((s,i)=>setTimeout(()=>$(s).classList.add('in'),i*130));});
+for(let i=0;i<15;i++){
+  on(1300+i*65,()=>{launchShield(i);if(i%5===0){const a=['#a1','#a2','#a3'][i%3];$(a).classList.add('lit')}});
+}
+on(1900,()=>$('#dim').classList.add('on'));
+on(1950,()=>{camFocus(960,440,1.14,0.55)});   // 金句前一级推镜
+on(2000,()=>{                                  // 口播 13:20「当最强的矛被锁在少数人手里，」
+  $('#q1').classList.add('slam');
+  const b=$('#b1');b.style.top='385px';b.classList.add('go');
+  inner.classList.add('shake');setTimeout(()=>inner.classList.remove('shake'),450);
+});
+on(4000,()=>{                                  // 口播 13:22「最好的盾必须属于所有人。」
+  $('#q2').classList.add('slam');
+  const b=$('#b2');b.style.top='500px';b.classList.add('go');
+  inner.classList.add('shake');setTimeout(()=>inner.classList.remove('shake'),450);
+  camFocus(960,440,1.22,0.6);                  // 二级推镜
+});
+on(4550,()=>$('#qtag').classList.add('show'));
+on(4800,()=>$('#anan').classList.add('show'));
+
+/* ===== 音效 ===== */
+on(100,()=>__sfx.swipe(0.5));
+on(150,()=>__sfx.pop(0.5));
+on(250,()=>__sfx.whoosh(0.4,0.55));
+on(350,()=>__sfx.whoosh(0.65,0.7));
+on(800,()=>__sfx.ding(0.6));
+on(1000,()=>__sfx.thud(0.7));
+on(1150,()=>__sfx.pop(0.45));
+for(let i=0;i<8;i++)on(1300+i*140,()=>__sfx.type(0.25));
+on(2000,()=>__sfx.thud(0.9));
+on(4000,()=>__sfx.thud(1));
+on(4550,()=>__sfx.ding(0.6));
+on(4800,()=>__sfx.pop(0.5));
+</script>
+</body>
+</html>

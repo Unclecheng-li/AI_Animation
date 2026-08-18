@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<script>
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+
+<script>
+/* ===== SFX 引擎（WebAudio 合成，无音频文件，随启动按钮手势激活） ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){ /* 波：弹出 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){ /* 呼：镜头/大幅移动 */
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){ /* 唰：快速滑入/切换 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){ /* 键盘：短促轻击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){ /* 叮：柔和落定 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){ /* 咚：低频落章/撞击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 4-1 · 回到开头的问题</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Long+Cang&family=Noto+Serif+SC:wght@600;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;background:#111009;overflow:hidden;font-family:'Noto Serif SC',serif}
+  body.paused *{animation-play-state:paused!important}
+  #stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:#f5efdd}
+  #stage::before{content:'';position:absolute;inset:0;background-image:radial-gradient(rgba(120,100,60,.08) 1.5px,transparent 2px);background-size:34px 34px;pointer-events:none}
+
+  /* ===== dark phase ===== */
+  #darkLayer{position:absolute;inset:0;background:#16140e;z-index:8;opacity:1}
+  #darkLayer.off{animation:flick .6s ease forwards}
+  @keyframes flick{0%{opacity:1}25%{opacity:.5}50%{opacity:.85}100%{opacity:0;visibility:hidden}}
+  #flash{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:9;opacity:0}
+  #flash div{font-size:64px;font-weight:900;color:#fff;letter-spacing:10px}
+  #flash.go{animation:flashA .55s steps(2) forwards}
+  @keyframes flashA{0%{opacity:0}20%{opacity:1;transform:translateX(-6px)}40%{opacity:.2}60%{opacity:1;transform:translateX(5px)}100%{opacity:0}}
+  #qDark{position:absolute;left:0;right:0;top:400px;text-align:center;z-index:10}
+  #qtext{display:inline-block;font-size:66px;font-weight:900;color:#f2ecdc;letter-spacing:6px;min-height:100px}
+  #caret{display:inline-block;width:6px;height:64px;background:#f2ecdc;vertical-align:-6px;margin-left:8px;animation:blink .8s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+
+  /* ===== film strip ===== */
+  #film{position:absolute;left:0;right:0;top:74px;height:196px;z-index:5;background:#1d1a12;opacity:0;transition:opacity .6s;box-shadow:0 10px 30px rgba(30,25,15,.35)}
+  #film.ghost{opacity:.18;filter:grayscale(1);z-index:9}
+  #film.on{opacity:1;filter:none}
+  #film::before,#film::after{content:'';position:absolute;left:0;right:0;height:26px;
+    background-image:radial-gradient(#f5efdd 5px,transparent 6px);background-size:44px 26px;background-position:8px center}
+  #film::before{top:8px}#film::after{bottom:8px}
+  #reelWrap{position:absolute;left:0;top:38px;bottom:38px;width:100%;overflow:hidden}
+  #reel{display:flex;gap:26px;padding:0 13px;width:max-content;animation:scroll 9s linear infinite}
+  @keyframes scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+  .frame{flex:none;width:280px;height:120px;background:#f5efdd;border-radius:4px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+  .frame .ft{position:absolute;left:10px;top:6px;font-family:'JetBrains Mono';font-size:10px;letter-spacing:2px;color:#a39a80}
+  .fAlert{flex-direction:column}
+  .fAlert .pop{width:200px;background:#fff;border:2.5px solid #333;border-radius:8px;box-shadow:4px 4px 0 rgba(0,0,0,.25);overflow:hidden}
+  .fAlert .pt{background:#e8b4b4;border-bottom:2px solid #333;font-family:'JetBrains Mono';font-size:10px;padding:2px 8px;color:#7a2020}
+  .fAlert .pb{font-family:'JetBrains Mono';font-size:14px;padding:8px 10px;color:#222}
+  .fMoney{font-family:'Bebas Neue';font-size:52px;color:#b8860b;letter-spacing:2px}
+  .fRoot{background:#18281c;font-family:'JetBrains Mono';font-size:16px;color:#7ee2a0;justify-content:flex-start;padding-left:18px}
+  .fScore{font-family:'Bebas Neue';font-size:44px;color:#0e7d8a;letter-spacing:2px}
+  .fScore small{font-size:20px;color:#8a8272;margin-left:6px}
+  .fShield svg{width:74px}
+  .fBig{font-family:'Bebas Neue';font-size:56px;color:#3a3e8c;letter-spacing:2px}
+
+  /* ===== bright phase ===== */
+  #ans{position:absolute;left:0;right:0;top:330px;text-align:center;z-index:6;opacity:0;transform:scale(1.8);transition:transform .5s cubic-bezier(.16,1.5,.3,1),opacity .3s}
+  #ans.slam{opacity:1;transform:scale(1)}
+  #ans .small{font-size:26px;color:#8a8272;letter-spacing:6px;margin-bottom:14px;font-weight:600}
+  #ans .big{font-size:96px;font-weight:900;color:#2c2a26;letter-spacing:8px}
+  #ans .big em{font-style:normal;color:#0e7d8a;border-bottom:8px solid #0e7d8a;padding-bottom:4px}
+
+  /* evidence cards */
+  #cards{position:absolute;left:50%;top:560px;transform:translateX(-50%);display:flex;gap:56px;z-index:6}
+  .card3{width:470px;height:330px;background:#fffdf4;border:3px solid #d8cfb4;border-radius:6px;box-shadow:0 14px 30px rgba(80,66,35,.18);
+    padding:34px 36px;position:relative;opacity:0;transform:translateY(70px) rotate(3deg);transition:all .65s cubic-bezier(.2,1.3,.4,1)}
+  .card3.in{opacity:1;transform:translateY(0) rotate(var(--rot,0deg))}
+  .card3::before{content:'';position:absolute;left:50%;top:-18px;width:130px;height:34px;transform:translateX(-50%) rotate(-2deg);
+    background:rgba(226,214,170,.85);border-left:2px dashed rgba(120,100,60,.3);border-right:2px dashed rgba(120,100,60,.3)}
+  .card3 .stat{font-family:'Bebas Neue';font-size:86px;line-height:1;letter-spacing:2px}
+  .card3 .stat small{font-size:38px;margin-left:8px}
+  .card3 .lab{font-size:19px;font-weight:900;color:#2c2a26;letter-spacing:2px;margin-top:6px}
+  .card3 hr{border:none;border-top:2px dashed #d8cfb4;margin:18px 0 16px}
+  .card3 .desc{font-size:19.5px;color:#5a5344;line-height:1.65;letter-spacing:.5px;font-weight:600}
+  .card3 .desc b{color:#2c2a26}
+  .card3 .hand{position:absolute;right:18px;bottom:12px;font-family:'Long Cang';font-size:27px;transform:rotate(-6deg)}
+  #c1 .stat{color:#0e7d8a}#c1 .hand{color:#0e7d8a}
+  #c2 .stat{color:#b8860b}#c2 .hand{color:#b8860b}
+  #c3 .stat{color:#3a3e8c}#c3 .hand{color:#3a3e8c}
+
+  /* anan */
+  #anan{position:absolute;left:40px;bottom:-10px;width:330px;z-index:25;opacity:0;transition:opacity .9s ease;filter:drop-shadow(0 12px 22px rgba(80,66,35,.35))}
+  #anan.show{opacity:1}
+  #anan img{width:100%;display:block;animation:bob 3.2s ease-in-out infinite alternate}
+  @keyframes bob{from{transform:translateY(0)}to{transform:translateY(-10px)}}
+  #anan .say{position:absolute;right:-196px;top:48px;width:200px;background:#fffdf4;border:3px solid #0e7d8a;border-radius:12px;padding:12px 16px;
+    font-size:21px;font-weight:900;color:#2c2a26;line-height:1.45;letter-spacing:1px;opacity:0;transform:scale(.6);transition:all .4s ease;box-shadow:5px 5px 0 rgba(14,125,138,.28)}
+  #anan .say::after{content:'';position:absolute;z-index:-1;left:26px;bottom:-18px;border:9px solid transparent;border-top:11px solid #0e7d8a}
+  #anan .say b{color:#0e7d8a}
+  #anan.show .say{opacity:1;transform:scale(1);transition-delay:.4s}
+
+  .corner{position:absolute;font-family:'JetBrains Mono';font-size:12px;color:#8a8272;letter-spacing:2px;z-index:9}
+  #chap{left:52px;bottom:36px}
+  #src{right:52px;bottom:36px}
+
+  /* HUD */
+  #hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'JetBrains Mono';pointer-events:none}
+  #track{height:5px;background:rgba(245,239,221,.18)}
+  #bar{height:100%;width:0;background:#0e7d8a}
+  #hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;color:#e8e2ce;background:rgba(30,27,18,.94);backdrop-filter:blur(4px)}
+  #hud button{pointer-events:auto;background:transparent;border:1px solid #8a9a96;color:#eee8d4;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+  #hud button:hover{background:rgba(120,160,155,.25)}
+  #replay.done{animation:pulse 1.2s infinite;border-color:#a8d8d2;color:#a8d8d2}
+  @keyframes pulse{50%{box-shadow:0 0 14px rgba(168,216,210,.8)}}
+
+  /* 镜头层 */
+  #cam{position:absolute;inset:0;transform-origin:0 0;transform:translate(-192px,-12px) scale(1.2);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- ================= 镜头世界 ================= -->
+  <div id="cam">
+  <!-- film montage -->
+  <div id="film">
+    <div id="reelWrap"><div id="reel">
+      <div class="frame fAlert"><span class="ft">CUT 01 · XSS</span><div class="pop"><div class="pt"><svg viewBox="0 0 24 24" style="width:11px;vertical-align:-1px" fill="none" stroke="#7a2020" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4L2.5 20h19L12 4z"/><path d="M12 10v4.5"/><circle cx="12" cy="17.4" r=".4" fill="#7a2020"/></svg> javascript alert</div><div class="pb">alert(9) → 真的弹了</div></div></div>
+      <div class="frame"><span class="ft">CUT 02 · 并发</span><span class="fMoney">¥ 100,403</span></div>
+      <div class="frame fRoot"><span class="ft" style="color:#4a6a52">CUT 03 · 穿越</span>root@localhost:~#</div>
+      <div class="frame"><span class="ft">CUT 04 · 计分</span><span class="fScore">27 / 28<small>HITS</small></span></div>
+      <div class="frame fShield"><span class="ft">CUT 05 · 开源的盾</span><svg viewBox="0 0 250 280"><path d="M125 8 L232 44 V138 C232 208 188 252 125 272 C62 252 18 208 18 138 V44 Z" fill="#27aebd" stroke="#0f6b76" stroke-width="10"/><path d="M125 78 L141 114 L180 118 L151 144 L160 182 L125 161 L90 182 L99 144 L70 118 L109 114 Z" fill="#e6f6f4"/></svg></div>
+      <div class="frame"><span class="ft">CUT 06 · 总分</span><span class="fBig">4,620</span></div>
+      <div class="frame fAlert"><span class="ft">CUT 01 · XSS</span><div class="pop"><div class="pt"><svg viewBox="0 0 24 24" style="width:11px;vertical-align:-1px" fill="none" stroke="#7a2020" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4L2.5 20h19L12 4z"/><path d="M12 10v4.5"/><circle cx="12" cy="17.4" r=".4" fill="#7a2020"/></svg> javascript alert</div><div class="pb">alert(9) → 真的弹了</div></div></div>
+      <div class="frame"><span class="ft">CUT 02 · 并发</span><span class="fMoney">¥ 100,403</span></div>
+      <div class="frame fRoot"><span class="ft" style="color:#4a6a52">CUT 03 · 穿越</span>root@localhost:~#</div>
+      <div class="frame"><span class="ft">CUT 04 · 计分</span><span class="fScore">27 / 28<small>HITS</small></span></div>
+      <div class="frame fShield"><span class="ft">CUT 05 · 开源的盾</span><svg viewBox="0 0 250 280"><path d="M125 8 L232 44 V138 C232 208 188 252 125 272 C62 252 18 208 18 138 V44 Z" fill="#27aebd" stroke="#0f6b76" stroke-width="10"/><path d="M125 78 L141 114 L180 118 L151 144 L160 182 L125 161 L90 182 L99 144 L70 118 L109 114 Z" fill="#e6f6f4"/></svg></div>
+      <div class="frame"><span class="ft">CUT 06 · 总分</span><span class="fBig">4,620</span></div>
+    </div></div>
+  </div>
+
+  <!-- bright phase -->
+  <div id="ans">
+    <div class="small">开头那个问题的答案 ——</div>
+    <div class="big">方向，<em>已经落地了</em></div>
+  </div>
+
+  <div id="cards">
+    <div class="card3" id="c1" style="--rot:-1.2deg">
+      <div class="stat">4,620<small>分</small></div>
+      <div class="lab">天积靶场实测总分（满分 4,800）</div>
+      <hr>
+      <div class="desc">开源模型在漏洞发现上，跟闭源前沿<b>站上了同一个擂台</b></div>
+      <div class="hand">同一个擂台！</div>
+    </div>
+    <div class="card3" id="c2" style="--rot:.8deg">
+      <div class="stat">几十<small>块</small></div>
+      <div class="lab">一次完整黑盒测试的成本</div>
+      <hr>
+      <div class="desc">按 token 计费跑完全场，<b>一杯咖啡的价格</b>换来一份渗透报告</div>
+      <div class="hand">便宜到离谱</div>
+    </div>
+    <div class="card3" id="c3" style="--rot:-.6deg">
+      <div class="stat">两周后<small>开源</small></div>
+      <div class="lab">权重开放下载 · 自己部署</div>
+      <hr>
+      <div class="desc">基于 AI 的安全审计，第一次成了<b>普通开发者、小团队也用得起</b>的工具</div>
+      <div class="hand">用得起，才是真的</div>
+    </div>
+  </div>
+
+  <!-- dark phase -->
+  <div id="darkLayer"></div>
+  <div id="flash"><div>AI 挖洞时代真来了？</div></div>
+  <div id="qDark"><span id="qtext"></span><span id="caret"></span></div>
+
+  <div id="anan">
+    <div class="say">答案，<br><b>已经落地了</b></div>
+    <img src="anan - emotion rename/10_闭目含笑_恬静满足.png" alt="安安·满足">
+  </div>
+
+  
+  
+
+  </div><!-- /cam -->
+<div class="corner" id="chap">04 / 收尾 · 回答</div><div class="corner" id="src">天积靶场实测 2026-08-15 · z.ai 官方博客 2026-08-14</div>
+  </div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 4-1 · 回到开头的问题 · 20s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+const DUR=20000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[];
+function typer(el,txt,dur,delay){
+  tws.push({t:performance.now()-t0+delay,d:dur,f:p=>{el.textContent=txt.slice(0,Math.floor(p*(txt.length+1)))}});
+}
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(q);if(q>=1)tws.splice(i,1)}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+
+/* ===== 镜头 ===== */
+const camEl=$('#cam');
+function camTo(tx,ty,s,dur){camEl.style.setProperty('--cd',dur+'s');camEl.style.transform='translate('+tx+'px,'+ty+'px) scale('+s+')';if(window.__sfx)__sfx.whoosh(dur,0.65)}
+const CX=960,CY=540;
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+
+/* ===== 镜头调度 ===== */
+on(3600,()=>{camTo(0,0,1,1.4)});            // 胶片显影缓拉
+on(6450,()=>{camFocus(960,420,1.12,0.45)}); // 答案 slam 冲击快推
+on(7300,()=>{camTo(0,0,1,1.2)});            // 冲击后回
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+
+/* timeline (20s) */
+on(100,()=>$('#flash').classList.add('go'));
+on(900,()=>typer($('#qtext'),'AI 挖洞时代，真的来了吗？',2600,0));
+on(4000,()=>$('#film').classList.add('ghost'));
+on(6000,()=>{
+  $('#darkLayer').classList.add('off');
+  $('#qDark').style.transition='opacity .4s';$('#qDark').style.opacity='0';
+  $('#film').classList.remove('ghost');$('#film').classList.add('on');
+});
+on(6500,()=>$('#ans').classList.add('slam'));
+on(9000,()=>$('#c1').classList.add('in'));
+on(11500,()=>$('#c2').classList.add('in'));
+on(14000,()=>$('#c3').classList.add('in'));
+on(16500,()=>$('#anan').classList.add('show'));
+
+/* ===== 音效 ===== */
+on(100,()=>__sfx.whoosh(0.6,0.5));
+for(let __si=0;__si<13;__si++)on(900+__si*200,()=>__sfx.type(0.5));
+on(4000,()=>__sfx.swipe(0.6));
+on(6000,()=>__sfx.pop(0.5));
+on(6500,()=>__sfx.thud(1.1));
+on(9000,()=>__sfx.pop(0.7));
+on(11500,()=>__sfx.pop(0.7));
+on(14000,()=>__sfx.pop(0.7));
+on(16500,()=>__sfx.pop(0.6));
+</script>
+</body>
+</html>

@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<script>
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+
+<script>
+/* ===== SFX 引擎（WebAudio 合成，无音频文件，随启动按钮手势激活） ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){ /* 波：弹出 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){ /* 呼：镜头/大幅移动 */
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){ /* 唰：快速滑入/切换 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){ /* 键盘：短促轻击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){ /* 叮：柔和落定 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){ /* 咚：低频落章/撞击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 0-5 · 标题卡</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=ZCOOL+XiaoWei&family=Ma+Shan+Zheng&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;background:#120508;overflow:hidden;font-family:'ZCOOL XiaoWei',serif}
+  body.paused *{animation-play-state:paused!important}
+  #stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:radial-gradient(1200px 700px at 50% 30%,#3a1520,#1a070c 75%)}
+
+  /* stage floor */
+  #floor{position:absolute;left:0;right:0;bottom:0;height:300px;background:
+    linear-gradient(180deg,rgba(0,0,0,0) 0,rgba(0,0,0,.45) 100%),
+    repeating-linear-gradient(90deg,#5a3a20 0 120px,#4c311a 120px 124px),
+    linear-gradient(180deg,#6b4626,#3d2712);
+  transform:perspective(700px) rotateX(38deg);transform-origin:50% 100%;margin-bottom:-90px}
+  #floor::before{content:'';position:absolute;left:0;right:0;top:0;height:8px;background:linear-gradient(90deg,transparent,#ffd98a 20%,#ffe9b8 50%,#ffd98a 80%,transparent)}
+
+  /* spotlights */
+  .spot{position:absolute;top:-60px;width:520px;height:900px;opacity:0;transition:opacity 1.2s ease;pointer-events:none;
+    background:linear-gradient(180deg,rgba(255,224,150,.55),rgba(255,224,150,.12) 55%,transparent 90%);
+    clip-path:polygon(46% 0,54% 0,100% 100%,0 100%);filter:blur(6px)}
+  #spotL{left:230px;transform:rotate(14deg)}
+  #spotR{right:230px;transform:rotate(-14deg)}
+  #spotC{left:50%;margin-left:-260px}
+  .spot.on{opacity:1}
+  .dust{position:absolute;border-radius:50%;background:rgba(255,240,200,.5);animation:dust 7s linear infinite}
+  @keyframes dust{0%{transform:translateY(-20px);opacity:0}15%{opacity:.7}100%{transform:translateY(760px);opacity:0}}
+
+  /* curtains */
+  .curtain{position:absolute;top:0;bottom:0;width:56%;z-index:10;transition:transform 2.2s cubic-bezier(.7,.05,.3,1);
+    background:
+      repeating-linear-gradient(90deg,#8c1626 0 46px,#a71e30 46px 78px,#7a1220 78px 108px,#931a2c 108px 140px);
+    box-shadow:inset 0 -120px 120px -60px rgba(0,0,0,.55)}
+  .curtain::after{content:'';position:absolute;top:0;bottom:0;width:90px;background:linear-gradient(90deg,transparent,rgba(0,0,0,.5))}
+  #curL{left:0;border-right:10px solid #d9a441}
+  #curL::after{right:0}
+  #curR{right:0;border-left:10px solid #d9a441}
+  #curR::after{left:0;transform:scaleX(-1)}
+  #stage.open #curL{transform:translateX(-101%)}
+  #stage.open #curR{transform:translateX(101%)}
+  /* valance */
+  #valance{position:absolute;left:0;right:0;top:0;height:120px;z-index:11;
+    background:repeating-linear-gradient(90deg,#8c1626 0 46px,#a71e30 46px 78px,#7a1220 78px 108px,#931a2c 108px 140px);
+    border-bottom:8px solid #d9a441}
+  #valance::after{content:'';position:absolute;left:0;right:0;top:100%;height:70px;
+    background:radial-gradient(circle at 70px -20px,#a71e30 56px,transparent 57px);background-size:140px 70px;filter:drop-shadow(0 6px 4px rgba(0,0,0,.4))}
+  #valance .fringe{position:absolute;left:0;right:0;top:calc(100% + 64px);height:14px;
+    background:repeating-linear-gradient(90deg,#d9a441 0 6px,transparent 6px 16px)}
+
+  /* title block */
+  #tb{position:absolute;left:50%;top:330px;transform:translateX(-50%);text-align:center;z-index:8;width:1600px}
+  #tb .kick{font-family:'Cormorant Garamond';font-style:italic;font-size:30px;letter-spacing:10px;color:#d9a441;opacity:0}
+  #tb .kick.in{animation:kIn .8s ease forwards}
+  @keyframes kIn{from{opacity:0;letter-spacing:26px}to{opacity:1;letter-spacing:10px}}
+  #t1,#t2{font-size:118px;line-height:1.28;letter-spacing:10px;color:#f6e6bd;
+    background:linear-gradient(100deg,#8a5c17 0%,#f6e6bd 22%,#ffd98a 40%,#fff3d6 50%,#ffd98a 60%,#f6e6bd 78%,#8a5c17 100%);
+    background-size:220% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+    filter:drop-shadow(0 6px 22px rgba(255,205,110,.25));opacity:0}
+  #t1.in{animation:tRise 1s cubic-bezier(.16,1,.3,1) forwards,shine 4.5s linear 1.2s infinite}
+  #t2.in{animation:tRise 1s cubic-bezier(.16,1,.3,1) forwards,shine 4.5s linear 1.6s infinite}
+  @keyframes tRise{from{opacity:0;transform:translateY(70px) scale(.94)}to{opacity:1;transform:translateY(0) scale(1)}}
+  @keyframes shine{from{background-position:200% 0}to{background-position:-20% 0}}
+  #t2{font-family:'Ma Shan Zheng';font-size:134px}
+  #t2 .qm{color:#e8b04a}
+  #sub{margin-top:34px;font-family:'JetBrains Mono';font-size:25px;color:#cbb98a;letter-spacing:4px;min-height:38px}
+  #sub .cur{display:inline-block;width:13px;height:26px;background:#d9a441;vertical-align:-4px;animation:blink 1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+  #tb .deco{margin:26px auto 0;width:0;height:2px;background:linear-gradient(90deg,transparent,#d9a441,transparent);transition:width 1.2s ease}
+  #tb .deco.in{width:640px}
+
+  /* An An on stage */
+  #anan{position:absolute;left:270px;bottom:60px;width:400px;z-index:9;opacity:0;transition:opacity 1s ease;filter:drop-shadow(0 0 46px rgba(255,214,140,.28)) drop-shadow(0 14px 22px rgba(0,0,0,.5))}
+  #anan.show{opacity:1}
+  #anan img{width:100%;display:block;animation:bob 3.4s ease-in-out infinite alternate}
+  @keyframes bob{from{transform:translateY(0)}to{transform:translateY(-10px)}}
+  #anan .say{position:absolute;right:-130px;top:70px;width:180px;background:#fdf3da;border:3px solid #8a5c17;border-radius:16px;padding:12px 16px;font-family:'ZCOOL XiaoWei';font-size:27px;color:#5d3f10;line-height:1.45;opacity:0;transform:scale(.6);transition:all .45s cubic-bezier(.34,1.6,.64,1);box-shadow:4px 5px 0 rgba(60,35,5,.7);letter-spacing:2px}
+  #anan .say::after{content:'';position:absolute;z-index:-1;left:26px;bottom:-21px;border:10px solid transparent;border-top:13px solid #8a5c17}
+  #anan.show .say{opacity:1;transform:scale(1);transition-delay:.5s}
+
+  .corner{position:absolute;font-family:'JetBrains Mono';font-size:15.5px;color:#8a6f3f;letter-spacing:2px;z-index:12}
+  #chap{left:60px;bottom:40px}
+  #src{right:60px;bottom:40px;font-size:14.5px}
+
+  #hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'JetBrains Mono';pointer-events:none}
+  #track{height:5px;background:rgba(255,220,150,.14)}
+  #bar{height:100%;width:0;background:linear-gradient(90deg,#d9a441,#ffe9b8)}
+  #hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;color:#cbb98a;background:rgba(20,8,4,.85);backdrop-filter:blur(4px)}
+  #hud button{pointer-events:auto;background:transparent;border:1px solid #cbb98a;color:#ead9ac;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+  #hud button:hover{background:rgba(217,164,65,.2)}
+  #replay.done{animation:pulse 1.2s infinite;border-color:#ffe9b8;color:#ffe9b8}
+  @keyframes pulse{50%{box-shadow:0 0 14px rgba(255,233,184,.8)}}
+
+  /* 镜头层 */
+  #cam{position:absolute;inset:0;transform-origin:0 0;transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- ================= 镜头世界 ================= -->
+  <div id="cam">
+  <div id="floor"></div>
+  <div class="spot" id="spotL"></div>
+  <div class="spot" id="spotR"></div>
+  <div class="spot" id="spotC"></div>
+
+  <div id="tb">
+    <div class="kick">ZHIPU · GLM-5.3 · CYBERGYM LIVE TEST</div>
+    <div id="t1">AI 挖洞时代，</div>
+    <div id="t2">真来了吗<span class="qm">？</span></div>
+    <div class="deco" id="deco"></div>
+    <div id="sub"><span id="subTxt"></span><span class="cur"></span></div>
+  </div>
+
+  <div id="anan">
+    <div class="say">大幕拉开，<br>请看实测——</div>
+    <img src="anan - emotion rename/02_抱书怀羊_恬静温柔.png" alt="安安·主持">
+  </div>
+
+  <div class="curtain" id="curL"></div>
+  <div class="curtain" id="curR"></div>
+  <div id="valance"><div class="fringe"></div></div>
+
+  
+  
+
+  </div><!-- /cam -->
+<div class="corner" id="chap">00 / 冷开场</div><div class="corner" id="src">GLM-5.3 靶场实测 · 全片 16:10</div>
+  </div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-5 · 标题卡 · 8s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+const DUR=8000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false}),tws=[];
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(q);if(q>=1)tws.splice(i,1)}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+
+/* dust motes inside spotlights */
+['spotL','spotR','spotC'].forEach(id=>{
+  const s=document.getElementById(id);
+  for(let i=0;i<9;i++){
+    const d=document.createElement('div');d.className='dust';
+    const sz=3+Math.random()*5;
+    d.style.width=d.style.height=sz+'px';
+    d.style.left=(15+Math.random()*70)+'%';
+    d.style.top=(Math.random()*30)+'%';
+    d.style.animationDelay=(Math.random()*7)+'s';
+    d.style.animationDuration=(5+Math.random()*5)+'s';
+    s.appendChild(d);
+  }
+});
+
+/* subtitle typewriter */
+const SUB='GLM-5.3 靶场实测 · 开源 vs 闭源 · 首场黑盒对决';
+function typeSub(start,dur){tws.push({t:start,d:dur,f:q=>{const n=Math.round(SUB.length*q);$('#subTxt').textContent=SUB.slice(0,n)}})}
+
+on(250, ()=>{['spotL','spotR','spotC'].forEach(id=>document.getElementById(id).classList.add('on'))});
+on(500, ()=>$('#stage').classList.add('open'));
+on(1900,()=>$('#tb .kick').classList.add('in'));
+on(2200,()=>$('#t1').classList.add('in'));
+on(2900,()=>$('#t2').classList.add('in'));
+on(3600,()=>$('#deco').classList.add('in'));
+on(3800,()=>typeSub(3800,1900));
+on(4300,()=>$('#anan').classList.add('show'));
+
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+/* ===== 镜头 ===== */
+const camEl=$('#cam');
+function camTo(tx,ty,s,dur){camEl.style.setProperty('--cd',dur+'s');camEl.style.transform='translate('+tx+'px,'+ty+'px) scale('+s+')';if(window.__sfx)__sfx.whoosh(dur,0.65)}
+const CX=960,CY=540;
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+
+/* ===== 镜头调度 ===== */
+on(1900,()=>{camFocus(960,470,1.13,5.0)});  // 标题 5s 缓推近（Ken Burns）
+
+
+/* ===== 音效 ===== */
+on(250,()=>__sfx.whoosh(0.4,0.5));
+on(500,()=>__sfx.swipe(0.8));
+on(1900,()=>__sfx.pop(0.7));
+on(2200,()=>__sfx.thud(0.8));
+on(2900,()=>__sfx.pop(0.8));
+on(3600,()=>__sfx.pop(0.5));
+for(let __si=0;__si<17;__si++)on(3800+__si*110,()=>__sfx.type(0.45));
+on(4300,()=>__sfx.pop(0.6));
+</script>
+</body>
+</html>
