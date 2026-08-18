@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<script>
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+
+<script>
+/* ===== SFX 引擎（WebAudio 合成，无音频文件，随启动按钮手势激活） ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){ /* 波：弹出 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){ /* 呼：镜头/大幅移动 */
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){ /* 唰：快速滑入/切换 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){ /* 键盘：短促轻击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){ /* 叮：柔和落定 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){ /* 咚：低频落章/撞击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 2-6 · 漏洞④ SQL 注入：逐字符逼问出 root</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Zhi+Mang+Xing&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+SC:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;background:#8a6a42;overflow:hidden;font-family:'Noto Sans SC',sans-serif}
+  body.paused *{animation-play-state:paused!important}
+  #stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;
+    background:#c9a06a;background-image:
+      radial-gradient(rgba(90,60,25,.25) 1.5px,transparent 2px),
+      radial-gradient(rgba(255,235,200,.16) 1px,transparent 1.6px);
+    background-size:22px 22px,14px 14px}
+  #cork{position:absolute;inset:0;box-shadow:inset 0 0 180px rgba(60,38,12,.55);pointer-events:none}
+
+  .pin{position:absolute;width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ff8a7a,#d63a2a 60%,#8f1d12);box-shadow:2px 3px 5px rgba(60,20,10,.5);z-index:6}
+  .tape{position:absolute;width:110px;height:30px;background:rgba(255,248,220,.55);box-shadow:0 2px 4px rgba(60,40,15,.25);z-index:5;transform:rotate(-3deg)}
+
+  #title{position:absolute;left:64px;top:44px;z-index:9;opacity:0;transform:translateY(-16px);transition:all .6s cubic-bezier(.16,1,.3,1)}
+  #title.show{opacity:1;transform:translateY(0)}
+  #title .no{display:inline-block;font-family:'Special Elite';font-size:19px;letter-spacing:4px;color:#f6ead2;background:#5a3d1e;border-radius:4px;padding:5px 16px}
+  #title h1{margin-top:10px;font-size:42px;font-weight:900;color:#3a2410;letter-spacing:1px}
+  #title h1 em{font-style:normal;color:#b3222a}
+  #title .en{font-family:'Special Elite';font-size:16px;color:#6b4c26;margin-top:3px;letter-spacing:3px}
+
+  /* mini scoreboard */
+  #miniScore{position:absolute;right:64px;top:48px;z-index:20;display:flex;align-items:center;gap:10px;background:#fdf8ec;border:2.5px solid #5a3d1e;border-radius:10px;padding:7px 16px;opacity:0;transform:translateY(-16px);transition:all .6s cubic-bezier(.34,1.5,.64,1);box-shadow:4px 5px 0 rgba(90,61,30,.5)}
+  #miniScore.show{opacity:1;transform:translateY(0)}
+  #miniScore img{width:26px;height:26px;border-radius:6px}
+  #miniScore b{font-family:'Special Elite';font-size:24px;color:#3a2410}
+  #miniScore small{font-family:'Special Elite';font-size:14px;color:#8a6a42}
+  #miniScore .lbl{font-size:12.5px;color:#8a6a42}
+  #msFloat{position:absolute;left:50%;top:-8px;transform:translateX(-50%) scale(.5);font-family:'Special Elite';font-size:30px;color:#b3222a;opacity:0;white-space:nowrap}
+  #msFloat.go{animation:floatUp 1.7s cubic-bezier(.2,.8,.3,1) forwards}
+  @keyframes floatUp{0%{opacity:0;transform:translateX(-50%) translateY(10px) scale(.5)}25%{opacity:1;transform:translateX(-50%) translateY(-14px) scale(1.15)}70%{opacity:1}100%{opacity:0;transform:translateX(-50%) translateY(-52px) scale(1)}}
+
+  .phase{position:absolute;inset:0;opacity:0;transition:opacity .45s}
+  .phase.on{opacity:1}
+
+  /* pinned card common */
+  .card{position:absolute;background:#fdf8ec;border:2px solid #d8c9a5;border-radius:6px;box-shadow:0 14px 34px rgba(60,38,12,.4);padding:28px 34px;opacity:0;transform:translateY(46px) rotate(var(--rot,0deg)) scale(.92)}
+  .card.in{animation:cIn .6s cubic-bezier(.34,1.5,.64,1) forwards}
+  @keyframes cIn{to{opacity:1;transform:translateY(0) rotate(var(--rot,0deg)) scale(1)}}
+
+  /* ===== Phase 1 填空题 ===== */
+  #tplCard{left:180px;top:200px;width:1560px;--rot:-.6deg}
+  #tplCard h3{font-size:21px;font-weight:900;color:#5a3d1e;letter-spacing:3px}
+  #tpl{margin-top:18px;font-family:'JetBrains Mono';font-size:34px;color:#3a2410;background:#fff;border:2px dashed #b39a6a;border-radius:10px;padding:26px 34px;line-height:1.6}
+  #tpl .blank{display:inline-block;min-width:200px;text-align:center;border-bottom:4px solid #b3222a;color:#b3222a;font-weight:700;padding:0 12px}
+  #tpl .cm2{color:#98a4c0;font-size:22px}
+  .fillRow{margin-top:22px;display:flex;align-items:center;gap:20px;font-family:'JetBrains Mono';font-size:24px;opacity:0;transform:translateX(-40px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+  .fillRow.in{opacity:1;transform:translateX(0)}
+  .fillRow .lab{width:200px;font-family:'Noto Sans SC';font-weight:900;font-size:19px;color:#6b4c26;letter-spacing:2px}
+  .fillRow .sql{flex:1;background:#fff;border:2px solid #d8c9a5;border-radius:8px;padding:14px 22px}
+  .fillRow.good .sql{border-color:#14915f;background:#eefaf3;color:#0e6b45}
+  .fillRow.evil .sql{border-color:#b3222a;background:#fdeeee;color:#8f1a20;font-weight:700}
+  .fillRow .verdict{width:300px;font-family:'Zhi Mang Xing';font-size:26px;letter-spacing:1px}
+  .fillRow.good .verdict{color:#14915f}
+  .fillRow.evil .verdict{color:#b3222a}
+  .fillRow .verdict b{font-size:30px}
+  #jin1{position:absolute;left:50%;bottom:60px;transform:translateX(-50%);background:#3a2410;color:#f6ead2;font-size:23px;font-weight:700;letter-spacing:2px;padding:16px 42px;border-radius:999px;opacity:0;transition:all .5s cubic-bezier(.2,1.3,.4,1);scale:.7;white-space:nowrap}
+  #jin1.show{opacity:1;scale:1}
+  #jin1 em{font-style:normal;color:#f0b429}
+
+  /* ===== Phase 2 通缉令墙 ===== */
+  .wanted{position:absolute;width:280px;background:#f6ead2;border:2px solid #c9b58e;border-radius:4px;padding:20px 18px 16px;text-align:center;box-shadow:0 12px 30px rgba(60,38,12,.4);opacity:0;transform:translateY(40px) rotate(var(--rot,0deg))}
+  .wanted.in{animation:cIn .5s cubic-bezier(.34,1.6,.64,1) forwards}
+  .wanted .wh{font-family:'Special Elite';font-size:15px;letter-spacing:3px;color:#8a6a42;border-bottom:1.5px dashed #b39a6a;padding-bottom:8px}
+  .wanted .wk{font-family:'JetBrains Mono';font-weight:700;font-size:34px;color:#3a2410;margin-top:14px}
+  .wanted .stampX{margin:14px auto 0;width:130px;font-family:'Zhi Mang Xing';font-size:24px;color:#b3222a;border:3px solid #b3222a;border-radius:8px;padding:2px 0 4px;transform:rotate(-8deg);opacity:0}
+  .wanted.banned .stampX{animation:stIn .4s cubic-bezier(.2,1.6,.3,1) forwards}
+  @keyframes stIn{from{opacity:0;transform:rotate(-8deg) scale(2.4)}to{opacity:1;transform:rotate(-8deg) scale(1)}}
+  #misCard{left:220px;top:640px;width:640px;--rot:-1.4deg;z-index:7}
+  #misCard h4{font-size:19px;font-weight:900;color:#6b4c26;letter-spacing:2px}
+  #misCard p{margin-top:10px;font-size:19px;color:#8a8378;line-height:1.7}
+  #misCard .gray{color:#8a8378}
+  #misCard .fuwei{display:inline-block;margin-top:10px;font-family:'Zhi Mang Xing';font-size:23px;color:#8a6a42;border-bottom:2px dashed #b39a6a}
+  #newCard{right:220px;top:640px;width:640px;--rot:1.2deg;z-index:7}
+  #newCard h4{font-size:19px;font-weight:900;color:#14915f;letter-spacing:2px}
+  #newCard p{margin-top:10px;font-size:19px;color:#3a2410;line-height:1.7}
+  #newCard p b{color:#b3222a}
+
+  /* ===== Phase 3 审讯实录 ===== */
+  #qterm{left:120px;top:190px;width:800px;--rot:-.8deg;font-family:'JetBrains Mono';font-size:17px;line-height:1.9}
+  #qterm h4{font-family:'Noto Sans SC';font-weight:900;font-size:18px;color:#5a3d1e;letter-spacing:2px;border-bottom:2px dashed #b39a6a;padding-bottom:8px}
+  .ql{margin-top:8px;white-space:pre-wrap;color:#4a3a20;opacity:0;transform:translateY(8px);transition:all .35s}
+  .ql.in{opacity:1;transform:translateY(0)}
+  .ql .k2{color:#0a7d94}
+  .ql .bad{color:#b3222a;font-weight:700}
+  .ql .ok3{color:#14915f;font-weight:700}
+  #qaZone{position:absolute;right:120px;top:190px;width:800px}
+  .qa{position:relative;background:#fdf8ec;border:2px solid #d8c9a5;border-radius:6px;box-shadow:0 12px 30px rgba(60,38,12,.35);padding:20px 26px;margin-bottom:22px;opacity:0;transform:translateX(60px) rotate(1deg)}
+  .qa.in{animation:qaIn .5s cubic-bezier(.16,1,.3,1) forwards}
+  @keyframes qaIn{to{opacity:1;transform:translateX(0) rotate(1deg)}}
+  .qa .q{font-family:'JetBrains Mono';font-size:17.5px;color:#4a3a20}
+  .qa .a{margin-top:8px;display:flex;align-items:center;gap:14px}
+  .qa .a .bigYN{font-family:'Zhi Mang Xing';font-size:44px;line-height:1}
+  .qa .a .bigYN.y{color:#14915f}
+  .qa .a .bigYN.n{color:#b3222a}
+  .qa .a span{font-size:16.5px;color:#6b4c26}
+  /* letter tiles */
+  #letters{position:absolute;left:50%;top:660px;transform:translateX(-50%);display:flex;gap:10px;z-index:8}
+  .lt{width:72px;height:88px;background:#fdf8ec;border:2px solid #c9b58e;border-radius:6px;box-shadow:0 10px 24px rgba(60,38,12,.35);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono';font-weight:700;font-size:40px;color:#3a2410;opacity:0;transform:translateY(-30px) rotate(-6deg)}
+  .lt.in{animation:ltIn .4s cubic-bezier(.2,1.6,.4,1) forwards}
+  @keyframes ltIn{to{opacity:1;transform:translateY(0) rotate(0)}}
+  #lettersCap{position:absolute;left:50%;top:790px;transform:translateX(-50%);font-family:'Zhi Mang Xing';font-size:28px;color:#5a3d1e;letter-spacing:2px;opacity:0;transition:opacity .6s;white-space:nowrap}
+  #lettersCap.show{opacity:1}
+  #proofStamp{position:absolute;left:130px;top:520px;font-family:'Zhi Mang Xing';font-size:44px;color:#b3222a;border:5px solid #b3222a;border-radius:12px;padding:4px 26px 8px;transform:rotate(-12deg) scale(3);opacity:0;z-index:9;letter-spacing:4px}
+  #proofStamp.stamp{animation:stampIn .5s cubic-bezier(.2,1.6,.3,1) forwards}
+  @keyframes stampIn{0%{opacity:0;transform:rotate(-12deg) scale(3)}60%{opacity:1;transform:rotate(-12deg) scale(.94)}100%{opacity:.94;transform:rotate(-12deg) scale(1)}}
+
+  /* ===== Phase 4 战利品 ===== */
+  #loot{position:absolute;left:50%;top:220px;transform:translateX(-50%);width:1300px}
+  .lootRow{background:#fdf8ec;border:2.5px solid #c9b58e;border-radius:8px;box-shadow:0 16px 40px rgba(60,38,12,.45);padding:26px 40px;margin-bottom:26px;display:flex;align-items:center;gap:26px;opacity:0;transform:scale(1.6);position:relative}
+  .lootRow.in{animation:lootIn .5s cubic-bezier(.2,1.3,.35,1) forwards}
+  @keyframes lootIn{to{opacity:1;transform:scale(1)}}
+  .lootRow .fn{font-family:'JetBrains Mono';font-weight:700;font-size:30px;color:#5a3d1e;width:260px}
+  .lootRow .val{font-family:'JetBrains Mono';font-weight:700;font-size:38px;color:#3a2410}
+  .lootRow.hot{border-color:#b3222a;background:#fdeeee}
+  .lootRow.hot .val{color:#b3222a}
+  .lootRow .rtag{position:absolute;right:34px;top:50%;transform:translateY(-50%) rotate(6deg);font-family:'Zhi Mang Xing';font-size:27px;color:#fff;background:#b3222a;border-radius:8px;padding:4px 16px;letter-spacing:2px}
+  #jin2{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);background:#b3222a;color:#fdf8ec;font-size:26px;font-weight:900;letter-spacing:3px;padding:18px 52px;border-radius:999px;opacity:0;transition:all .5s cubic-bezier(.2,1.3,.4,1);scale:.7;white-space:nowrap;box-shadow:0 16px 44px rgba(179,34,42,.4)}
+  #jin2.show{opacity:1;scale:1}
+
+  /* An An */
+  #anan{position:absolute;right:-14px;bottom:-16px;width:440px;z-index:25;opacity:0;transition:opacity .9s ease;filter:drop-shadow(0 14px 26px rgba(60,38,12,.5))}
+  #anan.show{opacity:1}
+  #anan img{width:100%;display:block;animation:bob 3.2s ease-in-out infinite alternate}
+  @keyframes bob{from{transform:translateY(0)}to{transform:translateY(-13px)}}
+  #anan .say{position:absolute;left:-196px;top:100px;width:228px;background:#fdf8ec;border:3px solid #5a3d1e;border-radius:16px;padding:14px 18px;font-family:'Zhi Mang Xing';font-size:31px;color:#3a2410;line-height:1.35;letter-spacing:2px;opacity:0;transform:scale(.6);transition:all .45s cubic-bezier(.34,1.6,.64,1);box-shadow:5px 5px 0 rgba(90,61,30,.6)}
+  #anan .say::after{content:'';position:absolute;z-index:-1;right:26px;bottom:-22px;border:11px solid transparent;border-top:13px solid #5a3d1e}
+  #anan .say b{color:#b3222a}
+  #anan.show .say{opacity:1;transform:scale(1);transition-delay:.45s}
+
+  .corner{position:absolute;font-family:'Special Elite';font-size:15px;color:#5a3d1e;letter-spacing:3px;z-index:9}
+  #chap{left:52px;bottom:34px}
+  #src{right:52px;bottom:34px;font-size:13.5px}
+
+  /* HUD */
+  #hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'JetBrains Mono';pointer-events:none}
+  #track{height:5px;background:rgba(58,36,16,.18)}
+  #bar{height:100%;width:0;background:#b3222a}
+  #hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;color:#e8d9bc;background:rgba(58,36,16,.92);backdrop-filter:blur(4px)}
+  #hud button{pointer-events:auto;background:transparent;border:1px solid #e8d9bc;color:#f3e6cb;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+  #hud button:hover{background:rgba(230,200,140,.18)}
+  #replay.done{animation:pulse 1.2s infinite;border-color:#f0b429;color:#f0b429}
+  @keyframes pulse{50%{box-shadow:0 0 14px rgba(240,180,41,.8)}}
+
+  /* 镜头层 */
+  #cam{position:absolute;inset:0;transform-origin:0 0;transform:translate(-154px,-63px) scale(1.16);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- ================= 镜头世界 ================= -->
+  <div id="cam">
+  <div id="cork"></div>
+
+  <div id="title">
+    <span class="no">CASE FILE · VULN #04</span>
+    <h1>SQL 注入：<em>逐字符逼问</em>出 root</h1>
+    <div class="en">SQL INJECTION · BOOLEAN-BASED INTERROGATION</div>
+  </div>
+
+  <div id="miniScore">
+    <div id="msFloat">+180 / +200</div>
+    <img src="icons/GLMicon.png" alt="GLM">
+    <span class="lbl">靶场计分</span><b id="msTotal">570</b><small>/ 4800</small>
+  </div>
+
+  <!-- ============ PHASE 1 填空题 ============ -->
+  <div class="phase" id="p1">
+    <div class="card" id="tplCard">
+      <div class="pin" style="left:50%;top:-11px"></div>
+      <h3>比方：搜索框，其实是一道「填空题」</h3>
+      <div id="tpl">找出名字里包含【<span class="blank" id="blank">&nbsp;</span>】的商品<br><span class="cm2">-- 你输什么，系统就把什么拼进这条 SQL</span></div>
+      <div class="fillRow good" id="fr1">
+        <div class="lab">正常填「手机」</div>
+        <div class="sql">... WHERE name LIKE '%手机%'</div>
+        <div class="verdict">正常搜索 <b>✓</b></div>
+      </div>
+      <div class="fillRow evil" id="fr2">
+        <div class="lab">填 手机' OR '1'='1</div>
+        <div class="sql">... LIKE '%手机%' <b>OR '1'='1'</b> —— 1 永远等于 1，条件恒真</div>
+        <div class="verdict">全部商品都出来 <b>!</b></div>
+      </div>
+    </div>
+    <div id="jin1">你本来是来填空的，结果填的内容<em>被当成命令执行了</em>——这就叫注入</div>
+  </div>
+
+  <!-- ============ PHASE 2 黑名单与误判 ============ -->
+  <div class="phase" id="p2">
+    <div class="wanted" id="w1" style="left:200px;top:210px;--rot:-3deg"><div class="wh">WANTED · 重点盯防</div><div class="wk">SLEEP</div><div class="stampX">封印</div></div>
+    <div class="wanted" id="w2" style="left:560px;top:190px;--rot:2deg"><div class="wh">WANTED · 重点盯防</div><div class="wk">UNION</div><div class="stampX">封印</div></div>
+    <div class="wanted" id="w3" style="left:920px;top:215px;--rot:-1.5deg"><div class="wh">WANTED · 重点盯防</div><div class="wk">--</div><div class="stampX">封印</div></div>
+    <div class="wanted" id="w4" style="left:1280px;top:195px;--rot:2.5deg"><div class="wh">WANTED · 重点盯防</div><div class="wk">#</div><div class="stampX">封印</div></div>
+    <div class="card" id="misCard">
+      <div class="pin" style="left:40px;top:-11px"></div>
+      <h4>第一轮 · 全被拦</h4>
+      <p>注入词一上桌全被封印，GLM <span class="gray">一度误判成「参数化查询」</span>——没洞？</p>
+      <span class="fuwei">翻车伏笔，记住这里 ↓（后面 2-9 会考）</span>
+    </div>
+    <div class="card" id="newCard">
+      <div class="pin" style="right:40px;top:-11px"></div>
+      <h4>第二轮 · 换路</h4>
+      <p>换个思路：<b>不用被盯上的词</b>，只用最基础的布尔逻辑问是非题——就像不带刀。</p>
+    </div>
+  </div>
+
+  <!-- ============ PHASE 3 审讯实录 ============ -->
+  <div class="phase" id="p3">
+    <div class="card" id="qterm">
+      <div class="pin" style="left:60px;top:-11px"></div>
+      <h4>审讯实录 · 布尔信道</h4>
+      <div class="ql" id="q1">$ keyword=<span class="bad">' OR '1'='1</span></div>
+      <div class="ql" id="q2">← 返回 <span class="bad">6</span> 个商品（全部）<span class="ok3">—— 注入点实锤</span></div>
+      <div class="ql" id="q3">$ keyword=' OR (LENGTH(database())&gt;0) --</div>
+      <div class="ql" id="q4">← 6 条 <span class="ok3">「是」</span></div>
+      <div class="ql" id="q5">$ keyword=' OR (LENGTH(database())&gt;99) --</div>
+      <div class="ql" id="q6">← 0 条 <span class="bad">「否」</span></div>
+      <div class="ql" id="q7">$ <span class="k2">-- 二分逼问：一个字符一个字符地撬</span></div>
+      <div class="ql" id="q8">$ SUBSTR(database(),1,1) &gt; 'm' ? <span class="bad">否</span> … = 'h' <span class="ok3">是</span></div>
+    </div>
+    <div id="qaZone">
+      <div class="qa" id="qa1"><div class="q">Q：数据库名长度 &gt; 0 吗？</div><div class="a"><span class="bigYN y">是 ✓</span><span>返回 6 条 —— 信道成立，可以问是非题</span></div></div>
+      <div class="qa" id="qa2"><div class="q">Q：数据库名长度 &gt; 99 吗？</div><div class="a"><span class="bigYN n">否 ✗</span><span>返回 0 条 —— 逐步收缩范围</span></div></div>
+      <div class="qa" id="qa3"><div class="q">逐字符二分：每个字符最多 8 次提问</div><div class="a"><span class="bigYN y" style="font-size:34px">h-e-a-s-e-c…</span><span>库名一个字母一个字母地浮现</span></div></div>
+    </div>
+    <div id="proofStamp">注入点实锤</div>
+    <div id="letters"></div>
+    <div id="lettersCap">数据库名，被一个字一个字地问出来了</div>
+  </div>
+
+  <!-- ============ PHASE 4 战利品 ============ -->
+  <div class="phase" id="p4">
+    <div id="loot">
+      <div class="lootRow" id="lt1"><span class="fn">database()</span><span class="val">heasec_pentest_shop</span></div>
+      <div class="lootRow hot" id="lt2"><span class="fn">user()</span><span class="val">root@localhost</span><span class="rtag">管理员权限</span></div>
+      <div class="lootRow" id="lt3"><span class="fn">version()</span><span class="val">MySQL 8.0.45</span></div>
+    </div>
+    <div id="jin2">管理员权限的数据库，整个裸奔</div>
+  </div>
+
+  <div id="anan">
+    <div class="say">root？<br><b>全招了</b>！</div>
+    <img src="anan - emotion rename/15_平举素纸_认真以待.png" alt="安安·认真">
+  </div>
+
+  
+  
+
+  </div><!-- /cam -->
+<div class="corner" id="chap">02 / 靶场实测 · VULN ④</div><div class="corner" id="src">天积靶场实测 2026-08-15 · 授权环境</div>
+  </div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 2-6 · 漏洞④ SQL 注入 · 97s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+const DUR=97000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3);
+function count(el,from,to,dur,delay){tws.push({t:performance.now()-t0+delay,d:dur,f:p=>{el.textContent=Math.round(from+(to-from)*p)},e:eo})}
+function typer(el,text,dur,delay){tws.push({t:performance.now()-t0+delay,d:dur,f:p=>{el.innerHTML=text.slice(0,Math.floor(p*(text.length+1)))||'&nbsp;'}})}
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1)tws.splice(i,1)}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+
+/* letter tiles */
+const DB='heasec_pentest_shop';
+const lw=$('#letters');
+DB.split('').forEach(ch=>{const d=document.createElement('div');d.className='lt';d.textContent=ch;lw.appendChild(d)});
+
+/* ===== Phase 1 (0-49s) · 填空原理 → 注入命名 ===== */
+on(300,()=>{$('#title').classList.add('show');$('#miniScore').classList.add('show');$('#p1').classList.add('on')});
+on(5000,()=>$('#tplCard').classList.add('in'));                 // 「网站的搜索框」亮相
+on(17000,()=>typer($('#blank'),'手机',900,0));                  // 正常填「手机」
+on(19000,()=>$('#fr1').classList.add('in'));                    // 正常搜索结果
+on(32000,()=>typer($('#blank'),"手机' OR '1'='1",1600,0));      // 填「手机' OR '1'='1」
+on(33000,()=>$('#fr2').classList.add('in'));                    // 拼接后 SQL：1 永远等于 1
+on(48000,()=>$('#jin1').classList.add('show'));                 // 「这就叫注入」
+
+/* ===== Phase 2 (49-64s) · 黑名单与误判 ===== */
+on(49500,()=>{$('#p1').classList.remove('on');$('#p2').classList.add('on')});
+['w1','w2','w3','w4'].forEach((id,i)=>{
+  on(50500+i*400,()=>$('#'+id).classList.add('in'));            // 黑名单关键词亮相
+  on(55000+i*250,()=>$('#'+id).classList.add('banned'));        // 第一轮全被拦截
+});
+on(57000,()=>$('#misCard').classList.add('in'));                // 误判参数化查询
+on(59000,()=>$('#newCard').classList.add('in'));                // 第二轮换思路·布尔逻辑
+
+/* ===== Phase 3 (64-90.5s) · 审讯实录 ===== */
+on(63500,()=>{$('#p2').classList.remove('on');$('#p3').classList.add('on')});
+on(64000,()=>$('#qterm').classList.add('in'));                  // payload 发出
+on(64200,()=>$('#q1').classList.add('in'));                     // keyword=' OR '1'='1
+on(67000,()=>$('#q2').classList.add('in'));                     // 永真 → 返回全部商品
+on(72000,()=>$('#proofStamp').classList.add('stamp'));          // 注入点实锤
+on(82000,()=>$('#qa1').classList.add('in'));                    // Q1 长度>0？
+on(84000,()=>{ $('#q3').classList.add('in');$('#q4').classList.add('in'); });   // 回答「是」
+on(86000,()=>$('#qa2').classList.add('in'));                    // Q2 长度>99？
+on(86300,()=>{ $('#q5').classList.add('in');$('#q6').classList.add('in'); });   // 回答「否」
+on(87800,()=>{ $('#q7').classList.add('in');$('#q8').classList.add('in'); });   // 二分逼问
+on(88000,()=>$('#qa3').classList.add('in'));                    // 逐字符逼问蒙太奇
+/* letters reveal · 20 字压缩进 2s 蒙太奇 */
+DB.split('').forEach((ch,i)=>on(88100+i*85,()=>lw.children[i].classList.add('in')));
+on(90000,()=>$('#lettersCap').classList.add('show'));
+
+/* ===== Phase 4 (90.5-97s) · 战利品 ===== */
+on(90500,()=>{$('#p3').classList.remove('on');$('#p4').classList.add('on')});
+on(90800,()=>$('#lt1').classList.add('in'));                    // database()
+on(91800,()=>{ $('#lt2').classList.add('in'); $('#anan').classList.add('show'); }); // user() root
+on(92800,()=>$('#lt3').classList.add('in'));                    // version()
+on(94000,()=>$('#jin2').classList.add('show'));                 // 「全部泄露」金句
+on(91800,()=>{ $('#msFloat').classList.add('go'); count($('#msTotal'),570,750,1000,200); });
+on(93000,()=>count($('#msTotal'),750,950,1200,0));
+on(95800,()=>$('#anan').classList.remove('show'));
+
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+/* ===== 镜头 ===== */
+const camEl=$('#cam');
+function camTo(tx,ty,s,dur){camEl.style.setProperty('--cd',dur+'s');camEl.style.transform='translate('+tx+'px,'+ty+'px) scale('+s+')';if(window.__sfx)__sfx.whoosh(dur,0.65)}
+const CX=960,CY=540;
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+
+/* ===== 镜头调度 ===== */
+on(300,()=>{camTo(0,0,1,2.0)});             // 开场拉镜
+on(21000,()=>{camFocus(960,430,1.16,1.2)}); // 「但是注意了」推进填空模板
+on(48000,()=>{camTo(0,0,1,1.0)});           // 「这就叫注入」拉回
+on(50000,()=>{camFocus(960,540,1.14,1.0)}); // 通缉令墙
+on(63500,()=>{camTo(0,0,1,1.0)});           // P3 前拉回
+on(72000,()=>{camFocus(700,520,1.14,0.9)}); // 注入点实锤推进
+on(80000,()=>{camTo(0,0,1,1.0)});           // 逼问段前拉回
+on(87800,()=>{camFocus(960,700,1.2,1.1)});  // 逐字符逼问高潮
+on(90200,()=>{camTo(0,0,1,1.1)});           // P4 前拉回
+
+
+/* ===== 音效 ===== */
+on(300,()=>__sfx.swipe(0.6));
+on(5000,()=>__sfx.pop(0.7));
+for(let __si=0;__si<2;__si++)on(17000+__si*400,()=>__sfx.type(0.5));
+on(19000,()=>__sfx.pop(0.6));
+for(let __si=0;__si<12;__si++)on(32000+__si*130,()=>__sfx.type(0.5));
+on(33000,()=>__sfx.pop(0.6));
+on(42000,()=>__sfx.ding(0.7));
+on(48000,()=>__sfx.ding(0.8));
+on(49500,()=>__sfx.swipe(0.7));
+on(50500,()=>__sfx.pop(0.55));
+on(50900,()=>__sfx.pop(0.55));
+on(51300,()=>__sfx.pop(0.55));
+on(51700,()=>__sfx.pop(0.55));
+on(55000,()=>__sfx.thud(0.5));
+on(55250,()=>__sfx.thud(0.5));
+on(55500,()=>__sfx.thud(0.5));
+on(55750,()=>__sfx.thud(0.5));
+on(57000,()=>__sfx.pop(0.6));
+on(59000,()=>__sfx.pop(0.6));
+on(63500,()=>__sfx.swipe(0.7));
+on(64000,()=>__sfx.pop(0.6));
+on(64200,()=>__sfx.type(0.6));
+on(67000,()=>__sfx.type(0.6));
+on(72000,()=>__sfx.thud(1));
+on(82000,()=>__sfx.pop(0.5));
+on(84000,()=>__sfx.pop(0.5));
+on(86000,()=>__sfx.pop(0.5));
+on(86300,()=>__sfx.pop(0.5));
+on(87800,()=>__sfx.pop(0.5));
+on(88000,()=>__sfx.pop(0.5));
+for(let __si=0;__si<20;__si++)on(88100+__si*85,()=>__sfx.type(0.5));
+on(90000,()=>__sfx.pop(0.5));
+on(90500,()=>__sfx.swipe(0.7));
+on(90800,()=>__sfx.pop(0.6));
+on(91800,()=>__sfx.pop(0.6));
+on(92800,()=>__sfx.pop(0.6));
+on(94000,()=>__sfx.ding(0.8));
+/* 计分滚动·由密到疏 easing 连击 */
+for(let __si=1;__si<=6;__si++)on(92000+Math.round(1000*Math.pow(__si/6,2)),()=>__sfx.type(0.4));
+for(let __si=1;__si<=7;__si++)on(93000+Math.round(1200*Math.pow(__si/7,2)),()=>__sfx.type(0.4));
+</script>
+</body>
+</html>

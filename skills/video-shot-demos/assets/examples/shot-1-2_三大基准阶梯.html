@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<script>
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+
+<script>
+/* ===== SFX 引擎（WebAudio 合成，无音频文件，随启动按钮手势激活） ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){ /* 波：弹出 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){ /* 呼：镜头/大幅移动 */
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){ /* 唰：快速滑入/切换 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){ /* 键盘：短促轻击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){ /* 叮：柔和落定 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){ /* 咚：低频落章/撞击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 1-2 · 三大基准阶梯</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=Cabin+Sketch:wght@700&family=Noto+Sans+SC:wght@400;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;background:#43502e;overflow:hidden;font-family:'Noto Sans SC',sans-serif}
+  body.paused *{animation-play-state:paused!important}
+  #stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;
+    background:#f6efdb;
+    background-image:
+      linear-gradient(rgba(120,95,50,.07) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(120,95,50,.07) 1px,transparent 1px);
+    background-size:88px 88px}
+  /* map frame */
+  #stage::before{content:'';position:absolute;inset:26px;border:3px solid #6b5836;pointer-events:none;z-index:15}
+  #stage::after{content:'';position:absolute;inset:36px;border:1.5px solid #6b5836;pointer-events:none;z-index:15}
+
+  /* contour rings */
+  .contour{position:absolute;border:1.6px solid rgba(150,105,55,.30);border-radius:48% 52% 55% 45%/58% 60% 40% 42%;pointer-events:none}
+  .contour.dash{border-style:dashed;opacity:.7}
+
+  /* legend (title) */
+  #legend{position:absolute;left:76px;top:72px;z-index:8;background:#fffdf2;border:3px solid #5d4c28;padding:22px 30px;box-shadow:7px 8px 0 rgba(93,76,40,.85);opacity:0;transform:rotate(-1deg) translateY(-30px)}
+  #legend.in{animation:lgIn .6s cubic-bezier(.2,1.2,.4,1) forwards}
+  @keyframes lgIn{to{opacity:1;transform:rotate(-1deg) translateY(0)}}
+  #legend h1{font-family:'ZCOOL KuaiLe';font-size:44px;color:#3f3315;letter-spacing:3px}
+  #legend h1 em{font-style:normal;color:#c26a1b}
+  #legend p{margin-top:8px;font-size:18.5px;color:#7a6636;letter-spacing:2px}
+  #legend .scale{margin-top:10px;font-family:'JetBrains Mono';font-size:13.5px;color:#a08a52;letter-spacing:1px;border-top:1.5px dashed #b8a26a;padding-top:8px}
+
+  /* compass */
+  #compass{position:absolute;right:100px;top:84px;width:120px;height:120px;z-index:8;opacity:0}
+  #compass.in{animation:fade .8s .2s ease forwards}
+  @keyframes fade{to{opacity:1}}
+  #compass svg{width:100%;height:100%;animation:compassSpin 24s linear infinite}
+  @keyframes compassSpin{to{transform:rotate(360deg)}}
+
+  /* ground */
+  #ground{position:absolute;left:60px;right:60px;bottom:250px;height:0;border-top:3.5px solid #5d4c28;z-index:2}
+  #ground::after{content:'';position:absolute;left:0;right:0;top:4px;height:22px;background:repeating-linear-gradient(-45deg,rgba(93,76,40,.4) 0 3px,transparent 3px 16px)}
+
+  /* peaks */
+  .peak{position:absolute;z-index:3;opacity:0;transform:translateY(60px)}
+  .peak.in{animation:pkIn .8s cubic-bezier(.16,1,.3,1) forwards}
+  @keyframes pkIn{to{opacity:1;transform:translateY(0)}}
+  .peak svg{display:block;filter:drop-shadow(6px 8px 0 rgba(93,76,40,.25))}
+
+  /* trail signs */
+  .sign{position:absolute;z-index:6;width:300px;text-align:center;opacity:0;transform:translateY(30px) scale(.85);transition:all .5s cubic-bezier(.34,1.5,.64,1)}
+  .sign.in{opacity:1;transform:translateY(0) scale(1)}
+  .sign .plank{background:#e8c98f;border:3px solid #6b4f24;border-radius:8px;padding:14px 12px 12px;box-shadow:4px 5px 0 rgba(93,76,40,.8);position:relative;transition:all .4s}
+  .sign .plank::before,.sign .plank::after{content:'';position:absolute;top:8px;width:9px;height:9px;border-radius:50%;background:#6b4f24}
+  .sign .plank::before{left:10px}.sign .plank::after{right:10px}
+  .sign .post{width:12px;height:44px;margin:0 auto;background:#8a6a34;border:2.5px solid #6b4f24;border-top:none}
+  .sign .lv{font-family:'Cabin Sketch';font-size:15px;letter-spacing:2px;color:#8a6a34}
+  .sign h2{font-family:'ZCOOL KuaiLe';font-size:29px;color:#3f3315;margin-top:2px;letter-spacing:1px}
+  .sign .ask{margin-top:6px;font-size:16.5px;color:#5d4c28;line-height:1.45}
+  .sign .ask b{color:#b3471f}
+  .sign .org{margin-top:6px;font-family:'JetBrains Mono';font-size:12px;color:#93803f}
+  .sign.lit .plank{background:#ffd98a;border-color:#b3471f;box-shadow:4px 5px 0 rgba(179,71,31,.7),0 0 34px rgba(255,190,80,.5)}
+  .sign .pop{position:absolute;left:50%;bottom:calc(100% + 14px);transform:translateX(-50%) scale(0);background:#b3471f;color:#ffe9c4;font-family:'ZCOOL KuaiLe';font-size:20px;padding:8px 20px;border-radius:999px;white-space:nowrap;box-shadow:0 8px 22px rgba(179,71,31,.4);transition:transform .45s cubic-bezier(.34,1.8,.64,1);letter-spacing:1px}
+  .sign.lit .pop{transform:translateX(-50%) scale(1)}
+
+  /* flag marker */
+  #flag{position:absolute;z-index:9;width:76px;height:96px;opacity:0;transition:left .8s cubic-bezier(.36,1.3,.5,1),bottom .8s cubic-bezier(.36,1.3,.5,1),opacity .3s}
+  #flag.show{opacity:1}
+  #flag .pole{position:absolute;left:8px;top:0;bottom:0;width:6px;background:#6b4f24;border-radius:3px}
+  #flag .cloth{position:absolute;left:14px;top:4px;width:0;height:0;border-top:17px solid transparent;border-bottom:17px solid transparent;border-left:52px solid #e2543a;filter:drop-shadow(3px 3px 0 rgba(93,76,40,.5));transform-origin:left center;animation:wave 1.2s ease-in-out infinite alternate}
+  @keyframes wave{from{transform:scaleX(1)}to{transform:scaleX(.82) skewY(3deg)}}
+  #flag .ball{position:absolute;left:3px;top:-8px;width:16px;height:16px;border-radius:50%;background:#ffd166;border:3px solid #6b4f24}
+
+  /* crown on peak 1 */
+  #pkCrown{position:absolute;z-index:10;width:96px;opacity:0;transform:scale(0) rotate(-16deg);transition:all .55s cubic-bezier(.34,1.9,.64,1)}
+  #pkCrown.pop{opacity:1;transform:scale(1) rotate(-8deg)}
+
+  /* note */
+  #note{position:absolute;left:50%;bottom:96px;transform:translateX(-50%);z-index:8;background:#fffdf2;border:3px solid #5d4c28;padding:14px 36px;font-family:'ZCOOL KuaiLe';font-size:26px;color:#3f3315;letter-spacing:2px;box-shadow:6px 7px 0 rgba(93,76,40,.85);opacity:0}
+  #note.show{animation:nIn .55s cubic-bezier(.2,1.3,.4,1) forwards}
+  @keyframes nIn{from{opacity:0;transform:translateX(-50%) translateY(30px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+  #note b{color:#b3471f}
+
+  /* An An */
+  #anan{position:absolute;left:60px;bottom:-20px;width:410px;z-index:9;opacity:0;transition:opacity .9s ease;filter:drop-shadow(0 14px 24px rgba(80,60,20,.35))}
+  #anan.show{opacity:1}
+  #anan img{width:100%;display:block;animation:bob 3s ease-in-out infinite alternate}
+  @keyframes bob{from{transform:translateY(0)}to{transform:translateY(-12px)}}
+  #anan .say{position:absolute;right:-150px;top:80px;width:190px;background:#fffdf2;border:3px solid #5d4c28;border-radius:14px;padding:12px 16px;font-family:'ZCOOL KuaiLe';font-size:26px;color:#3f3315;line-height:1.4;opacity:0;transform:scale(.6);transition:all .45s cubic-bezier(.34,1.6,.64,1);box-shadow:4px 5px 0 rgba(93,76,40,.8)}
+  #anan .say::after{content:'';position:absolute;z-index:-1;left:26px;bottom:-20px;border:10px solid transparent;border-top:12px solid #5d4c28}
+  #anan.show .say{opacity:1;transform:scale(1);transition-delay:.4s}
+
+  .corner{position:absolute;font-family:'JetBrains Mono';font-size:15.5px;color:#93803f;letter-spacing:2px;z-index:16}
+  #chap{left:76px;bottom:48px}
+  #src{right:76px;bottom:48px;font-size:14.5px}
+
+  #hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'JetBrains Mono';pointer-events:none}
+  #track{height:5px;background:rgba(107,88,54,.18)}
+  #bar{height:100%;width:0;background:#b3471f}
+  #hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;color:#d8c9a0;background:rgba(66,52,26,.88);backdrop-filter:blur(4px)}
+  #hud button{pointer-events:auto;background:transparent;border:1px solid #d8c9a0;color:#efe5c6;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+  #hud button:hover{background:rgba(216,201,160,.18)}
+  #replay.done{animation:pulse 1.2s infinite;border-color:#ffd166;color:#ffd166}
+  @keyframes pulse{50%{box-shadow:0 0 14px rgba(255,209,102,.8)}}
+
+  /* 镜头层 */
+  #cam{position:absolute;inset:0;transform-origin:0 0;transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- ================= 镜头世界 ================= -->
+  <div id="cam">
+  <div id="legend">
+    <h1>测 AI 挖洞 · <em>三座高峰</em></h1>
+    <p>一个比一个难：从「找到」→「看懂利用」→「真打进去」</p>
+    <div class="scale">BENCHMARK TRAIL MAP · SCALE 1:1507 · N ↑</div>
+  </div>
+
+  <div id="compass">
+    <svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="54" fill="#fffdf2" stroke="#5d4c28" stroke-width="3"/><circle cx="60" cy="60" r="42" fill="none" stroke="#b8a26a" stroke-width="1.5" stroke-dasharray="4 4"/><path d="M60 14 L70 60 L60 106 L50 60z" fill="#b3471f" stroke="#5d4c28" stroke-width="2"/><path d="M60 14 L70 60 L50 60z" fill="#e2543a"/><text x="60" y="10" text-anchor="middle" font-family="Cabin Sketch" font-size="14" fill="#5d4c28">N</text></svg>
+  </div>
+
+  <!-- contour rings per summit -->
+  <div class="contour" style="left:330px;top:390px;width:300px;height:210px"></div>
+  <div class="contour dash" style="left:290px;top:350px;width:380px;height:280px"></div>
+  <div class="contour" style="left:250px;top:310px;width:460px;height:350px;opacity:.6"></div>
+  <div class="contour" style="left:890px;top:250px;width:300px;height:230px"></div>
+  <div class="contour dash" style="left:850px;top:205px;width:380px;height:310px"></div>
+  <div class="contour" style="left:810px;top:160px;width:460px;height:390px;opacity:.6"></div>
+  <div class="contour" style="left:1430px;top:110px;width:320px;height:250px"></div>
+  <div class="contour dash" style="left:1390px;top:60px;width:400px;height:330px"></div>
+  <div class="contour" style="left:1350px;top:10px;width:480px;height:410px;opacity:.6"></div>
+
+  <div id="ground"></div>
+
+  <!-- peak 1 -->
+  <div class="peak" id="pk1" style="left:290px;bottom:250px">
+    <svg width="400" height="330" viewBox="0 0 400 330"><path d="M200 14 L386 316 H14z" fill="#8fae7e" stroke="#57694a" stroke-width="5" stroke-linejoin="round"/><path d="M200 14 L246 78 L214 66 L188 92 L162 64 L154 76z" fill="#fdfbf2" stroke="#57694a" stroke-width="4" stroke-linejoin="round"/><path d="M200 14 L386 316 H200z" fill="#7a9a6b" opacity=".55"/></svg>
+  </div>
+  <!-- peak 2 -->
+  <div class="peak" id="pk2" style="left:850px;bottom:250px">
+    <svg width="400" height="470" viewBox="0 0 400 470"><path d="M200 14 L386 456 H14z" fill="#6f94a8" stroke="#47606e" stroke-width="5" stroke-linejoin="round"/><path d="M200 14 L262 96 L224 82 L196 112 L168 80 L156 96z" fill="#fdfbf2" stroke="#47606e" stroke-width="4" stroke-linejoin="round"/><path d="M200 14 L386 456 H200z" fill="#5d7f92" opacity=".55"/></svg>
+  </div>
+  <!-- peak 3 -->
+  <div class="peak" id="pk3" style="left:1390px;bottom:250px">
+    <svg width="420" height="610" viewBox="0 0 420 610"><path d="M210 14 L404 596 H16z" fill="#8d8296" stroke="#57495f" stroke-width="5" stroke-linejoin="round"/><path d="M210 14 L286 118 L240 100 L208 136 L178 98 L162 118z" fill="#fdfbf2" stroke="#57495f" stroke-width="4" stroke-linejoin="round"/><path d="M210 14 L404 596 H210z" fill="#786d82" opacity=".55"/></svg>
+  </div>
+
+  <!-- signs -->
+  <div class="sign" id="sg1" style="left:340px;bottom:60px">
+    <div class="pop">考能不能「找到」漏洞</div>
+    <div class="plank">
+      <div class="lv">LEVEL 1 · 海拔 1507m</div>
+      <h2>CyberGym</h2>
+      <div class="ask">AI 能不能<b>找到</b>漏洞</div>
+      <div class="org">UC Berkeley · arXiv:2506.02548</div>
+    </div>
+    <div class="post"></div>
+  </div>
+  <div class="sign" id="sg2" style="left:900px;bottom:60px">
+    <div class="pop">考能不能「看懂并利用」</div>
+    <div class="plank">
+      <div class="lv">LEVEL 2 · 海拔 2600m</div>
+      <h2>ExploitBench</h2>
+      <div class="ask">AI 能不能<b>看懂并利用</b></div>
+      <div class="org">CMU · exploit-chain benchmark</div>
+    </div>
+    <div class="post"></div>
+  </div>
+  <div class="sign" id="sg3" style="left:1450px;bottom:60px">
+    <div class="pop">考能不能「真打进去」</div>
+    <div class="plank">
+      <div class="lv">LEVEL 3 · 海拔 4800m</div>
+      <h2>ExploitGym</h2>
+      <div class="ask">AI 能不能<b>真打进去</b></div>
+      <div class="org">Berkeley RDI + MPI-SP</div>
+    </div>
+    <div class="post"></div>
+  </div>
+
+  <div id="flag"><div class="pole"></div><div class="cloth"></div><div class="ball"></div></div>
+
+  <div id="pkCrown" style="left:442px;top:336px">
+    <svg viewBox="0 0 130 100"><path d="M10 84 L4 30 34 52 65 12 96 52 126 30 120 84z" fill="#ffd23f" stroke="#6b4f24" stroke-width="5" stroke-linejoin="round"/><circle cx="65" cy="10" r="8" fill="#e2543a" stroke="#6b4f24" stroke-width="4"/><rect x="10" y="84" width="110" height="12" rx="6" fill="#f4a259" stroke="#6b4f24" stroke-width="4"/></svg>
+  </div>
+
+  <div id="note">难度逐级递增 —— <b>GLM-5.3 先在第一峰 CyberGym 插旗登顶</b>（全球第一）</div>
+
+  <div id="anan">
+    <div class="say">第一座峰，<br>我们先爬它！</div>
+    <img src="anan - emotion rename/05_阖眸轻语_雀跃腼腆.png" alt="安安·雀跃">
+  </div>
+
+  
+  
+
+  </div><!-- /cam -->
+<div class="corner" id="chap">01 / 全球第一的实力</div><div class="corner" id="src">来源：伯克利 / CMU / 伯克利 RDI+MPI-SP · 一个比一个难</div>
+  </div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 1-2 · 三大基准阶梯 · 18s</span><span><span id="tc" style="margin-right:10px">01:32</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+const DUR=18000, OFFSET=92;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=OFFSET+el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+
+const flag=$('#flag');
+function hopTo(x,b){flag.style.left=x+'px';flag.style.bottom=b+'px'}
+/* flag anchor: pole bottom tip => left+11, bottom */
+on(400, ()=>$('#legend').classList.add('in'));
+on(700, ()=>$('#compass').classList.add('in'));
+on(1200,()=>{$('#pk1').classList.add('in');$('#sg1').classList.add('in')});
+on(1800,()=>{$('#pk2').classList.add('in');$('#sg2').classList.add('in')});
+on(2400,()=>{$('#pk3').classList.add('in');$('#sg3').classList.add('in')});
+on(3400,()=>$('#anan').classList.add('show'));
+on(4700,()=>{hopTo(479,566);flag.classList.add('show')});
+on(5400,()=>$('#sg1').classList.add('lit'));
+on(7200,()=>hopTo(1039,706));
+on(8000,()=>$('#sg2').classList.add('lit'));
+on(10000,()=>hopTo(1589,846));
+on(10800,()=>$('#sg3').classList.add('lit'));
+on(12800,()=>hopTo(1039,706));
+on(13600,()=>hopTo(479,566));
+on(14400,()=>$('#pkCrown').classList.add('pop'));
+on(15000,()=>$('#note').classList.add('show'));
+on(16600,()=>$('#anan').classList.remove('show'));
+
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+/* ===== 镜头 ===== */
+const camEl=$('#cam');
+function camTo(tx,ty,s,dur){camEl.style.setProperty('--cd',dur+'s');camEl.style.transform='translate('+tx+'px,'+ty+'px) scale('+s+')';if(window.__sfx)__sfx.whoosh(dur,0.65)}
+const CX=960,CY=540;
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+
+/* ===== 镜头调度 ===== */
+on(4700,()=>{camFocus(517,470,1.22,1.0)});  // 镜头随旗登峰1
+on(7200,()=>{camFocus(1077,330,1.22,0.9)}); // 跟跳峰2
+on(10000,()=>{camFocus(1627,190,1.22,0.9)}); // 跟跳峰3
+on(12800,()=>{camFocus(1077,330,1.22,0.9)}); // 跟回峰2
+on(13600,()=>{camFocus(517,470,1.22,0.9)}); // 跟回峰1
+on(15200,()=>{camTo(0,0,1,1.3)});           // 皇冠后拉回全景
+
+
+/* ===== 音效 ===== */
+on(400,()=>__sfx.pop(0.5));
+on(700,()=>__sfx.pop(0.5));
+on(1200,()=>__sfx.pop(0.7));
+on(1800,()=>__sfx.pop(0.7));
+on(2400,()=>__sfx.pop(0.7));
+on(3400,()=>__sfx.pop(0.7));
+on(4700,()=>__sfx.pop(0.6));
+on(5400,()=>__sfx.ding(0.7));
+on(7200,()=>__sfx.pop(0.6));
+on(8000,()=>__sfx.ding(0.7));
+on(10000,()=>__sfx.pop(0.6));
+on(10800,()=>__sfx.ding(0.8));
+on(12800,()=>__sfx.pop(0.5));
+on(13600,()=>__sfx.pop(0.5));
+on(14400,()=>__sfx.ding(1));
+on(14450,()=>__sfx.pop(0.8));
+on(15000,()=>__sfx.pop(0.5));
+</script>
+</body>
+</html>

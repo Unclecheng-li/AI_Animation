@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<script>
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+
+<script>
+/* ===== SFX 引擎（WebAudio 合成，无音频文件，随启动按钮手势激活） ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){ /* 波：弹出 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){ /* 呼：镜头/大幅移动 */
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){ /* 唰：快速滑入/切换 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){ /* 键盘：短促轻击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){ /* 叮：柔和落定 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){ /* 咚：低频落章/撞击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 2-4 · 漏洞② 超额退款</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;background:#d8ece1;overflow:hidden;font-family:'Noto Sans SC',sans-serif}
+  body.paused *{animation-play-state:paused!important}
+  #stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;
+    background:#eaf6f0;background-image:
+      linear-gradient(rgba(20,83,58,.07) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(20,83,58,.07) 1px,transparent 1px);
+    background-size:40px 40px}
+  /* awning */
+  #awning{position:absolute;left:0;right:0;top:0;height:26px;background:repeating-linear-gradient(90deg,#16a34a 0 64px,#fff 64px 128px);border-bottom:4px solid #0e5b34;opacity:0;transition:opacity .6s}
+  #awning.in{opacity:1}
+
+  #title{position:absolute;left:64px;top:56px;z-index:9;opacity:0;transform:translateY(-16px);transition:all .6s cubic-bezier(.16,1,.3,1)}
+  #title.show{opacity:1;transform:translateY(0)}
+  #title .no{display:inline-block;font-family:'Bebas Neue';font-size:20px;letter-spacing:5px;color:#fff;background:#dc2626;border-radius:8px;padding:4px 16px}
+  #title h1{margin-top:10px;font-size:42px;font-weight:900;color:#0e3b27;letter-spacing:1px}
+  #title h1 em{font-style:normal;color:#dc2626}
+  #title .en{font-family:'DM Mono';font-size:16px;color:#4a7a62;margin-top:3px;letter-spacing:2px}
+
+  /* mini scoreboard */
+  #miniScore{position:absolute;right:64px;top:56px;z-index:20;display:flex;align-items:center;gap:10px;background:#fff;border:2.5px solid #0e5b34;border-radius:14px;padding:7px 16px;opacity:0;transform:translateY(-16px);transition:all .6s cubic-bezier(.34,1.5,.64,1);box-shadow:4px 5px 0 rgba(14,91,52,.3)}
+  #miniScore.show{opacity:1;transform:translateY(0)}
+  #miniScore img{width:26px;height:26px;border-radius:7px}
+  #miniScore b{font-family:'Bebas Neue';font-size:27px;color:#0e3b27;letter-spacing:1px}
+  #miniScore small{font-family:'Bebas Neue';font-size:15px;color:#4a7a62;letter-spacing:1px}
+  #miniScore .lbl{font-size:12.5px;color:#4a7a62}
+  #msFloat{position:absolute;left:50%;top:-8px;transform:translateX(-50%) scale(.5);font-family:'Bebas Neue';font-size:32px;color:#dc2626;opacity:0;letter-spacing:2px;white-space:nowrap}
+  #msFloat.go{animation:floatUp 1.6s cubic-bezier(.2,.8,.3,1) forwards}
+  @keyframes floatUp{0%{opacity:0;transform:translateX(-50%) translateY(10px) scale(.5)}25%{opacity:1;transform:translateX(-50%) translateY(-14px) scale(1.15)}70%{opacity:1}100%{opacity:0;transform:translateX(-50%) translateY(-52px) scale(1)}}
+
+  .phase{position:absolute;inset:0;opacity:0;transition:opacity .45s}
+  .phase.on{opacity:1}
+
+  /* ===== Phase A : checklist ===== */
+  #checkCard{position:absolute;left:50%;top:220px;transform:translateX(-50%);width:900px;background:#fff;border:3px solid #0e5b34;border-radius:20px;box-shadow:8px 10px 0 rgba(14,91,52,.25);padding:38px 46px 42px;opacity:0;translate:0 40px;transition:all .7s cubic-bezier(.16,1,.3,1)}
+  #checkCard.in{opacity:1;translate:0 0}
+  #checkCard h2{font-size:26px;font-weight:900;color:#0e3b27;letter-spacing:2px;display:flex;align-items:center;gap:12px}
+  #checkCard h2 svg{width:28px;height:28px;color:#16a34a}
+  #checkCard .sub{font-family:'DM Mono';font-size:14.5px;color:#4a7a62;margin-top:4px;letter-spacing:1px}
+  .chk{display:flex;align-items:center;gap:18px;margin-top:24px;background:#f2faf5;border:2px solid #d3ebdd;border-radius:14px;padding:20px 24px;opacity:0;transform:translateX(-40px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+  .chk.in{opacity:1;transform:translateX(0)}
+  .chk .box{width:44px;height:44px;border-radius:12px;background:#16a34a;color:#fff;display:flex;align-items:center;justify-content:center;flex:none}
+  .chk .box svg{width:26px;height:26px}
+  .chk span{font-size:22px;font-weight:700;color:#14402c;letter-spacing:1px}
+  .chk .tag{margin-left:auto;font-family:'DM Mono';font-size:14px;color:#14915f;background:#d9f3e5;border-radius:6px;padding:4px 12px}
+  .chk.bad{background:#fff2f2;border:3px dashed #dc2626}
+  .chk.bad .box{background:#dc2626}
+  .chk.bad span{color:#b91c1c}
+  .chk.bad .tag{color:#b91c1c;background:#fbdcdc}
+  #missStamp{position:absolute;right:36px;bottom:30px;font-weight:900;font-size:40px;color:#dc2626;border:5px solid #dc2626;border-radius:12px;padding:2px 22px 6px;transform:rotate(10deg) scale(3);opacity:0;letter-spacing:6px}
+  #missStamp.stamp{animation:stampIn .5s cubic-bezier(.2,1.6,.3,1) forwards}
+  @keyframes stampIn{0%{opacity:0;transform:rotate(10deg) scale(3)}60%{opacity:1;transform:rotate(10deg) scale(.94)}100%{opacity:.94;transform:rotate(10deg) scale(1)}}
+  #capA2{position:absolute;left:50%;top:800px;transform:translateX(-50%);font-size:20px;color:#2c5a44;letter-spacing:1px;opacity:0;transition:opacity .6s;background:#fff;border:2px solid #0e5b34;border-radius:999px;padding:12px 30px}
+  #capA2.show{opacity:1}
+  #capA2 b{color:#dc2626}
+
+  /* ===== Phase B : POS ===== */
+  #pos{position:absolute;left:80px;top:190px;width:840px;height:760px;background:#0e3b27;border-radius:24px;padding:26px;box-shadow:0 30px 70px rgba(14,59,39,.4);opacity:0;transform:translateY(50px);transition:all .7s cubic-bezier(.16,1,.3,1)}
+  #pos.in{opacity:1;transform:translateY(0)}
+  #posScreen{background:#f4fbf7;border-radius:14px;height:100%;padding:22px 26px;font-family:'DM Mono';font-size:16.5px;line-height:1.9;color:#14402c;overflow:hidden;position:relative}
+  #posScreen .ph2{display:flex;align-items:center;gap:10px;border-bottom:2px dashed #bcd9c9;padding-bottom:12px;margin-bottom:14px;font-size:14px;color:#4a7a62;letter-spacing:1px}
+  #posScreen .ph2 b{color:#0e3b27;font-size:16px}
+  .tl2{white-space:pre-wrap;opacity:0;transform:translateY(10px);transition:all .4s}
+  .tl2.in{opacity:1;transform:translateY(0)}
+  .tl2 .k{color:#0a7d94}
+  .tl2 .ok2{color:#14915f;font-weight:500}
+  .tl2.evilLine{background:#fde2e2;border-left:5px solid #dc2626;padding:4px 10px;margin:4px -10px;border-radius:0 8px 8px 0;color:#b91c1c;font-weight:500}
+  #zoomAmt{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%) scale(.4);background:#dc2626;color:#fff;font-family:'DM Mono';font-weight:500;font-size:34px;border-radius:14px;padding:18px 34px;box-shadow:0 20px 60px rgba(220,38,38,.45);opacity:0;transition:all .5s cubic-bezier(.2,1.5,.4,1);z-index:5;white-space:nowrap}
+  #zoomAmt.pop{opacity:1;transform:translate(-50%,-50%) scale(1)}
+  #zoomAmt small{display:block;font-family:'Noto Sans SC';font-size:15px;margin-top:8px;opacity:.92;letter-spacing:1px}
+
+  /* balance LED */
+  #balPanel{position:absolute;right:80px;top:190px;width:860px;height:300px;background:#0a2c1c;border:3px solid rgba(255,210,63,.45);border-radius:24px;padding:30px 40px;box-shadow:0 30px 70px rgba(14,59,39,.4);opacity:0;transform:translateY(50px);transition:all .7s cubic-bezier(.16,1,.3,1)}
+  #balPanel.in{opacity:1;transform:translateY(0)}
+  #balPanel .blbl{display:flex;align-items:center;gap:10px;color:#7fd6a8;font-family:'DM Mono';font-size:15px;letter-spacing:3px}
+  #balPanel .blbl svg{width:18px;height:18px}
+  #balNum{margin-top:6px;font-family:'Bebas Neue';font-size:120px;color:#a7f3c8;letter-spacing:6px;line-height:1;font-variant-numeric:tabular-nums;text-shadow:0 0 34px rgba(110,240,170,.4);transition:color .45s,text-shadow .45s;transform-origin:left center}
+  #balNum.rolling{color:#eafff2;text-shadow:0 0 46px rgba(180,255,205,.8)}
+  #balNum.boom{color:#ffd23f;text-shadow:0 0 44px rgba(255,210,63,.65);animation:balLand .6s cubic-bezier(.2,1.5,.4,1)}
+  @keyframes balLand{0%{transform:scale(1)}38%{transform:scale(1.11)}100%{transform:scale(1)}}
+  #balDelta{position:absolute;right:40px;top:208px;font-family:'Bebas Neue';font-size:42px;color:#ffd23f;letter-spacing:3px;opacity:0;transform:translateY(14px) scale(.7);text-shadow:0 0 26px rgba(255,210,63,.55);pointer-events:none;white-space:nowrap}
+  #balDelta.go{animation:deltaUp 2.8s cubic-bezier(.2,.8,.3,1) forwards}
+  @keyframes deltaUp{0%{opacity:0;transform:translateY(16px) scale(.7)}14%{opacity:1;transform:translateY(0) scale(1.08)}26%{transform:translateY(0) scale(1)}72%{opacity:1;transform:translateY(-6px)}100%{opacity:0;transform:translateY(-24px)}}
+  #balCap{margin-top:6px;font-size:17px;color:#5aa87e;letter-spacing:2px}
+  #balCap b{color:#ffd23f}
+
+  /* receipt */
+  #receiptZone{position:absolute;right:80px;top:530px;width:860px;height:430px}
+  #printer{position:absolute;left:0;top:0;width:100%;height:64px;background:#f7f1e3;border:3px solid #0e5b34;border-radius:16px;display:flex;align-items:center;padding:0 26px;gap:14px;color:#0e5b34;font-family:'DM Mono';font-size:14.5px;letter-spacing:2px;box-shadow:0 16px 40px rgba(14,59,39,.35);opacity:0;transition:opacity .6s;z-index:3}
+  #printer.in{opacity:1}
+  #printer .slot{flex:1;height:10px;background:#07271a;border-radius:999px;box-shadow:inset 0 2px 6px #000}
+  #receipt{position:absolute;left:50%;top:56px;transform:translateX(-50%);width:520px;background:#fffef8;padding:30px 36px 26px;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 12px),96% 100%,92% calc(100% - 12px),88% 100%,84% calc(100% - 12px),80% 100%,76% calc(100% - 12px),72% 100%,68% calc(100% - 12px),64% 100%,60% calc(100% - 12px),56% 100%,52% calc(100% - 12px),48% 100%,44% calc(100% - 12px),40% 100%,36% calc(100% - 12px),32% 100%,28% calc(100% - 12px),24% 100%,20% calc(100% - 12px),16% 100%,12% calc(100% - 12px),8% 100%,4% calc(100% - 12px),0 100%);
+    box-shadow:0 24px 50px rgba(14,59,39,.3);font-family:'DM Mono';color:#33302a;height:0;overflow:hidden;transition:height 2.8s cubic-bezier(.3,.6,.3,1)}
+  #receipt h3{font-family:'Noto Sans SC';font-weight:900;font-size:21px;text-align:center;letter-spacing:4px}
+  #receipt .rsub{text-align:center;font-size:12.5px;color:#8a8474;margin-top:3px;letter-spacing:1px}
+  #receipt hr{border:none;border-top:2px dashed #c9c2b0;margin:14px 0}
+  .rl{display:flex;justify-content:space-between;font-size:15.5px;line-height:2.1}
+  .rl.bigRed{font-size:26px;font-weight:500;color:#dc2626}
+  .rl.bigBal{font-size:22px;font-weight:500;color:#0e3b27}
+  #rcBar{margin-top:10px;height:34px;background:repeating-linear-gradient(90deg,#33302a 0 3px,transparent 3px 7px)}
+
+  /* golden line */
+  #jinju{position:absolute;left:50%;bottom:56px;transform:translateX(-50%);background:#0e3b27;color:#eaf6f0;font-size:24px;font-weight:700;letter-spacing:2px;padding:16px 44px;border-radius:999px;opacity:0;box-shadow:0 16px 44px rgba(14,59,39,.4);white-space:nowrap;transition:all .5s cubic-bezier(.2,1.3,.4,1);scale:.7}
+  #jinju.show{opacity:1;scale:1}
+  #jinju em{font-style:normal;color:#ffd23f}
+
+  /* An An */
+  #anan{position:absolute;left:40px;bottom:-16px;width:430px;z-index:25;opacity:0;transition:opacity .9s ease;filter:drop-shadow(0 14px 26px rgba(14,59,39,.35))}
+  #anan.show{opacity:1}
+  #anan img{width:100%;display:block;animation:bob 3.2s ease-in-out infinite alternate}
+  @keyframes bob{from{transform:translateY(0)}to{transform:translateY(-13px)}}
+  #anan .say{position:absolute;right:-196px;top:100px;width:230px;background:#fff;border:3px solid #0e5b34;border-radius:16px;padding:14px 18px;font-size:26px;font-weight:900;color:#0e3b27;line-height:1.4;letter-spacing:1px;opacity:0;transform:scale(.6);transition:all .45s cubic-bezier(.34,1.6,.64,1);box-shadow:5px 5px 0 rgba(14,91,52,.5)}
+  #anan .say::after{content:'';position:absolute;z-index:-1;left:26px;bottom:-22px;border:11px solid transparent;border-top:13px solid #0e5b34}
+  #anan .say b{color:#dc2626}
+  #anan.show .say{opacity:1;transform:scale(1);transition-delay:.45s}
+
+  .corner{position:absolute;font-family:'DM Mono';font-size:15px;color:#4a7a62;letter-spacing:2px;z-index:9}
+  #chap{left:52px;bottom:34px}
+  #src{right:52px;bottom:34px;font-size:14px}
+
+  /* HUD */
+  #hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'DM Mono';pointer-events:none}
+  #track{height:5px;background:rgba(14,91,52,.15)}
+  #bar{height:100%;width:0;background:#16a34a}
+  #hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;color:#cfe8da;background:rgba(14,59,39,.92);backdrop-filter:blur(4px)}
+  #hud button{pointer-events:auto;background:transparent;border:1px solid #cfe8da;color:#e8f6ee;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+  #hud button:hover{background:rgba(140,220,170,.18)}
+  #replay.done{animation:pulse 1.2s infinite;border-color:#ffd23f;color:#ffd23f}
+  @keyframes pulse{50%{box-shadow:0 0 14px rgba(255,210,63,.8)}}
+
+  /* 镜头层 */
+  #cam{position:absolute;inset:0;transform-origin:0 0;transform:translate(-120px,-40px) scale(1.15);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- ================= 镜头世界 ================= -->
+  <div id="cam">
+  <div id="awning"></div>
+
+  <div id="title">
+    <span class="no">VULN #02</span>
+    <h1>超额退款：<em>299 的订单</em>退 99999</h1>
+    <div class="en">OVER-REFUND · MISSING AMOUNT CHECK</div>
+  </div>
+
+  <div id="miniScore">
+    <div id="msFloat">+180</div>
+    <img src="icons/GLMicon.png" alt="GLM">
+    <span class="lbl">靶场计分</span><b id="msTotal">150</b><small>/ 4800</small>
+  </div>
+
+  <!-- ============ PHASE A 校验清单 ============ -->
+  <div class="phase" id="pA">
+    <div id="checkCard">
+      <h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h9"/></svg>退款接口的校验清单</h2>
+      <div class="sub">POST /api/order/refund —— 服务端到底查了什么？</div>
+      <div class="chk" id="ck1"><div class="box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg></div><span>订单是不是你的？</span><div class="tag">CHECKED</div></div>
+      <div class="chk" id="ck2"><div class="box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg></div><span>订单状态能不能退？</span><div class="tag">CHECKED</div></div>
+      <div class="chk bad" id="ck3"><div class="box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg></div><span>退的钱 ≤ 实付金额？</span><div class="tag">MISSING</div></div>
+      <div id="missStamp">漏了一行</div>
+    </div>
+    <div id="capA2">前两道检查都过了，<b>唯独金额没人和实付比对</b>——那就试试多退点</div>
+  </div>
+
+  <!-- ============ PHASE B POS ============ -->
+  <div class="phase" id="pB">
+    <div id="pos">
+      <div id="posScreen">
+        <div class="ph2"><b>GLM · 退款接口调用</b><span>POST /api/order/refund</span></div>
+        <div class="tl2" id="l1">{</div>
+        <div class="tl2" id="l2">  <span class="k">"order_id"</span>: <span class="ok2">"TJ2026081500429"</span>,</div>
+        <div class="tl2" id="l3">  <span class="k">"paid_amount"</span>: <span class="ok2">299</span>,</div>
+        <div class="tl2 evilLine" id="l4">  <span class="k">"refund_amount"</span>: 99999</div>
+        <div class="tl2" id="l5">}</div>
+        <div class="tl2" id="l6">&nbsp;</div>
+        <div class="tl2" id="l7"><span class="ok2">← 200 OK · 0.31s</span></div>
+        <div class="tl2" id="l8">{ <span class="k">"success"</span>: <span class="ok2">true</span>, <span class="k">"message"</span>: <span class="ok2">"退款成功"</span>,</div>
+        <div class="tl2" id="l9">  <span class="k">"refund_amount"</span>: <span style="color:#b91c1c;font-weight:500">99999</span> }</div>
+        <div id="zoomAmt">"refund_amount": 99999<small>订单是你的 ✓ 状态可退 ✓ 金额？没查 —— 退了退了</small></div>
+      </div>
+    </div>
+
+    <div id="balPanel">
+      <div class="blbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6 12h.01M18 12h.01"/></svg>天积宝余额 · BALANCE</div>
+      <div id="balNum">¥ 404.00</div>
+      <div id="balDelta">+ ¥ 99,999.00</div>
+      <div id="balCap">一个请求，<b>凭空多出十万块</b></div>
+    </div>
+
+    <div id="receiptZone">
+      <div id="printer"><span>REFUND RECEIPT</span><div class="slot"></div><span id="prtSt">PRINTING…</span></div>
+      <div id="receipt">
+        <h3>天积商城 · 退款单</h3>
+        <div class="rsub">HEASEC MALL REFUND · No.TJ2026081500429</div>
+        <hr>
+        <div class="rl"><span>商品</span><span>降噪耳机 ×1</span></div>
+        <div class="rl"><span>实付金额</span><span>¥ 299.00</span></div>
+        <div class="rl bigRed"><span>退款金额</span><span>¥ 99,999.00</span></div>
+        <hr>
+        <div class="rl"><span>原余额</span><span>¥ 404.00</span></div>
+        <div class="rl bigBal"><span>现余额</span><span>¥ 100,403.00</span></div>
+        <div id="rcBar"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="jinju">就这么简单——<em>代码里漏写一行校验的事</em></div>
+
+  <div id="anan">
+    <div class="say">多、多了<br><b>十万块</b>？!</div>
+    <img src="anan - emotion rename/07_睁眸微张_愕然疑惑.png" alt="安安·震惊">
+  </div>
+
+  
+  
+
+  </div><!-- /cam -->
+<div class="corner" id="chap">02 / 靶场实测 · VULN ②</div><div class="corner" id="src">天积靶场实测 2026-08-15 · 授权环境</div>
+  </div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 2-4 · 漏洞② 超额退款 · 38s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+const DUR=38000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3);
+function money(el,from,to,dur,delay,fix){tws.push({t:performance.now()-t0+delay,d:dur,f:p=>{const v=from+(to-from)*p;el.textContent='¥ '+v.toLocaleString('en-US',{minimumFractionDigits:fix?2:0,maximumFractionDigits:fix?2:0})},e:eo})}
+function count(el,from,to,dur,delay){tws.push({t:performance.now()-t0+delay,d:dur,f:p=>{el.textContent=Math.round(from+(to-from)*p)},e:eo})}
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1)tws.splice(i,1)}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+
+/* ===== Phase A · 校验清单（口播 4:23-4:32） ===== */
+on(300,()=>{$('#title').classList.add('show');$('#awning').classList.add('in');$('#miniScore').classList.add('show');$('#pA').classList.add('on')});
+on(2000,()=>$('#checkCard').classList.add('in'));                 // 「退款接口写了个校验」
+on(3000,()=>$('#ck1').classList.add('in'));                      // 「订单是不是你的」
+on(3900,()=>$('#ck2').classList.add('in'));                      // 「能不能退」
+on(5000,()=>$('#ck3').classList.add('in'));                      // 「漏掉了校验退的钱」
+on(6200,()=>$('#missStamp').classList.add('stamp'));
+on(7000,()=>$('#capA2').classList.add('show'));
+
+/* ===== Phase B · POS 退款（口播 4:32-4:56） ===== */
+on(9000,()=>{$('#pA').classList.remove('on');$('#pB').classList.add('on')}); // 「于是GLM先买了一件299的商品」
+on(9400,()=>$('#pos').classList.add('in'));
+['l1','l2','l3'].forEach((id,i)=>on(10200+i*400,()=>$('#'+id).classList.add('in'))); // 订单 + 实付 299
+on(14800,()=>$('#l4').classList.add('in'));                      // 「调用退款的接口」
+on(16400,()=>$('#zoomAmt').classList.add('pop'));                // 「参数值改为99999」
+on(20000,()=>{$('#l5').classList.add('in');$('#zoomAmt').classList.remove('pop')}); // 「服务端一看啊」
+on(21000,()=>$('#l6').classList.add('in'));
+on(21800,()=>$('#l7').classList.add('in'));                      // 「订单是你的 状态也是支付的」
+on(22600,()=>$('#l8').classList.add('in'));                      // 「那还说啥 退了退了」
+on(23600,()=>$('#l9').classList.add('in'));                      // 「退款了99999」
+/* balance + receipt */
+on(24000,()=>$('#balPanel').classList.add('in'));
+on(27000,()=>{                                                   // 「余额直接从404飙到了100403」
+  $('#balNum').classList.add('rolling');
+  $('#balDelta').classList.add('go');
+  money($('#balNum'),404,100403,2600,0,true);
+});
+on(29800,()=>{$('#balNum').classList.remove('rolling');$('#balNum').classList.add('boom')});
+on(30000,()=>{$('#printer').classList.add('in')});
+on(30600,()=>{$('#receipt').style.height='360px'});
+on(33500,()=>{$('#prtSt').textContent='DONE'});
+on(32800,()=>$('#anan').classList.add('show'));                  // 「凭空多出10万块」
+/* ===== 金句 + 计分（口播 4:59-5:01） ===== */
+on(30600,()=>{ $('#msFloat').classList.add('go'); count($('#msTotal'),150,330,1400,200); });
+on(35200,()=>$('#jinju').classList.add('show'));                 // 「就这么简单——漏掉一行校验的事」
+
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+/* ===== 镜头 ===== */
+const camEl=$('#cam');
+function camTo(tx,ty,s,dur){camEl.style.setProperty('--cd',dur+'s');camEl.style.transform='translate('+tx+'px,'+ty+'px) scale('+s+')';if(window.__sfx)__sfx.whoosh(dur,0.65)}
+const CX=960,CY=540;
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+
+/* ===== 镜头调度 ===== */
+on(300,()=>{camTo(0,0,1,2.0)});             // 开场拉镜
+on(9400,()=>{camFocus(500,570,1.18,1.2)});  // 推向 POS 机
+on(16600,()=>{camTo(0,0,1,1.0)});           // 99999 特写后拉回
+on(26800,()=>{camFocus(1410,360,1.22,1.0)}); // 余额滚动飙涨高潮
+on(33000,()=>{camTo(0,0,1,1.2)});           // 金句前拉回全景
+
+
+/* ===== 音效 ===== */
+on(300,()=>__sfx.swipe(0.6));
+on(2000,()=>__sfx.pop(0.7));
+on(3000,()=>__sfx.pop(0.6));
+on(3900,()=>__sfx.pop(0.6));
+on(5000,()=>__sfx.pop(0.6));
+on(6200,()=>__sfx.thud(0.9));
+on(7000,()=>__sfx.pop(0.5));
+on(9000,()=>__sfx.swipe(0.7));
+on(9400,()=>__sfx.pop(0.7));
+on(10200,()=>__sfx.pop(0.55));
+on(10600,()=>__sfx.pop(0.55));
+on(11000,()=>__sfx.pop(0.55));
+on(14800,()=>__sfx.pop(0.55));
+on(16400,()=>__sfx.ding(0.7));
+on(20000,()=>__sfx.pop(0.5));
+on(21800,()=>__sfx.pop(0.5));
+on(22600,()=>__sfx.pop(0.5));
+on(23600,()=>__sfx.pop(0.5));
+on(24000,()=>__sfx.pop(0.7));
+for(let __si=1;__si<=12;__si++)on(27000+Math.round(2100*Math.pow(__si/12,2)),()=>__sfx.type(0.45)); // 余额滚动·由密到疏
+on(29800,()=>__sfx.ding(0.9));
+on(30000,()=>__sfx.pop(0.7));
+on(30600,()=>__sfx.swipe(0.6));
+for(let __sj=1;__sj<=8;__sj++)on(30800+Math.round(1200*Math.pow(__sj/8,2)),()=>__sfx.type(0.4)); // 计分滚动·由密到疏
+on(32100,()=>__sfx.ding(0.7));
+on(32800,()=>__sfx.pop(0.6));
+on(35200,()=>__sfx.ding(0.8));
+</script>
+</body>
+</html>

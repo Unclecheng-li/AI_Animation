@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<script>
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+
+<script>
+/* ===== SFX 引擎（WebAudio 合成，无音频文件，随启动按钮手势激活） ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){ /* 波：弹出 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){ /* 呼：镜头/大幅移动 */
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){ /* 唰：快速滑入/切换 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){ /* 键盘：短促轻击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){ /* 叮：柔和落定 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){ /* 咚：低频落章/撞击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 2-7 · 漏洞⑤ 路径穿越：失控电梯连跳四级</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=ZCOOL+KuaiLe&family=Share+Tech+Mono&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+SC:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;background:#04060f;overflow:hidden;font-family:'Noto Sans SC',sans-serif}
+  body.paused *{animation-play-state:paused!important}
+  #stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;
+    background:
+      radial-gradient(900px 500px at 78% -6%,rgba(255,220,150,.10),transparent 62%),
+      radial-gradient(1200px 700px at 30% 108%,rgba(45,212,238,.10),transparent 70%),
+      linear-gradient(180deg,#070b1c 0%,#0b1230 52%,#101a3e 100%);
+    box-shadow:inset 0 0 240px rgba(0,0,8,.75)}
+
+  .star{position:absolute;background:#cfe6ff;border-radius:50%;animation:twk 3.4s ease-in-out infinite alternate}
+  @keyframes twk{from{opacity:.15}to{opacity:.85}}
+  #moon{position:absolute;left:1616px;top:64px;width:96px;height:96px;border-radius:50%;
+    background:radial-gradient(circle at 36% 32%,#fff8e2,#ffe9ad 58%,#e8c56e);
+    box-shadow:0 0 60px rgba(255,233,173,.5),0 0 160px rgba(255,233,173,.22)}
+  #moon::after{content:'';position:absolute;left:20px;top:26px;width:16px;height:16px;border-radius:50%;background:rgba(216,180,90,.4);box-shadow:34px 22px 0 2px rgba(216,180,90,.3),14px 42px 0 -2px rgba(216,180,90,.3)}
+  .bld{position:absolute;bottom:0;background:linear-gradient(180deg,#0c1330,#070b1c);border-top:2px solid rgba(90,130,200,.18);
+    background-image:repeating-linear-gradient(0deg,rgba(255,220,140,.13) 0 3px,transparent 3px 26px),repeating-linear-gradient(90deg,rgba(255,220,140,.10) 0 4px,transparent 4px 30px)}
+
+  /* ===== 标题 / 计分 ===== */
+  #title{position:absolute;left:64px;top:46px;z-index:42;opacity:0;transform:translateY(-16px);transition:all .6s cubic-bezier(.16,1,.3,1)}
+  #title.show{opacity:1;transform:translateY(0)}
+  #title .no{display:inline-block;font-family:'Bungee';font-size:16px;color:#0a1420;background:#2dd4ee;border-radius:9px;padding:6px 16px;letter-spacing:2px;box-shadow:0 0 22px rgba(45,212,238,.55)}
+  #title h1{margin-top:12px;font-family:'Noto Sans SC';font-weight:900;font-size:42px;color:#e8f1ff;letter-spacing:2px;text-shadow:0 0 30px rgba(45,212,238,.25)}
+  #title h1 em{font-style:normal;color:#ff4d6d;text-shadow:0 0 26px rgba(255,77,109,.5)}
+  #title .en{font-family:'Share Tech Mono';font-size:15px;color:#5f7ba6;margin-top:6px;letter-spacing:3px}
+
+  #miniScore{position:absolute;right:64px;top:50px;z-index:42;display:flex;align-items:center;gap:10px;background:rgba(16,26,48,.85);border:2px solid rgba(45,212,238,.45);border-radius:14px;padding:8px 18px;opacity:0;transform:translateY(-16px);transition:all .6s cubic-bezier(.34,1.5,.64,1);box-shadow:0 0 26px rgba(45,212,238,.18)}
+  #miniScore.show{opacity:1;transform:translateY(0)}
+  #miniScore img{width:26px;height:26px;border-radius:7px}
+  #miniScore b{font-family:'Bungee';font-size:24px;color:#e8f1ff}
+  #miniScore small{font-family:'Bungee';font-size:14px;color:#5f7ba6}
+  #miniScore .lbl{font-size:12.5px;color:#5f7ba6}
+  #miniScore.pump{animation:pump .6s cubic-bezier(.2,1.6,.4,1)}
+  @keyframes pump{35%{transform:scale(1.1);box-shadow:0 0 44px rgba(255,210,63,.5);border-color:#ffd23f}}
+  #msFloat{position:absolute;left:50%;top:-12px;transform:translateX(-50%) scale(.5);font-family:'Bungee';font-size:34px;color:#ffd23f;opacity:0;white-space:nowrap;text-shadow:0 0 26px rgba(255,210,63,.7)}
+  #msFloat.go{animation:floatUp 2.4s cubic-bezier(.2,.8,.3,1) forwards}
+  @keyframes floatUp{0%{opacity:0;transform:translateX(-50%) translateY(14px) scale(.5)}20%{opacity:1;transform:translateX(-50%) translateY(-20px) scale(1.25)}70%{opacity:1}100%{opacity:0;transform:translateX(-50%) translateY(-70px) scale(1)}}
+
+  /* ===== 镜头层 ===== */
+  #cam{position:absolute;inset:0;transform-origin:0 0;transform:translate(440px,-370px) scale(1.3);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+  /* ===== 天积大厦 ===== */
+  #towerWrap{position:absolute;left:120px;top:200px;width:560px;height:840px;transition:opacity 1s,filter 1s;z-index:2}
+  #towerWrap.dim{opacity:.16;filter:saturate(.3) blur(1px)}
+  #towerWrap.shk{animation:shk2 .4s}
+  @keyframes shk2{20%{transform:translate(5px,2px)}45%{transform:translate(-4px,-2px)}70%{transform:translate(3px,1px)}}
+  #sign{position:absolute;left:50%;top:0;transform:translateX(-50%);font-family:'ZCOOL KuaiLe';font-size:30px;color:#ffd23f;letter-spacing:6px;white-space:nowrap;text-shadow:0 0 18px rgba(255,210,63,.8),0 0 46px rgba(255,210,63,.4);animation:signF 4.5s linear infinite}
+  @keyframes signF{0%,86%,92%,100%{opacity:1}89%,91%{opacity:.35}}
+  #antenna{position:absolute;left:277px;top:42px;width:6px;height:58px;background:linear-gradient(180deg,#8fa8d8,#3a4a78);border-radius:3px}
+  #beacon{position:absolute;left:272px;top:30px;width:16px;height:16px;border-radius:50%;background:#3a2a3a;border:2px solid #6a4a5a}
+  #beacon.on{background:#ff4d6d;border-color:#ff8aa5;box-shadow:0 0 22px #ff4d6d,0 0 60px rgba(255,77,109,.6);animation:blink .5s linear infinite}
+  @keyframes blink{50%{opacity:.3}}
+  #roof{position:absolute;left:0;top:100px;width:560px;height:26px;background:linear-gradient(180deg,#2a3a68,#16224a);border:2px solid rgba(120,170,255,.4);border-radius:8px 8px 0 0;box-shadow:0 0 30px rgba(45,212,238,.12)}
+  .shard{position:absolute;width:24px;height:24px;background:linear-gradient(135deg,rgba(180,230,255,.9),rgba(90,160,230,.65));clip-path:polygon(50% 0,100% 100%,0 78%);opacity:.9;transition:transform 1.15s cubic-bezier(.2,.55,.4,1),opacity 1.15s}
+
+  .floor{position:absolute;left:0;width:560px;height:150px;background:linear-gradient(180deg,rgba(19,29,58,.94),rgba(12,19,42,.96));border:2px solid rgba(80,120,190,.35);border-radius:14px;transition:border-color .5s,box-shadow .5s;overflow:hidden}
+  .floor::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(90deg,rgba(140,190,255,.05) 0 26px,transparent 26px 52px)}
+  .floor.lit{border-color:rgba(45,212,238,.8);box-shadow:0 0 30px rgba(45,212,238,.28),inset 0 0 40px rgba(45,212,238,.08)}
+  .floor.hot{box-shadow:0 0 44px rgba(255,210,63,.4),inset 0 0 60px rgba(255,210,63,.16);border-color:rgba(255,210,63,.8)}
+  .floor .np{position:absolute;left:16px;top:14px;font-family:'JetBrains Mono';font-weight:700;font-size:23px;color:#7fd4ea;background:rgba(10,18,38,.9);border:1.5px solid rgba(45,212,238,.4);border-radius:8px;padding:5px 14px;letter-spacing:1px}
+  .floor .sub{position:absolute;right:16px;top:18px;font-size:15px;font-weight:700;color:#5f7ba6;letter-spacing:1px}
+  .floor.rootF{border-color:rgba(255,77,109,.55)}
+  .floor.rootF .np{color:#ff8aa5;border-color:rgba(255,77,109,.6)}
+  .floor.rootF .sub{color:#ff8aa5;background:rgba(255,77,109,.12);border:1.5px solid rgba(255,77,109,.5);border-radius:8px;padding:4px 10px}
+  .floor .ico{position:absolute;right:22px;bottom:16px;opacity:.5}
+  .floor .shelf{position:absolute;left:20px;bottom:14px;width:200px;height:52px;background:repeating-linear-gradient(90deg,rgba(120,160,220,.16) 0 30px,transparent 30px 44px);border-bottom:3px solid rgba(120,160,220,.3)}
+
+  /* 电梯井 + 电梯 */
+  #shaft{position:absolute;left:224px;top:126px;width:112px;height:672px;border-left:3px dashed rgba(45,212,238,.35);border-right:3px dashed rgba(45,212,238,.35)}
+  #car{position:absolute;left:206px;top:-380px;width:148px;height:118px;z-index:6;
+    background:linear-gradient(180deg,rgba(24,40,72,.96),rgba(14,24,50,.98));border:3px solid #2dd4ee;border-radius:16px;
+    box-shadow:0 0 34px rgba(45,212,238,.45),inset 0 0 30px rgba(45,212,238,.12);
+    transition:top .62s cubic-bezier(.3,1.25,.4,1)}
+  #car::before{content:'';position:absolute;left:10px;right:10px;top:8px;height:26px;background:repeating-linear-gradient(90deg,rgba(45,212,238,.25) 0 8px,transparent 8px 16px);border-radius:6px}
+  #carBtn{position:absolute;right:-17px;top:38px;width:30px;height:30px;border-radius:50%;background:radial-gradient(circle at 36% 30%,#ff8aa5,#ff4d6d 60%,#c21840);border:3px solid #5e0f24;box-shadow:0 0 16px rgba(255,77,109,.7);display:flex;align-items:center;justify-content:center}
+  #carBtn svg{width:15px;height:15px}
+  #carBtn.hit{animation:btnHit .5s}
+  @keyframes btnHit{30%{transform:scale(.72);box-shadow:0 0 44px #ff4d6d}}
+  #pkg{position:absolute;left:50%;top:44px;transform:translateX(-50%);width:56px;height:64px;background:linear-gradient(180deg,#fff3cf,#ffe9ad);border:3px solid #a87d18;border-radius:8px;box-shadow:0 0 22px rgba(255,210,63,.55);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
+  #pkg::before{content:'';position:absolute;right:-3px;top:-3px;width:16px;height:16px;background:#a87d18;clip-path:polygon(0 0,100% 0,100% 100%)}
+  #pkg b{font-family:'JetBrains Mono';font-size:10.5px;color:#6a4c08;font-weight:700}
+  #pkg span{font-family:'Bungee';font-size:15px;color:#a87d18}
+  #pkg.naked{animation:pkgGlow .8s ease-in-out infinite alternate}
+  @keyframes pkgGlow{from{box-shadow:0 0 26px rgba(255,210,63,.7)}to{box-shadow:0 0 70px rgba(255,120,120,.95)}}
+
+  /* 探照灯 */
+  .spotBeam{position:absolute;width:200px;height:980px;left:180px;top:-820px;transform-origin:50% 100%;background:linear-gradient(0deg,rgba(255,240,190,.55),rgba(255,240,190,.06) 72%,transparent);filter:blur(7px);opacity:0;transition:opacity 1.2s;pointer-events:none;z-index:5}
+  .spotBeam.on{opacity:.85;animation:sway 5.5s ease-in-out infinite alternate}
+  #sb2{left:340px;animation-delay:-2.6s}
+  @keyframes sway{from{transform:rotate(-16deg)}to{transform:rotate(14deg)}}
+
+  /* ===== 右侧：符号特写 / 请求卡 / 能量豆 / 位置表 ===== */
+  #dotsBig{position:absolute;left:1010px;top:400px;width:600px;height:340px;display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:0;transform:scale(.6);transition:all .7s cubic-bezier(.34,1.4,.64,1);z-index:8}
+  #dotsBig.show{opacity:1;transform:scale(1)}
+  #dotsBig.morph{transition:all .8s cubic-bezier(.5,0,.8,.4);transform:translate(-316px,-208px) scale(.14);opacity:0}
+  #dotsBig .dd{font-family:'JetBrains Mono';font-weight:700;font-size:230px;line-height:.9;color:#ff4d6d;text-shadow:0 0 40px rgba(255,77,109,.75),0 0 120px rgba(255,77,109,.4);animation:ddPulse 1.1s ease-in-out infinite alternate}
+  @keyframes ddPulse{from{transform:scale(1)}to{transform:scale(1.07)}}
+  #dotsBig .ringR{position:absolute;left:50%;top:38%;width:420px;height:420px;margin:-210px 0 0 -210px;border-radius:50%;border:2px solid rgba(255,77,109,.5);animation:radar 2.2s ease-out infinite}
+  @keyframes radar{from{transform:scale(.35);opacity:.9}to{transform:scale(1.25);opacity:0}}
+  #dotsBig .cap2{margin-top:26px;font-size:25px;font-weight:900;color:#ffdce3;letter-spacing:2px;background:rgba(40,10,20,.85);border:2px solid rgba(255,77,109,.55);border-radius:12px;padding:10px 26px;box-shadow:0 0 30px rgba(255,77,109,.3)}
+  #dotsBig .cap2 b{color:#ff4d6d}
+
+  #payload{position:absolute;left:760px;top:280px;width:640px;background:rgba(13,22,44,.95);border:2px solid rgba(255,77,109,.5);border-radius:16px;box-shadow:0 0 40px rgba(255,77,109,.16),0 18px 50px rgba(0,0,0,.5);opacity:0;transform:translateY(36px);transition:all .6s cubic-bezier(.16,1,.3,1);z-index:8}
+  #payload.in{opacity:1;transform:translateY(0)}
+  #payload .ph2{height:42px;background:rgba(255,77,109,.14);border-bottom:1.5px solid rgba(255,77,109,.35);border-radius:14px 14px 0 0;display:flex;align-items:center;padding:0 16px;gap:9px;font-family:'Share Tech Mono';font-size:14px;color:#ff8aa5;letter-spacing:1px}
+  #payload .ph2 .dot{width:9px;height:9px;border-radius:50%;background:#ff4d6d;box-shadow:0 0 9px #ff4d6d}
+  #payload .pb2{padding:18px 24px 20px;font-family:'JetBrains Mono';font-size:18.5px;line-height:2;color:#9fb6d8}
+  #payload .kk{color:#7fd4ea}
+  #payload .vv{color:#ff8aa5;font-weight:700}
+  #payload .gone{opacity:.4}
+  #chipLbl{position:absolute;left:790px;top:490px;font-family:'JetBrains Mono';font-size:19px;color:#7fd4ea;z-index:9;opacity:0;transition:opacity .5s}
+  #chipLbl.show{opacity:1}
+  .chip{position:absolute;width:74px;height:52px;background:linear-gradient(180deg,#3a1220,#260a14);border:2.5px solid #ff4d6d;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono';font-weight:700;font-size:22px;color:#ff6a86;box-shadow:0 0 20px rgba(255,77,109,.45);z-index:24;opacity:0;transform:scale(.4);transition:opacity .45s,transform .45s cubic-bezier(.34,1.7,.64,1)}
+  .chip.in{opacity:1;transform:scale(1)}
+  .chip.hot{box-shadow:0 0 44px rgba(255,77,109,.95);border-color:#ffaebc}
+
+  #posCard{position:absolute;left:730px;top:600px;width:560px;text-align:center;opacity:0;transform:translateY(20px);transition:all .5s cubic-bezier(.16,1,.3,1);z-index:36}
+  #posCard.show{opacity:1;transform:translateY(0)}
+  #posCard .lb{font-family:'Share Tech Mono';font-size:15px;color:#5f7ba6;letter-spacing:4px}
+  #posName{margin-top:8px;font-family:'Bungee';font-size:44px;color:#2dd4ee;letter-spacing:2px;text-shadow:0 0 30px rgba(45,212,238,.5);transition:color .3s}
+  #posName.flip{animation:posF .5s cubic-bezier(.2,1.4,.4,1)}
+  @keyframes posF{30%{transform:translateY(-16px) scale(1.08)}}
+  #posName.red{color:#ff4d6d;text-shadow:0 0 34px rgba(255,77,109,.7)}
+  #posCard .arr{display:inline-block;margin-right:12px;color:#ff4d6d;font-size:38px;vertical-align:2px}
+
+  /* 路径条 */
+  #pathBar{position:absolute;left:760px;top:820px;right:70px;height:60px;background:rgba(10,17,36,.94);border:2px solid rgba(45,212,238,.4);border-radius:14px;padding:14px 22px;font-family:'JetBrains Mono';font-size:21px;color:#cfe6ff;white-space:nowrap;overflow:hidden;opacity:0;transition:opacity .5s,border-color .6s;z-index:36;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+  #pathBar.show{opacity:1}
+  #pathBar.danger{border-color:rgba(255,77,109,.6)}
+  #pathBar .pv{position:absolute;inset:14px 22px;transition:opacity .5s}
+  #pathBar .seg{transition:all .3s}
+  #pathBar .seg.cut{color:#4a5f86;text-decoration:line-through}
+  #pathBar .seg.hot{color:#ff6a86;text-shadow:0 0 12px rgba(255,77,109,.6)}
+  #pathBar .seg.evil{color:#ffb0c0;font-weight:700}
+  #pathBar .seg.evil.live{color:#ff4d6d;text-shadow:0 0 16px rgba(255,77,109,.9);animation:blink .6s linear infinite}
+  #pathBar .okc{color:#34f5a5}
+
+  /* 噔！ */
+  .ding{position:absolute;font-family:'ZCOOL KuaiLe';font-size:48px;color:#ffd23f;text-shadow:3px 3px 0 #7a1d12,0 0 26px rgba(255,210,63,.6);z-index:26;animation:dingA .85s cubic-bezier(.2,1.4,.4,1) forwards;pointer-events:none;white-space:nowrap}
+  @keyframes dingA{0%{opacity:0;transform:translate(-50%,0) scale(.4) rotate(-8deg)}25%{opacity:1;transform:translate(-50%,-18px) scale(1.15) rotate(3deg)}100%{opacity:0;transform:translate(-50%,-72px) scale(1)}}
+  .spark{position:absolute;width:4px;height:18px;border-radius:2px;background:#ffaebc;box-shadow:0 0 10px #ff4d6d;z-index:25;pointer-events:none}
+
+  /* ===== 电影系统 ===== */
+  #dim{position:absolute;inset:0;background:radial-gradient(closest-side at 50% 48%,transparent 48%,rgba(3,6,14,.78) 100%);opacity:0;transition:opacity 1s;z-index:30;pointer-events:none}
+  #dim.on{opacity:1}
+  #lbT,#lbB{position:absolute;left:0;right:0;height:0;background:#02040a;z-index:40;transition:height .9s cubic-bezier(.7,0,.3,1)}
+  #lbT{top:0}#lbB{bottom:0}
+  #stage.letter #lbT,#stage.letter #lbB{height:72px}
+  #flash{position:absolute;inset:0;background:#fff;opacity:0;z-index:38;pointer-events:none}
+  #flash.go{animation:fl .5s ease-out}
+  @keyframes fl{12%{opacity:.85}100%{opacity:0}}
+  #alarmGlow{position:absolute;inset:0;box-shadow:inset 0 0 150px rgba(255,77,109,.55);opacity:0;z-index:35;pointer-events:none}
+  #alarmGlow.on{animation:almP .6s ease-in-out 3}
+  @keyframes almP{50%{opacity:1}}
+  #slowTag{position:absolute;left:50%;top:92px;transform:translateX(-50%) translateY(-14px);z-index:41;font-family:'Share Tech Mono';font-size:16px;color:#ff8aa5;letter-spacing:3px;background:rgba(20,8,16,.82);border:1.5px solid rgba(255,77,109,.5);border-radius:999px;padding:8px 24px;opacity:0;transition:all .6s;white-space:nowrap}
+  #slowTag.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #slowTag .dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#ff4d6d;margin-right:10px;box-shadow:0 0 10px #ff4d6d;animation:blink .7s linear infinite}
+
+  /* ===== 实证窗（P2） ===== */
+  .nWin{position:absolute;background:rgba(13,22,44,.96);border:2px solid rgba(45,212,238,.45);border-radius:16px;box-shadow:0 0 40px rgba(45,212,238,.14),0 18px 50px rgba(0,0,0,.5);opacity:0;transform:translateY(40px);transition:all .6s cubic-bezier(.16,1,.3,1);z-index:30;overflow:hidden}
+  .nWin.in{opacity:1;transform:translateY(0)}
+  .nWin.out{opacity:0;transform:translateY(-24px)}
+  .nWin .wh{height:42px;background:rgba(45,212,238,.1);display:flex;align-items:center;padding:0 16px;gap:8px;font-family:'Share Tech Mono';font-size:13.5px;color:#7fd4ea;letter-spacing:1px;border-bottom:1.5px solid rgba(45,212,238,.25)}
+  .nWin .wh i{width:11px;height:11px;border-radius:50%}
+  .nWin .wh i:nth-child(1){background:#ff5f57}.nWin .wh i:nth-child(2){background:#febc2e}.nWin .wh i:nth-child(3){background:#28c840}
+  #upTerm{left:120px;top:225px;width:800px}
+  #upTerm .wb{padding:20px 26px;font-family:'JetBrains Mono';font-size:17.5px;line-height:2;color:#9fb6d8}
+  .ul{white-space:pre-wrap;opacity:0;transform:translateY(8px);transition:all .3s}
+  .ul.in{opacity:1;transform:translateY(0)}
+  .ul .kk{color:#7fd4ea}
+  .ul .vv{color:#ff6a86;font-weight:700}
+  .ul .ok4{color:#34f5a5;font-weight:700}
+  #browserPx{right:120px;top:225px;width:800px}
+  #browserPx .wb{padding:22px 26px}
+  #urlPx{border:2px solid rgba(45,212,238,.5);background:rgba(10,17,36,.9);border-radius:10px;font-family:'JetBrains Mono';font-size:18px;color:#cfe9ff;padding:13px 16px;display:flex;align-items:center;gap:10px}
+  #urlPx svg{width:18px;height:18px;flex:none;color:#34f5a5}
+  #okBig2{margin:30px auto 0;width:340px;text-align:center;font-family:'Bungee';font-size:32px;color:#34f5a5;border:4px solid #34f5a5;border-radius:14px;background:rgba(52,245,165,.08);padding:16px 0;opacity:0;transform:scale(2);text-shadow:0 0 24px rgba(52,245,165,.6);box-shadow:0 0 34px rgba(52,245,165,.3)}
+  #okBig2.stamp{animation:st3 .45s cubic-bezier(.34,1.6,.64,1) forwards}
+  @keyframes st3{to{opacity:1;transform:scale(1)}}
+  #okNote{margin-top:24px;text-align:center;font-size:21px;font-weight:900;color:#e8f1ff;letter-spacing:2px;opacity:0;transition:opacity .5s}
+  #okNote.show{opacity:1}
+  #okNote b{color:#ff4d6d}
+
+  /* ===== 危害延伸（P3） ===== */
+  #extWall{position:absolute;left:150px;top:250px;width:740px;background:rgba(38,14,22,.95);border:2px solid rgba(255,77,109,.55);border-radius:18px;box-shadow:0 0 40px rgba(255,77,109,.18),0 18px 50px rgba(0,0,0,.5);padding:26px 30px;opacity:0;transform:translateX(-60px);transition:all .6s cubic-bezier(.16,1,.3,1);z-index:30}
+  #extWall.in{opacity:1;transform:translateX(0)}
+  #extWall h3{font-family:'Noto Sans SC';font-weight:900;font-size:25px;color:#ff8aa5;letter-spacing:2px}
+  .extRow{display:flex;gap:18px;margin-top:20px}
+  .ext{flex:1;background:rgba(16,22,42,.95);border:2px solid rgba(120,160,220,.4);border-radius:14px;padding:18px 0;text-align:center;font-family:'JetBrains Mono';font-weight:700;font-size:24px;color:#9fb6d8;opacity:0;transform:translateY(-50px)}
+  .ext.in{animation:drop2 .45s cubic-bezier(.34,1.5,.64,1) forwards}
+  @keyframes drop2{to{opacity:1;transform:translateY(0)}}
+  .ext .bx{margin:12px auto 0;width:38px;height:38px;border-radius:50%;background:rgba(52,245,165,.12);border:2.5px solid #34f5a5;color:#34f5a5;display:flex;align-items:center;justify-content:center;box-shadow:0 0 18px rgba(52,245,165,.4)}
+  .ext .bx svg{width:22px;height:22px}
+  #extCap{margin-top:22px;font-size:19px;color:#ffdce3;font-weight:700;letter-spacing:1px;opacity:0;transition:opacity .5s}
+  #extCap.show{opacity:1}
+  #twist{position:absolute;right:150px;top:250px;width:800px;background:rgba(13,22,44,.96);border:2px solid rgba(255,210,63,.5);border-radius:18px;box-shadow:0 0 40px rgba(255,210,63,.14),0 18px 50px rgba(0,0,0,.5);padding:30px 36px;opacity:0;transform:translateX(60px);transition:all .6s cubic-bezier(.16,1,.3,1);z-index:30}
+  #twist.in{opacity:1;transform:translateX(0)}
+  #twist h3{font-family:'Noto Sans SC';font-weight:900;font-size:27px;color:#ffd23f;letter-spacing:2px}
+  #twist p{margin-top:14px;font-size:21px;color:#cfe0f5;line-height:1.8}
+  #twist p b{color:#ff6a86}
+  #horse{margin-top:20px;display:flex;align-items:center;gap:20px;background:rgba(255,77,109,.07);border:2px dashed rgba(255,77,109,.55);border-radius:14px;padding:16px 22px}
+  #horseImg{position:relative;width:76px;height:76px;flex:none;perspective:400px}
+  #horseImg .frame{position:absolute;inset:0;background:linear-gradient(180deg,#1a2a52,#101c3e);border:2.5px solid #ff6a86;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#ff8aa5;box-shadow:0 0 22px rgba(255,77,109,.35)}
+  #horseImg .frame svg{width:38px;height:38px}
+  #horseImg .lid{position:absolute;left:-4px;right:-4px;top:-4px;height:26px;background:linear-gradient(180deg,#ffd23f,#e9a718);border:2.5px solid #a87d18;border-radius:10px;transform-origin:top center;transition:transform .7s cubic-bezier(.34,1.4,.64,1);z-index:2;display:flex;align-items:center;justify-content:center;font-family:'Bungee';font-size:11px;color:#5e3c06}
+  #horse.open .lid{transform:rotateX(128deg)}
+  #horse .phpCode{font-family:'JetBrains Mono';font-size:16.5px;color:#ffb0c0;font-weight:700;opacity:0;transform:translateX(-14px);transition:all .5s .3s}
+  #horse.open .phpCode{opacity:1;transform:translateX(0)}
+  #jin3{position:absolute;left:50%;bottom:196px;transform:translateX(-50%) scale(.5);background:linear-gradient(180deg,#ff5d7f,#e11d48);color:#fff;font-weight:900;font-size:30px;letter-spacing:3px;padding:16px 52px;border-radius:16px;opacity:0;box-shadow:0 0 50px rgba(255,77,109,.5),0 16px 40px rgba(0,0,0,.5);white-space:nowrap;transition:all .5s cubic-bezier(.2,1.5,.4,1);z-index:31;border:2px solid rgba(255,255,255,.3)}
+  #jin3.show{opacity:1;transform:translateX(-50%) scale(1)}
+
+  /* 安安 */
+  #anan{position:absolute;left:-10px;bottom:-8px;width:400px;z-index:41;opacity:0;transition:opacity .9s ease;filter:drop-shadow(0 14px 30px rgba(0,0,0,.6))}
+  #anan.show{opacity:1}
+  #anan img{width:100%;display:block;animation:bob 3.1s ease-in-out infinite alternate}
+  @keyframes bob{from{transform:translateY(0)}to{transform:translateY(-12px)}}
+  #anan .say{position:absolute;right:-172px;top:96px;width:218px;background:#fff;border-radius:16px;padding:13px 17px;font-size:25px;font-weight:900;color:#1a2233;line-height:1.4;letter-spacing:1px;opacity:0;transform:scale(.6);transition:all .45s cubic-bezier(.34,1.6,.64,1);box-shadow:0 10px 34px rgba(0,0,0,.5)}
+  #anan .say::after{content:'';position:absolute;z-index:-1;left:26px;bottom:-20px;border:10px solid transparent;border-top:12px solid #fff}
+  #anan .say b{color:#e11d48}
+  #anan.show .say{opacity:1;transform:scale(1);transition-delay:.45s}
+
+  /* 字幕 */
+  .cap{position:absolute;left:58%;bottom:300px;transform:translateX(-50%) translateY(24px);background:rgba(13,22,44,.94);border:2px solid rgba(45,212,238,.5);border-radius:999px;box-shadow:0 0 30px rgba(45,212,238,.2),0 14px 34px rgba(0,0,0,.5);padding:14px 38px;font-size:23px;font-weight:900;color:#e8f1ff;letter-spacing:1px;opacity:0;transition:all .5s cubic-bezier(.16,1,.3,1);white-space:nowrap;z-index:41}
+  .cap.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .cap b{color:#2dd4ee}
+  .cap em{font-style:normal;color:#ff6a86}
+
+  .corner{position:absolute;font-family:'Share Tech Mono';font-size:15px;color:#4a5f86;letter-spacing:2px;z-index:42}
+  #chap{left:52px;bottom:34px}
+  #src{right:52px;bottom:34px;font-size:14px}
+
+  /* HUD */
+  #hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'Share Tech Mono';pointer-events:none}
+  #track{height:5px;background:rgba(45,212,238,.12)}
+  #bar{height:100%;width:0;background:#2dd4ee;box-shadow:0 0 10px rgba(45,212,238,.7)}
+  #hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;color:#7fd4ea;background:rgba(5,9,18,.94);backdrop-filter:blur(4px)}
+  #hud button{pointer-events:auto;background:transparent;border:1px solid #2dd4ee;color:#7fd4ee;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+  #hud button:hover{background:rgba(45,212,238,.14)}
+  #replay.done{animation:pulse 1.2s infinite;border-color:#ffd23f;color:#ffd23f}
+  @keyframes pulse{50%{box-shadow:0 0 14px rgba(255,210,63,.8)}}
+</style>
+</head>
+<body>
+<div id="stage">
+  <span class="star" style="left:120px;top:90px;width:3px;height:3px"></span>
+  <span class="star" style="left:420px;top:56px;width:2px;height:2px;animation-delay:-1s"></span>
+  <span class="star" style="left:900px;top:110px;width:3px;height:3px;animation-delay:-2.2s"></span>
+  <span class="star" style="left:1240px;top:60px;width:2px;height:2px;animation-delay:-.6s"></span>
+  <span class="star" style="left:1500px;top:150px;width:3px;height:3px;animation-delay:-1.7s"></span>
+  <span class="star" style="left:1760px;top:230px;width:2px;height:2px;animation-delay:-2.9s"></span>
+  <span class="star" style="left:760px;top:170px;width:2px;height:2px;animation-delay:-1.3s"></span>
+  <div id="moon"></div>
+  <div class="bld" style="left:0;width:110px;height:150px"></div>
+  <div class="bld" style="left:114px;width:86px;height:110px"></div>
+  <div class="bld" style="left:740px;width:120px;height:130px"></div>
+  <div class="bld" style="left:870px;width:80px;height:90px"></div>
+  <div class="bld" style="left:1420px;width:130px;height:160px"></div>
+  <div class="bld" style="left:1560px;width:90px;height:110px"></div>
+  <div class="bld" style="left:1700px;width:150px;height:140px"></div>
+
+  <div id="title">
+    <span class="no">STAGE 05</span>
+    <h1>路径穿越：失控电梯连跳<em>「四级」</em></h1>
+    <div class="en">PATH TRAVERSAL · ../../../../</div>
+  </div>
+
+  <div id="miniScore">
+    <div id="msFloat">+160</div>
+    <img src="icons/GLMicon.png" alt="GLM">
+    <span class="lbl">靶场计分</span><b id="msTotal">950</b><small>/ 4800</small>
+  </div>
+
+  <!-- ================= 镜头世界 ================= -->
+  <div id="cam">
+
+    <div id="towerWrap">
+      <div id="sign">天积大厦 · SHOP TOWER</div>
+      <div id="antenna"></div><div id="beacon"></div>
+      <div id="roof"></div>
+      <span class="shard" style="left:60px;top:78px"></span>
+      <span class="shard" style="left:120px;top:72px"></span>
+      <span class="shard" style="left:180px;top:80px"></span>
+      <span class="shard" style="left:240px;top:70px"></span>
+      <span class="shard" style="left:300px;top:76px"></span>
+      <span class="shard" style="left:360px;top:72px"></span>
+      <span class="shard" style="left:420px;top:80px"></span>
+      <span class="shard" style="left:480px;top:74px"></span>
+      <span class="shard" style="left:30px;top:84px"></span>
+      <span class="shard" style="left:520px;top:82px"></span>
+
+      <div class="floor rootF" id="f0" style="top:130px">
+        <div class="np">shop/</div><div class="sub">WEB ROOT · 谁都能访问</div>
+        <svg class="ico" width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#ff8aa5" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.6 3 14.4 0 18-3-3.6-3-14.4 0-18z"/></svg>
+      </div>
+      <div class="floor" id="f1" style="top:302px">
+        <div class="np">uploads/</div><div class="sub">上传区</div>
+        <svg class="ico" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#7fd4ea" stroke-width="1.6"><path d="M3 8a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+      </div>
+      <div class="floor" id="f2" style="top:474px">
+        <div class="np">products/</div><div class="sub">商品层</div>
+        <div class="shelf"></div>
+      </div>
+      <div class="floor" id="f3" style="top:646px">
+        <div class="np">products/</div><div class="sub">文件落点 · 最深处</div>
+        <div class="shelf"></div>
+      </div>
+
+      <div id="shaft"></div>
+      <div id="car">
+        <div id="carBtn"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>
+        <div id="pkg"><span>PNG</span><b>shell.png</b></div>
+      </div>
+
+      <div class="spotBeam" id="sb1"></div>
+      <div class="spotBeam" id="sb2"></div>
+    </div>
+
+    <!-- .. 符号巨幕特写 -->
+    <div id="dotsBig">
+      <div class="ringR"></div>
+      <div class="dd">..</div>
+      <div class="cap2">没人检查的符号 —— 意思：<b>返回上一级目录</b></div>
+    </div>
+
+    <!-- 恶意请求卡 -->
+    <div id="payload">
+      <div class="ph2"><span class="dot"></span>GLM 构造的上传请求 · CRAFTED REQUEST</div>
+      <div class="pb2">
+        POST /api/merchant/product/upload<br>
+        { <span class="kk">"file"</span>: <span class="kk">"shell.png"</span>, <span class="gone">…</span><br>
+        &nbsp;&nbsp;<span class="kk">"product_no"</span>: <span class="vv">"../../../../"</span> }
+      </div>
+    </div>
+    <div id="chipLbl">"product_no" =</div>
+    <div class="chip" id="c0" style="left:824px;top:520px">../</div>
+    <div class="chip" id="c1" style="left:910px;top:520px">../</div>
+    <div class="chip" id="c2" style="left:996px;top:520px">../</div>
+    <div class="chip" id="c3" style="left:1082px;top:520px">../</div>
+
+    <!-- P2 实证 -->
+    <div class="nWin" id="upTerm">
+      <div class="wh"><i></i><i></i><i></i>&nbsp;UPLOAD — GLM 的终端</div>
+      <div class="wb">
+        <div class="ul" id="u1">POST /api/merchant/product/upload</div>
+        <div class="ul" id="u2">{</div>
+        <div class="ul" id="u3">  <span class="kk">"product_no"</span>: <span class="vv">"../../../../evil"</span>,</div>
+        <div class="ul" id="u4">  <span class="kk">"file"</span>: <span class="kk">"shell.png"</span></div>
+        <div class="ul" id="u5">}</div>
+        <div class="ul" id="u6">&nbsp;</div>
+        <div class="ul" id="u7"><span class="ok4">← 200 OK</span></div>
+        <div class="ul" id="u8">{ <span class="kk">"path"</span>: <span class="vv">"shop/evil_20260815_shell.png"</span> }</div>
+      </div>
+    </div>
+    <div class="nWin" id="browserPx">
+      <div class="wh"><i></i><i></i><i></i>&nbsp;VISITOR — 任意游客的浏览器</div>
+      <div class="wb">
+        <div id="urlPx"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg><span id="urlTxt"></span></div>
+        <div id="okBig2">200 OK</div>
+        <div id="okNote">根目录下的文件，<b>谁都能看到</b></div>
+      </div>
+    </div>
+
+    <!-- P3 危害延伸 -->
+    <div id="extWall">
+      <h3>扩展名黑名单 · 拦住了危险后缀</h3>
+      <div class="extRow">
+        <div class="ext" id="e1">.php<div class="bx"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg></div></div>
+        <div class="ext" id="e2">.phtml<div class="bx"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg></div></div>
+        <div class="ext" id="e3">.htaccess<div class="bx"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg></div></div>
+      </div>
+      <div id="extCap">危险扩展名全被拦 —— 所以没能直接拿下服务器</div>
+    </div>
+    <div id="twist">
+      <h3>但是，有个转折</h3>
+      <p>它<b>只拦扩展名，不拦文件内容</b>——PHP 代码塞进正常后缀的图片里传上去，这就是<b>「图片马」</b>。</p>
+      <div id="horse">
+        <div id="horseImg">
+          <div class="lid">PNG</div>
+          <div class="frame"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5-9 9"/></svg></div>
+        </div>
+        <div class="phpCode">evil.png → 掀开盖子：&lt;?php system($_GET['cmd']); ?&gt;</div>
+      </div>
+    </div>
+    <div id="jin3">一张图片，就能控制别人的电脑</div>
+
+  </div><!-- /cam -->
+
+  <!-- 固定 UI（不随镜头移动） -->
+  <div id="posCard">
+    <div class="lb">— 文件当前位置 · CURRENT —</div>
+    <div id="posName">products / products</div>
+  </div>
+  <div id="pathBar">
+    <div class="pv" id="pvNormal"><span class="seg">uploads/products/</span><span class="seg">SP001_20260815_</span><span class="seg okc">shell.png　✓ 老老实实待在 uploads 里</span></div>
+    <div class="pv" id="pvEvil" style="opacity:0"><span class="seg" data-s="0">uploads/</span><span class="seg" data-s="1">products/</span><span class="seg" data-s="2">products/</span><span class="seg hot" data-s="3">../</span><span class="seg hot" data-s="4">../</span><span class="seg hot" data-s="5">../</span><span class="seg hot" data-s="6">../</span><span class="seg evil">evil_20260815_shell.png</span></div>
+  </div>
+
+  <div id="dim"></div>
+  <div id="alarmGlow"></div>
+  <div id="flash"></div>
+  <div id="lbT"></div><div id="lbB"></div>
+  <div id="slowTag"><span class="dot"></span>ESCAPE CAM · 电梯失控实录</div>
+
+  <div class="cap" id="cap1">正常上传：文件坐电梯，老老实实住进 <b>uploads 最深处</b></div>
+  <div class="cap" id="cap2">实证：服务器真的把它存进了 <em>网站根目录</em></div>
+
+  <div id="anan">
+    <div class="say">一级、两级…<br><b>跳上来啦</b></div>
+    <img src="anan - emotion rename/05_阖眸轻语_雀跃腼腆.png" alt="安安·雀跃">
+  </div>
+
+  <div class="corner" id="chap">02 / 靶场实测 · VULN ⑤</div>
+  <div class="corner" id="src">天积靶场实测 2026-08-15 · 授权环境</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 2-7 · 漏洞⑤ 路径穿越 · 88s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+const DUR=88000;
+const $=s=>document.querySelector(s),$$=s=>document.querySelectorAll(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+const after=(ms,f)=>on(performance.now()-t0+ms,f);
+function fly(el,x1,y1,x2,y2,dur,arc,ease,done){tws.push({t:performance.now()-t0,d:dur,e:ease||eio,done,f:p=>{el.style.left=(x1+(x2-x1)*p)+'px';el.style.top=(y1+(y2-y1)*p-Math.sin(p*Math.PI)*(arc||0))+'px'}})}
+function cnt(el,from,to,dur){tws.push({t:performance.now()-t0,d:dur,e:eo,f:p=>{el.textContent=Math.round(from+(to-from)*p).toLocaleString('en-US')}})}
+function typer(el,text,dur){tws.push({t:performance.now()-t0,d:dur,f:p=>{el.textContent=text.slice(0,Math.floor(p*(text.length+1)))}})}
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== 镜头 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+const CX=960,CY=540;
+function focus(fx,fy,s,dur){camTo(CX-fx*s,CY-fy*s,s,dur)}
+
+/* ===== 小道具 ===== */
+function ding(x,y,txt,big){const d=document.createElement('div');d.className='ding';d.textContent=txt||'噔！';
+  d.style.left=x+'px';d.style.top=y+'px';if(big){d.style.fontSize='72px'}
+  $('#cam').appendChild(d);after(900,()=>d.remove())}
+function sparks(x,y){for(let i=0;i<7;i++){const sp=document.createElement('div');sp.className='spark';
+  sp.style.left=x+'px';sp.style.top=y+'px';$('#cam').appendChild(sp);
+  const a=(i/7)*Math.PI*2+Math.random()*.4,d=34+Math.random()*30,tx=x+Math.cos(a)*d,ty=y+Math.sin(a)*d;
+  tws.push({t:performance.now()-t0,d:420,e:eo,f:p=>{sp.style.transform=`translate(${(tx-x)*p}px,${(ty-y)*p}px) rotate(${a*57}deg)`;sp.style.opacity=1-p}});
+  after(440,()=>sp.remove())}}
+function shakeTower(){const t=$('#towerWrap');t.classList.remove('shk');void t.offsetWidth;t.classList.add('shk')}
+function setPos(txt,red){const p=$('#posName');p.innerHTML=(red?'<span class="arr">▲</span>':'')+txt;
+  p.classList.toggle('red',!!red);p.classList.remove('flip');void p.offsetWidth;p.classList.add('flip')}
+
+/* 楼层与电梯参数（towerWrap 局部坐标，wrap 顶 = 世界 y 200） */
+const FLOOR_TOP=[130,302,474,646];           // f0..f3
+const CAR_TOP=i=>FLOOR_TOP[i]+18;            // 轿厢停靠位
+const camX=120+280;                          // 井道中心世界 x = 400
+const carWorldY=i=>200+CAR_TOP(i)+55;        // 轿厢中心世界 y
+function followTo(i,dur){camTo(-38,CY-carWorldY(i)*1.32,1.32,dur)}   // 跟随镜头：大厦固定靠左 x120-680
+
+/* ===== 第一幕 · 正常入住（0-20.5s，口播 7:27-7:49） ===== */
+on(400,()=>{$('#title').classList.add('show');$('#miniScore').classList.add('show')});
+on(1000,()=>camTo(0,0,1,2.2));                             // 开场拉镜：井道特写 → 大厦全景
+on(2200,()=>{const c=$('#car');c.style.transition='top 3s cubic-bezier(.45,0,.35,1)';c.style.top=CAR_TOP(3)+'px'});
+[0,1,2,3].forEach(i=>on(2800+i*800,()=>$('#f'+i).classList.add('lit')));
+on(5200,()=>$('#cap1').classList.add('show'));
+on(8500,()=>{$('#f3').classList.add('hot');$('#pathBar').classList.add('show');shakeTower()});
+on(20300,()=>{$('#cap1').classList.remove('show');$('#f3').classList.remove('hot')});
+
+/* ===== 第二幕 · 符号特写（23-32s，口播 7:49-8:00） ===== */
+on(23000,()=>{$('#dim').classList.add('on');$('#dotsBig').classList.add('show');focus(1310,565,2.05,1.5)});
+on(28300,()=>{                                             // 巨幕 .. 缩进请求卡
+  $('#dotsBig').classList.add('morph');
+  $('#payload').classList.add('in');
+  focus(1080,470,1.32,1.1);
+});
+on(31800,()=>{$('#chipLbl').classList.add('show');
+  ['#c0','#c1','#c2','#c3'].forEach((s,i)=>after(i*200,()=>$(s).classList.add('in')));
+  $('#pvNormal').style.opacity=0;$('#pvEvil').style.opacity=1;$('#pathBar').classList.add('danger');
+});
+
+/* ===== 第三幕 · 四段跳（41.8-52s，口播 8:10-8:18） ===== */
+on(41800,()=>{
+  $('#stage').classList.add('letter');
+  $('#slowTag').classList.add('show');
+  $('#posCard').classList.add('show');setPos('products / products',false);
+  $('#anan').classList.add('show');
+  followTo(3,1.0);                                         // 镜头对准电梯：跟随开始
+});
+
+const EVIL_SEGS=()=>document.querySelectorAll('#pvEvil .seg');
+function strike(a,b){const sg=EVIL_SEGS();sg[a].classList.add('cut');if(b!=null)sg[b].classList.add('cut')}
+
+const hops=[
+  {chip:'#c0',dest:2,pos:'products',strikeIdx:[2,3]},
+  {chip:'#c1',dest:1,pos:'uploads',strikeIdx:[1,4]},
+  {chip:'#c2',dest:0,pos:'shop/ · 网站根目录！',strikeIdx:[0,5],red:true},
+  {chip:'#c3',dest:-1}                                     // 第四颗：破顶
+];
+hops.forEach((h,i)=>{
+  const tFly=43500+i*2100;
+  on(tFly,()=>{
+    const ch=$(h.chip);ch.classList.add('hot');
+    const sx=parseInt(ch.style.left)+37, sy=parseInt(ch.style.top)+26;
+    const ty= h.dest>=0 ? 200+CAR_TOP(h.dest)+40 : 200+148+30;
+    fly(ch,sx,sy,camX,ty,700,90,eio,()=>{
+      ch.classList.remove('in');ch.style.opacity=0;
+      const btn=$('#carBtn');btn.classList.remove('hit');void btn.offsetWidth;btn.classList.add('hit');
+      sparks(camX+26,ty-10);
+      shakeTower();
+      if(h.dest>=0){
+        const car=$('#car');car.style.transition='top .62s cubic-bezier(.3,1.25,.4,1)';car.style.top=CAR_TOP(h.dest)+'px';
+        $('#f'+h.dest).classList.add('hot');after(900,()=>$('#f'+h.dest).classList.remove('hot'));
+        ding(camX+66,ty-56,'噔！');
+        strike(h.strikeIdx[0],h.strikeIdx[1]);
+        setPos(h.pos,!!h.red);
+        followTo(h.dest,0.9);                              // 镜头跟电梯上移
+      }
+    });
+  });
+});
+
+/* 第四跳 · 撞破屋顶 */
+on(43500+3*2100+750,()=>{
+  const car=$('#car');
+  car.style.transition='top .5s cubic-bezier(.55,0,.9,.4)';
+  car.style.top='-70px';
+  $('#pkg').classList.add('naked');
+  ding(camX+40,200+40,'哐！！',true);
+  shakeTower();after(300,()=>shakeTower());
+  $$('.shard').forEach(s=>{                                 // 玻璃碎裂
+    const dx=(Math.random()*2-1)*260, dy=-(60+Math.random()*220), r=(Math.random()*2-1)*540;
+    s.style.setProperty('transition','transform 1.2s cubic-bezier(.2,.5,.4,1),opacity 1.2s');
+    requestAnimationFrame(()=>{s.style.transform=`translate(${dx}px,${dy}px) rotate(${r}deg)`;s.style.opacity=0});
+  });
+  $('#flash').classList.add('go');
+  $('#alarmGlow').classList.add('on');
+  $('#beacon').classList.add('on');
+  $('#sb1').classList.add('on');$('#sb2').classList.add('on');
+  strike(6,null);
+  const sg=EVIL_SEGS();sg[7].classList.add('live');
+  setPos('互联网 · 裸奔！',true);
+  camTo(-17,322,1.14,0.7);                                  // 镜头随破顶猛抬（大厦仍靠左）
+});
+on(51900,()=>{const a=$('#alarmGlow');a.classList.remove('on')});
+
+/* ===== 第四幕 · 实证（54-60.5s，口播 8:18-8:24） ===== */
+on(54000,()=>{
+  $('#stage').classList.remove('letter');
+  $('#slowTag').classList.remove('show');
+  $('#dim').classList.remove('on');
+  $('#anan').classList.remove('show');
+  $('#posCard').classList.remove('show');
+  $('#towerWrap').classList.add('dim');
+  $('#payload').classList.remove('in');$('#chipLbl').classList.remove('show');
+  $('#pathBar').classList.remove('show');
+  camTo(0,0,1,1.4);                                         // 拉回家
+});
+on(54700,()=>$('#cap2').classList.add('show'));
+on(55000,()=>$('#upTerm').classList.add('in'));
+['u1','u2','u3','u4','u5'].forEach((id,i)=>on(55300+i*180,()=>$('#'+id).classList.add('in')));
+on(56300,()=>$('#u6').classList.add('in'));
+on(56600,()=>{$('#u7').classList.add('in');$('#u8').classList.add('in')});
+on(56900,()=>$('#browserPx').classList.add('in'));
+on(57200,()=>typer($('#urlTxt'),'https://mall.heasec-lab.cn/evil_20260815_shell.png',750));
+on(58200,()=>$('#okBig2').classList.add('stamp'));
+on(58700,()=>$('#okNote').classList.add('show'));
+on(60500,()=>$('#cap2').classList.remove('show'));
+
+/* ===== 第五幕 · 危害延伸（62-88s，口播 8:25-8:52） ===== */
+on(62000,()=>{$('#upTerm').classList.add('out');$('#browserPx').classList.add('out')});
+on(65000,()=>$('#extWall').classList.add('in'));
+['e1','e2','e3'].forEach((id,i)=>on(68200+i*600,()=>$('#'+id).classList.add('in')));
+on(73000,()=>$('#extCap').classList.add('show'));
+on(75800,()=>$('#twist').classList.add('in'));
+on(80000,()=>$('#horse').classList.add('open'));            // 掀开图片马的盖子
+on(85000,()=>$('#jin3').classList.add('show'));
+on(86800,()=>{
+  $('#msFloat').classList.add('go');
+  cnt($('#msTotal'),950,1110,1400);
+  const m=$('#miniScore');m.classList.add('pump');after(700,()=>m.classList.remove('pump'));
+});
+
+/* ===== 音效 ===== */
+on(400,()=>__sfx.swipe(0.6));
+on(2200,()=>__sfx.whoosh(2.2,0.6));
+on(2800,()=>__sfx.pop(0.5));
+on(3600,()=>__sfx.pop(0.5));
+on(4400,()=>__sfx.pop(0.5));
+on(5200,()=>__sfx.pop(0.5));
+on(5250,()=>__sfx.pop(0.5));
+on(8500,()=>__sfx.thud(0.8));
+on(23000,()=>__sfx.pop(0.6));
+on(31800,()=>__sfx.pop(0.6));
+on(41800,()=>__sfx.swipe(0.5));
+on(43500,()=>__sfx.whoosh(0.5,0.5));
+on(44200,()=>__sfx.thud(0.7));
+on(45600,()=>__sfx.whoosh(0.5,0.5));
+on(46300,()=>__sfx.thud(0.7));
+on(47700,()=>__sfx.whoosh(0.5,0.5));
+on(48400,()=>__sfx.thud(0.7));
+on(49800,()=>__sfx.whoosh(0.5,0.5));
+on(50550,()=>__sfx.thud(0.7));
+on(54000,()=>__sfx.thud(1.1));
+on(54050,()=>__sfx.swipe(0.8));
+on(54700,()=>__sfx.pop(0.5));
+on(55000,()=>__sfx.pop(0.6));
+on(55300,()=>__sfx.type(0.5));
+on(55480,()=>__sfx.type(0.5));
+on(55660,()=>__sfx.type(0.5));
+on(55840,()=>__sfx.type(0.5));
+on(56020,()=>__sfx.type(0.5));
+on(56300,()=>__sfx.type(0.5));
+on(56600,()=>__sfx.type(0.5));
+on(56900,()=>__sfx.pop(0.6));
+for(let __si=0;__si<6;__si++)on(57200+__si*125,()=>__sfx.type(0.5));
+on(58200,()=>__sfx.thud(0.9));
+on(58700,()=>__sfx.pop(0.5));
+on(65000,()=>__sfx.pop(0.6));
+on(68200,()=>__sfx.pop(0.55));
+on(68800,()=>__sfx.pop(0.55));
+on(69400,()=>__sfx.pop(0.55));
+on(73000,()=>__sfx.pop(0.5));
+on(75800,()=>__sfx.swipe(0.7));
+on(80000,()=>__sfx.thud(0.8));
+on(85000,()=>__sfx.ding(0.8));
+on(86800,()=>__sfx.pop(0.5));
+</script>
+</body>
+</html>

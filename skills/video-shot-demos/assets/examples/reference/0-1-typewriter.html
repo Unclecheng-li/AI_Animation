@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><script>
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false, startReal=0;
+    function clock(){ return started?(realPerf()-startReal):0; }
+    window.__startPlayback=function(){ if(started)return; started=true; startReal=realPerf(); };
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){ return realRAF(function(){ cb(clock()); }); };
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#prog,#label,#tag,#tc{transition:opacity .35s ease}body.hud-off #prog,body.hud-off #label,body.hud-off #tag,body.hud-off #tc{opacity:0!important}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false,finished=false;
+    var tc=document.getElementById('tc');
+    function isFinished(){ if(!tc)return false; var p=tc.textContent.split(' / '); return p.length===2&&p[0]===p[1]; }
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){if(!finished)document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){ if(!playing)return; if(innerHeight-e.clientY<=50)showHud(); else hideHud(); });
+    addEventListener('mouseleave',function(){ if(playing)hideHud(); });
+    setInterval(function(){ if(!playing)return; var f=isFinished(); if(f&&!finished){finished=true;showHud();} else if(!f&&finished){finished=false;hideHud();} },150);
+    b.addEventListener('click',function(){
+      if(playing)return; playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){ z.style.opacity='0';z.style.pointerEvents='none'; },600);
+      setTimeout(function(){ window.__startPlayback(); },2000);
+    });
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<meta charset="UTF-8">
+<title>镜头 0-1 · 黑屏打字机</title>
+<style>
+  html,body{margin:0;padding:0;background:#000;overflow:hidden;height:100%}
+  #stage{width:1920px;height:1080px;position:absolute;left:50%;top:50%;transform-origin:center;background:#0A0A0A;overflow:hidden}
+
+  /* CRT scanlines */
+  #scan{position:absolute;inset:0;pointer-events:none;z-index:20;
+    background:repeating-linear-gradient(0deg,rgba(255,255,255,1) 0 1px,transparent 1px 3px);
+    opacity:.04}
+  /* vignette */
+  #vig{position:absolute;inset:0;pointer-events:none;z-index:21;
+    background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.55) 100%)}
+  /* film flicker */
+  #flick{position:absolute;inset:0;pointer-events:none;z-index:22;background:#fff;opacity:0;
+    animation:flick 7s steps(1) infinite}
+  @keyframes flick{
+    0%,100%{opacity:0}
+    11%{opacity:.012} 11.4%{opacity:0}
+    37%{opacity:.018} 37.3%{opacity:0}
+    63%{opacity:.01} 63.5%{opacity:0}
+    88%{opacity:.02} 88.2%{opacity:0}
+  }
+  #grain{position:absolute;inset:0;pointer-events:none;z-index:23;opacity:.05}
+
+  /* question card (0-5s) */
+  #qwrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    z-index:15;pointer-events:none}
+  #qbox{max-width:1300px;padding:0 120px;
+    font-family:"Cascadia Mono","JetBrains Mono",Consolas,monospace;
+    font-size:34px;line-height:1.9;color:#F2F2F2;white-space:pre-wrap}
+  .qcur{display:inline-block;width:16px;height:36px;background:#F5F5F5;vertical-align:-7px;
+    animation:blink 1s steps(1) infinite}
+
+  /* text area */
+  #wrap{position:absolute;left:360px;top:50%;width:1200px;transform:translateY(-50%);
+    font-family:"Cascadia Mono","JetBrains Mono",Consolas,monospace;
+    font-size:30px;line-height:1.9;color:#EDEDED;z-index:10;white-space:pre-wrap}
+  .ch{opacity:0}
+  .ch.on{opacity:1}
+  .ch.em.on{animation:emb .8s ease-out}
+  @keyframes emb{
+    0%{font-weight:900;text-shadow:0 0 2px rgba(255,255,255,.9)}
+    100%{font-weight:400;text-shadow:none}
+  }
+  #cursor{display:inline-block;width:16px;height:34px;background:#F5F5F5;vertical-align:-6px;
+    animation:blink 1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+
+  /* HUD */
+  #hud{position:absolute;inset:0;z-index:50;pointer-events:none}
+  #prog{position:absolute;left:0;bottom:0;height:3px;width:0%;background:#F5F5F5}
+  #label{position:absolute;left:20px;bottom:14px;font-family:"Cascadia Mono",Consolas,monospace;
+    font-size:14px;color:#fff;opacity:.55}
+  #tc{position:absolute;right:20px;bottom:14px;font-family:"Cascadia Mono",Consolas,monospace;
+    font-size:14px;color:#fff;opacity:.55}
+  #replay{position:absolute;right:22px;top:22px;width:44px;height:44px;border-radius:50%;
+    border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.08);cursor:pointer;
+    display:none;align-items:center;justify-content:center;pointer-events:auto;z-index:60}
+  #replay:hover{background:rgba(255,255,255,.2)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="qwrap"><span id="qbox"><span class="qcur" id="qcursor"></span></span></div>
+  <div id="wrap"><span id="cursor"></span></div>
+  <canvas id="grain" width="480" height="270"></canvas>
+  <div id="scan"></div>
+  <div id="vig"></div>
+  <div id="flick"></div>
+  <div id="hud">
+    <div id="prog"></div>
+    <div id="label">镜头 0-1 · 黑屏打字机</div>
+    <div id="tc">0:00 / 0:26</div>
+  </div>
+  <button id="replay" title="重播 (R)">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 4 3 9 8 9"/></svg>
+  </button>
+</div>
+<script>
+(function(){
+  var DURATION=26;
+  var stage=document.getElementById('stage');
+  function fit(){var s=Math.min(innerWidth/1920,innerHeight/1080);
+    stage.style.transform='translate(-50%,-50%) scale('+s+')';}
+  addEventListener('resize',fit);fit();
+
+  /* ---- 问题卡（0-5s）：打完停顿，随后淡出让位 ---- */
+  var QTEXT='先问大家一个问题：有没有见过那种纯 AI 写的、看着就烦人的文案？';
+  var qbox=document.getElementById('qbox'),qcursor=document.getElementById('qcursor');
+  var qwrap=document.getElementById('qwrap');
+  var Q_START=0.4,Q_DT=0.09;
+  var qspans=[],qt=Q_START;
+  for(var qi=0;qi<QTEXT.length;qi++){
+    var qs=document.createElement('span');
+    qs.className='ch';qs.textContent=QTEXT[qi];
+    qs.dataset.t=qt;
+    qbox.insertBefore(qs,qcursor);
+    qspans.push(qs);
+    qt+=Q_DT;
+  }
+
+  /* ---- 文案（口播稿原文，逐句） ---- */
+  var SENTS=[
+    '今天咱们只做一件事，就是把"AI味"这东西掰开了揉碎了讲。',
+    '先给一个直白的定义：所谓 AI 味，说白了就是文本的"工业化痕迹"。',
+    '让你感觉对面不是在跟你说话，而是在按客服话术走流程。',
+    '别担心，今天咱们就把这层窗户纸捅破。',
+    '我会用最直白，最不绕弯子，最一针见血的方式告诉你，什么是"AI味"，以及如何避免写出"AI"味的文章。'
+  ];
+  var EMS=['掰开了揉碎了','说白了','别担心','最直白，最不绕弯子，最一针见血'];
+
+  /* 每句口播起点 5 / 9 / 13 / 17 / 19.5s，句尾留停顿 */
+  var STARTS=[5,9,13,17,19.5];
+  var ENDS=[9,13,17,19.5,24];
+
+  var wrap=document.getElementById('wrap');
+  var cursor=document.getElementById('cursor');
+
+  var full=SENTS.join('');
+  function isEmChar(globalIdx){
+    for(var k=0;k<EMS.length;k++){
+      var p=full.indexOf(EMS[k]);
+      if(p>=0&&globalIdx>=p&&globalIdx<p+EMS[k].length)return true;
+    }
+    return false;
+  }
+
+  var spans=[];
+  var gidx=0;
+  for(var si=0;si<SENTS.length;si++){
+    var s=SENTS[si];
+    var win=(ENDS[si]-STARTS[si])-0.45;
+    var dt=win/s.length;
+    var t=STARTS[si];
+    for(var ci=0;ci<s.length;ci++){
+      var sp=document.createElement('span');
+      sp.className='ch'+(isEmChar(gidx)?' em':'');
+      sp.textContent=s[ci];
+      sp.dataset.t=t;
+      wrap.insertBefore(sp,cursor);
+      spans.push(sp);
+      t+=dt;gidx++;
+    }
+    if(si<SENTS.length-1){
+      var br=document.createElement('span');
+      br.className='ch';br.innerHTML='<br>';
+      br.dataset.t=Math.min(t+0.05,STARTS[si+1]-0.25);
+      wrap.insertBefore(br,cursor);
+      spans.push(br);
+    }
+  }
+
+  /* ---- 胶片噪点 ---- */
+  var g=document.getElementById('grain'),gx=g.getContext('2d');
+  function noise(){
+    var id=gx.createImageData(480,270),d=id.data;
+    for(var i=0;i<d.length;i+=4){var v=(Math.random()*255)|0;d[i]=d[i+1]=d[i+2]=v;d[i+3]=255;}
+    gx.putImageData(id,0,0);
+  }
+  setInterval(noise,90);noise();
+  g.style.width='1920px';g.style.height='1080px';
+
+  /* ---- 时间轴 ---- */
+  var start=performance.now(),idx=0,qidx=0;
+  var prog=document.getElementById('prog'),tc=document.getElementById('tc'),replay=document.getElementById('replay');
+  function fmt(x){x=Math.max(0,Math.min(DURATION,x));var m=Math.floor(x/60),s=Math.floor(x%60);
+    return m+':'+(s<10?'0':'')+s;}
+  function frame(now){
+    var t=(now-start)/1000;
+    /* 问题卡打字 */
+    while(qidx<qspans.length&&+qspans[qidx].dataset.t<=t){
+      qspans[qidx].classList.add('on');
+      qbox.insertBefore(qcursor,qspans[qidx].nextSibling);
+      qidx++;
+    }
+    /* 问题卡 4.5s 起淡出，5.1s 完全让位 */
+    qwrap.style.opacity=t<4.5?1:Math.max(0,1-(t-4.5)/0.6);
+    /* 主光标 5s 前隐藏 */
+    cursor.style.visibility=t<4.9?'hidden':'visible';
+    /* 五句正片打字 */
+    while(idx<spans.length&&+spans[idx].dataset.t<=t){
+      spans[idx].classList.add('on');
+      wrap.insertBefore(cursor,spans[idx].nextSibling);
+      idx++;
+    }
+    /* 24s 起渐暗，25s 时定格在 0.15，只剩光标闪 */
+    var fade=t<24?1:Math.max(0.15,1-(t-24)*0.85);
+    for(var i=0;i<idx;i++)spans[i].style.opacity=fade;
+    prog.style.width=Math.min(100,t/DURATION*100)+'%';
+    tc.textContent=fmt(t)+' / '+fmt(DURATION);
+    if(t>=DURATION)replay.style.display='flex';
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  replay.addEventListener('click',function(){location.reload();});
+  addEventListener('keydown',function(e){
+    var k=e.key.toLowerCase();
+    if(k==='r')location.reload();
+    if(k==='h'){var h=document.getElementById('hud');
+      h.style.display=h.style.display==='none'?'':'none';}
+  });
+})();
+</script>
+</body>
+</html>

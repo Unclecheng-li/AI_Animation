@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<script>
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+
+<script>
+/* ===== SFX 引擎（WebAudio 合成，无音频文件，随启动按钮手势激活） ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){ /* 波：弹出 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){ /* 呼：镜头/大幅移动 */
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){ /* 唰：快速滑入/切换 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){ /* 键盘：短促轻击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){ /* 叮：柔和落定 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){ /* 咚：低频落章/撞击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 2-10 · GLM 交卷：4620 分，96.25%</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Serif+SC:wght@400;600;900&family=ZCOOL+XiaoWei&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;background:#3e4a3a;overflow:hidden;font-family:'Noto Serif SC',serif}
+  body.paused *{animation-play-state:paused!important}
+  #stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;
+    background:radial-gradient(1200px 700px at 50% 42%,#f9f4e2 0%,#f1e8cc 55%,#e6d9b4 100%)}
+  /* certificate border */
+  #certB{position:absolute;inset:36px;border:3px solid #b8963e;pointer-events:none}
+  #certB::before{content:'';position:absolute;inset:8px;border:1.5px solid #c9ab5e}
+  #certB::after{content:'';position:absolute;inset:14px;border:1px solid rgba(184,150,62,.45)}
+  .flourish{position:absolute;width:120px;height:120px;color:#b8963e;opacity:.85}
+  #f1{left:44px;top:44px}#f2{right:44px;top:44px;transform:scaleX(-1)}
+  #f3{left:44px;bottom:44px;transform:scaleY(-1)}#f4{right:44px;bottom:44px;transform:scale(-1)}
+
+  /* header */
+  #certHead{position:absolute;left:50%;top:78px;transform:translateX(-50%);text-align:center;z-index:5;opacity:0;transition:opacity .8s}
+  #certHead.show{opacity:1}
+  #medal{width:92px;height:92px;margin:0 auto;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fffdf4,#efe3c0);border:3px solid #b8963e;
+    display:flex;align-items:center;justify-content:center;box-shadow:0 8px 20px rgba(140,110,40,.3);position:relative}
+  #medal img{width:54px;height:54px}
+  #medal::after{content:'';position:absolute;inset:-11px;border:1.5px dashed #b8963e;border-radius:50%;animation:spinSlow 22s linear infinite}
+  @keyframes spinSlow{to{transform:rotate(360deg)}}
+  #certHead h1{margin-top:14px;font-family:'ZCOOL XiaoWei';font-size:56px;color:#3d3421;letter-spacing:12px}
+  #certHead .en{font-family:'JetBrains Mono';font-size:13px;color:#9a8550;letter-spacing:5px;margin-top:8px}
+  #certSeal{position:absolute;right:-150px;top:44px;width:104px;height:104px;background:rgba(178,52,31,.94);color:#f9f0da;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;font-family:'ZCOOL XiaoWei';font-size:30px;line-height:1.25;text-align:center;letter-spacing:2px;
+    transform:rotate(12deg) scale(2.6);opacity:0;box-shadow:inset 0 0 0 4px rgba(249,240,218,.5)}
+  #certSeal.stamp{animation:sealIn .5s cubic-bezier(.2,1.5,.4,1) forwards}
+  @keyframes sealIn{to{opacity:1;transform:rotate(12deg) scale(1)}}
+
+  /* scoreboard panel */
+  #board{position:absolute;left:130px;top:318px;width:1010px;background:rgba(255,253,246,.8);border:2px solid #cbb26a;border-radius:6px;padding:26px 34px 22px;
+    box-shadow:0 14px 34px rgba(140,110,40,.16);opacity:0;transform:translateY(34px);transition:all .6s ease;z-index:5}
+  #board.show{opacity:1;transform:translateY(0)}
+  #board .bhead{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #e0d0a0;padding-bottom:12px}
+  #board .bhead b{font-size:23px;color:#3d3421;letter-spacing:3px;font-weight:900}
+  #board .bhead span{font-family:'JetBrains Mono';font-size:13px;color:#9a8550}
+  .cat{display:flex;align-items:center;gap:18px;margin-top:16px}
+  .cat .cl{width:150px;flex:none}
+  .cat .cl b{display:block;font-size:19.5px;color:#4a3f28;letter-spacing:1px}
+  .cat .cl small{font-family:'JetBrains Mono';font-size:12px;color:#9a8550}
+  .cells{display:flex;gap:8px;flex-wrap:wrap}
+  .cell{width:44px;height:34px;border:2px solid #d9c78f;border-radius:4px;background:#f3ecd6;display:flex;align-items:center;justify-content:center;
+    color:#c9b98a;position:relative;transition:all .3s}
+  .cell svg{width:17px;height:17px;opacity:0;transform:scale(.3);transition:all .3s cubic-bezier(.2,1.7,.4,1)}
+  .cell.lit{background:#128a9d;border-color:#0d6b7a;color:#eafdff;box-shadow:0 0 12px rgba(18,138,157,.45)}
+  .cell.lit svg{opacity:1;transform:scale(1)}
+  .cell.miss{background:#efe9da;border-color:#c9bfa8;border-style:dashed}
+  .cell.miss .mx{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:10.5px;color:#a89a76;white-space:nowrap;font-family:'JetBrains Mono'}
+  .cat .cscore{margin-left:auto;font-family:'Bebas Neue';font-size:30px;color:#128a9d;letter-spacing:1px;min-width:74px;text-align:right}
+
+  /* total column */
+  #totalCol{position:absolute;right:130px;top:318px;width:600px;z-index:5;opacity:0;transform:translateY(34px);transition:all .6s .15s ease}
+  #totalCol.show{opacity:1;transform:translateY(0)}
+  #totalCard{background:rgba(255,253,246,.9);border:2px solid #cbb26a;border-radius:6px;padding:24px 34px;box-shadow:0 14px 34px rgba(140,110,40,.16);text-align:center}
+  #totalCard .lab{font-size:17px;color:#9a8550;letter-spacing:5px}
+  #totalNum{font-family:'Bebas Neue';font-size:118px;color:#128a9d;line-height:1;margin-top:6px;text-shadow:0 4px 0 rgba(18,138,157,.14)}
+  #totalNum small{font-size:44px;color:#b8a674}
+  #totFloat{position:absolute;right:40px;top:2px;font-family:'Bebas Neue';font-size:30px;color:#b2341f;opacity:0}
+  #totFloat.go{animation:floatUp 1.5s ease-out forwards}
+  @keyframes floatUp{0%{opacity:0;transform:translateY(10px)}25%{opacity:1}75%{opacity:1}100%{opacity:0;transform:translateY(-40px)}}
+  /* star bar */
+  #starBar{margin-top:18px;position:relative;height:26px;background:#efe7cd;border:1.5px solid #cbb26a;border-radius:13px;overflow:visible}
+  #starFill{height:100%;width:0;border-radius:13px;background:linear-gradient(90deg,#17a2b8,#128a9d);transition:none;position:relative}
+  #starFill::after{content:'';position:absolute;right:-13px;top:50%;transform:translateY(-50%);width:26px;height:26px;background:#128a9d;border-radius:50%;
+    box-shadow:0 0 0 4px #f9f4e2,0 0 16px rgba(18,138,157,.6)}
+  .mile{position:absolute;top:-8px;bottom:-8px;width:2px;background:#cbb26a}
+  .mile .mlab{position:absolute;top:-34px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:12.5px;color:#9a8550;font-family:'JetBrains Mono'}
+  .mile .mico{position:absolute;bottom:-34px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:13.5px;color:#b8a674;letter-spacing:1px}
+  .mile.reached .mlab{color:#128a9d;font-weight:700}
+  .mile.reached .mico{color:#128a9d;font-weight:700}
+  #rankLbl{margin-top:46px;text-align:center;font-size:19px;color:#4a3f28;letter-spacing:2px;opacity:0;transition:opacity .6s}
+  #rankLbl.show{opacity:1}
+  #rankLbl b{color:#b2341f}
+
+  /* data cards */
+  #cards{position:absolute;left:130px;right:130px;top:800px;display:flex;gap:40px;z-index:5}
+  .dcard{flex:1;background:rgba(255,253,246,.92);border:2px solid #cbb26a;border-radius:6px;padding:20px 26px;display:flex;align-items:center;gap:18px;
+    opacity:0;transform:translateY(40px);transition:all .5s cubic-bezier(.2,1.3,.4,1);box-shadow:0 10px 26px rgba(140,110,40,.14)}
+  .dcard.in{opacity:1;transform:translateY(0)}
+  .dcard .dic{width:58px;height:58px;flex:none;border-radius:50%;background:#eef7f3;border:2px solid #128a9d;display:flex;align-items:center;justify-content:center;color:#128a9d}
+  .dcard .dic svg{width:30px;height:30px}
+  .dcard .dnum{font-family:'Bebas Neue';font-size:56px;color:#3d3421;line-height:1}
+  .dcard .dnum small{font-size:26px;color:#9a8550}
+  .dcard .dlab{font-size:15.5px;color:#7a6c44;letter-spacing:1px;margin-top:2px}
+  .dcard.hot{border-color:#b2341f}
+  .dcard.hot .dnum{color:#b2341f}
+  .dcard.hot .dic{background:#fbeee9;border-color:#b2341f;color:#b2341f}
+
+  /* big slam 96.25% */
+  #slam{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%) scale(2.6);z-index:40;opacity:0;text-align:center;pointer-events:none}
+  #slam.go{animation:slamIn .5s cubic-bezier(.2,1.4,.4,1) forwards}
+  @keyframes slamIn{to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+  #slam.out{transition:opacity .6s,transform .6s;opacity:0!important;transform:translate(-50%,-50%) scale(.92)!important}
+  #slam .pct{font-family:'Bebas Neue';font-size:190px;color:#b2341f;line-height:1;text-shadow:0 8px 0 rgba(178,52,31,.16);letter-spacing:2px}
+  #slam .cap{margin-top:4px;font-size:30px;font-weight:900;color:#3d3421;letter-spacing:8px;background:rgba(249,244,226,.92);display:inline-block;padding:8px 30px;border:2.5px solid #b2341f;border-radius:4px}
+
+  /* up quote */
+  #upQ{position:absolute;left:50%;bottom:96px;transform:translateX(-50%) translateY(24px);z-index:30;background:rgba(61,52,33,.94);color:#f4ecd4;
+    padding:18px 44px;border-radius:6px;font-size:24px;letter-spacing:2px;opacity:0;transition:all .6s ease;white-space:nowrap;box-shadow:0 16px 40px rgba(61,52,33,.35)}
+  #upQ.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #upQ b{color:#7fd4c1}
+  #upQ .who{font-family:'JetBrains Mono';font-size:13px;color:#b8a674;margin-right:16px}
+
+  /* anans */
+  .anan2{position:absolute;bottom:-12px;width:360px;z-index:25;opacity:0;transition:opacity .9s ease}
+  .anan2.show{opacity:1}
+  .anan2 img{width:100%;display:block;animation:bob 3.2s ease-in-out infinite alternate}
+  @keyframes bob{from{transform:translateY(0)}to{transform:translateY(-10px)}}
+  #ananL{left:6px;filter:drop-shadow(0 12px 22px rgba(140,110,40,.35))}
+  #ananR{right:6px;filter:drop-shadow(0 12px 22px rgba(140,110,40,.35))}
+  .anan2 .say{position:absolute;top:56px;width:200px;background:#fffdf6;border:2.5px solid #b8963e;border-radius:12px;padding:12px 16px;
+    font-family:'ZCOOL XiaoWei';font-size:26px;color:#4a3f28;line-height:1.35;letter-spacing:1px;opacity:0;transform:scale(.6);transition:all .4s ease;box-shadow:4px 4px 0 rgba(184,150,62,.35)}
+  #ananL .say{left:330px}
+  #ananL .say::after{content:'';position:absolute;z-index:-1;left:26px;bottom:-18px;border:9px solid transparent;border-top:11px solid #b8963e}
+  #ananR .say{right:330px}
+  #ananR .say::after{content:'';position:absolute;z-index:-1;right:26px;bottom:-18px;border:9px solid transparent;border-top:11px solid #b8963e}
+  .anan2 .say b{color:#b2341f}
+  .anan2.show .say{opacity:1;transform:scale(1);transition-delay:.45s}
+
+  .corner{position:absolute;font-family:'JetBrains Mono';font-size:12px;color:#9a8550;letter-spacing:2px;z-index:9}
+  #chap{left:60px;bottom:60px}
+  #src{right:60px;bottom:60px}
+
+  /* HUD */
+  #hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'JetBrains Mono';pointer-events:none}
+  #track{height:5px;background:rgba(184,150,62,.25)}
+  #bar{height:100%;width:0;background:#b2341f}
+  #hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;color:#e8dcc0;background:rgba(61,52,33,.94);backdrop-filter:blur(4px)}
+  #hud button{pointer-events:auto;background:transparent;border:1px solid #c9ab5e;color:#f0e6cc;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+  #hud button:hover{background:rgba(200,170,110,.25)}
+  #replay.done{animation:pulse 1.2s infinite;border-color:#e8c87a;color:#e8c87a}
+  @keyframes pulse{50%{box-shadow:0 0 14px rgba(232,200,122,.8)}}
+
+  /* 镜头层 */
+  #cam{position:absolute;inset:0;transform-origin:0 0;transform:translate(-211px,0px) scale(1.22);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- ================= 镜头世界 ================= -->
+  <div id="cam">
+  <div id="certB"></div>
+  <svg class="flourish" id="f1" viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 6 h60 q14 0 14 14 v14 M6 6 v60 q0 14 14 14 h14 M6 6 q34 4 40 40"/><circle cx="86" cy="34" r="3.5" fill="currentColor" stroke="none"/><circle cx="34" cy="86" r="3.5" fill="currentColor" stroke="none"/></svg>
+  <svg class="flourish" id="f2" viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 6 h60 q14 0 14 14 v14 M6 6 v60 q0 14 14 14 h14 M6 6 q34 4 40 40"/><circle cx="86" cy="34" r="3.5" fill="currentColor" stroke="none"/><circle cx="34" cy="86" r="3.5" fill="currentColor" stroke="none"/></svg>
+  <svg class="flourish" id="f3" viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 6 h60 q14 0 14 14 v14 M6 6 v60 q0 14 14 14 h14 M6 6 q34 4 40 40"/><circle cx="86" cy="34" r="3.5" fill="currentColor" stroke="none"/><circle cx="34" cy="86" r="3.5" fill="currentColor" stroke="none"/></svg>
+  <svg class="flourish" id="f4" viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 6 h60 q14 0 14 14 v14 M6 6 v60 q0 14 14 14 h14 M6 6 q34 4 40 40"/><circle cx="86" cy="34" r="3.5" fill="currentColor" stroke="none"/><circle cx="34" cy="86" r="3.5" fill="currentColor" stroke="none"/></svg>
+
+  <div id="certHead">
+    <div id="medal"><img src="icons/GLMicon.png" alt="GLM"></div>
+    <h1>渗透测试 · 成绩单</h1>
+    <div class="en">HEASEC RANGE · FINAL REPORT · GLM-5.3</div>
+    <div id="certSeal">远超<br>预期</div>
+  </div>
+
+  <!-- scoreboard -->
+  <div id="board">
+    <div class="bhead"><b>计分板 · 28 个计分点</b><span>点亮 27 · 唯一空格：AK/SK 泄露（未找到）</span></div>
+    <div class="cat" id="cat1">
+      <div class="cl"><b>绕过验证</b><small>AUTH BYPASS · 6</small></div>
+      <div class="cells"></div>
+      <div class="cscore">6/6</div>
+    </div>
+    <div class="cat" id="cat2">
+      <div class="cl"><b>越权访问</b><small>ACCESS · 7</small></div>
+      <div class="cells"></div>
+      <div class="cscore">6/7</div>
+    </div>
+    <div class="cat" id="cat3">
+      <div class="cl"><b>交易篡改</b><small>TXN TAMPER · 5</small></div>
+      <div class="cells"></div>
+      <div class="cscore">5/5</div>
+    </div>
+    <div class="cat" id="cat4">
+      <div class="cl"><b>输入验证</b><small>INPUT · 10</small></div>
+      <div class="cells"></div>
+      <div class="cscore">10/10</div>
+    </div>
+  </div>
+
+  <!-- total -->
+  <div id="totalCol">
+    <div id="totalCard">
+      <div id="totFloat">+180</div>
+      <div class="lab">总分 TOTAL SCORE</div>
+      <div id="totalNum">0<small> / 4,800</small></div>
+      <div id="starBar">
+        <div id="starFill"></div>
+        <div class="mile" id="m1" style="left:33.33%"><span class="mlab">1,600</span><span class="mico">安全初探者</span></div>
+        <div class="mile" id="m2" style="left:66.66%"><span class="mlab">3,200</span><span class="mico">漏洞猎手</span></div>
+        <div class="mile" id="m3" style="left:calc(100% - 2px)"><span class="mlab">4,800</span><span class="mico">渗透大师</span></div>
+      </div>
+      <div id="rankLbl">段位：<b>漏洞猎手</b> —— 距「渗透大师」只差一格</div>
+    </div>
+  </div>
+
+  <!-- data cards -->
+  <div id="cards">
+    <div class="dcard" id="dc1">
+      <div class="dic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg></div>
+      <div><div class="dnum">30<small> 项</small></div><div class="dlab">报告漏洞总数</div></div>
+    </div>
+    <div class="dcard" id="dc2">
+      <div class="dic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg></div>
+      <div><div class="dnum">27<small> 个</small></div><div class="dlab">计分点有效命中（人工复现判定）</div></div>
+    </div>
+    <div class="dcard hot" id="dc3">
+      <div class="dic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg></div>
+      <div><div class="dnum">0<small> 误报 · 96.25%</small></div><div class="dlab">命中率 · 复现才算数</div></div>
+    </div>
+  </div>
+
+  <!-- slam -->
+  
+
+  <div id="upQ"><span class="who">UP 主</span>我原来以为开源模型能打到 80% 就不错了——<b>96%，真的太惊喜了，远远超出预期</b></div>
+
+  <div class="anan2" id="ananL">
+    <div class="say">什么？<br><b>96%？！</b></div>
+    <img src="anan - emotion rename/07_睁眸微张_愕然疑惑.png" alt="安安·震惊">
+  </div>
+  <div class="anan2" id="ananR">
+    <div class="say">嘿嘿<br><b>打得漂亮</b></div>
+    <img src="anan - emotion rename/14_红腮含颦_腼腆欣喜.png" alt="安安·得意">
+  </div>
+
+  
+  
+
+  </div><!-- /cam -->
+<div id="slam">
+    <div class="pct">96.25%</div>
+    <div class="cap">命 中 率 · 0 误 报</div>
+  </div><div class="corner" id="chap">02 / 靶场实测 · 交卷</div><div class="corner" id="src">天积靶场实测 2026-08-15 · 耗时 157 分钟 · 成本约 96 元</div>
+  </div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 2-10 · GLM 交卷 · 17s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+const DUR=17000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3);
+function count(el,from,to,dur,delay,fmt){tws.push({t:delay,d:dur,f:p=>{const v=Math.round(from+(to-from)*p);el.textContent=fmt?fmt(v):v},e:eo})}
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1)tws.splice(i,1)}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+
+/* build cells: cat sizes 6/7/5/10, miss at cat2 index 3 (AK/SK) */
+const cats=[['cat1',6,-1],['cat2',7,3],['cat3',5,-1],['cat4',10,-1]];
+const checkSVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13l5 5L20 7"/></svg>';
+cats.forEach(([id,n,miss])=>{
+  const box=document.querySelector('#'+id+' .cells');
+  for(let i=0;i<n;i++){
+    const c=document.createElement('div');c.className='cell';
+    if(i===miss){c.classList.add('miss');c.innerHTML='<span class="mx">AK/SK?</span>';}
+    else c.innerHTML=checkSVG;
+    box.appendChild(c);
+  }
+});
+
+/* timeline (17s) */
+on(300,()=>$('#certHead').classList.add('show'));
+on(1400,()=>$('#certSeal').classList.add('stamp'));
+on(1700,()=>{$('#board').classList.add('show');$('#totalCol').classList.add('show')});
+
+/* light cells row by row */
+let base=2000;
+const gaps=[150,150,170,130];
+cats.forEach(([id,n,miss],ci)=>{
+  const cells=document.querySelectorAll('#'+id+' .cell');
+  let t=base;
+  for(let i=0;i<n;i++){
+    if(i===miss)continue;
+    const c=cells[i];
+    on(t,()=>{c.classList.add('lit')});
+    t+=gaps[ci];
+  }
+  base=t+300;
+});
+/* total rolls 0→4620 */
+count(document.querySelector('#totalNum'),0,4620,2500,5500,v=>v.toLocaleString()+'');
+/* keep "/ 4,800" — rebuild: totalNum contains small tag; use custom fmt */
+document.querySelector('#totalNum').innerHTML='<span id="tnV">0</span><small> / 4,800</small>';
+const tnV=document.querySelector('#tnV');
+tws.length=0; /* reset the earlier count tween */
+count(tnV,0,4620,2500,5500,v=>v.toLocaleString());
+/* floats during roll */
+[5700,6400,7100,7700].forEach((t,i)=>on(t,()=>{
+  const f=$('#totFloat');f.textContent='+'+[180,200,160,180][i];
+  f.classList.remove('go');void f.offsetWidth;f.classList.add('go');
+}));
+/* AK/SK miss wiggle */
+on(6500,()=>{
+  const miss=document.querySelector('.cell.miss');
+  miss.animate([{transform:'translateX(0)'},{transform:'translateX(-4px)'},{transform:'translateX(4px)'},{transform:'translateX(0)'}],{duration:400,iterations:2});
+});
+/* star bar fill */
+tws.push({t:8000,d:1500,f:p=>{document.querySelector('#starFill').style.width=(p*96.25)+'%'},e:eo});
+on(8500,()=>$('#m1').classList.add('reached'));
+on(9000,()=>$('#m2').classList.add('reached'));
+on(9400,()=>$('#rankLbl').classList.add('show'));
+
+/* data cards */
+on(10600,()=>$('#dc1').classList.add('in'));
+on(11000,()=>$('#dc2').classList.add('in'));
+on(11400,()=>$('#dc3').classList.add('in'));
+
+/* slam */
+on(13800,()=>$('#slam').classList.add('go'));
+on(15300,()=>$('#slam').classList.add('out'));
+
+/* up quote + anans */
+on(15700,()=>$('#upQ').classList.add('show'));
+on(16000,()=>{$('#ananL').classList.add('show')});
+on(16400,()=>{$('#ananR').classList.add('show')});
+
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+/* ===== 镜头 ===== */
+const camEl=$('#cam');
+function camTo(tx,ty,s,dur){camEl.style.setProperty('--cd',dur+'s');camEl.style.transform='translate('+tx+'px,'+ty+'px) scale('+s+')';if(window.__sfx)__sfx.whoosh(dur,0.65)}
+const CX=960,CY=540;
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+
+/* ===== 镜头调度 ===== */
+on(300,()=>{camTo(0,0,1,2.0)});             // 开场拉镜
+on(5800,()=>{camFocus(1490,520,1.2,1.1)});  // 总分列计分滚动
+on(13000,()=>{camTo(0,0,1,1.0)});           // slam 前拉回
+
+
+/* ===== 音效 ===== */
+on(300,()=>__sfx.swipe(0.6));
+on(1400,()=>__sfx.thud(0.9));
+on(1700,()=>__sfx.pop(0.7));
+/* 格子点亮打字连击 2000-6500（间隔 300）*/
+[2000,2300,2600,2900,3200,3500,3800,4100,4400,4700,5000,5300,5600,5900,6200,6500].forEach(t=>on(t,()=>__sfx.type(0.32)));
+on(8500,()=>__sfx.ding(0.7));
+on(9000,()=>__sfx.ding(0.7));
+on(9400,()=>__sfx.pop(0.7));
+on(10600,()=>__sfx.pop(0.6));
+on(11000,()=>__sfx.pop(0.6));
+on(11400,()=>__sfx.pop(0.6));
+on(13800,()=>__sfx.thud(1.2));
+on(15300,()=>__sfx.swipe(0.6));
+on(15700,()=>__sfx.pop(0.6));
+on(16000,()=>__sfx.pop(0.6));
+on(16400,()=>__sfx.pop(0.6));
+</script>
+</body>
+</html>
