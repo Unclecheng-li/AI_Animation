@@ -5,17 +5,15 @@
 **一套用 AI 生成炫酷 HTML 动画的 [Agent Skills](https://support.claude.com/en/articles/12512176-what-are-skills) 集合 · A collection of skills for generating cool HTML animations with AI**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](./LICENSE)
-[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](#contributing)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](#贡献与许可)
 [![Skills count](https://img.shields.io/badge/Skills-7-orange?style=flat-square)](#skills-gallery)
 [![Spec](https://img.shields.io/badge/Spec-SKILL.md-black?style=flat-square)](https://agentskills.io)
 
-[中文](#中文) · [English](#english)
+🌐 **English version**: [`README_EN.md`](README_EN.md)
 
 </div>
 
 ---
-
-## 中文
 
 ### 项目简介
 
@@ -74,8 +72,7 @@
 </tr>
 <tr>
 <td colspan="4" valign="top" align="center">
-<!-- TODO: 补充预览图 -->
-<a href="#video-shot-demos"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/ee93829f-91c5-48df-925e-342cd2be4557" /></a>
+<a href="#video-shot-demos"><img width="2560" height="1440" alt="video-shot-demos" src="https://github.com/user-attachments/assets/ee93829f-91c5-48df-925e-342cd2be4557" /></a>
 <br/><a href="#video-shot-demos"><strong>video-shot-demos</strong></a>
 <br/><sub>视频分镜演示 / 电影级镜头动画</sub>
 </td>
@@ -313,7 +310,7 @@ Links: [README](./skills/card-theater/README.md) · [SKILL.md](./skills/card-the
 #### `video-shot-demos`
 
 <a href="./skills/video-shot-demos">
-<!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/ee93829f-91c5-48df-925e-342cd2be4557" />
+<img width="2560" height="1440" alt="video-shot-demos preview" src="https://github.com/user-attachments/assets/ee93829f-91c5-48df-925e-342cd2be4557" />
 </a>
 
 **分类:** 视频分镜演示 / 电影级镜头动画
@@ -332,11 +329,11 @@ Links: [README](./skills/card-theater/README.md) · [SKILL.md](./skills/card-the
 
 <table>
 <tr>
-<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/ee93829f-91c5-48df-925e-342cd2be4557" /></td>
-<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/cce72cdc-b63b-4c2e-ac90-cd25defff624" /></td>
-<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1437" alt="image" src="https://github.com/user-attachments/assets/1724eb62-98a6-488c-9353-9229d8cfbe35" /></td>
-<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/c2bce877-db80-44a9-993a-897432c58ae1" /></td>
-<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/6906eeeb-e202-46cb-a3a2-b51d6eb9137e" /></td>
+<td align="center" width="20%"><img width="2560" height="1440" alt="复古报纸头条" src="https://github.com/user-attachments/assets/ee93829f-91c5-48df-925e-342cd2be4557" /></td>
+<td align="center" width="20%"><img width="2560" height="1440" alt="嘉年华老虎机" src="https://github.com/user-attachments/assets/cce72cdc-b63b-4c2e-ac90-cd25defff624" /></td>
+<td align="center" width="20%"><img width="2560" height="1437" alt="像素平台跳跃" src="https://github.com/user-attachments/assets/1724eb62-98a6-488c-9353-9229d8cfbe35" /></td>
+<td align="center" width="20%"><img width="2560" height="1440" alt="审讯室软木板" src="https://github.com/user-attachments/assets/c2bce877-db80-44a9-993a-897432c58ae1" /></td>
+<td align="center" width="20%"><img width="2560" height="1440" alt="机场安检" src="https://github.com/user-attachments/assets/6906eeeb-e202-46cb-a3a2-b51d6eb9137e" /></td>
 </tr>
 <tr>
 <td align="center"><sub><code>复古报纸头条</code><br />震撼数字宣告</sub></td>
@@ -492,42 +489,8 @@ ai-animation-skills/
 
 ---
 
-## English
+### 贡献与许可
 
-### Overview
-
-A collection of AI Agent skills for generating stunning HTML animation pages. Each skill is a self-contained folder with `SKILL.md` (agent instructions), `README.md`, `references/`, and `assets/`. Once installed, the AI agent auto-activates the matching skill based on your description.
-
-### Skills
-
-| Skill | Description | Templates |
-|-------|-------------|-----------|
-| [`ppt-animation`](./skills/ppt-animation) | PPT-style slideshow animations with 5 built-in themes | 30+ |
-| [`flowchart`](./skills/flowchart) | Animated flowcharts, concept maps, process diagrams, AI model viz | 7 types + 7 examples |
-| [`network-protocol-viz`](./skills/network-protocol-viz) | Network protocol animations (TCP, IPv4, routing, etc.) | 10+ |
-| [`dynamic-archify`](./skills/dynamic-archify) | Animated architecture/workflow/sequence/dataflow/lifecycle diagrams | 5 types |
-| [`scholar-notes`](./skills/scholar-notes) | Handwritten notebook-style HTML learning notes | 2 styles |
-| [`card-theater`](./skills/card-theater) | Sidebar narrative + 3D card carousel presentations | 5 templates |
-| [`video-shot-demos`](./skills/video-shot-demos) | Cinematic per-shot HTML demo animations with rotating styles, camera moves & WebAudio SFX | 29 examples |
-
-### Installation
-
-```bash
-# Install all skills
-npx skills add https://github.com/Unclecheng-li/AI_Animation
-
-# Install a single skill
-npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/ppt-animation
-npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/dynamic-archify
-npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/scholar-notes
-npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/card-theater
-npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/video-shot-demos
-```
-
-### Contributing
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md). New animation skills are welcome!
-
-### License
+见 [CONTRIBUTING.md](./CONTRIBUTING.md)，欢迎提交新的动画 Skill！
 
 MIT — for educational use only.
