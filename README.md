@@ -64,8 +64,7 @@
 <br/><sub>学霸笔记 / 手写笔记本风格</sub>
 </td>
 <td colspan="2" valign="top" align="center">
-<!-- TODO: 补充预览图 -->
-<a href="#card-theater"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/51ace25a-fde6-45db-97f5-3c30582fb85f" /></a>
+<a href="#card-theater"><img width="2560" height="1440" alt="card-theater" src="https://github.com/user-attachments/assets/51ace25a-fde6-45db-97f5-3c30582fb85f" /></a>
 <br/><a href="#card-theater"><strong>card-theater</strong></a>
 <br/><sub>卡片剧场 / 3D 卡片轮播</sub>
 </td>
@@ -266,7 +265,7 @@ Links: [README](./skills/scholar-notes/README.md) · [SKILL.md](./skills/scholar
 #### `card-theater`
 
 <a href="./skills/card-theater">
-<!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/834e8f89-abff-4a20-82cf-bdeb1f0c5756" />
+<img width="2560" height="1440" alt="card-theater preview" src="https://github.com/user-attachments/assets/834e8f89-abff-4a20-82cf-bdeb1f0c5756" />
 </a>
 
 **分类:** 侧边栏叙事 + 3D 卡片轮播演示
@@ -284,11 +283,11 @@ Links: [README](./skills/scholar-notes/README.md) · [SKILL.md](./skills/scholar
 
 <table>
 <tr>
-<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2526" height="1440" alt="image" src="https://github.com/user-attachments/assets/4191ddf3-7b9d-4f35-9ed3-ad4162da5c12" /></td>
-<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/09b2d9bc-c3a1-4914-9fb5-e9315cd4986a" /></td>
-<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/d7ac9061-43b1-4f81-8ba7-bf4892015abe" /></td>
-<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/da0c020b-889a-4453-ba86-9b722442bbfc" /></td>
-<td align="center" width="20%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/ac9722fd-74e2-4cc9-b379-3223afd4063b" /></td>
+<td align="center" width="20%"><img width="2526" height="1440" alt="scroll-3d-tilt" src="https://github.com/user-attachments/assets/4191ddf3-7b9d-4f35-9ed3-ad4162da5c12" /></td>
+<td align="center" width="20%"><img width="2560" height="1440" alt="apple-aurora-track" src="https://github.com/user-attachments/assets/09b2d9bc-c3a1-4914-9fb5-e9315cd4986a" /></td>
+<td align="center" width="20%"><img width="2560" height="1440" alt="coverflow-classic" src="https://github.com/user-attachments/assets/d7ac9061-43b1-4f81-8ba7-bf4892015abe" /></td>
+<td align="center" width="20%"><img width="2560" height="1440" alt="coverflow-watermark" src="https://github.com/user-attachments/assets/da0c020b-889a-4453-ba86-9b722442bbfc" /></td>
+<td align="center" width="20%"><img width="2560" height="1440" alt="coverflow-focus" src="https://github.com/user-attachments/assets/ac9722fd-74e2-4cc9-b379-3223afd4063b" /></td>
 </tr>
 <tr>
 <td align="center"><sub><code>scroll-3d-tilt</code><br />滚动 3D 倾斜</sub></td>

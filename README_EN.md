@@ -64,8 +64,7 @@ One sentence is all it takes:
 <br/><sub>Handwritten notebook style</sub>
 </td>
 <td colspan="2" valign="top" align="center">
-<!-- TODO: add preview image -->
-<a href="#card-theater"><img width="2560" height="1440" alt="card-theater" src="https://via.placeholder.com/2560x1440/0a0a0a/30D158?text=card-theater" /></a>
+<a href="#card-theater"><img width="2560" height="1440" alt="card-theater" src="https://github.com/user-attachments/assets/51ace25a-fde6-45db-97f5-3c30582fb85f" /></a>
 <br/><a href="#card-theater"><strong>card-theater</strong></a>
 <br/><sub>Card theater / 3D card carousel</sub>
 </td>
@@ -124,7 +123,7 @@ Links: [README](./skills/ppt-animation/README.md) · [SKILL.md](./skills/ppt-ani
 #### `flowchart`
 
 <a href="./skills/flowchart">
-<img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/130f278e-3978-433d-b9f2-5fb79dcab3c3" />
+<img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/0cefab32-b583-4342-b25d-39b5b8c4bf83" />
 </a>
 
 **Category:** Flowcharts / concept maps / principle demos
@@ -144,7 +143,7 @@ Highlights:
 <td align="center" width="25%"><a href="./skills/flowchart/README.md#支持的图表类型"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/4c6fcc04-7b36-4a65-87a1-b6eb01949179" /></a><br /><sub><code>RNN</code><br />RNN flow</sub></td>
 <td align="center" width="25%"><a href="./skills/flowchart/README.md#支持的图表类型"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/267231a2-2b93-4e55-bfb2-577c2a73927f" /></a><br /><sub><code>LSTM</code><br />LSTM flow</sub></td>
 <td align="center" width="25%"><a href="./skills/flowchart/README.md#支持的图表类型"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/90645354-939c-444c-becd-2dd2a12b4f6d" /></a><br /><sub><code>GPU</code><br />Architecture</sub></td>
-<td align="center" width="25%"><a href="./skills/flowchart/README.md#支持的图表类型"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/80bcb567-21a0-4e49-a51e-6723ace3eb1a" /></a><br /><sub><code>Flowchart</code><br />Attack chain / workflow</sub></td>
+<td align="center" width="25%"><a href="./skills/flowchart/README.md#支持的图表类型"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/80bcb567-21a0-4e49-a51e-6723ace3eb1e" /></a><br /><sub><code>Flowchart</code><br />Attack chain / workflow</sub></td>
 </tr>
 </table>
 
@@ -266,7 +265,7 @@ Links: [README](./skills/scholar-notes/README.md) · [SKILL.md](./skills/scholar
 #### `card-theater`
 
 <a href="./skills/card-theater">
-<!-- TODO: add preview image --><img width="2560" height="1440" alt="card-theater preview" src="https://via.placeholder.com/2560x1440/0a0a0a/30D158?text=card-theater" />
+<img width="2560" height="1440" alt="card-theater preview" src="https://github.com/user-attachments/assets/834e8f89-abff-4a20-82cf-bdeb1f0c5756" />
 </a>
 
 **Category:** Sidebar narrative + 3D card carousel
@@ -284,11 +283,11 @@ Highlights:
 
 <table>
 <tr>
-<td align="center" width="20%"><!-- TODO: add preview image --><img width="2560" height="1440" alt="scroll-3d-tilt" src="https://via.placeholder.com/2560x1440/030508/00E096?text=scroll-3d-tilt" /></td>
-<td align="center" width="20%"><!-- TODO: add preview image --><img width="2560" height="1440" alt="apple-aurora-track" src="https://via.placeholder.com/2560x1440/000000/0A84FF?text=apple-aurora" /></td>
-<td align="center" width="20%"><!-- TODO: add preview image --><img width="2560" height="1440" alt="coverflow-classic" src="https://via.placeholder.com/2560x1440/000000/30D158?text=coverflow-classic" /></td>
-<td align="center" width="20%"><!-- TODO: add preview image --><img width="2560" height="1440" alt="coverflow-watermark" src="https://via.placeholder.com/2560x1440/000000/BF5AF2?text=coverflow-watermark" /></td>
-<td align="center" width="20%"><!-- TODO: add preview image --><img width="2560" height="1440" alt="coverflow-focus" src="https://via.placeholder.com/2560x1440/000000/FFD60A?text=coverflow-focus" /></td>
+<td align="center" width="20%"><img width="2526" height="1440" alt="scroll-3d-tilt" src="https://github.com/user-attachments/assets/4191ddf3-7b9d-4f35-9ed3-ad4162da5c12" /></td>
+<td align="center" width="20%"><img width="2560" height="1440" alt="apple-aurora-track" src="https://github.com/user-attachments/assets/09b2d9bc-c3a1-4914-9fb5-e9315cd4986a" /></td>
+<td align="center" width="20%"><img width="2560" height="1440" alt="coverflow-classic" src="https://github.com/user-attachments/assets/d7ac9061-43b1-4f81-8ba7-bf4892015abe" /></td>
+<td align="center" width="20%"><img width="2560" height="1440" alt="coverflow-watermark" src="https://github.com/user-attachments/assets/da0c020b-889a-4453-ba86-9b722442bbfc" /></td>
+<td align="center" width="20%"><img width="2560" height="1440" alt="coverflow-focus" src="https://github.com/user-attachments/assets/ac9722fd-74e2-4cc9-b379-3223afd4063b" /></td>
 </tr>
 <tr>
 <td align="center"><sub><code>scroll-3d-tilt</code><br />Scroll 3D tilt</sub></td>
