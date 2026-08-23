@@ -1,6 +1,6 @@
 # 角色反应与字幕同步
 
-## 安安情绪速查表（素材在 `assets/examples/anan - emotion rename/`，复制到输出目录后引用）
+## 安安情绪速查表（素材随两套实例项目分发：`assets/examples/glm-5.3-range-test/anan - emotion rename/` 与 `assets/examples/doubao-paper-detective/anan - emotion rename/`，内容相同；复制到输出目录后引用）
 
 | 文件 | 姿态/情绪 | 用在什么节拍（实测用法） |
 |---|---|---|
@@ -20,7 +20,7 @@
 | `14_红腮含颦_腼腆欣喜.png` | 红腮、欣喜 | 交卷时刻、好成绩公布 |
 | `15_平举素纸_认真以待.png` | 平举纸、认真 | 严肃声明、规则宣读 |
 
-选图原则：**情绪必须匹配节拍**，宁可不用也不要错用；同一镜头最多换 1 次表情。配套 Logo 在 `assets/examples/icons/`（GLM/GPT），引用方式相同。
+选图原则：**情绪必须匹配节拍**，宁可不用也不要错用；同一镜头最多换 1 次表情。配套 Logo 随各实例项目分发（第一辑 `icons/GLMicon.png`、`GPTicon.png`，第二辑 `doubaoicon.png`、`doctor_ava.jpg`），引用方式相同。
 
 ## 角色表情特写（吐槽担当）
 

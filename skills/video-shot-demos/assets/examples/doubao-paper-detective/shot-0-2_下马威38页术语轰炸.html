@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<script>
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+
+<script>
+/* ===== SFX 引擎（WebAudio 合成，无音频文件，随启动按钮手势激活） ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){ /* 波：弹出 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){ /* 呼：镜头/大幅移动 */
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){ /* 唰：快速滑入/切换 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){ /* 键盘：短促轻击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){ /* 叮：柔和落定 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){ /* 咚：低频落章/撞击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 0-2 · 下马威：38 页术语轰炸</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Noto+Serif+SC:wght@400;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;background:#3a352b;overflow:hidden;font-family:'Noto Serif SC',serif}
+  body.paused *{animation-play-state:paused!important}
+  #stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;
+    background:#ece5d3;
+    background-image:
+      radial-gradient(ellipse 1000px 560px at 110% 110%,rgba(140,110,60,.12),transparent 60%),
+      radial-gradient(ellipse 800px 500px at -10% -10%,rgba(140,110,60,.10),transparent 60%),
+      repeating-linear-gradient(0deg,rgba(110,85,40,.025) 0 2px,transparent 2px 5px)}
+  #grain{position:absolute;inset:0;opacity:.5;pointer-events:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0.42 0 0 0 0 0.36 0 0 0 0 0.24 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+  /* 报头 */
+  #mast{position:absolute;left:90px;right:90px;top:44px;opacity:0}
+  #mast.in{animation:mIn .8s cubic-bezier(.2,.8,.2,1) forwards}
+  @keyframes mIn{from{opacity:0;transform:translateY(-36px)}to{opacity:1;transform:translateY(0)}}
+  #mast .eyebrow{display:flex;align-items:center;gap:22px}
+  #mast .eyebrow .ln{flex:1;height:1.5px;background:#6b5c40}
+  #mast .eyebrow span{font-family:'JetBrains Mono';font-size:16px;letter-spacing:6px;color:#6b5c40;white-space:nowrap}
+  #mast .row{display:flex;align-items:flex-end;justify-content:space-between;padding:12px 2px 14px}
+  #mast .paper{font-weight:900;font-size:64px;letter-spacing:12px;color:#211F1C;line-height:1.05}
+  #mast .paper small{display:block;font-family:'Playfair Display';font-style:italic;font-weight:700;font-size:18px;letter-spacing:8px;color:#8a7a58;margin-top:6px}
+  #mast .meta{text-align:right;font-size:16px;color:#57492f;line-height:1.85;letter-spacing:2px}
+  #mast .meta b{color:#D0453E}
+  #mast .thick{height:4px;background:#211F1C}
+  #mast .thin{height:1.5px;background:#211F1C;margin-top:4px}
+
+  /* 左栏：标签 + 38 + 标题 */
+  #kicker{position:absolute;left:90px;top:268px;display:inline-block;background:#211F1C;color:#ece5d3;font-weight:900;font-size:27px;letter-spacing:4px;
+    padding:10px 24px;transform:rotate(-1deg) scale(.6);opacity:0;box-shadow:7px 7px 0 #D0453E;transition:all .4s cubic-bezier(.34,1.6,.64,1)}
+  #kicker small{font-family:'JetBrains Mono';font-weight:700;font-size:17px;letter-spacing:2px;color:#e8b04a;margin-left:12px}
+  #kicker.in{opacity:1;transform:rotate(-1deg) scale(1)}
+
+  #bigNum{position:absolute;left:76px;top:330px;display:flex;align-items:baseline;gap:18px;opacity:0}
+  #bigNum.in{animation:nIn .6s cubic-bezier(.16,1,.3,1) forwards}
+  @keyframes nIn{from{opacity:0;transform:translateY(46px)}to{opacity:1;transform:translateY(0)}}
+  #num38{font-family:'Playfair Display';font-weight:900;font-size:296px;line-height:.95;color:#211F1C;font-variant-numeric:tabular-nums;letter-spacing:-8px}
+  #bigNum .unit{font-size:66px;font-weight:900;color:#211F1C;letter-spacing:4px}
+  #bigNum .unit em{display:block;font-style:normal;font-family:'JetBrains Mono';font-size:16px;font-weight:700;color:#8a7a58;letter-spacing:3px;margin-top:8px}
+  #headline{position:absolute;left:90px;top:730px;width:640px;font-weight:900;font-size:54px;color:#211F1C;letter-spacing:3px;opacity:0;transform:translateY(30px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+  #headline.in{opacity:1;transform:translateY(0)}
+  #headline u{text-decoration:none;border-bottom:8px solid #D0453E}
+
+  /* 摘要版（整屏论文页） */
+  #sheet{position:absolute;left:770px;top:-1020px;width:1060px;height:842px;background:#f6f0df;border:3px solid #211F1C;
+    box-shadow:16px 18px 0 rgba(33,31,28,.18),0 34px 80px rgba(60,45,20,.3);transform:rotate(-1.2deg);transition:top .85s cubic-bezier(.3,1.15,.4,1);padding:44px 52px;z-index:12}
+  #sheet.in{top:118px}
+  #sheet h4{font-family:'Playfair Display';font-weight:900;font-size:27px;letter-spacing:2px;color:#211F1C}
+  #sheet .sub{display:flex;justify-content:space-between;font-family:'JetBrains Mono';font-size:14px;color:#8a7a58;letter-spacing:2px;margin-top:6px;padding-bottom:12px;border-bottom:2px solid #211F1C}
+  #sheet .abs{margin-top:16px;font-size:14.5px;line-height:1.92;color:#4a4438;text-align:justify;letter-spacing:.4px}
+  #sheet .abs b{color:#211F1C}
+  #sheet .more{margin-top:10px;font-family:'JetBrains Mono';font-size:14px;color:#8a7a58;letter-spacing:2px;text-align:right}
+  #sheet img.pg{display:block;margin:2px auto 0;height:700px;box-shadow:0 8px 22px rgba(60,45,20,.35);border:1.5px solid #d8cfb6;background:#fff}
+  #sheet .lbl{position:absolute;left:-44px;top:-26px;background:#f7d774;border:3px solid #211F1C;box-shadow:5px 6px 0 rgba(33,31,28,.8);
+    font-weight:900;font-size:23px;color:#211F1C;letter-spacing:2px;padding:10px 20px;transform:rotate(-6deg)}
+
+  /* 术语贴纸 */
+  .term{position:absolute;font-family:'JetBrains Mono';font-weight:700;font-size:23px;color:#211F1C;letter-spacing:1px;
+    padding:14px 24px 16px;box-shadow:4px 6px 0 rgba(33,31,28,.35);opacity:0;transform:scale(.4) rotate(var(--r,0deg));z-index:14}
+  .term::before{content:'';position:absolute;left:50%;top:-9px;width:16px;height:16px;margin-left:-8px;border-radius:50%;background:#D0453E;box-shadow:0 3px 5px rgba(0,0,0,.35)}
+  .term.pop{animation:tPop .45s cubic-bezier(.34,1.7,.64,1) forwards}
+  @keyframes tPop{to{opacity:1;transform:scale(1) rotate(var(--r,0deg))}}
+
+  /* 三张红描边小卡 */
+  .pain{position:absolute;top:836px;width:470px;background:#ece5d3;border:4px solid #D0453E;box-shadow:8px 8px 0 rgba(208,69,62,.28);
+    padding:20px 26px;display:flex;align-items:center;gap:16px;opacity:0;transform:scale(1.5) rotate(var(--r,0deg));z-index:16}
+  .pain.slam{animation:pSlam .42s cubic-bezier(.2,1.4,.4,1) forwards}
+  @keyframes pSlam{0%{opacity:0;transform:scale(1.5) rotate(var(--r,0deg))}60%{opacity:1;transform:scale(.95) rotate(var(--r,0deg))}100%{opacity:1;transform:scale(1) rotate(var(--r,0deg))}}
+  .pain .no{font-family:'Playfair Display';font-weight:900;font-size:44px;color:#D0453E;line-height:1}
+  .pain b{font-weight:900;font-size:30px;color:#211F1C;letter-spacing:2px}
+
+  /* 红印章 */
+  #seal{position:absolute;left:795px;top:540px;width:170px;height:170px;border:6px solid #D0453E;border-radius:50%;z-index:18;
+    display:flex;align-items:center;justify-content:center;font-weight:900;font-size:44px;color:#D0453E;letter-spacing:2px;white-space:nowrap;
+    transform:rotate(-14deg) scale(3);opacity:0;mix-blend-mode:multiply;box-shadow:inset 0 0 26px rgba(208,69,62,.3)}
+  #seal::after{content:'';position:absolute;inset:9px;border:2.5px solid #D0453E;border-radius:50%;opacity:.7}
+  #seal.stamp{animation:sealIn .45s cubic-bezier(.2,1.5,.35,1) forwards}
+  @keyframes sealIn{0%{opacity:0;transform:rotate(-14deg) scale(3)}60%{opacity:1;transform:rotate(-14deg) scale(.92)}100%{opacity:.9;transform:rotate(-14deg) scale(1)}}
+
+  /* 底部横条 */
+  #strip{position:absolute;left:0;right:0;bottom:150px;background:#211F1C;padding:24px 0;text-align:center;z-index:17;
+    transform:translateY(280px);opacity:0;transition:transform .6s cubic-bezier(.2,1,.3,1),opacity .45s ease}
+  #strip.in{transform:translateY(0);opacity:1}
+  #strip .tx{display:inline-block;font-weight:900;font-size:35px;color:#ece5d3;letter-spacing:4px}
+  #strip .tx em{font-style:normal;color:#e8b04a}
+  #strip .tx i{font-style:normal;color:#D0453E;margin:0 18px}
+
+  /* 安安 */
+  #anan{position:absolute;right:10px;bottom:-14px;width:400px;z-index:20;opacity:0;transition:opacity .9s ease;filter:drop-shadow(0 16px 30px rgba(60,45,20,.4))}
+  #anan.show{opacity:1}
+  #anan img{width:100%;display:block;animation:bob 3.1s ease-in-out infinite alternate}
+  @keyframes bob{from{transform:translateY(0)}to{transform:translateY(-13px)}}
+  #anan .say{position:absolute;left:-210px;top:66px;width:250px;background:#f6f0df;border:3px solid #211F1C;border-radius:16px;padding:15px 19px;
+    font-weight:900;font-size:24px;color:#211F1C;line-height:1.45;letter-spacing:1px;opacity:0;transform:scale(.6);transition:all .45s cubic-bezier(.34,1.6,.64,1);box-shadow:5px 6px 0 rgba(33,31,28,.85)}
+  #anan .say::after{content:'';position:absolute;right:-15px;top:44px;border:9px solid transparent;border-left:12px solid #211F1C}
+  #anan .say b{color:#D0453E}
+  #anan.show .say{opacity:1;transform:scale(1);transition-delay:.45s}
+
+  /* 整屏微震 */
+  #scene.shake{animation:shake .32s linear}
+  @keyframes shake{20%{transform:translate(5px,-4px)}40%{transform:translate(-5px,3px)}60%{transform:translate(4px,2px)}80%{transform:translate(-3px,-2px)}}
+
+  /* ── 底盘 ── */
+  #lbT,#lbB{position:absolute;left:0;right:0;height:0;background:#02040a;z-index:40;transition:height .9s cubic-bezier(.7,0,.3,1)}
+  #lbT{top:0}#lbB{bottom:0}
+  /* letterbox 黑边效果已取消 */
+  #dim{position:absolute;inset:0;background:radial-gradient(closest-side at 50% 46%,transparent 52%,rgba(0,0,0,.8) 100%);opacity:0;transition:opacity 1s;z-index:30;pointer-events:none}
+  #dim.on{opacity:1}
+
+  .corner{position:absolute;font-family:'JetBrains Mono';font-size:15px;color:#8a7a58;letter-spacing:2px;z-index:45}
+  #chap{left:52px;bottom:34px}
+  #src{right:52px;bottom:34px}
+
+  #hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'JetBrains Mono';pointer-events:none}
+  #track{height:5px;background:rgba(60,45,25,.18)}
+  #bar{height:100%;width:0;background:#D0453E}
+  #hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;color:#c9bfa4;background:rgba(30,26,18,.9);backdrop-filter:blur(4px)}
+  #hud button{pointer-events:auto;background:transparent;border:1px solid #c9bfa4;color:#e8dfc8;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+  #hud button:hover{background:rgba(200,180,130,.18)}
+  #replay.done{animation:pulse 1.2s infinite;border-color:#e8b04a;color:#e8b04a}
+  @keyframes pulse{50%{box-shadow:0 0 14px rgba(232,176,74,.8)}}
+
+  /* 镜头层 */
+  #cam{position:absolute;inset:0;transform-origin:0 0;transform:translate(-160px,-80px) scale(1.2);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- ================= 镜头世界 ================= -->
+  <div id="cam">
+  <div id="scene">
+    <div id="grain"></div>
+
+    <div id="mast">
+      <div class="eyebrow"><div class="ln"></div><span>THE THESIS DAILY · 开学季特刊</span><div class="ln"></div></div>
+      <div class="row">
+        <div class="paper">论文侦探报<small>THESIS DETECTIVE WEEKLY</small></div>
+        <div class="meta">开学季 · <b>毕设特别报道</b><br>第 38 期 · 本刊记者 安安 整理</div>
+      </div>
+      <div class="thick"></div><div class="thin"></div>
+    </div>
+
+    <div id="kicker">提示词注入<small>PROMPT INJECTION</small></div>
+
+    <div id="bigNum">
+      <div id="num38">0</div>
+      <div class="unit">页<em>PAGES · FULL TEXT</em></div>
+    </div>
+
+    <div id="headline">第一篇，就给我个<u>下马威</u></div>
+
+    <div id="sheet">
+      <div class="lbl">光是摘要，就占了一整屏</div>
+      <img class="pg" src="papers/p1_full.jpg" alt="How Vulnerable Are AI Agents to Indirect Prompt Injections 首页">
+      <div class="more">arXiv:2603.15714 · 38 pages …cont. p.2 / 38 →</div>
+    </div>
+
+    <div class="term" id="tm1" style="left:850px;top:470px;--r:-8deg;background:#ffd968">threat model</div>
+    <div class="term" id="tm2" style="left:1420px;top:400px;--r:6deg;background:#ffb4a2">ASR</div>
+    <div class="term" id="tm3" style="left:1080px;top:640px;--r:-5deg;background:#b8e6c8">benchmark saturation</div>
+    <div class="term" id="tm4" style="left:900px;top:730px;--r:8deg;background:#cfd8ff">concealment</div>
+
+    <div class="pain" id="pn1" style="left:120px;--r:-2deg"><span class="no">01</span><b>重点抓不住</b></div>
+    <div class="pain" id="pn2" style="left:725px;--r:1.5deg"><span class="no">02</span><b>逻辑看不懂</b></div>
+    <div class="pain" id="pn3" style="left:1330px;--r:-1.5deg"><span class="no">03</span><b>结论靠不靠谱没数</b></div>
+
+    <div id="seal">读不懂</div>
+  </div>
+  </div><!-- /cam -->
+
+  <div id="strip"><span class="tx">做毕设的、考研的、读研的 <i>★</i> 谁没被<em>文献</em>按在地上摩擦过</span></div>
+
+  <div id="anan">
+    <div class="say">每个词都得<b>查一遍</b>…</div>
+    <img src="anan - emotion rename/11_懵然半睁_茫然迟疑.png" alt="安安·懵然">
+  </div>
+
+  <div id="dim"></div>
+  <div id="lbT"></div><div id="lbB"></div>
+
+  <div class="corner" id="chap">Part1 / 冷开场</div>
+  <div class="corner" id="src">论文1 · arXiv:2603.15714 · 38 页</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-2 · 下马威：38 页术语轰炸 · 15s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+const DUR=15000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3);
+function count(el,from,to,dur,delay){tws.push({t:performance.now()-t0+delay,d:dur,e:eo,f:p=>{el.textContent=Math.round(from+(to-from)*p)}})}
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1)tws.splice(i,1)}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function shake(){const sc=$('#scene');sc.classList.remove('shake');void sc.offsetWidth;sc.classList.add('shake')}
+
+/* ===== 叙事 cue ===== */
+on(300,()=>{camTo(0,0,1,2.2)});                            // 开场拉镜：报头特写 → 整版
+on(400,()=>$('#mast').classList.add('in'));
+on(2000,()=>{$('#kicker').classList.add('in')});
+on(5500,()=>{camFocus(360,540,1.28,1.0);$('#bigNum').classList.add('in');count($('#num38'),0,38,1500,80)}); // 38 滚动→落地7s"38页"
+on(7000,()=>$('#headline').classList.add('in'));            // "38页"原文时间点
+on(7060,()=>{$('#num38').textContent='38'});            // 兜底终值
+on(8000,()=>camTo(0,0,1,0.9));                            // "摘要就占了一整个屏幕"
+on(8100,()=>$('#sheet').classList.add('in'));
+on(8900,()=>shake());                                     // 落地一震（保持广角，不再快速推拉）
+on(10000,()=>$('#tm1').classList.add('pop'));              // "搞不懂的术语"
+on(10300,()=>$('#tm2').classList.add('pop'));
+on(10600,()=>$('#tm3').classList.add('pop'));
+on(10900,()=>$('#tm4').classList.add('pop'));
+on(11000,()=>{camFocus(960,860,1.12,0.9)});
+on(11200,()=>$('#pn1').classList.add('slam'));            // 三连痛点卡←"重点抓不住"~11.3s
+on(12000,()=>$('#pn2').classList.add('slam'));            // ←"逻辑看不懂"~12.2s
+on(13000,()=>$('#pn3').classList.add('slam'));            // ←"结论靠不靠谱心里更没数"~13.5s
+on(13600,()=>$('#seal').classList.add('stamp'));          // 盖章
+on(14000,()=>{camTo(0,0,1,0.8);$('#strip').classList.add('in');$('#anan').classList.add('show')}); // 共鸣横条 + 安安（0.8s内完成，不挤压收尾推镜）
+on(14800,()=>camFocus(960,540,1.05,1.4));                 // 收尾轻推定格
+
+/* ===== 音效 ===== */
+on(300,()=>__sfx.swipe(0.7));
+on(2000,()=>__sfx.pop(0.8));
+for(let i=0;i<15;i++)on(5500+i*95,()=>__sfx.type(0.45));  // 38 连击键音
+on(7000,()=>__sfx.ding(0.8));
+on(8100,()=>__sfx.whoosh(0.8,0.9));
+on(8900,()=>__sfx.thud(1.2));
+on(10000,()=>__sfx.pop(0.75));
+on(10300,()=>__sfx.pop(0.75));
+on(10600,()=>__sfx.pop(0.75));
+on(10900,()=>__sfx.pop(0.75));
+on(11200,()=>__sfx.thud(1));
+on(12000,()=>__sfx.thud(1));
+on(13000,()=>__sfx.thud(1.1));
+on(13600,()=>__sfx.thud(1.3));
+on(14000,()=>__sfx.pop(0.8));
+on(14800,()=>__sfx.ding(0.6));
+</script>
+</body>
+</html>

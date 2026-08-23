@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<script>
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+
+<script>
+/* ===== SFX 引擎（WebAudio 合成，无音频文件，随启动按钮手势激活） ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){ /* 波：弹出 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){ /* 呼：镜头/大幅移动 */
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){ /* 唰：快速滑入/切换 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){ /* 键盘：短促轻击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){ /* 叮：柔和落定 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){ /* 咚：低频落章/撞击 */
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 0-1 · 导师的论文砸下来</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Noto+Sans+SC:wght@400;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;background:#10152b;overflow:hidden;font-family:'Noto Sans SC',sans-serif}
+  body.paused *{animation-play-state:paused!important}
+  /* 深夜宿舍：深蓝夜色 + 暖黄台灯 */
+  #stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;
+    background:linear-gradient(180deg,#1c2541 0%,#232c50 58%,#2a2f52 100%)}
+
+  /* 星空 */
+  #sky{position:absolute;inset:0;animation:twk 4.5s ease-in-out infinite alternate;
+    background:
+      radial-gradient(2.5px 2.5px at 180px 90px,#fff,transparent),
+      radial-gradient(2px 2px at 420px 200px,#ffe9a8,transparent),
+      radial-gradient(2px 2px at 640px 80px,#fff,transparent),
+      radial-gradient(3px 3px at 880px 160px,#fff,transparent),
+      radial-gradient(2px 2px at 1080px 70px,#ffe9a8,transparent),
+      radial-gradient(2.5px 2.5px at 1330px 150px,#fff,transparent),
+      radial-gradient(2px 2px at 1560px 60px,#fff,transparent),
+      radial-gradient(2px 2px at 1740px 210px,#ffe9a8,transparent),
+      radial-gradient(2px 2px at 300px 320px,#fff,transparent),
+      radial-gradient(2.5px 2.5px at 760px 300px,#fff,transparent),
+      radial-gradient(2px 2px at 1480px 320px,#fff,transparent),
+      radial-gradient(2px 2px at 60px 220px,#fff,transparent)}
+  @keyframes twk{from{opacity:.55}to{opacity:1}}
+
+  /* 书桌 */
+  #desk{position:absolute;left:0;right:0;top:760px;bottom:0;background:#7a4c2a;border-top:10px solid #96613a}
+  #desk::after{content:'';position:absolute;left:0;right:0;top:34px;height:6px;background:rgba(0,0,0,.14)}
+  /* 台灯光晕 */
+  #glow{position:absolute;left:1080px;top:330px;width:840px;height:640px;pointer-events:none;
+    background:radial-gradient(closest-side,rgba(242,193,78,.34),rgba(242,193,78,.10) 55%,transparent 75%);
+    animation:glowP 3.4s ease-in-out infinite alternate}
+  @keyframes glowP{from{opacity:.75}to{opacity:1}}
+
+  /* 台灯（扁平色块） */
+  #lamp{position:absolute;left:1652px;top:352px;width:230px;height:340px}
+  #lamp .base{position:absolute;left:66px;bottom:0;width:104px;height:26px;border-radius:14px;background:#3E63DD}
+  #lamp .pole{position:absolute;left:108px;bottom:22px;width:16px;height:150px;border-radius:8px;background:#2c4bb0;transform:rotate(-8deg);transform-origin:bottom}
+  #lamp .arm{position:absolute;left:34px;top:96px;width:16px;height:130px;border-radius:8px;background:#2c4bb0;transform:rotate(38deg);transform-origin:top}
+  #lamp .shade{position:absolute;left:-6px;top:52px;width:120px;height:74px;border-radius:60px 60px 18px 18px;background:#3E63DD;transform:rotate(-24deg)}
+  #lamp .bulb{position:absolute;left:38px;top:106px;width:34px;height:34px;border-radius:50%;background:#F2C14E;box-shadow:0 0 34px 12px rgba(242,193,78,.75);animation:bulbP 3.4s ease-in-out infinite alternate}
+  @keyframes bulbP{from{box-shadow:0 0 26px 9px rgba(242,193,78,.6)}to{box-shadow:0 0 40px 15px rgba(242,193,78,.85)}}
+  #lamp .cone{position:absolute;left:-180px;top:120px;width:420px;height:280px;background:linear-gradient(200deg,rgba(242,193,78,.20),rgba(242,193,78,0) 70%);clip-path:polygon(62% 0,84% 4%,100% 100%,0 100%)}
+
+  /* 代码编辑器窗口 */
+  #editor{position:absolute;left:120px;top:150px;width:760px;height:540px;background:#141a2e;border-radius:18px;
+    box-shadow:0 24px 60px rgba(0,0,0,.5);opacity:0;transform:translateY(36px);transition:all .8s cubic-bezier(.16,1,.3,1)}
+  #editor.in{opacity:1;transform:translateY(0)}
+  #editor .bar{height:52px;display:flex;align-items:center;gap:10px;padding:0 20px;border-bottom:2px solid #232c4a;border-radius:18px 18px 0 0;background:#10162a}
+  #editor .dot{width:16px;height:16px;border-radius:50%}
+  #editor .fname{margin-left:12px;font-family:'Space Mono';font-size:16px;color:#8a93b8;letter-spacing:1px}
+  #editor .lines{padding:26px 30px;font-family:'Space Mono';font-size:21px;line-height:2.05;color:#c8cfe8;white-space:pre}
+  #editor .k{color:#7d95ff}#editor .s{color:#F2C14E}#editor .f{color:#6fd3a7}#editor .c{color:#5a6284;font-style:italic}#editor .n{color:#e58fb1}
+  #editor .cur{display:inline-block;width:12px;height:24px;background:#F2C14E;vertical-align:-4px;animation:blink 1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+
+  /* 文件夹（露出 3 个 PDF 角标） */
+  #folder{position:absolute;left:1170px;top:420px;width:460px;height:330px;opacity:0;transform:translateY(36px);transition:all .8s .15s cubic-bezier(.16,1,.3,1)}
+  #folder.in{opacity:1;transform:translateY(0)}
+  #folder .paper{position:absolute;width:150px;height:196px;background:#fdfbf4;border-radius:10px;border:3px solid #e5ddc8;box-shadow:0 8px 18px rgba(0,0,0,.28)}
+  #folder .paper .tag{position:absolute;left:12px;top:12px;background:#D0453E;color:#fff;font-family:'Space Mono';font-weight:700;font-size:14px;padding:3px 9px;border-radius:6px;letter-spacing:1px}
+  #folder .paper .nm{position:absolute;left:12px;top:48px;font-family:'Space Mono';font-size:16px;color:#4a4438}
+  #folder .paper i{position:absolute;left:12px;right:12px;height:7px;border-radius:4px;background:#e5ddc8}
+  #folder .paper img.ph,.pdfFly img.ph{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:7px;object-position:top center}
+  #folder .paper .tag,.pdfFly .tag{z-index:2}
+  #folder .p1{left:24px;top:-34px;transform:rotate(-9deg)}
+  #folder .p2{left:150px;top:-46px;transform:rotate(1deg)}
+  #folder .p3{left:280px;top:-32px;transform:rotate(9deg)}
+  #folder .body{position:absolute;left:0;right:0;top:64px;height:266px;background:#F2C14E;border-radius:18px;box-shadow:0 20px 44px rgba(0,0,0,.4)}
+  #folder .tab{position:absolute;left:0;top:30px;width:170px;height:44px;background:#F2C14E;border-radius:14px 14px 0 0}
+  #folder .lbl{position:absolute;left:26px;bottom:22px;font-family:'Space Mono';font-size:19px;font-weight:700;color:#7a4c10;letter-spacing:1px}
+
+  /* 导师消息气泡 */
+  #mentor{position:absolute;left:50%;top:64px;transform:translateX(-50%) scale(.5);display:flex;align-items:flex-start;gap:16px;opacity:0;transition:all .45s cubic-bezier(.34,1.6,.64,1);z-index:20}
+  #mentor.in{opacity:1;transform:translateX(-50%) scale(1)}
+  #mentor .ava{width:76px;height:76px;border-radius:50%;background:#211F1C;flex:none;box-shadow:0 8px 22px rgba(242,193,78,.5);border:4px solid #F2C14E;overflow:hidden}
+  #mentor .ava img{width:100%;height:100%;object-fit:cover;display:block}
+  #mentor .bub{position:relative;background:#F2C14E;border:3px solid #211F1C;border-radius:18px;padding:14px 24px 16px;box-shadow:0 14px 34px rgba(0,0,0,.35)}
+  #mentor .bub::before{content:'';position:absolute;left:-16px;top:26px;border:8px solid transparent;border-right:12px solid #211F1C}
+  #mentor .who{font-size:14px;font-weight:700;color:#211F1C;letter-spacing:2px;margin-bottom:4px;opacity:.72}
+  #mentor .txt{font-size:25px;font-weight:900;color:#211F1C;letter-spacing:1px;white-space:nowrap}
+
+  /* 砸落的 PDF（transition 驱动，快进截图也能定格到落点） */
+  .pdfFly{position:absolute;width:118px;height:150px;opacity:0;z-index:16;
+    transition:left .55s cubic-bezier(.55,.08,.75,.35),top .55s cubic-bezier(.55,.08,.75,.35),opacity .18s}
+  .pdfFly .pg{position:absolute;inset:0;background:#fdfbf4;border-radius:12px;border:3px solid #e5ddc8;box-shadow:0 14px 30px rgba(0,0,0,.45);transform:rotate(var(--r,0deg))}
+  .pdfFly .tag{position:absolute;left:10px;top:10px;background:#D0453E;color:#fff;font-family:'Space Mono';font-weight:700;font-size:15px;padding:3px 9px;border-radius:6px}
+  .pdfFly .nm{position:absolute;left:10px;top:44px;font-family:'Space Mono';font-size:15px;color:#4a4438}
+  .pdfFly i{position:absolute;left:10px;right:10px;height:6px;border-radius:3px;background:#e5ddc8}
+  .pdfFly.show{opacity:1}
+  .pdfFly .sq{position:absolute;inset:0}
+  .pdfFly.land .sq{animation:squash .34s cubic-bezier(.2,1.4,.4,1)}
+  @keyframes squash{35%{transform:scaleY(.82) scaleX(1.12)}70%{transform:scaleY(1.06) scaleX(.97)}}
+
+  /* 整屏微震 */
+  #scene.shake{animation:shake .32s linear}
+  @keyframes shake{20%{transform:translate(5px,-4px)}40%{transform:translate(-5px,3px)}60%{transform:translate(4px,2px)}80%{transform:translate(-3px,-2px)}}
+
+  /* 大字砸入 */
+  #bigTitle{position:absolute;left:50%;top:250px;transform:translateX(-50%) rotate(-2deg) scale(1.7);opacity:0;z-index:22;text-align:center}
+  #bigTitle.slam{animation:btIn .5s cubic-bezier(.2,1.35,.35,1) forwards}
+  @keyframes btIn{0%{opacity:0;transform:translateX(-50%) rotate(-2deg) scale(1.7)}60%{opacity:1;transform:translateX(-50%) rotate(-2deg) scale(.96)}100%{opacity:1;transform:translateX(-50%) rotate(-2deg) scale(1)}}
+  #bigTitle .kick{display:inline-block;font-family:'Space Mono';font-size:17px;letter-spacing:5px;color:#F2C14E;background:#211F1C;border-radius:8px;padding:7px 18px;margin-bottom:16px}
+  #bigTitle .plate{background:#fdf6e3;border:4px solid #211F1C;border-radius:20px;box-shadow:12px 12px 0 #D0453E,0 30px 70px rgba(0,0,0,.5);padding:30px 56px 36px}
+  #bigTitle h1{font-family:'Baloo 2','Noto Sans SC';font-weight:800;font-size:74px;color:#211F1C;letter-spacing:4px;line-height:1.15}
+  #bigTitle h1 em{font-style:normal;color:#D0453E;border-bottom:8px solid #D0453E}
+
+  /* 安安 */
+  #anan{position:absolute;left:-16px;bottom:-10px;width:400px;z-index:24;opacity:0;transition:opacity .9s ease;filter:drop-shadow(0 16px 34px rgba(0,0,0,.55))}
+  #anan.show{opacity:1}
+  #anan img{width:100%;display:block;animation:bob 3.2s ease-in-out infinite alternate}
+  @keyframes bob{from{transform:translateY(0)}to{transform:translateY(-13px)}}
+  #anan .say{position:absolute;left:280px;top:34px;width:290px;background:#fdf6e3;border:3px solid #211F1C;border-radius:18px;padding:16px 20px;font-size:23px;font-weight:900;color:#211F1C;line-height:1.5;opacity:0;transform:scale(.6);transition:all .45s cubic-bezier(.34,1.6,.64,1);box-shadow:6px 7px 0 rgba(33,31,28,.85)}
+  #anan .say::after{content:'';position:absolute;left:-15px;bottom:38px;border:9px solid transparent;border-right:12px solid #211F1C}
+  #anan .say b{color:#D0453E}
+  #anan.show .say{opacity:1;transform:scale(1);transition-delay:.45s}
+
+  /* ── 底盘：黑边 / 角注 / HUD ── */
+  #lbT,#lbB{position:absolute;left:0;right:0;height:0;background:#02040a;z-index:40;transition:height .9s cubic-bezier(.7,0,.3,1)}
+  #lbT{top:0}#lbB{bottom:0}
+  /* letterbox 黑边效果已取消 */
+  #dim{position:absolute;inset:0;background:radial-gradient(closest-side at 50% 46%,transparent 52%,rgba(0,0,0,.8) 100%);opacity:0;transition:opacity 1s;z-index:30;pointer-events:none}
+  #dim.on{opacity:1}
+
+  .corner{position:absolute;font-family:'Space Mono';font-size:15px;color:rgba(190,198,228,.6);letter-spacing:2px;z-index:45}
+  #chap{left:52px;bottom:34px}
+  #src{right:52px;bottom:34px}
+
+  #hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'Space Mono';pointer-events:none}
+  #track{height:5px;background:rgba(255,255,255,.12)}
+  #bar{height:100%;width:0;background:#3E63DD;box-shadow:0 0 10px rgba(62,99,221,.7)}
+  #hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;color:#aeb6d8;background:rgba(10,12,26,.92);backdrop-filter:blur(4px)}
+  #hud button{pointer-events:auto;background:transparent;border:1px solid #8a93b8;color:#c8cfe8;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+  #hud button:hover{background:rgba(255,255,255,.12)}
+  #replay.done{animation:pulse 1.2s infinite;border-color:#F2C14E;color:#F2C14E}
+  @keyframes pulse{50%{box-shadow:0 0 14px rgba(242,193,78,.8)}}
+
+  /* 镜头层 */
+  #cam{position:absolute;inset:0;transform-origin:0 0;transform:translate(-190px,-110px) scale(1.24);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- ================= 镜头世界 ================= -->
+  <div id="cam">
+  <div id="scene">
+    <div id="sky"></div>
+    <div id="glow"></div>
+    <div id="desk"></div>
+
+    <div id="lamp">
+      <div class="cone"></div><div class="base"></div><div class="pole"></div><div class="arm"></div><div class="shade"></div><div class="bulb"></div>
+    </div>
+
+    <div id="editor">
+      <div class="bar">
+        <span class="dot" style="background:#D0453E"></span><span class="dot" style="background:#F2C14E"></span><span class="dot" style="background:#0E9F6E"></span>
+        <span class="fname">thesis_plan.py — 毕设记事本</span>
+      </div>
+      <div class="lines"><span class="c"># 临近开学 · 毕业设计启动</span>
+<span class="k">topic</span> = <span class="s">"AI 安全"</span>
+<span class="k">papers</span> = <span class="f">load</span>(<span class="s">"./导师投喂/*.pdf"</span>)
+<span class="k">for</span> p <span class="k">in</span> papers:
+    <span class="f">read</span>(p)  <span class="c"># 先把方向摸清楚</span>
+<span class="cur"></span></div>
+    </div>
+
+    <div id="folder">
+      <div class="paper p1"><img class="ph" src="papers/thumb_p1.jpg" alt="红队竞赛论文首页"><span class="tag">PDF</span></div>
+      <div class="paper p2"><img class="ph" src="papers/thumb_p2.jpg" alt="PIArena论文首页"><span class="tag">PDF</span></div>
+      <div class="paper p3"><img class="ph" src="papers/thumb_p3.jpg" alt="SoK综述论文首页"><span class="tag">PDF</span></div>
+      <div class="tab"></div><div class="body"></div>
+      <div class="lbl">from_导师.zip</div>
+    </div>
+
+    <div id="mentor">
+      <div class="ava"><img src="doctor_ava.jpg" alt="导师头像"></div>
+      <div class="bub"><div class="who">导师 · 刚刚</div><div class="txt">下学期开题，先把方向摸清楚</div></div>
+    </div>
+
+    <div class="pdfFly" id="pdfA" style="left:920px;top:190px;--r:-10deg;z-index:16"><div class="sq"><div class="pg"><img class="ph" src="papers/thumb_p1.jpg" alt="红队竞赛论文首页"><span class="tag">PDF</span></div></div></div>
+    <div class="pdfFly" id="pdfB" style="left:920px;top:190px;--r:7deg;z-index:17"><div class="sq"><div class="pg"><img class="ph" src="papers/thumb_p2.jpg" alt="PIArena论文首页"><span class="tag">PDF</span></div></div></div>
+    <div class="pdfFly" id="pdfC" style="left:920px;top:190px;--r:-4deg;z-index:18"><div class="sq"><div class="pg"><img class="ph" src="papers/thumb_p3.jpg" alt="SoK综述论文首页"><span class="tag">PDF</span></div></div></div>
+
+    <div id="bigTitle">
+      <div class="kick">THESIS · CHAPTER 1</div>
+      <div class="plate"><h1>毕设第一关：<em>文献综述</em></h1></div>
+    </div>
+
+    <div id="anan">
+      <div class="say">一摞英文论文…<b>我看不懂</b>，但我大受震撼</div>
+      <img src="anan - emotion rename/08_倦眼半阖_慵懒无力.png" alt="安安·倦眼">
+    </div>
+  </div>
+  </div><!-- /cam -->
+
+  <div id="dim"></div>
+  <div id="lbT"></div><div id="lbB"></div>
+
+  <div class="corner" id="chap">Part1 / 冷开场</div>
+  <div class="corner" id="src">豆包商单 · 论文侦探</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-1 · 导师的论文砸下来 · 11s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+const DUR=11000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function fly(el,x1,y1,x2,y2,dur,arc,ease,done){tws.push({t:performance.now()-t0,d:dur,e:ease||eio,done,f:p=>{el.style.left=(x1+(x2-x1)*p)+'px';el.style.top=(y1+(y2-y1)*p-Math.sin(p*Math.PI)*(arc||0))+'px'}})}
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+
+function shake(){const sc=$('#scene');sc.classList.remove('shake');void sc.offsetWidth;sc.classList.add('shake')}
+
+/* ===== 叙事 cue（对齐口播节拍） ===== */
+on(300,()=>{camTo(0,0,1,2.2)});                          // 开场拉镜：编辑器特写 → 全景书桌
+on(400,()=>$('#editor').classList.add('in'));
+on(600,()=>$('#folder').classList.add('in'));
+on(5000,()=>$('#mentor').classList.add('in'));           // 导师消息气泡
+on(6000,()=>{const p=$('#pdfA');p.classList.add('show');p.style.left='880px';p.style.top='800px'});
+on(6500,()=>{const p=$('#pdfB');p.classList.add('show');p.style.left='1005px';p.style.top='812px'});
+on(7000,()=>{const p=$('#pdfC');p.classList.add('show');p.style.left='945px';p.style.top='724px'});
+on(6300,()=>{$('#pdfA').classList.add('land');shake()});
+on(6800,()=>{$('#pdfB').classList.add('land');shake()});
+on(7300,()=>{$('#pdfC').classList.add('land');shake()});
+on(8500,()=>$('#mentor').classList.remove('in'));        // 让位给大字
+on(8800,()=>{camTo(0,0,1,0.8);$('#bigTitle').classList.add('slam')}); // 大字砸入
+on(9500,()=>{camFocus(300,830,1.16,1.0);$('#anan').classList.add('show')});  // 安安登场吐槽
+on(10800,()=>{camTo(0,0,1,1.3)}); // 收尾全景
+
+/* ===== 音效 ===== */
+on(300,()=>__sfx.swipe(0.7));
+on(2000,()=>__sfx.pop(0.7));
+on(5000,()=>__sfx.thud(0.9));
+on(6300,()=>__sfx.thud(1));
+on(6800,()=>__sfx.thud(1));
+on(7300,()=>__sfx.thud(1.1));
+on(8800,()=>{__sfx.thud(1.3);__sfx.swipe(0.8)});
+on(9500,()=>__sfx.pop(0.7));
+on(10800,()=>__sfx.ding(0.8));
+</script>
+</body>
+</html>

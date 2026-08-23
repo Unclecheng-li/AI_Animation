@@ -64,8 +64,7 @@ One sentence is all it takes:
 <br/><sub>Handwritten notebook style</sub>
 </td>
 <td colspan="2" valign="top" align="center">
-<!-- TODO: add preview image -->
-<a href="#card-theater"><img width="2560" height="1440" alt="card-theater" src="https://via.placeholder.com/2560x1440/0a0a0a/30D158?text=card-theater" /></a>
+<a href="#card-theater"><img width="2560" height="1440" alt="card-theater" src="https://github.com/user-attachments/assets/51ace25a-fde6-45db-97f5-3c30582fb85f" /></a>
 <br/><a href="#card-theater"><strong>card-theater</strong></a>
 <br/><sub>Card theater / 3D card carousel</sub>
 </td>
@@ -124,7 +123,7 @@ Links: [README](./skills/ppt-animation/README.md) · [SKILL.md](./skills/ppt-ani
 #### `flowchart`
 
 <a href="./skills/flowchart">
-<img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/130f278e-3978-433d-b9f2-5fb79dcab3c3" />
+<img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/0cefab32-b583-4342-b25d-39b5b8c4bf83" />
 </a>
 
 **Category:** Flowcharts / concept maps / principle demos
@@ -144,7 +143,7 @@ Highlights:
 <td align="center" width="25%"><a href="./skills/flowchart/README.md#支持的图表类型"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/4c6fcc04-7b36-4a65-87a1-b6eb01949179" /></a><br /><sub><code>RNN</code><br />RNN flow</sub></td>
 <td align="center" width="25%"><a href="./skills/flowchart/README.md#支持的图表类型"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/267231a2-2b93-4e55-bfb2-577c2a73927f" /></a><br /><sub><code>LSTM</code><br />LSTM flow</sub></td>
 <td align="center" width="25%"><a href="./skills/flowchart/README.md#支持的图表类型"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/90645354-939c-444c-becd-2dd2a12b4f6d" /></a><br /><sub><code>GPU</code><br />Architecture</sub></td>
-<td align="center" width="25%"><a href="./skills/flowchart/README.md#支持的图表类型"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/80bcb567-21a0-4e49-a51e-6723ace3eb1a" /></a><br /><sub><code>Flowchart</code><br />Attack chain / workflow</sub></td>
+<td align="center" width="25%"><a href="./skills/flowchart/README.md#支持的图表类型"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/80bcb567-21a0-4e49-a51e-6723ace3eb1e" /></a><br /><sub><code>Flowchart</code><br />Attack chain / workflow</sub></td>
 </tr>
 </table>
 
@@ -266,7 +265,7 @@ Links: [README](./skills/scholar-notes/README.md) · [SKILL.md](./skills/scholar
 #### `card-theater`
 
 <a href="./skills/card-theater">
-<!-- TODO: add preview image --><img width="2560" height="1440" alt="card-theater preview" src="https://via.placeholder.com/2560x1440/0a0a0a/30D158?text=card-theater" />
+<img width="2560" height="1440" alt="card-theater preview" src="https://github.com/user-attachments/assets/834e8f89-abff-4a20-82cf-bdeb1f0c5756" />
 </a>
 
 **Category:** Sidebar narrative + 3D card carousel
@@ -284,11 +283,11 @@ Highlights:
 
 <table>
 <tr>
-<td align="center" width="20%"><!-- TODO: add preview image --><img width="2560" height="1440" alt="scroll-3d-tilt" src="https://via.placeholder.com/2560x1440/030508/00E096?text=scroll-3d-tilt" /></td>
-<td align="center" width="20%"><!-- TODO: add preview image --><img width="2560" height="1440" alt="apple-aurora-track" src="https://via.placeholder.com/2560x1440/000000/0A84FF?text=apple-aurora" /></td>
-<td align="center" width="20%"><!-- TODO: add preview image --><img width="2560" height="1440" alt="coverflow-classic" src="https://via.placeholder.com/2560x1440/000000/30D158?text=coverflow-classic" /></td>
-<td align="center" width="20%"><!-- TODO: add preview image --><img width="2560" height="1440" alt="coverflow-watermark" src="https://via.placeholder.com/2560x1440/000000/BF5AF2?text=coverflow-watermark" /></td>
-<td align="center" width="20%"><!-- TODO: add preview image --><img width="2560" height="1440" alt="coverflow-focus" src="https://via.placeholder.com/2560x1440/000000/FFD60A?text=coverflow-focus" /></td>
+<td align="center" width="20%"><img width="2526" height="1440" alt="scroll-3d-tilt" src="https://github.com/user-attachments/assets/4191ddf3-7b9d-4f35-9ed3-ad4162da5c12" /></td>
+<td align="center" width="20%"><img width="2560" height="1440" alt="apple-aurora-track" src="https://github.com/user-attachments/assets/09b2d9bc-c3a1-4914-9fb5-e9315cd4986a" /></td>
+<td align="center" width="20%"><img width="2560" height="1440" alt="coverflow-classic" src="https://github.com/user-attachments/assets/d7ac9061-43b1-4f81-8ba7-bf4892015abe" /></td>
+<td align="center" width="20%"><img width="2560" height="1440" alt="coverflow-watermark" src="https://github.com/user-attachments/assets/da0c020b-889a-4453-ba86-9b722442bbfc" /></td>
+<td align="center" width="20%"><img width="2560" height="1440" alt="coverflow-focus" src="https://github.com/user-attachments/assets/ac9722fd-74e2-4cc9-b379-3223afd4063b" /></td>
 </tr>
 <tr>
 <td align="center"><sub><code>scroll-3d-tilt</code><br />Scroll 3D tilt</sub></td>
@@ -316,13 +315,13 @@ Links: [README](./skills/card-theater/README.md) · [SKILL.md](./skills/card-the
 **Category:** Cinematic per-shot demo animations
 **For:** video companion demos, screen-recording as finished films, tech write-up reenactments, product launch visuals — anywhere needing "one HTML per shot, rotating styles, camera moves, synced SFX".
 
-`video-shot-demos` turns a video's storyboard into web animations you can fullscreen-record as finished footage: one shot = one standalone HTML. The whole series shares a cinematic player chassis (black-screen start + virtual clock + hover-to-reveal HUD + pause/replay), while every shot is created in a completely different visual style. Ships with 29 production-grade sample pages (vintage newspaper / convenience-store POS / pixel platformer / kung-fu manual / airport security…), 15 character emotion sprites, a WebAudio synthesized SFX engine, a camera scheduling system (push/pull/pan/follow + letterbox slow-mo), and a headless screenshot QA tool.
+`video-shot-demos` turns a video's storyboard into web animations you can fullscreen-record as finished footage: one shot = one standalone HTML. The whole series shares a cinematic player chassis (black-screen start + virtual clock + hover-to-reveal HUD + pause/replay), while every shot is created in a completely different visual style. Ships with two complete production example sets (`glm-5.3-range-test`, a 29-shot security-lab reenactment, and `doubao-paper-detective`, an 11-shot paper-reading sponsored video — 40 styles, zero repeats), 15 character emotion sprites, a WebAudio synthesized SFX engine, a camera scheduling system (push/pull/pan/follow + letterbox slow-mo), and a headless screenshot QA tool.
 
 Highlights:
 - Cinematic player: black-screen "start playback" intro; the hijacked virtual clock keeps CSS animations and JS cues in perfect sync — clean, glitch-free screen recordings
 - Camera language: opening pull-back / key-moment push-in / follow shots / Ken Burns slow push / impact slams; slow-mo segments auto-dress with letterbox bars + vignette + millisecond counter
 - WebAudio SFX: zero audio files, 6 primitives (pop/whoosh/swipe/type/ding/thud); camera moves automatically get a whoosh
-- 29-style library: every style ships with font pairings, suitable content types, and a production-grade reference page — no two consecutive shots share a style
+- 40-style library (two example collections, 29 + 11): every style ships with font pairings, suitable content types, and a production-grade reference page — no two consecutive shots share a style
 - Character close-ups: 15 emotion sprites picked per narrative beat, 400px closeups + speech bubbles easing in
 - Caption bars aligned sentence-by-sentence with the voiceover script, keywords highlighted; source footnotes for data, cross-page score continuity
 - Headless screenshot QA: fast-forward the virtual clock to any millisecond and capture frames to hunt for overlaps, occlusions, and animation glitches
@@ -344,7 +343,7 @@ Highlights:
 </tr>
 </table>
 
-<sub>↑ 5 of 29 styles — <a href="./skills/video-shot-demos/README.md"><b>open the full style library</b></a> (29 runnable production samples).</sub>
+<sub>↑ 5 of 40 styles (first collection) — <a href="./skills/video-shot-demos/README.md"><b>open the full style library</b></a> (two example sets, 40 runnable production pages).</sub>
 
 Links: [README](./skills/video-shot-demos/README.md) · [SKILL.md](./skills/video-shot-demos/SKILL.md)
 
@@ -477,7 +476,7 @@ ai-animation-skills/
 │       ├── README.md
 │       ├── references/          ← Player/camera/SFX/style-library/character specs
 │       ├── assets/              ← Starter skeleton template.html
-│       │   └── examples/        ← 29 production samples + character sprites + icons
+│       │   └── examples/        ← Two production sets (glm 29 shots + doubao 11 shots, each with character sprites & icons)
 │       └── scripts/             ← Headless screenshot QA tool
 ├── web_animation/               ← Original example HTML (historical archive)
 ├── UI/                          ← UI design reference images
