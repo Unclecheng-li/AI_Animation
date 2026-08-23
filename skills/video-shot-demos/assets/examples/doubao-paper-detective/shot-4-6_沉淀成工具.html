@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 4-6 · 沉淀成工具，越攒越省力</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=ZCOOL+QingKe+HuangYou&family=Noto+Sans+SC:wght@400;700;900&family=Long+Cang&family=Bebas+Neue&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#241a12;overflow:hidden;font-family:'Noto Sans SC',sans-serif}
+body.paused *{animation-play-state:paused!important}
+/* 舞台：工坊软木公告板 */
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;
+  background:
+    radial-gradient(ellipse 1500px 1000px at 50% 38%,#4a3626,#382818 58%,#241a12 100%);
+  box-shadow:inset 0 0 200px rgba(0,0,0,.5)}
+#stage::before{content:'';position:absolute;inset:0;opacity:.05;pointer-events:none;
+  background:repeating-linear-gradient(0deg,#e8c86a 0 1px,transparent 1px 28px),
+             repeating-linear-gradient(90deg,#e8c86a 0 1px,transparent 1px 28px)}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1.05);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ── 顶部标题 ── */
+#title{position:absolute;left:0;right:0;top:54px;z-index:20;text-align:center;opacity:0;transform:translateY(-20px);transition:all .7s cubic-bezier(.16,1,.3,1)}
+#title.in{opacity:1;transform:translateY(0)}
+#title .t1{font-family:'ZCOOL QingKe HuangYou';font-size:50px;color:#f5ecd7;letter-spacing:8px}
+#title .t1 em{font-style:normal;color:#f4c542}
+#title .rule{margin:12px auto 0;width:300px;height:2px;background:linear-gradient(90deg,transparent,#f4c542,transparent)}
+
+/* ── 三联印章（拆解·对比·验证） ── */
+.stamp{position:absolute;top:270px;width:196px;height:196px;z-index:16;opacity:0;transform:translateY(-160px) scale(2.2) rotate(-18deg);
+  transition:all .5s cubic-bezier(.34,1.3,.64,1)}
+.stamp.in{opacity:1;transform:translateY(0) scale(1) rotate(var(--sr,0deg))}
+.stamp .bx{width:100%;height:100%;border-radius:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  border:6px solid;box-shadow:0 20px 46px rgba(0,0,0,.45),inset 0 0 0 3px rgba(255,255,255,.14)}
+.stamp .zh{font-family:'ZCOOL QingKe HuangYou';font-size:64px;letter-spacing:6px;line-height:1}
+.stamp .en{margin-top:10px;font-family:'Bebas Neue';font-size:15px;letter-spacing:5px;opacity:.8}
+.stamp.s1{left:466px;--sr:-6deg}
+.stamp.s1 .bx{border-color:#3E63DD;color:#5c83f2;background:rgba(62,99,221,.12)}
+.stamp.s2{left:862px;--sr:4deg}
+.stamp.s2 .bx{border-color:#211F1C;color:#f5ecd7;background:rgba(33,31,28,.55)}
+.stamp.s3{left:1258px;--sr:-3deg}
+.stamp.s3 .bx{border-color:#0E9F6E;color:#2fd69b;background:rgba(14,159,110,.12)}
+/* 加号 */
+.plus{position:absolute;top:352px;z-index:15;font-family:'ZCOOL QingKe HuangYou';font-size:72px;color:#f4c542;opacity:0;transform:scale(0);transition:all .4s cubic-bezier(.34,1.6,.64,1)}
+.plus.in{opacity:1;transform:scale(1)}
+.plus.p1{left:730px}.plus.p2{left:1126px}
+
+/* ── 齿轮组 ── */
+#gears{position:absolute;left:50%;top:290px;transform:translateX(-50%) scale(0);z-index:17;width:360px;height:260px;opacity:0;
+  transition:all .55s cubic-bezier(.34,1.4,.64,1)}
+#gears.in{transform:translateX(-50%) scale(1);opacity:1}
+#gears svg{position:absolute;overflow:visible}
+#g1{left:96px;top:60px;width:172px;animation:spinR 5s linear infinite}
+#g2{left:214px;top:14px;width:104px;animation:spinL 3.4s linear infinite}
+#g3{left:42px;top:8px;width:88px;animation:spinL 4.2s linear infinite}
+@keyframes spinR{to{transform:rotate(360deg)}}
+@keyframes spinL{to{transform:rotate(-360deg)}}
+#gears .tooth{fill:#c9a24a}
+#gears .body{fill:#8a6a3a}
+#gears .hub{fill:#f4c542}
+#gears .body2{fill:#6a5a3a}
+
+/* ── 工具徽章 ── */
+#badge{position:absolute;left:50%;top:296px;transform:translateX(-50%) scale(0) rotate(-30deg);z-index:18;width:250px;height:250px;opacity:0;
+  transition:all .6s cubic-bezier(.34,1.5,.64,1)}
+#badge.in{transform:translateX(-50%) scale(1) rotate(0deg);opacity:1}
+#badge .outer{position:absolute;inset:0;border-radius:50%;
+  background:radial-gradient(circle at 34% 30%,#ffe9a8,#f4c542 45%,#d9a441 78%,#a8792a);
+  box-shadow:0 24px 56px rgba(244,197,66,.4),0 0 0 6px #b8891a,0 0 0 12px rgba(244,197,66,.25)}
+#badge .inner{position:absolute;inset:22px;border-radius:50%;background:#2b2118;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  box-shadow:inset 0 4px 18px rgba(0,0,0,.6)}
+#badge .zh{font-family:'ZCOOL QingKe HuangYou';font-size:60px;color:#f4c542;letter-spacing:4px;line-height:1}
+#badge .en{margin-top:10px;font-family:'Bebas Neue';font-size:15px;letter-spacing:4px;color:rgba(244,197,66,.75)}
+#badge .gearMini{position:absolute;left:50%;top:32px;transform:translateX(-50%);width:34px;animation:spinR 6s linear infinite}
+/* 锻造火花 */
+.spark{position:absolute;width:6px;height:6px;border-radius:50%;background:#ffe9a8;pointer-events:none;z-index:19;
+  box-shadow:0 0 8px rgba(244,197,66,.9);animation:sparkFly .8s cubic-bezier(.16,.6,.4,1) forwards}
+@keyframes sparkFly{0%{transform:translate(0,0) scale(1);opacity:1}100%{transform:translate(var(--dx),var(--dy)) scale(0);opacity:0}}
+/* 应用商店标签 */
+#apptag{position:absolute;left:50%;top:578px;transform:translateX(-50%) scale(0);z-index:18;opacity:0;
+  transition:all .5s cubic-bezier(.34,1.6,.64,1)}
+#apptag.in{opacity:1;transform:translateX(-50%) scale(1)}
+#apptag span{display:inline-flex;align-items:center;gap:10px;background:#211F1C;border:2px solid #f4c542;border-radius:999px;
+  padding:10px 26px;font-family:'ZCOOL QingKe HuangYou';font-size:26px;color:#f4c542;letter-spacing:2px;
+  box-shadow:0 12px 30px rgba(0,0,0,.45)}
+#apptag img{width:26px;height:26px;border-radius:6px}
+/* 卡墙计数器 */
+#wcount{position:absolute;right:118px;top:212px;z-index:19;background:#211F1C;border:2.5px solid #f4c542;border-radius:12px;
+  padding:8px 18px;opacity:0;transform:scale(.6) rotate(4deg);transition:all .5s cubic-bezier(.34,1.6,.64,1)}
+#wcount.in{opacity:1;transform:scale(1) rotate(1.5deg)}
+#wcount .lab{font-family:'ZCOOL QingKe HuangYou';font-size:19px;color:#c9a24a;letter-spacing:2px}
+#wcount .num{font-family:'Bebas Neue';font-size:42px;color:#f4c542;line-height:1;margin-left:8px;vertical-align:-5px}
+/* 打磨对比便签 */
+#notesticky{position:absolute;right:-46px;top:60px;width:170px;height:140px;z-index:21;background:#fff3a6;border-radius:3px;
+  box-shadow:0 14px 28px rgba(0,0,0,.4);padding:34px 12px 0;text-align:center;
+  transform:scale(0) rotate(18deg);transition:all .5s cubic-bezier(.34,1.6,.64,1)}
+#notesticky.in{transform:scale(1) rotate(5deg)}
+#notesticky::before{content:'';position:absolute;left:50%;top:-11px;width:82px;height:24px;transform:translateX(-50%) rotate(-2deg);
+  background:rgba(210,190,120,.55);border-radius:2px}
+#notesticky .n1{font-family:'ZCOOL QingKe HuangYou';font-size:23px;color:#7a5a10;line-height:1.4}
+#notesticky .n2{font-family:'Bebas Neue';font-size:12px;color:#a5843a;letter-spacing:1px;margin-top:6px}
+
+/* ── 卡墙塞卡 ── */
+#miniwall{position:absolute;left:520px;top:290px;z-index:15;width:880px;height:390px;opacity:0;transform:translateY(30px);transition:all .6s cubic-bezier(.16,1,.3,1)}
+#miniwall.in{opacity:1;transform:translateY(0)}
+#miniwall .frame{position:absolute;inset:0;border-radius:18px;border:3px solid rgba(244,197,66,.4);background:rgba(33,25,17,.5);
+  box-shadow:inset 0 0 40px rgba(0,0,0,.35)}
+#miniwall .wlab{position:absolute;left:50%;top:-56px;transform:translateX(-50%);background:#382818;border:2px solid rgba(244,197,66,.6);border-radius:999px;
+  padding:6px 26px;font-family:'ZCOOL QingKe HuangYou';font-size:24px;color:#f4c542;letter-spacing:4px;white-space:nowrap;
+  box-shadow:0 6px 16px rgba(0,0,0,.35)}
+.wslot{position:absolute;width:118px;height:158px;border-radius:10px;border:2px dashed rgba(244,197,66,.35)}
+.wslot .wc{position:absolute;inset:0;border-radius:9px;background:#fdf6e3;border:2px solid #d8c690;box-shadow:0 8px 18px rgba(0,0,0,.3);
+  padding:8px;opacity:0;transform:translateY(-90px) rotate(10deg) scale(.5);transition:all .55s cubic-bezier(.34,1.5,.64,1)}
+.wslot.on .wc{opacity:1;transform:translateY(0) rotate(0deg) scale(1)}
+.wslot .strip{height:30px;border-radius:6px;margin-bottom:7px}
+.wslot .ln{height:6px;border-radius:3px;background:#e7dcc0;margin-bottom:5px}
+.wslot .ln.s{width:55%}
+#flydoc{position:absolute;left:180px;top:330px;width:118px;height:158px;z-index:19;border-radius:10px;
+  transform:rotate(-16deg) scale(.96);opacity:0;transition:all .8s cubic-bezier(.4,0,.2,1)}
+#flydoc .fc{position:absolute;inset:0;border-radius:9px;background:#fdf6e3;border:2px solid #d8c690;
+  box-shadow:0 16px 36px rgba(0,0,0,.4);padding:8px}
+#flydoc .strip{height:30px;border-radius:6px;margin-bottom:7px;background:#ffe9b8}
+#flydoc .ln{height:6px;border-radius:3px;background:#e7dcc0;margin-bottom:5px}
+#flydoc .ln.s{width:55%}
+#flydoc .new{position:absolute;right:-12px;top:-14px;background:#D0453E;color:#fff;font-family:'Bebas Neue';font-size:12px;
+  letter-spacing:1px;border-radius:999px;padding:3px 10px;transform:rotate(8deg);box-shadow:0 3px 8px rgba(208,69,62,.5)}
+#flydoc.fly{left:542px;opacity:1;transform:rotate(4deg) scale(.96)}
+#flydoc.dock{left:544px;top:312px;transform:rotate(0deg) scale(.96)}
+#secline{position:absolute;left:50%;top:712px;transform:translateX(-50%);z-index:16;opacity:0;transition:opacity .5s}
+#secline.in{opacity:1}
+#secline span{font-family:'ZCOOL QingKe HuangYou';font-size:30px;color:#f5ecd7;letter-spacing:4px;
+  border-bottom:2px dashed rgba(244,197,66,.5);padding-bottom:6px}
+#secline b{color:#f4c542}
+
+/* ── 金笔打磨 ── */
+#polish{position:absolute;left:50%;top:284px;transform:translateX(-50%) scale(.7);z-index:20;width:760px;opacity:0;transition:all .6s cubic-bezier(.16,1,.3,1)}
+#polish.in{opacity:1;transform:translateX(-50%) scale(1)}
+#polish .pcard{background:#fdf6e3;border-radius:16px;border:2.5px solid #d8c690;box-shadow:0 26px 60px rgba(0,0,0,.5);padding:26px 36px}
+#polish .ph{display:flex;align-items:center;justify-content:space-between;border-bottom:2.5px solid #211F1C;padding-bottom:12px}
+#polish .pt{font-family:'ZCOOL QingKe HuangYou';font-size:30px;color:#211F1C;letter-spacing:3px}
+#polish .pbadge{font-family:'Bebas Neue';font-size:13px;letter-spacing:2px;color:#fff;background:#8b5cf6;border-radius:6px;padding:4px 11px;transform:rotate(3deg)}
+.pline{margin-top:14px;font-family:'Noto Sans SC';font-weight:700;font-size:20px;color:#3a362e;display:flex;align-items:center;gap:12px;
+  opacity:0;transform:translateX(-16px);transition:all .4s ease}
+.pline.wrt{opacity:1;transform:translateX(0)}
+.pline .dot{width:10px;height:10px;border-radius:50%;background:#d9a441;flex:none}
+.pline.cross{color:#a08c60;text-decoration:line-through;text-decoration-color:rgba(208,69,62,.7)}
+#pzone{margin-top:16px;border:2.5px dashed #d9a441;border-radius:12px;height:96px;position:relative;background:rgba(244,197,66,.06)}
+#pzone .plab{position:absolute;left:14px;top:-14px;background:#fdf6e3;padding:0 10px;font-family:'ZCOOL QingKe HuangYou';font-size:18px;color:#a08c60;letter-spacing:2px}
+#goldw2{position:absolute;left:22px;top:22px;height:56px;width:0;overflow:hidden;white-space:nowrap}
+#goldw2.w{width:430px;transition:width 1.8s linear}
+#goldw2 span{font-family:'Long Cang';font-size:44px;letter-spacing:4px;
+  background:linear-gradient(180deg,#8a6408,#f4c542 55%,#8a6408);-webkit-background-clip:text;background-clip:text;color:transparent}
+#pen2{position:absolute;left:-20px;top:26px;width:110px;opacity:0;transform:rotate(24deg);pointer-events:none;transition:left 1.8s linear,opacity .3s}
+#pen2.write{opacity:1;left:336px}
+#pen2 svg{width:100%;filter:drop-shadow(0 5px 9px rgba(100,78,28,.4))}
+
+/* ── 安安 ── */
+#anan{position:absolute;left:30px;bottom:-14px;width:330px;z-index:26;opacity:0;transform:translateY(30px);transition:all .7s cubic-bezier(.16,1,.3,1);
+  filter:drop-shadow(0 12px 22px rgba(0,0,0,.6))}
+#anan.show{opacity:1;transform:translateY(0)}
+#anan img{width:100%;display:block;animation:bob 3.2s ease-in-out infinite alternate}
+@keyframes bob{from{transform:translateY(0)}to{transform:translateY(-10px)}}
+#anan .say{position:absolute;left:288px;top:36px;width:240px;background:#fdf6e3;border:2.5px solid #211F1C;border-radius:14px;
+  padding:12px 15px;font-family:'Noto Sans SC';font-weight:700;font-size:20px;color:#211F1C;line-height:1.55;
+  opacity:0;transform:scale(.6);transition:all .45s cubic-bezier(.34,1.6,.64,1) .35s;box-shadow:4px 5px 0 rgba(0,0,0,.3)}
+#anan .say::after{content:'';position:absolute;left:24px;bottom:-14px;border:8px solid transparent;border-top:12px solid #211F1C}
+#anan .say b{color:#D0453E}
+#anan.show .say{opacity:1;transform:scale(1)}
+
+/* ───────── 底盘区 ───────── */
+#lbT,#lbB{position:absolute;left:0;right:0;height:0;background:#111;z-index:40;transition:height .9s cubic-bezier(.7,0,.3,1)}
+#lbT{top:0}#lbB{bottom:0}
+/* letterbox 黑边效果已取消 */
+#dim{position:absolute;inset:0;background:radial-gradient(closest-side at 50% 46%,transparent 52%,rgba(0,0,0,.5) 100%);opacity:0;transition:opacity 1s;z-index:30;pointer-events:none}
+#dim.on{opacity:1}
+.corner{position:absolute;font-family:'Bebas Neue';font-weight:400;font-size:16px;color:rgba(244,197,66,.6);letter-spacing:2px;z-index:9}
+#chap{left:52px;bottom:30px}
+#src{right:52px;bottom:30px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'Bebas Neue',monospace;pointer-events:none}
+#track{height:5px;background:rgba(244,197,66,.15)}
+#bar{height:100%;width:0;background:#f4c542;box-shadow:0 0 10px rgba(244,197,66,.55)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;color:#a89a72;background:rgba(40,29,19,.92);backdrop-filter:blur(4px)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #8a6a3a;color:#a89a72;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(244,197,66,.14)}
+#replay.done{animation:pulse 1.2s infinite;border-color:#f4c542;color:#f4c542}
+@keyframes pulse{50%{box-shadow:0 0 14px rgba(244,197,66,.7)}}
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- ================= 镜头世界 ================= -->
+  <div id="cam">
+
+    <!-- 标题 -->
+    <div id="title">
+      <div class="t1">这一步<em>强在</em>：折腾全变成工具</div>
+      <div class="rule"></div>
+    </div>
+
+    <!-- 三联印章 -->
+    <div class="stamp s1" id="st1"><div class="bx"><span class="zh">拆解</span><span class="en">TEARDOWN</span></div></div>
+    <div class="plus p1" id="pl1">+</div>
+    <div class="stamp s2" id="st2"><div class="bx"><span class="zh">对比</span><span class="en">COMPARE</span></div></div>
+    <div class="plus p2" id="pl2">+</div>
+    <div class="stamp s3" id="st3"><div class="bx"><span class="zh">验证</span><span class="en">VERIFY</span></div></div>
+
+    <!-- 齿轮组 -->
+    <div id="gears">
+      <svg id="g1" viewBox="0 0 100 100"><g><circle class="body" cx="50" cy="50" r="34"/>
+        <g class="tooth"><rect x="44" y="2" width="12" height="16" rx="3"/><rect x="44" y="82" width="12" height="16" rx="3"/><rect x="2" y="44" width="16" height="12" rx="3"/><rect x="82" y="44" width="16" height="12" rx="3"/>
+        <rect x="14" y="14" width="12" height="14" rx="3" transform="rotate(-45 20 21)"/><rect x="74" y="14" width="12" height="14" rx="3" transform="rotate(45 80 21)"/><rect x="14" y="72" width="12" height="14" rx="3" transform="rotate(45 20 79)"/><rect x="74" y="72" width="12" height="14" rx="3" transform="rotate(-45 80 79)"/></g>
+        <circle class="hub" cx="50" cy="50" r="12"/></g></svg>
+      <svg id="g2" viewBox="0 0 100 100"><g><circle class="body2" cx="50" cy="50" r="34"/>
+        <g class="tooth"><rect x="44" y="2" width="12" height="16" rx="3"/><rect x="44" y="82" width="12" height="16" rx="3"/><rect x="2" y="44" width="16" height="12" rx="3"/><rect x="82" y="44" width="16" height="12" rx="3"/>
+        <rect x="14" y="14" width="12" height="14" rx="3" transform="rotate(-45 20 21)"/><rect x="74" y="14" width="12" height="14" rx="3" transform="rotate(45 80 21)"/><rect x="14" y="72" width="12" height="14" rx="3" transform="rotate(45 20 79)"/><rect x="74" y="72" width="12" height="14" rx="3" transform="rotate(-45 80 79)"/></g>
+        <circle class="hub" cx="50" cy="50" r="11"/></g></svg>
+      <svg id="g3" viewBox="0 0 100 100"><g><circle class="body" cx="50" cy="50" r="32"/>
+        <g class="tooth"><rect x="44" y="4" width="12" height="14" rx="3"/><rect x="44" y="82" width="12" height="14" rx="3"/><rect x="4" y="44" width="14" height="12" rx="3"/><rect x="82" y="44" width="14" height="12" rx="3"/>
+        <rect x="16" y="16" width="11" height="13" rx="3" transform="rotate(-45 21 22)"/><rect x="73" y="16" width="11" height="13" rx="3" transform="rotate(45 78 22)"/><rect x="16" y="71" width="11" height="13" rx="3" transform="rotate(45 21 77)"/><rect x="73" y="71" width="11" height="13" rx="3" transform="rotate(-45 78 77)"/></g>
+        <circle class="hub" cx="50" cy="50" r="10"/></g></svg>
+    </div>
+
+    <!-- 工具徽章 -->
+    <div id="badge"><div class="outer"></div><div class="inner">
+      <svg class="gearMini" viewBox="0 0 100 100"><g><circle fill="#8a6a3a" cx="50" cy="50" r="34"/>
+        <g fill="#c9a24a"><rect x="44" y="2" width="12" height="16" rx="3"/><rect x="44" y="82" width="12" height="16" rx="3"/><rect x="2" y="44" width="16" height="12" rx="3"/><rect x="82" y="44" width="16" height="12" rx="3"/>
+        <rect x="14" y="14" width="12" height="14" rx="3" transform="rotate(-45 20 21)"/><rect x="74" y="14" width="12" height="14" rx="3" transform="rotate(45 80 21)"/><rect x="14" y="72" width="12" height="14" rx="3" transform="rotate(45 20 79)"/><rect x="74" y="72" width="12" height="14" rx="3" transform="rotate(-45 80 79)"/></g>
+        <circle fill="#f4c542" cx="50" cy="50" r="12"/></g></svg>
+      <span class="zh">反复用</span><span class="en">REUSABLE TOOL</span>
+    </div></div>
+
+    <!-- 应用商店标签 -->
+    <div id="apptag"><span><img src="doubaoicon.png" alt="豆包">已加入我的应用</span></div>
+
+    <!-- 卡墙塞卡 -->
+    <div id="miniwall">
+      <div class="frame"></div><span class="wlab">文献卡片墙</span>
+    </div>
+    <div id="wcount"><span class="lab">已攒</span><span class="num" id="wnum">000</span><span class="lab">篇</span></div>
+    <div id="flydoc"><div class="fc"><span class="new">NEW</span><div class="strip"></div><div class="ln"></div><div class="ln"></div><div class="ln s"></div></div></div>
+    <div id="secline"><span>后面几个月，<b>往里一塞</b>的事</span></div>
+
+    <!-- 金笔打磨 -->
+    <div id="polish"><div class="pcard">
+      <div class="ph"><span class="pt">综述写作参考框架</span><span class="pbadge">豆包一键导出</span></div>
+      <div class="pline" id="pl_1"><span class="dot"></span>梳理论文逻辑 ✓</div>
+      <div class="pline" id="pl_2"><span class="dot"></span>理清章节结构 ✓</div>
+      <div class="pline cross" id="pl_3"><span class="dot"></span>核心观点与论证 ✗</div>
+      <div id="pzone"><span class="plab">这一部分</span>
+        <div id="goldw2"><span>还得自己打磨！</span></div>
+        <div id="pen2"><svg viewBox="0 0 130 60"><g transform="rotate(-8 65 30)">
+          <rect x="8" y="22" width="76" height="16" rx="8" fill="#2b2b2b"/><rect x="8" y="22" width="76" height="7" rx="3.5" fill="#4a4a4a"/>
+          <path d="M84 22l30 8-30 8z" fill="#f4c542" stroke="#b8891a" stroke-width="1.5"/><circle cx="106" cy="30" r="2.4" fill="#2b2b2b"/>
+          <rect x="8" y="18" width="10" height="24" rx="4" fill="#e8b93a"/></g></svg></div>
+      </div>
+      <div id="notesticky"><div class="n1">框架≠观点<br>逻辑≠论证</div><div class="n2">FRAME ≠ ARGUMENT</div></div>
+    </div></div>
+
+    <!-- 安安 -->
+    <div id="anan">
+      <div class="say">工具帮你省事，<br>但<b>思想</b>得自己给</div>
+      <img src="anan - emotion rename/15_平举素纸_认真以待.png" alt="安安·认真">
+    </div>
+
+  </div><!-- /cam -->
+
+  <div id="dim"></div>
+  <div id="lbT"></div><div id="lbB"></div>
+  <div class="corner" id="chap">环节4 / 沉淀 · 工具化</div>
+  <div class="corner" id="src">口播念稿 v7.0 · 环节4</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 4-6 · 沉淀成工具，越攒越省力 · 14s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=17000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+
+/* ── 卡墙 12 格 ── */
+const wall=$('#miniwall');
+const slots=[];
+for(let r=0;r<2;r++)for(let c=0;c<6;c++){
+  const i=r*6+c,s=document.createElement('div');s.className='wslot';
+  s.style.left=(24+c*140)+'px';s.style.top=(28+r*174)+'px';
+  s.innerHTML=`<div class="wc"><div class="strip" style="background:${['#ffd9d4','#dceaff','#ddf3e5','#f3e2ff','#fff2c2','#ffe9b8'][i%6]}"></div><div class="ln"></div><div class="ln"></div><div class="ln s"></div></div>`;
+  wall.appendChild(s);slots.push(s);
+}
+
+/* 锻造火花 */
+function burst(x,y,n){
+  const cam=$('#cam');
+  for(let i=0;i<n;i++){
+    const s=document.createElement('i');s.className='spark';
+    const ang=Math.random()*Math.PI*2,d=60+Math.random()*90;
+    s.style.left=x+'px';s.style.top=y+'px';
+    s.style.setProperty('--dx',(Math.cos(ang)*d)+'px');
+    s.style.setProperty('--dy',(Math.sin(ang)*d+40)+'px');
+    cam.appendChild(s);setTimeout(()=>s.remove(),900);
+  }
+}
+/* 攒卡计数 */
+function runCount(start,dur,to){
+  const el=$('#wnum');
+  tws.push({tag:'cnt',t:start,d:dur,e:eio,f:p=>{el.textContent=String(Math.round(to*p)).padStart(3,'0')}});
+}
+
+/* ───────── 本镜头叙事 cue（17s · 沉淀成工具 6:39-6:56） ───────── */
+/* 口播① 0-4s「那么这一步就强在拆解对比验证，折腾来的东西」6:39 */
+on(200,()=>{$('#title').classList.add('in');__sfx.pop(0.6)});                              // 标题
+on(600,()=>{$('#st1').classList.add('in');burst(564,368,10);__sfx.thud(0.5)});             // 印章·拆解←"拆解"~1s
+on(1500,()=>{$('#pl1').classList.add('in');__sfx.pop(0.4)});                               // +
+on(1750,()=>{$('#st2').classList.add('in');burst(960,368,10);__sfx.thud(0.5)});            // 印章·对比←"对比"~2s
+on(2650,()=>{$('#pl2').classList.add('in');__sfx.pop(0.4)});                               // +
+on(2900,()=>{$('#st3').classList.add('in');burst(1356,368,12);__sfx.thud(0.55)});          // 印章·验证←"验证"~3s
+
+/* 口播② 4-6s「全部都沉淀成能反复用的工具了」6:43 */
+on(3800,()=>{['#st1','#st2','#st3','#pl1','#pl2'].forEach(id=>{                            // 印章收拢←"折腾来的东西"~3.5s
+  const el=$(id);el.style.transition='all .5s cubic-bezier(.6,0,1,.4)';el.style.opacity='0';el.style.transform='scale(.4) rotate(20deg)'});
+  __sfx.whoosh(0.5,0.6)});
+on(4200,()=>{$('#gears').classList.add('in');__sfx.ding(0.5)});                            // 齿轮组←"沉淀成"4s
+on(5000,()=>{$('#gears').style.transition='all .45s cubic-bezier(.6,0,1,.4)';
+  $('#gears').style.transform='translateX(-50%) scale(.3)';$('#gears').style.opacity='0';
+  burst(960,420,26);__sfx.whoosh(0.4,0.55)});                                              // 齿轮压缩·火花四溅
+on(5500,()=>{$('#badge').classList.add('in');burst(960,420,18);__sfx.ding(0.8);__sfx.thud(0.35)}); // 「反复用」徽章←"反复用的工具了"~5.5s
+on(6000,()=>{$('#apptag').classList.add('in');__sfx.pop(0.55)});                           // 已加入我的应用
+
+/* 口播③ 6-10s「后面几个月继续读文献也是就往卡片墙里一筛的事情」6:45 */
+on(6500,()=>{$('#badge').style.transition='all .45s ease';$('#badge').style.opacity='0';
+  $('#badge').style.transform='translateX(-50%) scale(.5) rotate(24deg)';
+  $('#apptag').style.opacity='0';$('#apptag').style.transform='translateX(-50%) scale(.6)';
+  __sfx.whoosh(0.5,0.5)});                                                                 // 徽章+标签退场
+on(7000,()=>{$('#miniwall').classList.add('in');$('#wcount').classList.add('in');__sfx.pop(0.5)}); // 卡墙+计数器入场←"卡片墙"~8s
+on(7500,()=>{$('#flydoc').classList.add('fly');__sfx.whoosh(0.7,0.5)});                    // 文献飞入
+on(8000,()=>{$('#flydoc').classList.add('dock');__sfx.pop(0.5)});                          // 入格←"一筛"
+slots.forEach((s,i)=>{if(i===0)return;on(8100+(i-1)*110,()=>{s.classList.add('on');__sfx.pop(0.18)})}); // 已攒卡浮现
+on(8200,()=>{runCount(8200,1600,128);for(let k=0;k<10;k++)on(8200+k*150,()=>__sfx.type(0.24))}); // 计数 000→128←"继续读文献"
+on(9000,()=>{$('#secline').classList.add('in');__sfx.pop(0.4)});                          // 往里一塞←"一筛的事情"~9.5s
+
+/* 口播④ 10-17s「框架只是梳理逻辑，核心观点和论证还得自己打磨」6:49-6:56 */
+on(10000,()=>{camFocus(960,470,1.14,0.8);
+  $('#miniwall').style.opacity='0';$('#flydoc').style.opacity='0';$('#secline').style.opacity='0';
+  $('#wcount').style.opacity='0';$('#miniwall').style.transform='translateY(40px)';
+  __sfx.whoosh(0.6,0.5)});                                                                 // 卡墙退场←"一键导出的框架"6:49
+on(10500,()=>{$('#polish').classList.add('in');__sfx.ding(0.6)});                          // 框架卡入场←"导出的框架"~10.5s
+on(11000,()=>{$('#pl_1').classList.add('wrt');__sfx.type(0.45)});                          // 梳理逻辑 ✓←"梳理一下论文的逻辑"~11.5s
+on(11500,()=>{$('#pl_2').classList.add('wrt');__sfx.type(0.45)});                          // 理清结构 ✓
+on(14000,()=>{$('#pl_3').classList.add('wrt');$('#notesticky').classList.add('in');__sfx.swipe(0.5)}); // 核心观点 ✗←"核心观点和论证"6:53=14s
+on(14200,()=>{$('#pen2').classList.add('write');$('#goldw2').classList.add('w');           // 金笔打磨←"自己来打磨"
+  for(let k=0;k<9;k++)on(14250+k*190,()=>__sfx.type(0.26))});
+on(15500,()=>{$('#anan').classList.add('show');__sfx.pop(0.55)});                          // 安安登场
+on(16000,()=>camTo(0,0,1.0,0.8));                                                          // 收镜定格
+on(16500,()=>__sfx.ding(0.4));
+</script>
+</body>
+</html>

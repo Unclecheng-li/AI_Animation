@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 2-4 · 疑点：95 条攻击零迁移</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Noto+Serif+SC:wght@700;900&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#0f0d0a;overflow:hidden;font-family:'Noto Serif SC',serif}
+body.paused *{animation-play-state:paused!important}
+/* 舞台：审讯室深色软木板 */
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;
+  background:#241f1a;background-image:
+    radial-gradient(rgba(255,240,210,.05) 1.5px,transparent 2.2px),
+    radial-gradient(rgba(0,0,0,.3) 1.5px,transparent 2.2px);
+  background-size:26px 26px,34px 34px;background-position:0 0,13px 17px;
+  box-shadow:inset 0 0 0 20px #17120d,inset 0 0 200px rgba(0,0,0,.8)}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:translate(0px,-33px) scale(1.22);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+#world{position:absolute;inset:0}
+#world.shake{animation:bdShake .45s ease}
+@keyframes bdShake{0%,100%{transform:none}18%{transform:translate(4px,-3px)}38%{transform:translate(-5px,3px)}58%{transform:translate(4px,2px)}78%{transform:translate(-3px,-2px)}}
+
+/* ───────── 画面层：审讯室证物聚光灯 ───────── */
+/* 警灯余光 */
+#policeL,#policeR{position:absolute;top:-260px;width:720px;height:540px;z-index:2;pointer-events:none;mix-blend-mode:screen;opacity:0;transition:opacity 1s}
+#policeL{left:-200px;background:radial-gradient(closest-side,rgba(208,69,62,.16),transparent 70%)}
+#policeR{right:-200px;background:radial-gradient(closest-side,rgba(62,99,221,.15),transparent 70%)}
+#policeL.on{opacity:1;animation:polL 3.2s ease-in-out infinite alternate}
+#policeR.on{opacity:1;animation:polR 3.2s ease-in-out infinite alternate}
+@keyframes polL{from{opacity:.35}to{opacity:1}}
+@keyframes polR{from{opacity:1}to{opacity:.35}}
+
+/* 聚光灯锥 */
+.cone{position:absolute;top:-20px;z-index:3;pointer-events:none;
+  clip-path:polygon(46% 0,54% 0,100% 100%,0 100%);filter:blur(6px);opacity:0;transition:opacity 1.1s ease;
+  background:linear-gradient(180deg,rgba(255,238,190,.42),rgba(255,232,170,.12) 55%,transparent 92%)}
+.cone.on{opacity:1;animation:coneFl 4.8s ease-in-out infinite alternate}
+@keyframes coneFl{from{opacity:.88}to{opacity:1}}
+#cone1{left:150px;width:760px;height:940px}
+#cone2{left:650px;width:980px;height:1120px}
+.mote{position:absolute;border-radius:50%;background:rgba(255,240,200,.55);animation:moteF linear infinite}
+@keyframes moteF{0%{transform:translateY(-8px);opacity:0}14%{opacity:.7}100%{transform:translateY(640px);opacity:0}}
+
+/* 图钉 */
+.pin{position:absolute;width:24px;height:24px;border-radius:50%;z-index:8;
+  background:radial-gradient(circle at 35% 30%,#ffb0a0,#D0453E 60%,#8f241f);box-shadow:2px 4px 6px rgba(0,0,0,.55)}
+
+/* 证物袋 */
+#evBag{position:absolute;left:300px;top:190px;width:460px;height:560px;z-index:5}
+#evBag .bag{position:absolute;inset:0;border-radius:10px;border:2px solid rgba(225,232,240,.32);
+  background:linear-gradient(155deg,rgba(215,225,235,.14),rgba(215,225,235,.05) 60%,rgba(215,225,235,.09));
+  box-shadow:0 24px 50px rgba(0,0,0,.5)}
+#evBag .bag::after{content:'';position:absolute;inset:0;border-radius:10px;
+  background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.07) 42%,transparent 55%)}
+#evBag .zip{position:absolute;left:8px;right:8px;top:8px;height:26px;border-radius:6px;
+  background:repeating-linear-gradient(90deg,rgba(230,236,244,.22) 0 9px,rgba(230,236,244,.08) 9px 18px);
+  border-bottom:2px solid rgba(230,236,244,.3)}
+#evTag{position:absolute;left:34px;top:-26px;width:252px;height:52px;background:#efe6c8;transform:rotate(-2.5deg);z-index:6;
+  box-shadow:0 6px 14px rgba(0,0,0,.45);display:flex;align-items:center;gap:10px;padding:0 14px}
+#evTag .ev{font-family:'Courier Prime';font-weight:700;font-size:21px;color:#8f1d12;letter-spacing:4px}
+#evTag .bar{flex:1;height:22px;background:repeating-linear-gradient(90deg,#211F1C 0 2px,transparent 2px 5px)}
+#evTag .no{position:absolute;right:10px;bottom:-17px;font-family:'Courier Prime';font-size:11.5px;color:#efe6c8;opacity:.9}
+#evPaper{position:absolute;left:22px;right:22px;top:56px;bottom:22px;background:#f2ead6;transform:rotate(-1.2deg);z-index:5;
+  box-shadow:0 8px 20px rgba(0,0,0,.35);padding:0;display:flex;align-items:center;justify-content:center;overflow:hidden;
+  font-family:'Courier Prime';font-size:14.5px;line-height:1.8;color:#38322a}
+#evPaper img{height:100%;display:block;box-shadow:0 0 0 1px rgba(90,70,40,.25)}
+#evPaper .abs{font-size:12.5px;color:#6a5f4e;letter-spacing:1px;margin-bottom:10px;font-style:italic}
+#evPaper p{margin-bottom:12px}
+#keySent{font-weight:700;color:#2c261d}
+#axNote{position:absolute;left:160px;top:512px;z-index:7;background:#f5e9a8;padding:7px 14px;transform:rotate(4deg);
+  font-family:'Courier Prime';font-size:14px;color:#4a3f1a;box-shadow:0 6px 14px rgba(0,0,0,.4)}
+
+/* 红棉线 */
+#strings{position:absolute;left:0;top:0;z-index:7;pointer-events:none;filter:drop-shadow(0 2px 2px rgba(0,0,0,.45))}
+#strings ellipse,#strings path{fill:none;stroke:#D0453E;stroke-width:4;stroke-linecap:round}
+#keyCircle{stroke-dasharray:940;stroke-dashoffset:940;transition:stroke-dashoffset .9s ease}
+#stringLine{stroke-dasharray:540;stroke-dashoffset:540;transition:stroke-dashoffset .8s ease .12s}
+#strings .drawn{stroke-dashoffset:0}
+
+/* 关键句放大卡 */
+#magCard{position:absolute;left:1180px;top:230px;width:560px;height:200px;z-index:6;background:#f2ead6;
+  transform:rotate(.8deg) translateY(34px);box-shadow:0 18px 40px rgba(0,0,0,.5);border-left:8px solid #D0453E;
+  padding:20px 28px;opacity:0;transition:all .55s cubic-bezier(.34,1.4,.64,1)}
+#magCard.in{opacity:1;transform:rotate(.8deg) translateY(0)}
+.mcH{font-family:'Noto Serif SC';font-weight:700;font-size:15px;color:#8a7a5a;letter-spacing:3px}
+.mcT{margin-top:12px;font-family:'Courier Prime';font-size:21px;line-height:1.65;color:#33291d}
+.n95{font-family:'JetBrains Mono';font-weight:800;font-size:34px;color:#D0453E}
+.n0{font-family:'JetBrains Mono';font-weight:800;font-size:34px;color:#0E9F6E}
+
+/* 95 vs 0 对峙 */
+.vs{position:absolute;top:560px;width:300px;height:252px;z-index:6;background:#2b251f;border-radius:12px;text-align:center;
+  padding-top:24px;opacity:0;transform:scale(1.7);transition:all .45s cubic-bezier(.2,1.35,.4,1);box-shadow:0 22px 50px rgba(0,0,0,.55)}
+.vs.in{opacity:1;transform:scale(1) rotate(var(--vr,0deg))}
+#vsL{left:780px;border:3px solid #D0453E;--vr:-1.5deg}
+#vsR{left:1200px;border:3px solid #0E9F6E;--vr:1.5deg}
+.vs .vnum{font-family:'JetBrains Mono';font-weight:800;font-size:138px;line-height:1}
+#vsL .vnum{color:#D0453E;text-shadow:0 0 34px rgba(208,69,62,.35)}
+#vsR .vnum{color:#0E9F6E;text-shadow:0 0 34px rgba(14,159,110,.35)}
+.vs .vlab{margin-top:6px;font-family:'Noto Serif SC';font-weight:700;font-size:25px;color:#e9dcc0;letter-spacing:3px}
+.vs .vtag{display:inline-block;margin-top:10px;font-family:'Courier Prime';font-size:14px;letter-spacing:2px;padding:3px 14px;border-radius:999px;border:1.5px solid}
+#vsL .vtag{color:#ff9d94;border-color:#D0453E}
+#vsR .vtag{color:#7fd9b8;border-color:#0E9F6E}
+#crack{position:absolute;left:1085px;top:545px;z-index:7;pointer-events:none}
+#crackP{fill:none;stroke:#e9dcc0;stroke-width:4.5;stroke-linecap:round;stroke-linejoin:round;
+  stroke-dasharray:420;stroke-dashoffset:420;transition:stroke-dashoffset .5s ease}
+#crackP.drawn{stroke-dashoffset:0}
+#vsC{fill:#17120d;stroke:#d9a441;stroke-width:3.5;transform:scale(0);transform-box:fill-box;transform-origin:center;
+  transition:transform .45s cubic-bezier(.34,1.6,.64,1)}
+#vsT{font-family:'Courier Prime';font-weight:700;font-size:29px;fill:#d9a441;opacity:0;transition:opacity .4s ease .1s}
+
+/* 巨大问号（钉下来） */
+#bigQ{position:absolute;left:990px;top:-6px;z-index:9;text-align:center;transform-origin:50% 0;
+  transform:translateY(-420px);opacity:0;transition:transform .55s cubic-bezier(.2,1.35,.4,1),opacity .3s}
+#bigQ.down{transform:translateY(0);opacity:1;animation:qSway 3.4s ease-in-out .7s infinite alternate}
+@keyframes qSway{from{transform:rotate(-2.4deg)}to{transform:rotate(2.4deg)}}
+.qstr{width:4px;height:92px;margin:0 auto;background:linear-gradient(180deg,#D0453E,#8f241f)}
+.qpin{width:30px;height:30px;margin:-4px auto 0;border-radius:50%;position:relative;z-index:2;
+  background:radial-gradient(circle at 35% 30%,#ffb0a0,#D0453E 60%,#8f241f);box-shadow:2px 4px 7px rgba(0,0,0,.55)}
+.qch{font-family:'Noto Serif SC';font-weight:900;font-size:228px;line-height:1;color:#D97706;margin-top:-16px;
+  text-shadow:0 0 42px rgba(217,119,6,.42),0 14px 30px rgba(0,0,0,.7)}
+
+/* 安安 */
+#anan{position:absolute;right:-16px;bottom:-8px;width:360px;z-index:12;opacity:0;transition:opacity .9s ease;
+  filter:drop-shadow(0 14px 30px rgba(0,0,0,.6))}
+#anan.show{opacity:1}
+#anan img{width:100%;display:block;animation:bob 3.3s ease-in-out infinite alternate}
+@keyframes bob{from{transform:translateY(0)}to{transform:translateY(-12px)}}
+#anan .say{position:absolute;left:-186px;top:-96px;width:306px;background:#f2ead6;border:2.5px solid #3a2c1a;border-radius:12px;
+  padding:13px 17px;font-family:'Noto Serif SC';font-weight:700;font-size:22px;color:#33291d;line-height:1.5;z-index:2;
+  opacity:0;transform:scale(.6);transition:all .45s cubic-bezier(.34,1.6,.64,1);box-shadow:5px 6px 0 rgba(0,0,0,.4)}
+#anan .say::after{content:'';position:absolute;right:34px;bottom:-14px;border:8px solid transparent;border-top:11px solid #3a2c1a}
+#anan .say b{color:#D0453E}
+#anan.show .say{opacity:1;transform:scale(1);transition-delay:.45s}
+
+/* 黄黑警戒胶带 */
+#tape{position:absolute;left:-160px;top:830px;width:2260px;height:72px;z-index:15;
+  background:repeating-linear-gradient(45deg,#e8b93a 0 34px,#1d1a16 34px 68px);
+  transform:rotate(3deg) translateX(-120%);transition:transform 1s cubic-bezier(.16,1,.3,1);
+  box-shadow:0 10px 30px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;gap:170px}
+#tape.in{transform:rotate(3deg) translateX(0)}
+#tape .tt{background:rgba(20,16,10,.9);color:#ffd23f;font-family:'Courier Prime';font-weight:700;font-size:25px;
+  letter-spacing:4px;padding:6px 26px;border-radius:3px;white-space:nowrap}
+
+/* 存疑琥珀印章 */
+#stampW{position:absolute;left:1360px;top:700px;width:190px;height:190px;z-index:16;
+  transform:rotate(-14deg) scale(2.8);opacity:0;pointer-events:none}
+#stampW.go{animation:stIn .48s cubic-bezier(.2,1.5,.3,1) forwards}
+@keyframes stIn{0%{opacity:0;transform:rotate(-14deg) scale(2.8)}60%{opacity:1;transform:rotate(-14deg) scale(.93)}100%{opacity:.95;transform:rotate(-14deg) scale(1)}}
+
+/* ───────── 底盘区 ───────── */
+#lbT,#lbB{position:absolute;left:0;right:0;height:0;background:#000;z-index:40;transition:height .9s cubic-bezier(.7,0,.3,1)}
+#lbT{top:0}#lbB{bottom:0}
+/* letterbox 黑边效果已取消 */
+#dim{position:absolute;inset:0;background:radial-gradient(closest-side at 50% 46%,transparent 52%,rgba(0,0,0,.85) 100%);opacity:0;transition:opacity 1s;z-index:30;pointer-events:none}
+#dim.on{opacity:1}
+.corner{position:absolute;font-family:'Courier Prime';font-size:15px;color:rgba(233,220,192,.55);letter-spacing:2px;z-index:41}
+#chap{left:52px;bottom:34px}
+#src{right:52px;bottom:34px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'JetBrains Mono',monospace;pointer-events:none}
+#track{height:5px;background:rgba(208,69,62,.18)}
+#bar{height:100%;width:0;background:#D0453E;box-shadow:0 0 10px rgba(208,69,62,.6)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;color:#b8ab90;background:rgba(15,12,9,.92);backdrop-filter:blur(4px)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #7a6c55;color:#b8ab90;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(208,69,62,.15)}
+#replay.done{animation:pulse 1.2s infinite;border-color:#f0a832;color:#f0a832}
+@keyframes pulse{50%{box-shadow:0 0 14px rgba(240,168,50,.8)}}
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- ================= 镜头世界 ================= -->
+  <div id="cam">
+    <div id="world">
+      <div id="policeL"></div>
+      <div id="policeR"></div>
+      <div class="cone" id="cone1"></div>
+      <div class="cone" id="cone2"></div>
+
+      <!-- 证物袋：论文摘要 -->
+      <div id="evBag">
+        <div class="bag"></div>
+        <div class="zip"></div>
+        <div id="evTag"><span class="ev">EVIDENCE</span><span class="bar"></span><span class="no">No. 2603-15714</span></div>
+        <div id="evPaper">
+          <img src="papers/p1_evidence.jpg" alt="Paper 01 真实首页证物">
+        </div>
+        <div id="axNote">arXiv:2603.15714</div>
+      </div>
+
+      <!-- 红棉线圈画与引线 -->
+      <svg id="strings" width="1920" height="1080" viewBox="0 0 1920 1080">
+        <ellipse id="keyCircle" cx="530" cy="665" rx="185" ry="27" transform="rotate(-1.5 530 665)"/>
+        <path id="stringLine" d="M 712 660 C 880 620, 1040 420, 1174 336"/>
+      </svg>
+      <div class="pin" style="left:1164px;top:320px"></div>
+      <div class="pin" style="left:1460px;top:214px"></div>
+      <div class="pin" style="left:444px;top:166px"></div>
+
+      <!-- 关键句放大卡 -->
+      <div id="magCard">
+        <div class="mcH">MAGNIFIED · 关键句放大</div>
+        <div class="mcT"><span class="n95">95</span> attacks effective on <b>Qwen</b> —<br><span class="n0">0</span> transferred to closed-source models</div>
+      </div>
+
+      <!-- 95 vs 0 对峙 -->
+      <div class="vs" id="vsL">
+        <div class="vnum" id="vnumL">0</div>
+        <div class="vlab">条有效攻击</div>
+        <div class="vtag">开源 · Qwen</div>
+      </div>
+      <div class="vs" id="vsR">
+        <div class="vnum">0</div>
+        <div class="vlab">条迁移成功</div>
+        <div class="vtag">闭源模型</div>
+      </div>
+      <svg id="crack" width="110" height="280" viewBox="0 0 110 280">
+        <path id="crackP" d="M58 4 L34 62 L74 118 L30 180 L66 236 L48 276"/>
+        <circle id="vsC" cx="55" cy="140" r="36"/>
+        <text id="vsT" x="55" y="150" text-anchor="middle">VS</text>
+      </svg>
+
+      <!-- 巨大问号 -->
+      <div id="bigQ">
+        <div class="qstr"></div>
+        <div class="qpin"></div>
+        <div class="qch">?</div>
+      </div>
+
+      <!-- 安安 -->
+      <div id="anan">
+        <div class="say">这条结论，我不信——<b>得亲手验证</b></div>
+        <img src="anan - emotion rename/09_垂眸出神_淡然凝思.png" alt="安安·凝思">
+      </div>
+
+      <!-- 警戒胶带 -->
+      <div id="tape">
+        <span class="tt">NEXT · 亲手复现验证 · REPRODUCE &amp; VERIFY</span>
+        <span class="tt">NEXT · 亲手复现验证 · REPRODUCE &amp; VERIFY</span>
+      </div>
+
+      <!-- 存疑印章 -->
+      <div id="stampW">
+        <svg viewBox="0 0 200 200">
+          <circle cx="100" cy="100" r="92" fill="none" stroke="#D97706" stroke-width="7"/>
+          <circle cx="100" cy="100" r="76" fill="none" stroke="#D97706" stroke-width="2.5"/>
+          <path d="M100 36 L130 82 H70 Z" fill="none" stroke="#D97706" stroke-width="6" stroke-linejoin="round"/>
+          <line x1="100" y1="50" x2="100" y2="65" stroke="#D97706" stroke-width="6" stroke-linecap="round"/>
+          <circle cx="100" cy="73" r="3.6" fill="#D97706"/>
+          <text x="100" y="140" text-anchor="middle" font-family="'Noto Serif SC'" font-weight="900" font-size="52" fill="#D97706">存疑</text>
+          <text x="100" y="164" text-anchor="middle" font-family="'Courier Prime'" font-size="13" letter-spacing="3" fill="#D97706">TO VERIFY</text>
+        </svg>
+      </div>
+    </div><!-- /world -->
+  </div><!-- /cam -->
+
+  <div id="dim"></div>
+  <div id="lbT"></div><div id="lbB"></div>
+  <div class="corner" id="chap">环节2 / 第二遍：比数据</div>
+  <div class="corner" id="src">论文1 摘要 · arXiv:2603.15714</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 2-4 · 疑点：95 条攻击零迁移 · 19s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=19000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+
+/* 板子震动 / 数字滚动（绝对时间轴） */
+function shake(){const w=$('#world');w.classList.remove('shake');void w.offsetWidth;w.classList.add('shake')}
+function cntAbs(el,from,to,start,dur){tws.push({t:start,d:dur,e:eo,f:p=>{el.textContent=Math.round(from+(to-from)*p)}})}
+
+/* 光锥尘埃 */
+(function(){const c=$('#cone1');for(let i=0;i<10;i++){const d=document.createElement('i');d.className='mote';
+  const s=2.5+Math.random()*4;d.style.width=d.style.height=s+'px';
+  d.style.left=(14+Math.random()*72)+'%';d.style.top=(Math.random()*36)+'%';
+  d.style.animationDelay=(Math.random()*6)+'s';d.style.animationDuration=(4.5+Math.random()*5)+'s';c.appendChild(d)}})();
+
+/* ───────── 本镜头叙事 cue（15s · 疑点：95 条攻击零迁移） ───────── */
+on(250,()=>{$('#cone1').classList.add('on');$('#policeL').classList.add('on');$('#policeR').classList.add('on');__sfx.whoosh(0.6,0.4)}); // 聚光灯亮起
+on(1500,()=>camFocus(560,560,1.28,1.0));
+on(2000,()=>{$('#keyCircle').classList.add('drawn');__sfx.swipe(0.5)});                            // 红棉线圈关键句
+on(3000,()=>{$('#stringLine').classList.add('drawn');$('#magCard').classList.add('in');__sfx.pop(0.6)}); // 引线到放大卡
+on(3500,()=>{camFocus(1140,620,1.14,1.0);$('#cone2').classList.add('on');$('#vsL').classList.add('in');__sfx.thud(0.9)}); // 95 砸入←"95条"3:02
+on(3600,()=>{$('#crackP').classList.add('drawn');__sfx.swipe(0.5)});                               // 裂缝
+on(3700,()=>cntAbs($('#vnumL'),0,95,3800,1000));                                                   // 数字滚动 0→95
+for(let i=0;i<10;i++)on(3750+i*100,()=>__sfx.type(0.45));                                          // 滚动连击
+on(5500,()=>{$('#vsR').classList.add('in');__sfx.thud(1)});                                        // 0 砸入
+on(6500,()=>{$('#vsC').style.transform='scale(1)';$('#vsT').style.opacity='1';__sfx.pop(0.5)});    // VS 落定
+on(6600,()=>__sfx.ding(0.6));
+on(8000,()=>{$('#bigQ').classList.add('down');shake();__sfx.thud(1.2)});                            // 问号钉下·板震
+on(10000,()=>{$('#anan').classList.add('show');__sfx.pop(0.6)});                                      // 安安
+on(12000,()=>{$('#tape').classList.add('in');__sfx.swipe(0.8);__sfx.whoosh(0.8,0.6)});               // 警戒胶带
+on(12600,()=>{$('#stampW').classList.add('go');shake();__sfx.thud(1)});                            // 存疑印章砸下
+on(15000,()=>camFocus(1130,650,1.32,1.3));                                                         // 推向 95 vs 0 定格
+on(18500,()=>__sfx.ding(0.5));
+</script>
+</body>
+</html>

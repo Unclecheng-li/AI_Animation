@@ -315,13 +315,13 @@ Links: [README](./skills/card-theater/README.md) · [SKILL.md](./skills/card-the
 **分类:** 视频分镜演示 / 电影级镜头动画
 **适用于:** 视频配套演示动画、录屏成片、技术实测复盘、产品发布可视化——需要"一个镜头一个 HTML、风格轮换、镜头推拉、同步音效"的电影化演示场景。
 
-`video-shot-demos` 把视频分镜做成可全屏录屏当成片的网页动画：一个镜头 = 一个独立 HTML。整辑共享电影化播放器底盘（黑场起手 + 虚拟时钟 + 悬停唤出 HUD + 暂停重播），每个镜头却用完全不同的视觉风格创作。内置 29 个成片级样板页（复古报纸 / 便利店 POS / 像素游戏 / 武功秘籍 / 机场安检…）、安安 15 张情绪立绘、WebAudio 合成音效引擎、镜头调度系统（推拉摇移 / 跟拍 / 黑边慢放）与无头截图质检工具。
+`video-shot-demos` 把视频分镜做成可全屏录屏当成片的网页动画：一个镜头 = 一个独立 HTML。整辑共享电影化播放器底盘（黑场起手 + 虚拟时钟 + 悬停唤出 HUD + 暂停重播），每个镜头却用完全不同的视觉风格创作。内置两套完整成片实例（`glm-5.3-range-test` 29 镜头安全实测复盘 + `doubao-paper-detective` 11 镜头论文阅读商单，共 40 种风格零重复）、安安 15 张情绪立绘、WebAudio 合成音效引擎、镜头调度系统（推拉摇移 / 跟拍 / 黑边慢放）与无头截图质检工具。
 
 亮点:
 - 电影化播放器：黑场「启动播放」起手，虚拟时钟让 CSS 动画与 JS cue 永不漂移，录屏干净零闪跳
 - 镜头语言：开场拉镜 / 关键推近 / 跟拍 / Ken Burns 缓推 / 冲击快推，慢放段落自动配黑边 + 暗角 + 毫秒计数
 - WebAudio 合成音效：零音频文件，6 原语（pop/whoosh/swipe/type/ding/thud），镜头运动自动挂呼啸声
-- 29 种视觉风格库：每种风格配字体组合 + 适用内容 + 成片级活样板，连续镜头绝不同风格
+- 40 种视觉风格库（两辑实例 29+11）：每种风格配字体组合 + 适用内容 + 成片级活样板，连续镜头绝不同风格
 - 角色表情特写：安安 15 张情绪立绘按叙事节拍选图，400px 特写 + 吐槽气泡淡入登场
 - 字幕条逐句对齐口播稿，关键词高亮；数据角注出处，跨页比分连续滚动
 - 无头截图质检：虚拟时钟快进到任意毫秒截帧，逐张排查重叠遮挡 / 动画穿帮
@@ -343,7 +343,7 @@ Links: [README](./skills/card-theater/README.md) · [SKILL.md](./skills/card-the
 </tr>
 </table>
 
-<sub>↑ 5 / 29 种风格示例 — <a href="./skills/video-shot-demos/README.md"><b>打开完整风格库</b></a>（29 个成片样板可直接运行）。</sub>
+<sub>↑ 5 / 40 种风格示例（第一辑）— <a href="./skills/video-shot-demos/README.md"><b>打开完整风格库</b></a>（两套实例共 40 个成片页面可直接运行）。</sub>
 
 Links: [README](./skills/video-shot-demos/README.md) · [SKILL.md](./skills/video-shot-demos/SKILL.md)
 
@@ -476,7 +476,7 @@ ai-animation-skills/
 │       ├── README.md
 │       ├── references/          ← 播放器/镜头/音效/风格库/角色 五份规范
 │       ├── assets/              ← 起步骨架 template.html
-│       │   └── examples/        ← 29 个成片样板 + 安安表情 + 图标
+│       │   └── examples/        ← 两套成片实例（glm 29 镜头 + doubao 11 镜头，各带安安表情与图标）
 │       └── scripts/             ← 无头截图质检工具
 ├── web_animation/               ← 原始示例 HTML（历史存档）
 ├── UI/                          ← UI 设计参考图

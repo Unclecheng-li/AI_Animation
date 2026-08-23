@@ -315,13 +315,13 @@ Links: [README](./skills/card-theater/README.md) · [SKILL.md](./skills/card-the
 **Category:** Cinematic per-shot demo animations
 **For:** video companion demos, screen-recording as finished films, tech write-up reenactments, product launch visuals — anywhere needing "one HTML per shot, rotating styles, camera moves, synced SFX".
 
-`video-shot-demos` turns a video's storyboard into web animations you can fullscreen-record as finished footage: one shot = one standalone HTML. The whole series shares a cinematic player chassis (black-screen start + virtual clock + hover-to-reveal HUD + pause/replay), while every shot is created in a completely different visual style. Ships with 29 production-grade sample pages (vintage newspaper / convenience-store POS / pixel platformer / kung-fu manual / airport security…), 15 character emotion sprites, a WebAudio synthesized SFX engine, a camera scheduling system (push/pull/pan/follow + letterbox slow-mo), and a headless screenshot QA tool.
+`video-shot-demos` turns a video's storyboard into web animations you can fullscreen-record as finished footage: one shot = one standalone HTML. The whole series shares a cinematic player chassis (black-screen start + virtual clock + hover-to-reveal HUD + pause/replay), while every shot is created in a completely different visual style. Ships with two complete production example sets (`glm-5.3-range-test`, a 29-shot security-lab reenactment, and `doubao-paper-detective`, an 11-shot paper-reading sponsored video — 40 styles, zero repeats), 15 character emotion sprites, a WebAudio synthesized SFX engine, a camera scheduling system (push/pull/pan/follow + letterbox slow-mo), and a headless screenshot QA tool.
 
 Highlights:
 - Cinematic player: black-screen "start playback" intro; the hijacked virtual clock keeps CSS animations and JS cues in perfect sync — clean, glitch-free screen recordings
 - Camera language: opening pull-back / key-moment push-in / follow shots / Ken Burns slow push / impact slams; slow-mo segments auto-dress with letterbox bars + vignette + millisecond counter
 - WebAudio SFX: zero audio files, 6 primitives (pop/whoosh/swipe/type/ding/thud); camera moves automatically get a whoosh
-- 29-style library: every style ships with font pairings, suitable content types, and a production-grade reference page — no two consecutive shots share a style
+- 40-style library (two example collections, 29 + 11): every style ships with font pairings, suitable content types, and a production-grade reference page — no two consecutive shots share a style
 - Character close-ups: 15 emotion sprites picked per narrative beat, 400px closeups + speech bubbles easing in
 - Caption bars aligned sentence-by-sentence with the voiceover script, keywords highlighted; source footnotes for data, cross-page score continuity
 - Headless screenshot QA: fast-forward the virtual clock to any millisecond and capture frames to hunt for overlaps, occlusions, and animation glitches
@@ -343,7 +343,7 @@ Highlights:
 </tr>
 </table>
 
-<sub>↑ 5 of 29 styles — <a href="./skills/video-shot-demos/README.md"><b>open the full style library</b></a> (29 runnable production samples).</sub>
+<sub>↑ 5 of 40 styles (first collection) — <a href="./skills/video-shot-demos/README.md"><b>open the full style library</b></a> (two example sets, 40 runnable production pages).</sub>
 
 Links: [README](./skills/video-shot-demos/README.md) · [SKILL.md](./skills/video-shot-demos/SKILL.md)
 
@@ -476,7 +476,7 @@ ai-animation-skills/
 │       ├── README.md
 │       ├── references/          ← Player/camera/SFX/style-library/character specs
 │       ├── assets/              ← Starter skeleton template.html
-│       │   └── examples/        ← 29 production samples + character sprites + icons
+│       │   └── examples/        ← Two production sets (glm 29 shots + doubao 11 shots, each with character sprites & icons)
 │       └── scripts/             ← Headless screenshot QA tool
 ├── web_animation/               ← Original example HTML (historical archive)
 ├── UI/                          ← UI design reference images

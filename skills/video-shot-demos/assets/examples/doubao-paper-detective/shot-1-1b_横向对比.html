@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 1-1b · 光懂结构不够，还得横向对比</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,800;1,600&family=Noto+Serif+SC:wght@400;600;700;900&family=ZCOOL+XiaoWei&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#1a1712;overflow:hidden;font-family:'Noto Serif SC',serif}
+body.paused *{animation-play-state:paused!important}
+/* 舞台：深色学术桌布 */
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;
+  background:
+    radial-gradient(ellipse 1400px 900px at 50% 30%,#2e2820,#221d16 55%,#16120d 100%);
+  box-shadow:inset 0 0 200px rgba(0,0,0,.5)}
+#stage::before{content:'';position:absolute;inset:0;opacity:.06;pointer-events:none;
+  background:repeating-linear-gradient(0deg,rgba(232,185,58,.3) 0 1px,transparent 1px 3px),
+             repeating-linear-gradient(90deg,rgba(232,185,58,.2) 0 1px,transparent 1px 3px)}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1.05);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ── 顶部标题 ── */
+#title{position:absolute;left:0;right:0;top:58px;z-index:20;text-align:center;opacity:0;transform:translateY(-22px);transition:all .7s cubic-bezier(.16,1,.3,1)}
+#title.in{opacity:1;transform:translateY(0)}
+#title .t1{font-family:'ZCOOL XiaoWei';font-size:52px;color:#f2e7c9;letter-spacing:10px}
+#title .t1 em{font-style:normal;color:#e8b93a}
+#title .t2{margin-top:8px;font-family:'Playfair Display';font-style:italic;font-size:17px;color:rgba(232,185,58,.75);letter-spacing:4px}
+#title .rule{margin:12px auto 0;width:340px;height:1px;background:linear-gradient(90deg,transparent,#e8b93a,transparent)}
+
+/* 开场漂浮论文图标 */
+.floatdoc{position:absolute;z-index:8;width:56px;height:70px;border-radius:5px;opacity:0;
+  background:#f2e7c9;box-shadow:0 10px 24px rgba(0,0,0,.4);padding:8px;
+  animation:floatUp 6s ease-in-out infinite}
+.floatdoc .fd{height:7px;border-radius:4px;background:#d8c690;margin-bottom:6px}
+.floatdoc .fd.s{width:60%}
+.floatdoc.fd1{left:14%;top:24%;animation-delay:0s}
+.floatdoc.fd2{left:20%;top:58%;animation-delay:1.4s;width:46px;height:58px}
+.floatdoc.fd3{right:16%;top:22%;animation-delay:2.6s}
+.floatdoc.fd4{right:22%;top:60%;animation-delay:3.8s;width:46px;height:58px}
+@keyframes floatUp{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-18px) rotate(2deg)}}
+.floatdoc.in{opacity:.55;transition:opacity 1s}
+
+/* ── 金句横幅（横向对比 四个大字） ── */
+#banner{position:absolute;left:50%;top:300px;transform:translateX(-50%) scale(.3);z-index:22;opacity:0;
+  transition:all .55s cubic-bezier(.34,1.6,.64,1);pointer-events:none}
+#banner.in{opacity:1;transform:translateX(-50%) scale(1)}
+#banner .bb{position:relative;background:linear-gradient(160deg,#f7e6b8,#e8c86a 55%,#d9a441);border-radius:10px;
+  padding:26px 58px 22px;box-shadow:0 24px 60px rgba(232,185,58,.3),0 0 0 2px #b8891a inset}
+#banner .bb::before,#banner .bb::after{content:'';position:absolute;top:50%;width:70px;height:2px;background:rgba(184,137,26,.6)}
+#banner .bb::before{left:-80px}#banner .bb::after{right:-80px}
+#banner .zh{font-family:'ZCOOL XiaoWei';font-size:88px;color:#211F1C;letter-spacing:18px;line-height:1}
+#banner .zh em{font-style:normal;color:#8a2016}
+#banner .en{margin-top:6px;text-align:center;font-family:'Playfair Display';font-weight:600;font-size:14px;letter-spacing:6px;color:rgba(33,31,28,.6)}
+
+/* ── 天平 ── */
+#scale{position:absolute;left:50%;top:520px;transform:translateX(-50%);z-index:14;width:760px;height:340px;
+  opacity:0;transition:opacity .8s ease}
+#scale.in{opacity:1}
+#pillar{position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:16px;height:230px;
+  background:linear-gradient(90deg,#5c4a2e,#8a6a3a,#5c4a2e);border-radius:4px 4px 0 0}
+#base{position:absolute;left:50%;bottom:-12px;transform:translateX(-50%);width:180px;height:24px;border-radius:8px;
+  background:linear-gradient(180deg,#8a6a3a,#5c4a2e);box-shadow:0 8px 24px rgba(0,0,0,.4)}
+#beam{position:absolute;left:50%;top:56px;width:640px;height:10px;transform-origin:50% 50%;transform:translateX(-50%) rotate(0deg);
+  transition:transform 1.1s cubic-bezier(.34,1.3,.64,1);
+  background:linear-gradient(180deg,#e8b93a,#b8891a);border-radius:5px;box-shadow:0 4px 14px rgba(0,0,0,.35)}
+#beam::before{content:'';position:absolute;left:50%;top:-14px;transform:translateX(-50%);width:20px;height:20px;
+  border-radius:50%;background:#f4c542;box-shadow:0 0 0 4px rgba(184,137,26,.5),0 0 20px rgba(244,197,66,.6)}
+#beam.tiltL{transform:translateX(-50%) rotate(-9deg)}
+#beam.tiltR{transform:translateX(-50%) rotate(9deg)}
+#beam.balance{transform:translateX(-50%) rotate(0deg)}
+
+/* 托盘 */
+.pan{position:absolute;top:66px;width:200px;text-align:center;transition:all 1.1s cubic-bezier(.34,1.3,.64,1)}
+#panL{left:calc(50% - 320px - 100px)}
+#panR{left:calc(50% + 320px - 100px)}
+.pan .chain{width:2px;height:86px;margin:0 auto;background:linear-gradient(180deg,rgba(232,185,58,.9),rgba(232,185,58,.4))}
+.pan .dish{width:200px;height:26px;border-radius:0 0 100px 100px;margin-top:-2px;
+  background:linear-gradient(180deg,#f4c542,#d9a441);box-shadow:0 10px 24px rgba(0,0,0,.45),inset 0 3px 0 rgba(255,255,255,.4)}
+.pan .load{position:absolute;left:50%;top:-6px;transform:translateX(-50%) translateY(10px);opacity:0;
+  transition:all .55s cubic-bezier(.34,1.5,.64,1)}
+.pan.loaded .load{opacity:1;transform:translateX(-50%) translateY(-56px)}
+.load .paper{width:112px;border-radius:5px;border:3px solid #fff;box-shadow:0 12px 28px rgba(0,0,0,.5)}
+#panL .paper{background:#f2e7c9}
+#panR .paper{background:#e8ecf7}
+.pan .chain2{position:absolute;left:50%;top:150px;width:2px;height:0;background:rgba(232,185,58,.7);transition:height .5s ease .3s}
+.pan.loaded .chain2{height:44px}
+.load .lab{margin-top:8px;font-family:'Playfair Display';font-weight:600;font-size:12px;letter-spacing:2px;color:#e8b93a;
+  background:rgba(33,31,28,.85);border:1px solid rgba(232,185,58,.5);border-radius:999px;padding:3px 12px;display:inline-block}
+/* 托盘随秤杆倾斜时的摆动 */
+#scale.tiltL #panL{transform:translateY(-56px)}
+#scale.tiltL #panR{transform:translateY(56px)}
+#scale.tiltR #panL{transform:translateY(56px)}
+#scale.tiltR #panR{transform:translateY(-56px)}
+
+/* 疑问气泡 */
+#q1{position:absolute;left:50%;top:214px;transform:translateX(-50%) scale(.5);z-index:16;opacity:0;
+  transition:all .5s cubic-bezier(.34,1.6,.64,1)}
+#q1.in{opacity:1;transform:translateX(-50%) scale(1)}
+#q1 span{font-family:'ZCOOL XiaoWei';font-size:34px;color:#f2e7c9;letter-spacing:4px;
+  border:1.5px dashed rgba(232,185,58,.6);border-radius:999px;padding:10px 30px;background:rgba(22,18,13,.7)}
+#q1 b{color:#e8b93a}
+
+/* ── 口播过渡卡片（前置三句：拆解过关 / 光懂结构不够 / 横向对比） ── */
+.tcard{position:absolute;left:50%;top:430px;transform:translateX(-50%) translateY(16px) scale(.94);z-index:16;
+  opacity:0;text-align:center;transition:all .5s cubic-bezier(.34,1.4,.64,1)}
+.tcard .tt{font-family:'ZCOOL XiaoWei';font-size:46px;color:#f2e7c9;letter-spacing:6px;line-height:1.35;
+  text-shadow:0 4px 18px rgba(0,0,0,.5)}
+.tcard .tt b{color:#e8b93a;font-weight:700}
+.tcard .tseal{margin-top:12px;display:inline-block;font-family:'Noto Serif SC';font-weight:900;font-size:21px;
+  letter-spacing:5px;color:#211F1C;background:linear-gradient(160deg,#f7e6b8,#e8c86a);border-radius:6px;
+  padding:7px 22px;box-shadow:0 8px 22px rgba(232,185,58,.35);transform:rotate(-2deg)}
+.tcard.in{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}
+.tcard.out{opacity:0;transform:translateX(-50%) translateY(-18px) scale(.9);transition:all .35s ease}
+
+/* ── 数据行飞片 ── */
+.dchip{position:absolute;z-index:18;width:210px;padding:9px 14px;border-radius:8px;opacity:0;
+  font-family:'Playfair Display','Noto Serif SC';font-weight:600;font-size:15.5px;letter-spacing:.5px;
+  box-shadow:0 12px 26px rgba(0,0,0,.5);transform:scale(.5);transition:all .6s cubic-bezier(.34,1.4,.64,1)}
+.dchip .dk{display:block;font-size:11.5px;font-weight:400;letter-spacing:2px;opacity:.7;margin-bottom:2px}
+.dchip.on{opacity:1;transform:scale(1)}
+.dchip.c1{background:#f2e7c9;color:#211F1C;border:1.5px solid #d8c690}
+.dchip.c2{background:#e8ecf7;color:#1c2a52;border:1.5px solid #b9c6e4}
+
+/* ── 对比表 ── */
+#table{position:absolute;left:50%;top:238px;transform:translateX(-50%);z-index:17;width:860px;
+  opacity:0;transform-origin:50% 0;transform:translateX(-50%) scaleY(.1);transition:all .7s cubic-bezier(.34,1.4,.64,1)}
+#table.in{opacity:1;transform:translateX(-50%) scaleY(1)}
+#table .thead{display:flex;align-items:stretch;border:2px solid #e8b93a;border-radius:12px 12px 0 0;overflow:hidden;background:#211d16}
+#table .th{flex:1;padding:12px 10px;text-align:center;font-family:'ZCOOL XiaoWei';font-size:21px;letter-spacing:3px;color:#e8b93a}
+#table .th+.th{border-left:1.5px dashed rgba(232,185,58,.4)}
+#table .th .sub{display:block;font-family:'Playfair Display';font-weight:400;font-size:10.5px;letter-spacing:2px;color:rgba(232,185,58,.55);margin-top:2px}
+#table .row{display:flex;align-items:stretch;border:2px solid rgba(232,185,58,.5);border-top:none;opacity:0;transform:translateX(-30px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#table .row:last-child{border-radius:0 0 12px 12px}
+#table .row.on{opacity:1;transform:translateX(0)!important}
+#table .td{flex:1;padding:11px 10px;text-align:center;font-family:'Playfair Display','Noto Serif SC';font-weight:600;font-size:19px;color:#f2e7c9}
+#table .td+.td{border-left:1.5px dashed rgba(232,185,58,.25)}
+#table .td.metric{font-family:'Noto Serif SC';font-weight:400;font-size:15.5px;color:rgba(242,231,201,.6);letter-spacing:2px;
+  display:flex;align-items:center;justify-content:center;gap:8px}
+#table .td.metric svg{width:17px;height:17px;flex:none;opacity:.75}
+#table .td.win{color:#e8b93a;font-size:22px}
+#table .td.lose{color:rgba(242,231,201,.4)}
+#table .vs{position:absolute;left:50%;top:-42px;transform:translateX(-50%) scale(0);z-index:2;
+  font-family:'Playfair Display';font-style:italic;font-weight:800;font-size:30px;color:#8a2016;
+  background:#f4c542;border-radius:50%;width:56px;height:56px;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 0 0 4px #211F1C,0 0 24px rgba(244,197,66,.6);transition:transform .5s cubic-bezier(.34,1.7,.64,1)}
+#table .vs.pop{transform:translateX(-50%) scale(1)}
+
+/* 敲锤 */
+#gavel{position:absolute;left:640px;top:110px;transform:rotate(-50deg) scale(1.6);z-index:23;opacity:0;
+  transition:transform .3s cubic-bezier(.6,0,1,.4),opacity .2s}
+#gavel.strike{opacity:1;transform:rotate(8deg) scale(1.6)}
+#gavel.rest{opacity:0;transform:rotate(-30deg) scale(1.6) translateX(-140px);transition:all .6s ease .15s}
+/* 收尾金色光晕 */
+#glow{position:absolute;left:50%;top:50%;width:1200px;height:700px;transform:translate(-50%,-50%) scale(.6);z-index:15;
+  background:radial-gradient(closest-side,rgba(232,185,58,.14),transparent 70%);opacity:0;transition:all 1.2s ease;pointer-events:none}
+#glow.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
+#gavel svg{width:120px;filter:drop-shadow(0 10px 18px rgba(0,0,0,.5))}
+#ring{position:absolute;left:50%;top:254px;transform:translate(-50%,-50%) scale(0);z-index:21;width:200px;height:200px;border-radius:50%;
+  border:5px solid rgba(244,197,66,.9);pointer-events:none}
+#ring.go{animation:ringGo .7s ease-out forwards}
+@keyframes ringGo{0%{transform:translate(-50%,-50%) scale(.2);opacity:1}100%{transform:translate(-50%,-50%) scale(3.4);opacity:0}}
+
+/* ── 安安 ── */
+#anan{position:absolute;right:36px;bottom:-16px;width:330px;z-index:26;opacity:0;transform:translateY(30px);transition:all .7s cubic-bezier(.16,1,.3,1);
+  filter:drop-shadow(0 12px 22px rgba(0,0,0,.6))}
+#anan.show{opacity:1;transform:translateY(0)}
+#anan img{width:100%;display:block;animation:bob 3.2s ease-in-out infinite alternate}
+@keyframes bob{from{transform:translateY(0)}to{transform:translateY(-10px)}}
+#anan .say{position:absolute;left:-236px;top:44px;width:250px;background:#f7f2e4;border:2.5px solid #211F1C;border-radius:14px;
+  padding:12px 15px;font-family:'Noto Serif SC';font-weight:600;font-size:20px;color:#211F1C;line-height:1.55;
+  opacity:0;transform:scale(.6);transition:all .45s cubic-bezier(.34,1.6,.64,1) .35s;box-shadow:4px 5px 0 rgba(0,0,0,.3)}
+#anan .say::after{content:'';position:absolute;right:-14px;top:44px;border:8px solid transparent;border-left:12px solid #211F1C}
+#anan .say b{color:#8a2016}
+#anan.show .say{opacity:1;transform:scale(1)}
+
+/* ───────── 底盘区 ───────── */
+#lbT,#lbB{position:absolute;left:0;right:0;height:0;background:#111;z-index:40;transition:height .9s cubic-bezier(.7,0,.3,1)}
+#lbT{top:0}#lbB{bottom:0}
+/* letterbox 黑边效果已取消 */
+#dim{position:absolute;inset:0;background:radial-gradient(closest-side at 50% 46%,transparent 52%,rgba(0,0,0,.55) 100%);opacity:0;transition:opacity 1s;z-index:30;pointer-events:none}
+#dim.on{opacity:1}
+.corner{position:absolute;font-family:'Playfair Display';font-weight:600;font-size:16px;color:rgba(232,185,58,.6);letter-spacing:2px;z-index:9}
+#chap{left:52px;bottom:30px}
+#src{right:52px;bottom:30px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'Playfair Display',monospace;pointer-events:none}
+#track{height:5px;background:rgba(232,185,58,.15)}
+#bar{height:100%;width:0;background:#e8b93a;box-shadow:0 0 10px rgba(232,185,58,.55)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;color:#a89a72;background:rgba(30,26,20,.92);backdrop-filter:blur(4px)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #8a6a3a;color:#a89a72;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(232,185,58,.12)}
+#replay.done{animation:pulse 1.2s infinite;border-color:#e8b93a;color:#e8b93a}
+@keyframes pulse{50%{box-shadow:0 0 14px rgba(232,185,58,.7)}}
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- ================= 镜头世界 ================= -->
+  <div id="cam">
+
+    <!-- 开场漂浮论文图标 -->
+    <div class="floatdoc fd1"><div class="fd"></div><div class="fd"></div><div class="fd s"></div></div>
+    <div class="floatdoc fd2"><div class="fd"></div><div class="fd s"></div></div>
+    <div class="floatdoc fd3"><div class="fd"></div><div class="fd"></div><div class="fd s"></div></div>
+    <div class="floatdoc fd4"><div class="fd"></div><div class="fd s"></div></div>
+
+    <!-- 口播过渡卡片（前置三句） -->
+    <div class="tcard" id="tc1"><div class="tt">拆解完了这 <b>3 篇</b> 论文</div><div class="tseal">第一遍 · 过关 ✓</div></div>
+    <div class="tcard" id="tc2"><div class="tt">不过读论文呢<br>光看懂<b>结构</b>是<b>不够</b>的</div></div>
+    <div class="tcard" id="tc3"><div class="tt">还要<b>横向对比</b>一下数据</div></div>
+
+    <!-- 标题 -->
+    <div id="title">
+      <div class="t1">光看懂<em>结构</em>还不够</div>
+      <div class="t2">STRUCTURE ALONE IS NOT ENOUGH</div>
+      <div class="rule"></div>
+    </div>
+
+    <!-- 金句横幅 -->
+    <div id="banner"><div class="bb">
+      <div class="zh">还得<em>横向对比</em></div>
+      <div class="en">CROSS-REFERENCE · SIDE BY SIDE</div>
+    </div></div>
+
+    <!-- 天平 -->
+    <div id="scale">
+      <div id="pillar"></div><div id="base"></div>
+      <div id="beam"></div>
+      <div class="pan" id="panL">
+        <div class="chain"></div><div class="dish"></div>
+        <div class="load"><img class="paper" src="papers/thumb_p2.jpg" alt="论文A"><div><span class="lab">PAPER A</span></div></div>
+      </div>
+      <div class="pan" id="panR">
+        <div class="chain"></div><div class="dish"></div>
+        <div class="load"><img class="paper" src="papers/thumb_p3.jpg" alt="论文B"><div><span class="lab">PAPER B</span></div></div>
+      </div>
+    </div>
+
+    <!-- 疑问气泡 -->
+    <div id="q1" hidden></div>
+
+    <!-- 数据行飞片（JS 生成） -->
+    <div id="chips"></div>
+
+    <!-- 对比表 -->
+    <div id="table">
+      <div class="thead">
+        <div class="th">对比维度<span class="sub">METRIC</span></div>
+        <div class="th">论文 A<span class="sub">PAPER A</span></div>
+        <div class="th">论文 B<span class="sub">PAPER B</span></div>
+      </div>
+      <div class="row" id="r1"><div class="td metric"><svg viewBox="0 0 24 24" fill="none" stroke="#e8b93a" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>样本量</div><div class="td win">1,024</div><div class="td lose">512</div></div>
+      <div class="row" id="r2"><div class="td metric"><svg viewBox="0 0 24 24" fill="none" stroke="#e8b93a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.1V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>识别准确率</div><div class="td win">92.4%</div><div class="td lose">88.1%</div></div>
+      <div class="row" id="r3"><div class="td metric"><svg viewBox="0 0 24 24" fill="none" stroke="#e8b93a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>迁移攻击成功率</div><div class="td lose">12%</div><div class="td win">3%</div></div>
+      <div class="row" id="r4"><div class="td metric"><svg viewBox="0 0 24 24" fill="none" stroke="#e8b93a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.7V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.3C6.2 13.5 5 11.4 5 9a7 7 0 0 1 7-7z"/><path d="M9 22h6"/></svg>鲁棒性测试</div><div class="td win">通过 7/8</div><div class="td lose">通过 4/8</div></div>
+      <div class="vs" id="vs">VS</div>
+    </div>
+
+    <!-- 敲锤与音波 + 光晕 -->
+    <div id="glow"></div>
+    <div id="gavel"><svg viewBox="0 0 120 120"><g transform="rotate(45 60 60)">
+      <rect x="52" y="18" width="16" height="70" rx="6" fill="#8a6a3a"/><rect x="52" y="18" width="16" height="10" rx="5" fill="#b8891a"/>
+      <rect x="22" y="74" width="76" height="26" rx="10" fill="#5c4a2e"/><rect x="22" y="74" width="76" height="9" rx="4" fill="#8a6a3a"/>
+      <rect x="30" y="70" width="60" height="6" rx="3" fill="#e8b93a"/></g></svg></div>
+    <div id="ring"></div>
+
+    <!-- 安安 -->
+    <div id="anan">
+      <div class="say">两篇放一起看，<br>谁强谁弱<b>一眼见分晓</b></div>
+      <img src="anan - emotion rename/15_平举素纸_认真以待.png" alt="安安·认真">
+    </div>
+
+  </div><!-- /cam -->
+
+  <div id="dim"></div>
+  <div id="lbT"></div><div id="lbB"></div>
+  <div class="corner" id="chap">环节1 / 第二遍：抠数据</div>
+  <div class="corner" id="src">口播念稿 v7.0 · 环节1</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 1-1b · 光懂结构不够，还得横向对比 · 9s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=12250;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+
+/* ── 数据行飞片 ── */
+const chipData=[
+  {k:'样本量',   v:'1,024',  c:'c1', fx:600, fy:560, tx:768, ty:322},
+  {k:'样本量',   v:'512',    c:'c2', fx:1320,fy:560, tx:978, ty:322},
+  {k:'准确率',   v:'92.4%',  c:'c1', fx:600, fy:640, tx:768, ty:382},
+  {k:'准确率',   v:'88.1%',  c:'c2', fx:1320,fy:640, tx:978, ty:382},
+  {k:'迁移攻击', v:'12%',    c:'c1', fx:600, fy:720, tx:768, ty:442},
+  {k:'迁移攻击', v:'3%',     c:'c2', fx:1320,fy:720, tx:978, ty:442},
+  {k:'鲁棒性',   v:'7/8',    c:'c1', fx:600, fy:800, tx:768, ty:502},
+  {k:'鲁棒性',   v:'4/8',    c:'c2', fx:1320,fy:800, tx:978, ty:502}
+];
+const chipsEl=$('#chips');
+const chips=chipData.map((d,i)=>{
+  const el=document.createElement('div');el.className='dchip '+d.c;
+  el.innerHTML=`<span class="dk">${d.k}</span>${d.v}`;
+  el.style.left=d.fx+'px';el.style.top=d.fy+'px';
+  chipsEl.appendChild(el);return {el,d};
+});
+
+/* ───────── 本镜头叙事 cue（12.25s · 拆解过关→横向对比） ─────────
+   台词锚点（t=0 = 1:39.06“那么拆解完了这3篇论文”起念）：
+   0.00s 拆解完了这3篇 / 1.12s 第一遍过关 / 2.18s 不过读论文 / 3.16s 光懂结构不够
+   4.98s 横向对比 / 6.16s 第二遍 / 7.18s 分散各篇数据 / 9.19s 放一起对比 */
+const hide=(id)=>{const e=$(id);e.classList.remove('in');e.classList.add('out')};
+
+/* 口播① 0-2.2s「拆解完了这3篇论文，第一遍就算是过关了」 */
+on(0,()=>{$('#title').classList.add('in')});
+on(150,()=>{$('#tc1').classList.add('in');__sfx.pop(0.55)});                                // 「3篇论文」卡
+on(1000,()=>__sfx.ding(0.6));                                                               // 「过关」提示音（卡面静止不弹跳）
+on(2200,()=>hide('#tc1'));
+
+/* 口播② 2.2-5.0s「不过读论文呢，光看懂结构是不够的」· 天平失衡 */
+on(2400,()=>{$('#tc2').classList.add('in');__sfx.pop(0.5)});
+on(3400,()=>{$('#scale').classList.add('in')});                                            // 天平浮现
+on(4200,()=>{$('#panL').classList.add('loaded');__sfx.pop(0.45)});                          // 左盘·结构篇
+on(4500,()=>{$('#beam').classList.add('tiltL');$('#scale').classList.add('tiltL');__sfx.thud(0.4)}); // 倾斜
+on(5200,()=>hide('#tc2'));
+
+/* 口播③ 5.0-7.2s「还要横向对比一下数据」 */
+on(5300,()=>{$('#tc3').classList.add('in');__sfx.pop(0.55)});                              // 「横向对比」卡
+on(6000,()=>{$('#panR').classList.add('loaded');__sfx.pop(0.5)});                          // 右盘·数据篇
+on(6300,()=>{$('#beam').classList.remove('tiltL');$('#beam').classList.add('balance');
+  $('#scale').classList.remove('tiltL');__sfx.ding(0.5)});                                 // 天平回平
+on(7100,()=>hide('#tc3'));
+
+/* 口播④ 7.2-9.2s「第二遍读的时候，把分散在各篇论文里的数据」· 数据飞片聚拢 */
+on(7200,()=>{camFocus(960,430,1.12,0.8);$('#scale').style.opacity='0';
+  $('#scale').style.transform='translateX(-50%) translateY(70px)';__sfx.whoosh(0.6,0.5)});  // 天平让位
+chips.forEach((c,i)=>on(7500+i*170,()=>{c.el.style.left=c.d.tx+'px';c.el.style.top=c.d.ty+'px';
+  c.el.classList.add('on');__sfx.pop(0.28)}));                                             // 飞片从两侧汇聚
+
+/* 口播⑤ 9.2-12.25s「放一起来进行一个对比啊」· 落表·裁决 */
+on(9200,()=>{chips.forEach(c=>{c.el.style.opacity='0';c.el.style.transform='scale(.7) translateY(20px)'});
+  $('#table').classList.add('in');__sfx.ding(0.6);__sfx.thud(0.35)});                      // 表格撑开
+['#r1','#r2','#r3','#r4'].forEach((id,i)=>on(9500+i*260,()=>{                              // 逐行写入
+  const el=$(id);el.style.transform=i%2?'translateX(30px)':'translateX(-30px)';
+  el.classList.add('on');__sfx.type(0.45)}));
+on(10600,()=>{$('#vs').classList.add('pop');__sfx.pop(0.7)});                              // VS 弹出
+on(11000,()=>{$('#gavel').classList.add('strike');__sfx.whoosh(0.25,0.7)});                // 锤落
+on(11200,()=>{$('#ring').classList.add('go');__sfx.thud(0.9);__sfx.ding(0.7)});            // 音波
+on(11400,()=>{$('#gavel').classList.remove('strike');$('#gavel').classList.add('rest');
+  $('#glow').classList.add('on');$('#anan').classList.add('show');__sfx.pop(0.5)});        // 锤移开·安安·金光
+on(12050,()=>{camTo(0,0,1.0,0.7);__sfx.ding(0.4)});                                        // 收镜定格
+</script>
+</body>
+</html>

@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<script>
+/* ===== [底盘] 播放器引导：虚拟时钟 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+
+<script>
+/* ===== [底盘] SFX 引擎 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 5-1 · 三篇一条线与双结论</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&family=Noto+Sans+SC:wght@400;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#2b2925;overflow:hidden;font-family:'Noto Sans SC',sans-serif}
+body.paused *{animation-play-state:paused!important}
+/* ===== 舞台：象牙白地图纸 ===== */
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;
+  background:#f4f1ea;box-shadow:inset 0 0 200px rgba(120,105,70,.18)}
+#stage::before{content:'';position:absolute;inset:0;pointer-events:none;
+  background-image:linear-gradient(rgba(33,31,28,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(33,31,28,.045) 1px,transparent 1px);
+  background-size:96px 96px}
+#frame{position:absolute;inset:30px;border:2.5px solid #d9d2bf;pointer-events:none}
+#frame::before{content:'';position:absolute;inset:7px;border:1px solid #e3ddcc}
+
+/* ===== [底盘] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:translate(0px,-324px) scale(1.3);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ── 标题区 ── */
+#title{position:absolute;left:64px;top:52px;opacity:0;transform:translateY(-16px);transition:all .6s cubic-bezier(.16,1,.3,1)}
+#title.show{opacity:1;transform:translateY(0)}
+#title .no{display:inline-block;font-family:'Montserrat';font-weight:700;font-size:15px;letter-spacing:2.5px;color:#f4f1ea;background:#211F1C;border-radius:6px;padding:6px 14px}
+#title h1{margin-top:12px;font-size:44px;font-weight:900;letter-spacing:2px;color:#211F1C}
+#title h1 em{font-style:normal;color:#3E63DD}
+#title .en{font-family:'Space Mono';font-size:13px;color:#8f8875;margin-top:6px;letter-spacing:2.5px}
+
+/* ── 线路图例牌 ── */
+#legend{position:absolute;left:630px;top:96px;display:flex;align-items:center;gap:16px;background:#fffdf6;border:2px solid #211F1C;
+  border-radius:10px;padding:12px 22px;box-shadow:5px 5px 0 rgba(33,31,28,.15);opacity:0;transform:translateY(-18px);transition:all .55s cubic-bezier(.2,1.3,.4,1)}
+#legend.show{opacity:1;transform:translateY(0)}
+#legend .sw{width:64px;height:8px;border-radius:4px;background:#3E63DD;position:relative}
+#legend .sw::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:16px;height:16px;border-radius:50%;background:#fff;border:5px solid #3E63DD}
+#legend .lt b{display:block;font-size:23px;font-weight:900;color:#211F1C;letter-spacing:2px}
+#legend .lt span{font-family:'Space Mono';font-size:12px;color:#8f8875;letter-spacing:2px}
+
+/* ── 顶部进度链 ── */
+#chain{position:absolute;left:1046px;top:102px;display:flex;align-items:flex-start;opacity:0;transform:translateY(-16px);transition:all .5s ease}
+#chain.show{opacity:1;transform:translateY(0)}
+.cnode{position:relative;width:118px;text-align:center}
+.cdot{width:42px;height:42px;margin:0 auto;border-radius:50%;background:#fffdf6;border:3px solid #c9c2ad;color:#a29a82;
+  display:flex;align-items:center;justify-content:center;font-family:'Montserrat';font-weight:700;font-size:17px;transition:all .35s cubic-bezier(.2,1.6,.4,1);position:relative;z-index:2}
+.cdot svg{position:absolute;inset:0;margin:auto;width:20px;height:20px;opacity:0;transform:scale(.3);transition:all .3s cubic-bezier(.2,1.7,.4,1)}
+.cdot .num{transition:opacity .2s}
+.clab{margin-top:8px;font-size:15px;font-weight:700;color:#8f8875;letter-spacing:1px;transition:color .3s}
+.clink{width:46px;height:4px;background:#d9d2bf;margin-top:19px;border-radius:2px;position:relative;overflow:hidden}
+.clink i{position:absolute;inset:0;background:#0E9F6E;transform:scaleX(0);transform-origin:left;transition:transform .4s ease}
+.cnode.lit .cdot{background:#0E9F6E;border-color:#0E9F6E;color:#fff;transform:scale(1.12)}
+.cnode.lit .cdot svg{opacity:1;transform:scale(1)}
+.cnode.lit .cdot .num{opacity:0}
+.cnode.lit .clab{color:#0E9F6E}
+.clink.lit i{transform:scaleX(1)}
+
+/* ── 地图 SVG ── */
+#mapSvg{position:absolute;left:0;top:0;width:1920px;height:1080px}
+#mainG path.main{stroke-dasharray:2000;stroke-dashoffset:2000}
+#mainG.draw path.main{transition:stroke-dashoffset 1.7s cubic-bezier(.35,.6,.3,1);stroke-dashoffset:0}
+#mainG.draw path.shadow{transition:stroke-dashoffset 1.7s cubic-bezier(.35,.6,.3,1);stroke-dashoffset:0}
+
+/* ── 车站 ── */
+.station{position:absolute;width:0;height:0;z-index:12}
+.sdot{position:absolute;left:-19px;top:-19px;width:38px;height:38px;border-radius:50%;background:#fffdf6;border:7px solid var(--c);
+  box-shadow:0 4px 12px rgba(33,31,28,.25);opacity:0;transform:scale(.2)}
+.station.open .sdot{animation:stPop .5s cubic-bezier(.2,1.7,.4,1) forwards}
+@keyframes stPop{to{opacity:1;transform:scale(1)}}
+.spulse{position:absolute;left:-19px;top:-19px;width:38px;height:38px;border-radius:50%;border:3px solid var(--c);opacity:0}
+.station.open .spulse{animation:pl 2.4s ease-out .6s infinite}
+@keyframes pl{0%{opacity:.7;transform:scale(1)}100%{opacity:0;transform:scale(2.3)}}
+.slab{position:absolute;background:#fffdf6;border:2px solid #211F1C;border-radius:9px;box-shadow:5px 5px 0 rgba(33,31,28,.15);
+  padding:12px 66px 11px 18px;white-space:nowrap;opacity:0;transform:translateY(14px) scale(.85);transition:all .45s cubic-bezier(.2,1.5,.4,1)}
+.slab::before{content:'';position:absolute;left:0;top:0;bottom:0;width:7px;background:var(--c);border-radius:7px 0 0 7px}
+.station.open .slab{opacity:1;transform:translateY(0) scale(1);transition-delay:.18s}
+.slab .sname{font-size:25px;font-weight:900;color:#211F1C;letter-spacing:1.5px;padding-left:6px}
+.slab .sname b{color:var(--c)}
+.slab .ssub{margin-top:4px;font-family:'Space Mono';font-size:13.5px;color:#8f8875;letter-spacing:.5px;padding-left:6px}
+.slab .sthumb{position:absolute;right:9px;top:50%;width:46px;border:2.5px solid #fff;background:#fff;border-radius:2px;
+  box-shadow:0 5px 12px rgba(33,31,28,.35);transform:translateY(-50%) rotate(7deg)}
+.slab .ssub b{color:var(--c);font-weight:700}
+
+/* ── 换乘信息牌 ── */
+#xfer{position:absolute;left:790px;top:392px;width:430px;z-index:13;opacity:0;transform:translateY(-26px);transition:all .5s cubic-bezier(.2,1.4,.4,1);transform-origin:50% -60px}
+#xfer.show{opacity:1;transform:translateY(0);animation:sway 5s ease-in-out .6s infinite}
+@keyframes sway{0%,100%{transform:rotate(-1.1deg)}50%{transform:rotate(1.1deg)}}
+#xfer .xboard{background:#211F1C;border-radius:12px;padding:14px 22px 16px;box-shadow:0 14px 30px rgba(33,31,28,.3)}
+#xfer .xhead{display:flex;align-items:center;gap:10px;font-family:'Montserrat';font-weight:700;font-size:13px;letter-spacing:2.5px;color:#c9c2ad}
+#xfer .xhead .xic{width:22px;height:22px;border-radius:50%;border:2.5px solid #c9c2ad;display:flex;align-items:center;justify-content:center}
+#xfer .xhead .xic svg{width:12px;height:12px;stroke:#c9c2ad}
+#xfer .xbody{margin-top:9px;font-size:21px;font-weight:900;color:#f4f1ea;letter-spacing:1px}
+#xfer .xtags{margin-top:10px;display:flex;gap:12px}
+#xfer .xtag{font-size:18px;font-weight:700;padding:6px 16px;border-radius:999px;background:rgba(62,99,221,.18);color:#8fa3ec;border:1.5px solid #3E63DD;
+  opacity:0;transform:scale(.6);transition:all .35s cubic-bezier(.2,1.6,.4,1)}
+#xfer .xtag.on{opacity:1;transform:scale(1)}
+#xfer .xhang{position:absolute;left:50%;top:100%;width:2.5px;height:76px;background:#b6ae97}
+#xfer .xhang::after{content:'';position:absolute;left:50%;bottom:-6px;transform:translateX(-50%);width:9px;height:9px;border-radius:50%;background:#b6ae97}
+
+/* ── 结案证书卡 ── */
+.ccard{position:absolute;width:300px;height:258px;background:#fffdf6;border:2px solid #211F1C;border-radius:12px;z-index:14;
+  box-shadow:7px 7px 0 rgba(33,31,28,.14),0 20px 44px rgba(33,31,28,.14);padding:0;opacity:0;transform:translateY(-960px) rotate(3deg)}
+.ccard.in{transition:transform .8s cubic-bezier(.2,1.15,.35,1),opacity .3s;opacity:1;transform:translateY(0) rotate(0)}
+.ccard .chead{background:#211F1C;color:#f4f1ea;font-family:'Montserrat';font-weight:700;font-size:12px;letter-spacing:2.5px;
+  padding:9px 16px;border-radius:9px 9px 0 0;display:flex;justify-content:space-between;align-items:center}
+.ccard .chead .cdot2{width:9px;height:9px;border-radius:50%;background:#D97706}
+.ccard .cbody{padding:16px 20px 0;text-align:center}
+.ccard .cbig{font-family:'Montserrat';font-weight:900;font-size:44px;color:#3E63DD;line-height:1.05;letter-spacing:-1px}
+.ccard .cbig small{font-size:24px}
+.ccard .ctext{margin-top:8px;font-size:18px;font-weight:900;color:#211F1C;letter-spacing:.5px;white-space:nowrap}
+.ccard .cnote{margin-top:7px;font-family:'Space Mono';font-size:12px;color:#8f8875;letter-spacing:.5px}
+.ccard .gold{position:absolute;inset:7px;border:1.5px solid #cbb26a;border-radius:8px;pointer-events:none}
+.seal{position:absolute;right:-20px;bottom:-20px;width:88px;height:88px;border-radius:50%;border:3.5px solid #0E9F6E;color:#0E9F6E;
+  background:rgba(14,159,110,.08);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+  transform:rotate(-14deg) scale(2.3);opacity:0;z-index:5}
+.seal::before{content:'';position:absolute;inset:5px;border:1.5px dashed #0E9F6E;border-radius:50%;opacity:.7}
+.seal svg{width:24px;height:24px}
+.seal span{font-size:16.5px;font-weight:900;letter-spacing:2px}
+.seal.stamp{animation:sealIn .48s cubic-bezier(.2,1.6,.4,1) forwards}
+@keyframes sealIn{to{opacity:1;transform:rotate(-14deg) scale(1)}}
+
+/* ── 亲手验过吊牌 ── */
+#verifyTag{position:absolute;left:1270px;top:536px;z-index:13;background:#0E9F6E;color:#f4f1ea;border-radius:8px;
+  padding:9px 20px;font-size:18px;font-weight:900;letter-spacing:2px;box-shadow:4px 4px 0 rgba(14,120,84,.35);
+  opacity:0;transform:translateY(-14px) scale(.8);transition:all .45s cubic-bezier(.2,1.5,.4,1)}
+#verifyTag.show{opacity:1;transform:translateY(0) scale(1)}
+#verifyTag svg{display:inline-block;vertical-align:-3px;width:20px;height:20px;margin-right:7px}
+
+/* ── 终点勋章 ── */
+#medal{position:absolute;left:1630px;top:158px;width:220px;height:300px;z-index:15;opacity:0;transform:scale(2.5)}
+#medal.slam{animation:medalIn .55s cubic-bezier(.2,1.4,.4,1) forwards}
+@keyframes medalIn{to{opacity:1;transform:scale(1)}}
+#medal .rib{position:absolute;top:0;width:56px;height:130px;background:linear-gradient(180deg,#D97706,#b45309)}
+#medal .rib.r1{left:44px;transform:rotate(-16deg);clip-path:polygon(0 0,100% 0,100% 100%,0 82%)}
+#medal .rib.r2{right:44px;transform:rotate(16deg);clip-path:polygon(0 0,100% 0,100% 82%,0 100%)}
+#medal .rib::after{content:'';position:absolute;left:50%;top:0;bottom:0;width:9px;background:rgba(244,241,234,.55);transform:translateX(-50%)}
+#medal .mdisc{position:absolute;left:10px;top:96px;width:200px;height:200px;border-radius:50%;
+  background:radial-gradient(circle at 34% 28%,#f5c769,#D97706 62%,#b45309);border:5px solid #8c3f0c;
+  box-shadow:0 18px 40px rgba(140,63,12,.4),inset 0 4px 10px rgba(255,240,200,.6),inset 0 -8px 16px rgba(120,50,5,.45);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;box-sizing:border-box;padding-bottom:12px}
+#medal .mdisc::before{content:'';position:absolute;inset:11px;border:2px dashed rgba(255,244,214,.75);border-radius:50%}
+#medal .mdisc::after{content:'';position:absolute;top:-60%;left:-80%;width:60%;height:220%;transform:rotate(24deg);
+  background:linear-gradient(90deg,transparent,rgba(255,250,230,.5),transparent);animation:shine 3.4s ease-in-out 1s infinite}
+@keyframes shine{0%{left:-80%}45%,100%{left:130%}}
+#medal .mstar{width:34px;height:34px;color:#fff6dd;margin-bottom:2px}
+#medal .mt1{font-size:26px;font-weight:900;color:#fff6dd;letter-spacing:3px;text-shadow:0 2px 0 rgba(120,50,5,.5)}
+#medal .mt2{font-family:'Montserrat';font-weight:900;font-size:40px;color:#fff6dd;letter-spacing:1px;text-shadow:0 3px 0 rgba(120,50,5,.5);line-height:1}
+#medal .mt3{margin-top:2px;font-family:'Space Mono';font-size:9px;color:rgba(255,246,221,.85);letter-spacing:.6px;white-space:nowrap}
+
+/* ── 安安 ── */
+#mascot{position:absolute;left:24px;bottom:8px;width:330px;z-index:28;opacity:0;transition:opacity .8s ease;filter:drop-shadow(0 12px 26px rgba(33,31,28,.3))}
+#mascot.show{opacity:1}
+#mascot img{width:100%;display:block;animation:bob 3s ease-in-out infinite alternate}
+@keyframes bob{from{transform:translateY(0)}to{transform:translateY(-11px)}}
+#mascot .say{position:absolute;left:300px;top:-80px;width:250px;background:#fffdf6;border:2.5px solid #211F1C;border-radius:14px;padding:13px 18px;
+  font-size:24px;font-weight:900;color:#211F1C;line-height:1.4;opacity:0;transform:scale(.6);transition:all .45s cubic-bezier(.34,1.6,.64,1);box-shadow:5px 5px 0 rgba(33,31,28,.18)}
+#mascot .say::after{content:'';position:absolute;left:30px;bottom:-19px;border:9px solid transparent;border-top:12px solid #211F1C}
+#mascot .say b{color:#3E63DD}
+#mascot.show .say{opacity:1;transform:scale(1);transition-delay:.4s}
+
+/* ── 底盘区 ── */
+#lbT,#lbB{position:absolute;left:0;right:0;height:0;background:#14120e;z-index:40;transition:height .9s cubic-bezier(.7,0,.3,1)}
+#lbT{top:0}#lbB{bottom:0}
+/* letterbox 黑边效果已取消 */
+#dim{position:absolute;inset:0;background:radial-gradient(closest-side at 50% 46%,transparent 52%,rgba(0,0,0,.8) 100%);opacity:0;transition:opacity 1s;z-index:30;pointer-events:none}
+#dim.on{opacity:1}
+
+.corner{position:absolute;font-family:'Space Mono';font-size:14px;color:rgba(33,31,28,.5);letter-spacing:2px;z-index:9}
+#chap{left:52px;bottom:34px}
+#src{right:52px;bottom:34px}
+
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'Space Mono';pointer-events:none}
+#track{height:5px;background:rgba(33,31,28,.12)}
+#bar{height:100%;width:0;background:#3E63DD;box-shadow:0 0 10px rgba(62,99,221,.5)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;color:#e8e2d0;background:rgba(33,31,28,.94);backdrop-filter:blur(4px)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #999;color:#ccc;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(255,255,255,.12)}
+#replay.done{animation:pulse 1.2s infinite;border-color:#8fa3ec;color:#8fa3ec}
+@keyframes pulse{50%{box-shadow:0 0 14px rgba(143,163,236,.8)}}
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <div id="cam">
+    <div id="frame"></div>
+
+    <!-- 地图底：幽灵线路 -->
+    <svg id="mapSvg" viewBox="0 0 1920 1080">
+      <g stroke="#e0dac8" stroke-width="5" fill="none" stroke-linecap="round">
+        <path d="M0 430 H 420 L 700 150 H 1000"/>
+        <path d="M760 1080 V 800 L 980 580" opacity=".8"/>
+        <path d="M1300 1080 L 1560 820 H 1920" opacity=".8"/>
+        <path d="M0 220 H 240" opacity=".7"/>
+      </g>
+      <g stroke="#eae4d2" stroke-width="2.5" fill="none">
+        <path d="M0 640 H 320"/>
+        <path d="M1620 1080 V 900"/>
+      </g>
+      <!-- 主线 -->
+      <g id="mainG">
+        <path class="main shadow" d="M100 900 H560 L880 580 H1150 L1470 260 H1810" stroke="#c4cdf0" stroke-width="15" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <path class="main" d="M100 900 H560 L880 580 H1150 L1470 260 H1810" stroke="#3E63DD" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
+    </svg>
+
+    <div id="title">
+      <span class="no">SHOT 5-1 · RECAP</span>
+      <h1>三篇论文，<em>连成一条线</em></h1>
+      <div class="en">PAPER DETECTIVE · FINAL RECAP MAP</div>
+    </div>
+
+    <div id="legend">
+      <div class="sw"></div>
+      <div class="lt"><b>论文侦探线</b><span>PAPER DETECTIVE LINE</span></div>
+    </div>
+
+    <!-- 进度链 -->
+    <div id="chain">
+      <div class="cnode" id="cn1"><div class="cdot"><span class="num">1</span><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13l5 5L20 7"/></svg></div><div class="clab">导读拆解</div></div>
+      <div class="clink" id="cl1"><i></i></div>
+      <div class="cnode" id="cn2"><div class="cdot"><span class="num">2</span><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13l5 5L20 7"/></svg></div><div class="clab">数据对比</div></div>
+      <div class="clink" id="cl2"><i></i></div>
+      <div class="cnode" id="cn3"><div class="cdot"><span class="num">3</span><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13l5 5L20 7"/></svg></div><div class="clab">复现验真</div></div>
+      <div class="clink" id="cl3"><i></i></div>
+      <div class="cnode" id="cn4"><div class="cdot"><span class="num">4</span><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13l5 5L20 7"/></svg></div><div class="clab">卡片沉淀</div></div>
+    </div>
+
+    <!-- 车站 1 -->
+    <div class="station" id="st1" style="left:560px;top:900px;--c:#D0453E">
+      <div class="spulse"></div><div class="sdot"></div>
+      <div class="slab" style="left:-160px;top:-128px">
+        <div class="sname"><b>案卷 01</b> · 攻击有多狠</div>
+        <div class="ssub">27 万次攻击 · <b>13 模型全破</b></div>
+        <img class="sthumb" src="papers/thumb_p1.jpg" alt="红队竞赛论文首页">
+      </div>
+    </div>
+    <!-- 车站 2 -->
+    <div class="station" id="st2" style="left:1000px;top:580px;--c:#D97706">
+      <div class="spulse"></div><div class="sdot"></div>
+      <div class="slab" style="left:-392px;top:52px">
+        <div class="sname"><b>案卷 02</b> · 为什么防不住</div>
+        <div class="ssub">WHY DEFENSES FAIL</div>
+        <img class="sthumb" src="papers/thumb_p2.jpg" alt="PIArena论文首页">
+      </div>
+    </div>
+    <!-- 车站 3 -->
+    <div class="station" id="st3" style="left:1470px;top:260px;--c:#3E63DD">
+      <div class="spulse"></div><div class="sdot"></div>
+      <div class="slab" style="left:-150px;top:64px">
+        <div class="sname"><b>案卷 03</b> · 领域全景</div>
+        <div class="ssub"><b>78 篇 → 42</b> 技术</div>
+        <img class="sthumb" src="papers/thumb_p3.jpg" alt="SoK综述论文首页">
+      </div>
+    </div>
+
+    <!-- 换乘信息牌 -->
+    <div id="xfer">
+      <div class="xboard">
+        <div class="xhead">
+          <span class="xic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.6" stroke-linecap="round"><path d="M7 4v12M7 8h10M17 12v8"/></svg></span>
+          TRANSFER · 换乘信息
+        </div>
+        <div class="xbody">当前研究热门</div>
+        <div class="xtags">
+          <span class="xtag" id="xt1">Agent 安全</span>
+          <span class="xtag" id="xt2">提示注入</span>
+        </div>
+      </div>
+      <div class="xhang"></div>
+    </div>
+
+    <!-- 亲手验过吊牌 -->
+    <div id="verifyTag"><svg viewBox="0 0 24 24" fill="none" stroke="#f4f1ea" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg>关键结论都是亲手验过的</div>
+
+    <!-- 结案证书卡 -->
+    <div class="ccard" id="cc1" style="left:1150px;top:632px">
+      <div class="gold"></div>
+      <div class="chead">CASE CLOSED · 结案证书 ①<span class="cdot2"></span></div>
+      <div class="cbody">
+        <div class="cbig">r = <small>-</small>0.31</div>
+        <div class="ctext">模型能力 × 安全性弱相关</div>
+        <div class="cnote">未做后训练 · 复现实测一致</div>
+      </div>
+      <div class="seal" id="seal1"><svg viewBox="0 0 24 24" fill="none" stroke="#0E9F6E" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13l5 5L20 7"/></svg><span>已复现</span></div>
+    </div>
+    <div class="ccard" id="cc2" style="left:1470px;top:632px">
+      <div class="gold"></div>
+      <div class="chead">CASE CLOSED · 结案证书 ②<span class="cdot2"></span></div>
+      <div class="cbody">
+        <div class="cbig">不对称</div>
+        <div class="ctext">攻防迁移 · 成功率不对称</div>
+        <div class="cnote">ATTACK-DEFENSE TRANSFER GAP</div>
+      </div>
+      <div class="seal" id="seal2"><svg viewBox="0 0 24 24" fill="none" stroke="#0E9F6E" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13l5 5L20 7"/></svg><span>已复现</span></div>
+    </div>
+
+    <!-- 终点勋章 -->
+    <div id="medal">
+      <div class="rib r1"></div><div class="rib r2"></div>
+      <div class="mdisc">
+        <svg class="mstar" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.6l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.5l-5.9 3.1 1.2-6.5L2.5 9.5l6.6-.9z"/></svg>
+        <div class="mt1">毕设创新点</div>
+        <div class="mt2">GET</div>
+        <div class="mt3">TERMINUS · THESIS POINT</div>
+      </div>
+    </div>
+
+    <!-- 安安 -->
+    <div id="mascot">
+      <div class="say">这一波，<b>直接血赚</b></div>
+      <img src="anan - emotion rename/14_红腮含颦_腼腆欣喜.png" alt="安安·腼腆欣喜">
+    </div>
+  </div><!-- /cam -->
+
+  <div id="dim"></div>
+  <div id="lbT"></div><div id="lbB"></div>
+
+  <div class="corner" id="chap">Part3 / 收尾</div>
+  <div class="corner" id="src">论文1 §4.1 · 复现实测一致</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 5-1 · 三篇一条线与双结论 · 25s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [底盘] 时间轴引擎 ===== */
+const DUR=27000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+const after=(ms,f)=>on(performance.now()-t0+ms,f);
+function fly(el,x1,y1,x2,y2,dur,arc,ease,done){tws.push({t:performance.now()-t0,d:dur,e:ease||eio,done,f:p=>{el.style.left=(x1+(x2-x1)*p)+'px';el.style.top=(y1+(y2-y1)*p-Math.sin(p*Math.PI)*(arc||0))+'px'}})}
+function cnt(el,from,to,dur){tws.push({t:performance.now()-t0,d:dur,e:eo,f:p=>{el.textContent=Math.round(from+(to-from)*p).toLocaleString('en-US')}})}
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [底盘] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+
+/* ────────────────────────────────────────────────
+   本镜头 cue（25s）
+   ──────────────────────────────────────────────── */
+on(300,()=>{camTo(0,0,1,2.2);$('#mainG').classList.add('draw');$('#legend').classList.add('show');$('#title').classList.add('show')});
+
+on(4000,()=>$('#st1').classList.add('open'));
+on(5000,()=>$('#st2').classList.add('open'));
+on(7000,()=>$('#st3').classList.add('open'));
+
+on(9000,()=>$('#xfer').classList.add('show'));
+on(9500,()=>$('#xt1').classList.add('on'));
+on(12000,()=>$('#xt2').classList.add('on'));
+
+on(14000,()=>{camFocus(1420,700,1.15,1.0);$('#verifyTag').classList.add('show')});
+on(18000,()=>$('#cc1').classList.add('in'));
+on(21000,()=>$('#cc2').classList.add('in'));
+on(19500,()=>$('#seal1').classList.add('stamp'));
+on(21500,()=>$('#seal2').classList.add('stamp'));
+
+on(24000,()=>{camFocus(1700,300,1.22,0.9);$('#medal').classList.add('slam')});
+
+on(26000,()=>{$('#mascot').classList.add('show')});
+
+on(25500,()=>$('#chain').classList.add('show'));
+on(25600,()=>{$('#cn1').classList.add('lit')});
+on(25700,()=>{$('#cl1').classList.add('lit');$('#cn2').classList.add('lit')});
+on(25800,()=>{$('#cl2').classList.add('lit');$('#cn3').classList.add('lit')});
+on(25900,()=>{$('#cl3').classList.add('lit');$('#cn4').classList.add('lit')});
+
+on(26800,()=>{camTo(0,0,1,1.9)});
+
+/* ===== 音效 ===== */
+on(300,()=>__sfx.whoosh(1.6,0.8));
+on(600,()=>__sfx.pop(0.5));
+on(4000,()=>__sfx.pop(0.8));
+on(5000,()=>__sfx.pop(0.8));
+on(7000,()=>__sfx.pop(0.8));
+on(9000,()=>__sfx.swipe(0.7));
+on(9500,()=>__sfx.pop(0.6));
+on(12000,()=>__sfx.pop(0.6));
+on(14000,()=>__sfx.swipe(0.6));
+on(18000,()=>__sfx.pop(0.7));
+on(21000,()=>__sfx.pop(0.7));
+on(19500,()=>__sfx.thud(1));
+on(21500,()=>__sfx.thud(1));
+on(24000,()=>__sfx.thud(1.25));
+on(26000,()=>__sfx.pop(0.7));
+on(25600,()=>__sfx.ding(0.75));
+on(25700,()=>__sfx.ding(0.75));
+on(25800,()=>__sfx.ding(0.75));
+on(25900,()=>__sfx.ding(0.9));
+on(26800,()=>__sfx.whoosh(1.6,0.6));
+</script>
+</body>
+</html>

@@ -27,9 +27,11 @@ description: 为视频/课程/解说文案制作"每镜头一个 HTML"的高完�
 
 本 Skill 自带素材库与实例库（`assets/`）：
 
-- `assets/examples/anan - emotion rename/` — **安安 15 张情绪立绘**（约 5MB/张高清 PNG）。新项目开工时，把该文件夹整个复制进用户的输出目录，页面内以 `anan - emotion rename/12_粉颊捧笺_娇羞雀跃.png` 相对路径引用。情绪→场景速查表见 `references/character-reactions.md`。
-- `assets/examples/icons/` — `GLMicon.png`、`GPTicon.png` 等模型 Logo，同样复制到输出目录后以 `icons/GLMicon.png` 引用；有新角色 Logo 就照此补充。
-- `assets/examples/` — **29 个成片级页面 + index 总览 + 播放器原始参考**（`reference/0-1-typewriter.html`），整套可直接双击运行。它们是所有风格的"活样板"：写某种风格前，先读 1-2 个同风格的成片页学其落地手法（风格↔页面对应关系见 `references/style-library.md` 末尾的索引，或直接打开 examples/index.html 看风格标签）。
+- `assets/examples/` — **两套完整成片实例**（每个文件夹自包含，直接双击 index.html 即可运行）：
+  - `glm-5.3-range-test/` — 29 镜头 · 安全实测复盘（复古报纸/嘉年华老虎机/像素游戏/审讯室/机场安检…）+ 播放器原始参考 `reference/0-1-typewriter.html`
+  - `doubao-paper-detective/` — 11 镜头 · 论文阅读商单「论文侦探」（黑色电影档案/黄铜天平/集换式卡牌卡册/地铁线路图/毕业寄语明信片…）
+- **表情包与图标**：每个项目文件夹内自带 `anan - emotion rename/`（安安 15 张情绪立绘）与项目图标（`icons/GLMicon.png`、`doubaoicon.png`、`doctor_ava.jpg` 等）。新项目开工时，把要用的素材整个复制进用户的输出目录，页面内以 `anan - emotion rename/12_粉颊捧笺_娇羞雀跃.png` 这样的相对路径引用；有新角色 Logo 就照此补充。情绪→场景速查表见 `references/character-reactions.md`。
+- 它们是所有风格的"活样板"：写某种风格前，先读 1-2 个同风格的成片页学其落地手法（风格↔页面对应关系见 `references/style-library.md` 的索引，或直接打开各项目 index.html 看风格标签）。两套实例也演示了同一底盘如何服务完全不同的内容领域。
 
 素材不全时，先列出分镜表（编号/标题/时长/口播段落）让用户确认，再动手。没有口播稿就自己按内容节奏排时间轴，并在代码注释里注明每个 cue 对应的叙事节拍。
 

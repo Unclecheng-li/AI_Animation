@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<script>
+/* ===== [底盘] 播放器引导：虚拟时钟 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+
+<script>
+/* ===== [底盘] SFX 引擎 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 5-2 · 指定句与三连</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;700&family=Caveat:wght@500;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#3a332a;overflow:hidden;font-family:'Noto Serif SC',serif}
+body.paused *{animation-play-state:paused!important}
+/* ===== 舞台：暖木书桌 ===== */
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;
+  background:radial-gradient(1300px 800px at 50% 42%,#e6d9bd,#d5c5a4 70%,#c4b191)}
+#stage::before{content:'';position:absolute;inset:0;pointer-events:none;opacity:.5;
+  background-image:radial-gradient(rgba(120,95,55,.12) 1.2px,transparent 1.6px);background-size:34px 34px}
+
+/* ===== [底盘] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:translate(0px,0px) scale(1.18);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ── 桌面装饰 ── */
+#flower{position:absolute;right:60px;bottom:40px;width:340px;opacity:.85;transform:rotate(8deg)}
+#clip{position:absolute;left:300px;top:120px;width:90px;transform:rotate(-24deg);opacity:.9;z-index:12}
+#coffee{position:absolute;left:120px;top:90px;width:210px;height:210px;border-radius:50%;border:14px solid rgba(150,116,66,.16);filter:blur(1px)}
+
+/* ── 明信片 ── */
+#pcardWrap{position:absolute;left:340px;top:160px;width:1240px;height:760px;opacity:0;transform:scale(.82) rotate(-7deg);transition:all .9s cubic-bezier(.2,1.1,.35,1)}
+#pcardWrap.in{opacity:1;transform:scale(1) rotate(0deg)}
+#pcard{position:absolute;inset:0;transform:rotate(-1.4deg);transform-style:preserve-3d;transition:transform 1s cubic-bezier(.45,.05,.25,1)}
+#pcard.flipped{transform:rotate(-1.4deg) rotateY(180deg)}
+.face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;background:#f6efe3;border-radius:6px;
+  border:1.5px solid #d8c9a8;box-shadow:0 26px 60px rgba(90,70,40,.35)}
+.face.back{transform:rotateY(180deg)}
+.face .innerline{position:absolute;inset:14px;border:1px dashed #cdbd99;border-radius:4px;pointer-events:none}
+
+/* 和纸胶带 */
+.tape{position:absolute;width:130px;height:38px;background:repeating-linear-gradient(45deg,rgba(62,99,221,.28) 0 8px,rgba(62,99,221,.18) 8px 16px);
+  box-shadow:0 2px 6px rgba(90,70,40,.2);opacity:.9;z-index:3}
+.tape.t1{left:60px;top:-18px;transform:rotate(-8deg)}
+.tape.t2{right:240px;top:-16px;transform:rotate(5deg)}
+
+/* 邮票 */
+#stampBox{position:absolute;right:44px;top:40px;width:136px;height:166px;background:#fff;border:2px dashed #b9a578;
+  padding:7px;transform:rotate(2deg);box-shadow:0 4px 12px rgba(90,70,40,.18)}
+#stampBox svg{width:100%;height:100%;display:block}
+/* 邮戳 */
+#postmark{position:absolute;right:118px;top:140px;width:150px;height:150px;transform:rotate(-13deg) scale(1.8);opacity:0;z-index:4}
+#postmark.stamp{animation:pmIn .5s cubic-bezier(.2,1.5,.4,1) forwards}
+@keyframes pmIn{to{opacity:1;transform:rotate(-13deg) scale(1)}}
+
+/* ── 流程回顾条 ── */
+#flow{position:absolute;left:52px;top:52px;display:flex;align-items:flex-start;opacity:0;transition:opacity .5s}
+#flow.show{opacity:1}
+.fstep{width:112px;text-align:center;position:relative}
+.ficon{width:58px;height:58px;margin:0 auto;border-radius:50%;background:#efe6d2;border:2.5px solid #b9a578;color:#a8946f;
+  display:flex;align-items:center;justify-content:center;transition:all .4s cubic-bezier(.2,1.5,.4,1)}
+.ficon svg{width:28px;height:28px}
+.flab{margin-top:8px;font-size:16.5px;font-weight:700;color:#a8946f;letter-spacing:2px;transition:color .3s}
+.farr{width:26px;margin-top:24px;color:#c4b491}
+.farr svg{width:100%;display:block}
+.fstep.lit .ficon{background:#3E63DD;border-color:#3E63DD;color:#fff;transform:scale(1.1);box-shadow:0 6px 16px rgba(62,99,221,.35)}
+.fstep.lit .flab{color:#3E63DD}
+
+/* ── 钢笔手写 ── */
+#hw{position:absolute;left:76px;top:254px;font-family:'Ma Shan Zheng';font-size:50px;color:#2b2620;letter-spacing:4px}
+#hw .ch{display:inline-block;opacity:0;transform:translateY(14px) rotate(4deg);transition:all .3s ease}
+#hw.write .ch{opacity:1;transform:translateY(0) rotate(0)}
+#hwline{position:absolute;left:76px;top:330px;width:0;height:5px;border-radius:3px;background:#3E63DD;opacity:.85;transition:width .6s cubic-bezier(.3,.7,.3,1)}
+#hwline.go{width:560px}
+
+/* ── 金句卡 ── */
+#quote{position:absolute;left:130px;top:400px;width:980px;background:#fffdf5;border:1.5px solid #d8c9a8;border-radius:8px;
+  box-shadow:0 14px 36px rgba(90,70,40,.22);padding:30px 46px 26px;opacity:0;transform:translateY(36px) rotate(.8deg);transition:all .6s cubic-bezier(.2,1.2,.4,1)}
+#quote.in{opacity:1;transform:translateY(0) rotate(.8deg)}
+#quote .qtape{position:absolute;left:50%;top:-16px;transform:translateX(-50%) rotate(-2deg);width:150px;height:32px;
+  background:rgba(217,119,6,.25);box-shadow:0 2px 5px rgba(90,70,40,.15)}
+#quote .qtext{font-family:'Ma Shan Zheng';font-size:39px;color:#2b2620;line-height:1.65;letter-spacing:2px}
+#quote .hl-red{color:#D0453E;position:relative;white-space:nowrap}
+#quote .hl-green{color:#0E9F6E;position:relative;white-space:nowrap}
+#quote .hl-red::after,#quote .hl-green::after{content:'';position:absolute;left:-2%;right:-2%;bottom:2px;height:8px;border-radius:4px;
+  transform:scaleX(0);transform-origin:left;transition:transform .55s cubic-bezier(.3,.7,.3,1)}
+#quote .hl-red::after{background:rgba(208,69,62,.3)}
+#quote .hl-green::after{background:rgba(14,159,110,.3)}
+#quote .hl-red.brush::after,#quote .hl-green.brush::after{transform:scaleX(1)}
+#quote .qtag{position:absolute;right:22px;top:16px;font-family:'Caveat';font-size:22px;color:#b9a578;transform:rotate(3deg)}
+
+/* ── 安安 15（正面） ── */
+#anan15{position:absolute;left:1630px;top:478px;width:272px;z-index:20;opacity:0;transition:opacity .7s ease;filter:drop-shadow(0 10px 22px rgba(90,70,40,.4))}
+#anan15.show{opacity:1}
+#anan15 img{width:100%;display:block;animation:bob 3.1s ease-in-out infinite alternate}
+@keyframes bob{from{transform:translateY(0)}to{transform:translateY(-10px)}}
+#anan15 .say{position:absolute;left:-252px;top:-34px;width:236px;background:#fffdf5;border:2px solid #b9a578;border-radius:14px;padding:12px 17px;
+  font-family:'Ma Shan Zheng';font-size:26px;color:#2b2620;line-height:1.4;opacity:0;transform:scale(.6);transition:all .45s cubic-bezier(.34,1.6,.64,1);box-shadow:4px 4px 0 rgba(150,116,66,.25)}
+#anan15 .say::after{content:'';position:absolute;right:26px;bottom:-17px;border:8px solid transparent;border-top:11px solid #b9a578}
+#anan15.show .say{opacity:1;transform:scale(1);transition-delay:.4s}
+
+/* ── 背面 ── */
+.back .bdiv{position:absolute;left:620px;top:60px;bottom:60px;width:1.5px;background:#cdbd99}
+#bquestion{position:absolute;left:64px;top:110px;width:540px;font-family:'Ma Shan Zheng';font-size:47px;color:#2b2620;line-height:1.6;letter-spacing:3px}
+#bquestion .ch{display:inline-block;opacity:0;transform:translateY(12px);transition:all .3s ease}
+#bquestion.write .ch{opacity:1;transform:translateY(0)}
+#bquestion .qhl{color:#3E63DD}
+/* ── 豆包贴纸 logo（“你是怎么用豆包…”处） ── */
+#dbLogo{position:absolute;left:474px;top:120px;width:98px;height:98px;border-radius:50%;background:#fffdf5;
+  border:2.5px solid #b9a578;display:flex;align-items:center;justify-content:center;z-index:7;opacity:0;
+  box-shadow:3px 5px 12px rgba(120,95,55,.3);transform:rotate(-6deg) scale(2)}
+#dbLogo img{width:72px;height:72px;border-radius:50%}
+#dbLogo .dbcap{position:absolute;left:50%;bottom:-30px;transform:translateX(-50%);font-family:'Caveat','Ma Shan Zheng';
+  font-size:19px;color:#8a7a58;letter-spacing:2px;white-space:nowrap;opacity:0;transition:opacity .4s ease .25s}
+#dbLogo.stampIn{animation:dbStamp .55s cubic-bezier(.2,1.4,.4,1) forwards}
+#dbLogo.stampIn .dbcap{opacity:1}
+@keyframes dbStamp{0%{opacity:0;transform:rotate(-10deg) scale(2)}
+  60%{opacity:1;transform:rotate(-4deg) scale(.9)}
+  100%{opacity:1;transform:rotate(-6deg) scale(1)}}
+#bcta{position:absolute;left:96px;top:330px;font-family:'Ma Shan Zheng';font-size:32px;color:#8a7a58;letter-spacing:3px;opacity:0;transform:translateX(-14px);transition:all .5s ease}
+#bcta.show{opacity:1;transform:translateX(0)}
+#barrow{position:absolute;left:300px;top:392px;width:300px;height:150px;overflow:visible}
+#barrow path{stroke-dasharray:520;stroke-dashoffset:520;transition:stroke-dashoffset 1s ease .2s}
+#barrow.go path{stroke-dashoffset:0}
+/* 背面右栏：收件栏线 */
+.bline{position:absolute;right:70px;height:1.5px;background:#cdbd99;width:380px}
+#bl1{top:120px}#bl2{top:172px}#bl3{top:224px}
+#bstampHint{position:absolute;right:70px;top:40px;width:92px;height:66px;border:1.5px dashed #c4b491;border-radius:3px}
+#btriLab{position:absolute;left:660px;top:330px;width:520px;text-align:center;font-family:'Caveat';font-size:30px;color:#8a7a58;letter-spacing:2px;opacity:0;transition:opacity .5s}
+#btriLab.show{opacity:1}
+
+/* 三连按钮 */
+#triple{position:absolute;left:660px;top:392px;width:520px;display:flex;justify-content:center;gap:44px;z-index:6;opacity:0;transform:translateY(30px);transition:all .55s cubic-bezier(.2,1.2,.4,1)}
+#triple.in{opacity:1;transform:translateY(0)}
+.tbtn{position:relative;width:130px;text-align:center;transition:transform .7s cubic-bezier(.4,0,.2,1),opacity .5s}
+.tbtn .ring{width:118px;height:118px;margin:0 auto;border-radius:50%;background:#f6efe3;border:3.5px solid #2b2620;display:flex;align-items:center;justify-content:center;transition:all .35s;transform:rotate(var(--rr,0deg))}
+.tbtn svg{width:56px;height:56px;fill:none;stroke:#2b2620;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:all .35s}
+.tbtn .tlab{margin-top:12px;font-size:21px;font-weight:700;color:#2b2620;letter-spacing:4px;transition:all .35s}
+.tbtn.lit .ring{background:#3E63DD;border-color:#3E63DD;transform:rotate(var(--rr,0deg)) scale(1.07);box-shadow:0 8px 20px rgba(62,99,221,.4)}
+.tbtn.lit svg{stroke:#fff}
+.tbtn.lit .tlab{color:#3E63DD}
+.tbtn .pop{position:absolute;left:50%;top:0;width:118px;height:118px;margin-left:-59px;border:3.5px solid #3E63DD;border-radius:50%;opacity:0;pointer-events:none}
+.tbtn.lit .pop{animation:popR .7s ease-out}
+@keyframes popR{0%{opacity:.9;transform:scale(.9)}100%{opacity:0;transform:scale(1.65)}}
+#triple.merge .tbtn{transform:translateX(var(--mx)) scale(.35);opacity:0}
+#thanks{position:absolute;left:660px;top:470px;width:520px;text-align:center;font-family:'Ma Shan Zheng';font-size:44px;color:#3E63DD;letter-spacing:6px;z-index:6;
+  opacity:0;transform:scale(.7);transition:all .5s cubic-bezier(.2,1.5,.4,1)}
+#thanks.show{opacity:1;transform:scale(1)}
+#thanks small{display:block;margin-top:6px;font-family:'Caveat';font-size:20px;color:#8a7a58;letter-spacing:3px}
+#postmark2{position:absolute;right:84px;bottom:56px;width:132px;height:132px;transform:rotate(9deg) scale(1.8);opacity:0;z-index:4}
+#postmark2.stamp{animation:pmIn2 .5s cubic-bezier(.2,1.5,.4,1) forwards}
+@keyframes pmIn2{to{opacity:.8;transform:rotate(9deg) scale(1)}}
+#halo{position:absolute;left:920px;top:392px;width:200px;height:200px;margin-left:-100px;border-radius:50%;border:6px solid #3E63DD;opacity:0;z-index:5;pointer-events:none}
+#halo.go{animation:haloA 1.4s ease-out forwards}
+@keyframes haloA{0%{opacity:.95;transform:scale(.3)}100%{opacity:0;transform:scale(2.3)}}
+
+/* 落款 */
+#sign{position:absolute;left:64px;bottom:56px;font-family:'Ma Shan Zheng';font-size:42px;color:#2b2620;letter-spacing:3px;opacity:0;transform:translateY(16px);transition:all .6s ease}
+#sign.show{opacity:1;transform:translateY(0)}
+#sign .u{color:#3E63DD}
+#sign .wave{display:inline-block;animation:waveh 1.4s ease-in-out infinite;transform-origin:70% 70%}
+@keyframes waveh{0%,100%{transform:rotate(0)}50%{transform:rotate(16deg)}}
+
+/* 纸飞机 */
+#plane{position:absolute;left:-260px;top:640px;width:120px;z-index:25;filter:drop-shadow(0 8px 12px rgba(90,70,40,.3))}
+
+/* ── 安安 10（挥手） ── */
+#anan10{position:absolute;left:64px;bottom:70px;width:262px;z-index:22;opacity:0;transition:opacity .8s ease;filter:drop-shadow(0 10px 22px rgba(90,70,40,.4))}
+#anan10.show{opacity:1}
+#anan10 img{width:100%;display:block;animation:waveA 1.7s ease-in-out infinite}
+@keyframes waveA{0%,100%{transform:rotate(-2.6deg) translateY(0)}50%{transform:rotate(2.6deg) translateY(-10px)}}
+
+/* ── 底盘区 ── */
+#lbT,#lbB{position:absolute;left:0;right:0;height:0;background:#221d16;z-index:40;transition:height .9s cubic-bezier(.7,0,.3,1)}
+#lbT{top:0}#lbB{bottom:0}
+/* letterbox 黑边效果已取消 */
+#dim{position:absolute;inset:0;background:radial-gradient(closest-side at 50% 46%,transparent 52%,rgba(0,0,0,.75) 100%);opacity:0;transition:opacity 1s;z-index:30;pointer-events:none}
+#dim.on{opacity:1}
+
+.corner{position:absolute;font-family:'Caveat';font-size:19px;color:rgba(43,38,32,.55);letter-spacing:1px;z-index:9}
+#chap{left:52px;bottom:30px}
+#src{right:52px;bottom:30px}
+#src .cdb{width:26px;height:26px;vertical-align:-6px;margin-right:7px;border-radius:7px}
+
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'Caveat';pointer-events:none}
+#track{height:5px;background:rgba(43,38,32,.15)}
+#bar{height:100%;width:0;background:#3E63DD;box-shadow:0 0 10px rgba(62,99,221,.5)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:14px;color:#e8dcc0;background:rgba(43,38,32,.94);backdrop-filter:blur(4px)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #a8946f;color:#e0d4b8;font-family:inherit;font-size:14px;padding:2px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(255,255,255,.12)}
+#replay.done{animation:pulse 1.2s infinite;border-color:#9db4f0;color:#9db4f0}
+@keyframes pulse{50%{box-shadow:0 0 14px rgba(157,180,240,.8)}}
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <div id="cam">
+    <div id="coffee"></div>
+
+    <!-- 干花装饰 -->
+    <svg id="flower" viewBox="0 0 340 220" fill="none" stroke-linecap="round">
+      <path d="M40 200 C 90 150, 130 110, 190 60" stroke="#8a9464" stroke-width="4"/>
+      <path d="M90 200 C 130 160, 180 130, 250 100" stroke="#9aa06e" stroke-width="3.5"/>
+      <path d="M150 205 C 180 175, 220 160, 290 140" stroke="#8a9464" stroke-width="3"/>
+      <g fill="#c9a0a8" stroke="none">
+        <circle cx="190" cy="58" r="13"/><circle cx="172" cy="70" r="9"/><circle cx="206" cy="72" r="8"/>
+        <circle cx="250" cy="98" r="11"/><circle cx="236" cy="112" r="7"/>
+        <circle cx="290" cy="138" r="9"/><circle cx="276" cy="150" r="6"/>
+      </g>
+      <g fill="#b08e96" stroke="none"><circle cx="181" cy="64" r="4"/><circle cx="243" cy="105" r="3.5"/><circle cx="283" cy="144" r="3"/></g>
+      <path d="M120 170 q 18 -6 26 8 M150 150 q 16 -10 28 2" stroke="#8a9464" stroke-width="3"/>
+    </svg>
+
+    <!-- 回形针 -->
+    <svg id="clip" viewBox="0 0 90 90" fill="none" stroke="#8f8574" stroke-width="5" stroke-linecap="round">
+      <path d="M30 70 L62 24 a12 12 0 0 1 19 13 L48 86 a17 17 0 0 1 -27 -21 L52 22"/>
+    </svg>
+
+    <!-- 明信片 -->
+    <div id="pcardWrap">
+      <div id="pcard">
+        <!-- ===== 正面 ===== -->
+        <div class="face front">
+          <div class="innerline"></div>
+          <div class="tape t1"></div><div class="tape t2"></div>
+
+          <div id="flow">
+            <div class="fstep" id="fs1"><div class="ficon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/><path d="M8 10.5h5M10.5 8v5"/></svg></div><div class="flab">拆解</div></div>
+            <div class="farr"><svg viewBox="0 0 26 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h17M15 6l6 6-6 6"/></svg></div>
+            <div class="fstep" id="fs2"><div class="ficon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V9M10 20V4M16 20v-8M22 20H2"/></svg></div><div class="flab">对比</div></div>
+            <div class="farr"><svg viewBox="0 0 26 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h17M15 6l6 6-6 6"/></svg></div>
+            <div class="fstep" id="fs3"><div class="ficon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-6 4 3 6-8"/><path d="M3 21h18"/></svg></div><div class="flab">画图</div></div>
+            <div class="farr"><svg viewBox="0 0 26 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h17M15 6l6 6-6 6"/></svg></div>
+            <div class="fstep" id="fs4"><div class="ficon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg></div><div class="flab">验证</div></div>
+            <div class="farr"><svg viewBox="0 0 26 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h17M15 6l6 6-6 6"/></svg></div>
+            <div class="fstep" id="fs5"><div class="ficon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg></div><div class="flab">沉淀</div></div>
+          </div>
+
+          <div id="stampBox">
+            <svg viewBox="0 0 122 152">
+              <rect x="3" y="3" width="116" height="146" rx="3" fill="#eef2fd" stroke="#3E63DD" stroke-width="2.5"/>
+              <image href="doubaoicon.png" x="27" y="14" width="68" height="68"/>
+              <path d="M14 100 Q 40 82 61 96 T 108 92" stroke="#3E63DD" stroke-width="3" fill="none"/>
+              <text x="61" y="128" text-anchor="middle" font-family="'Noto Serif SC'" font-weight="700" font-size="16" fill="#3E63DD">豆包</text>
+              <text x="61" y="145" text-anchor="middle" font-family="Caveat" font-size="15" fill="#8fa3ec">2026</text>
+            </svg>
+          </div>
+          <div id="postmark">
+            <svg viewBox="0 0 150 150">
+              <circle cx="75" cy="75" r="66" fill="none" stroke="#8a6d4a" stroke-width="3" opacity=".85"/>
+              <circle cx="75" cy="75" r="52" fill="none" stroke="#8a6d4a" stroke-width="1.6" opacity=".7"/>
+              <text x="75" y="68" text-anchor="middle" font-family="Ma Shan Zheng" font-size="26" fill="#8a6d4a" opacity=".9">开学季</text>
+              <text x="75" y="96" text-anchor="middle" font-family="Caveat" font-size="19" fill="#8a6d4a" opacity=".9">2026.08</text>
+            </svg>
+          </div>
+
+          <div id="hw"></div>
+          <div id="hwline"></div>
+
+          <div id="quote">
+            <div class="qtape"></div>
+            <div class="qtag">key sentence</div>
+            <div class="qtext">搞学术，自己的思考和研究是 AI <span class="hl-red" id="hlR">替代不了</span>的，<br>但用好 AI 能实实在在地<span class="hl-green" id="hlG">提效</span></div>
+          </div>
+        </div>
+
+        <!-- ===== 背面 ===== -->
+        <div class="face back">
+          <div class="innerline"></div>
+          <div class="bdiv"></div>
+          <div id="bquestion"></div>
+          <div id="dbLogo"><img src="doubaoicon.png" alt="豆包"><span class="dbcap">AI 科研搭子</span></div>
+          <div id="bcta">评论区聊聊 →</div>
+          <svg id="barrow" viewBox="0 0 300 150" fill="none" stroke="#8a7a58" stroke-width="4" stroke-linecap="round">
+            <path d="M10 20 C 90 90, 180 100, 268 74 M 240 58 l 30 14 -24 22"/>
+          </svg>
+          <div class="bline" id="bl1"></div><div class="bline" id="bl2"></div><div class="bline" id="bl3"></div>
+          <div id="bstampHint"></div>
+          <div id="btriLab">~ if it helps ~</div>
+
+          <div id="halo"></div>
+          <div id="triple">
+            <div class="tbtn" id="t1" style="--mx:172px;--rr:-3deg">
+              <div class="ring"><svg viewBox="0 0 24 24"><path d="M7 10v10H4.4a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1H7z"/><path d="M7 10l3.6-6.6a1.6 1.6 0 0 1 2.9 1.2L12.6 9h6.5a1.6 1.6 0 0 1 1.6 1.9l-1.3 7.6a2 2 0 0 1-2 1.5H7"/></svg></div>
+              <div class="tlab">点赞</div><div class="pop"></div>
+            </div>
+            <div class="tbtn" id="t2" style="--mx:0px;--rr:2deg">
+              <div class="ring"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><circle cx="12" cy="12" r="4.2"/><path d="M12 3.6v3M12 17.4v3M3.6 12h3M17.4 12h3"/></svg></div>
+              <div class="tlab">投币</div><div class="pop"></div>
+            </div>
+            <div class="tbtn" id="t3" style="--mx:-172px;--rr:-2deg">
+              <div class="ring"><svg viewBox="0 0 24 24"><path d="M12 3.8l2.5 5.2 5.7.7-4.2 3.9 1.1 5.6L12 16.4l-5.1 2.8 1.1-5.6-4.2-3.9 5.7-.7z"/></svg></div>
+              <div class="tlab">收藏</div><div class="pop"></div>
+            </div>
+          </div>
+
+          <div id="thanks">感谢三连<small>LIKE · COIN · FAVORITE</small></div>
+          <div id="postmark2">
+            <svg viewBox="0 0 150 150">
+              <circle cx="75" cy="75" r="66" fill="none" stroke="#8a6d4a" stroke-width="3" opacity=".85"/>
+              <circle cx="75" cy="75" r="52" fill="none" stroke="#8a6d4a" stroke-width="1.6" opacity=".7"/>
+              <text x="75" y="68" text-anchor="middle" font-family="Ma Shan Zheng" font-size="24" fill="#8a6d4a" opacity=".9">已送达</text>
+              <text x="75" y="96" text-anchor="middle" font-family="Caveat" font-size="19" fill="#8a6d4a" opacity=".9">2026.08</text>
+            </svg>
+          </div>
+          <div id="sign">我是 <span class="u">Uncle城</span>，我们下期视频再见<span class="wave">~</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 纸飞机 -->
+    <svg id="plane" viewBox="0 0 120 90" style="opacity:0">
+      <path d="M4 46 L116 8 L78 82 L56 56 Z" fill="#fffdf5" stroke="#c4b491" stroke-width="2.5" stroke-linejoin="round"/>
+      <path d="M56 56 L116 8" stroke="#c4b491" stroke-width="2.5"/>
+      <path d="M56 56 L46 78 L78 82" fill="#efe6d2" stroke="#c4b491" stroke-width="2" stroke-linejoin="round"/>
+    </svg>
+
+    <!-- 安安们 -->
+    <div id="anan15">
+      <div class="say">这句是认真的</div>
+      <img src="anan - emotion rename/15_平举素纸_认真以待.png" alt="安安·认真以待">
+    </div>
+    <div id="anan10">
+      <img src="anan - emotion rename/10_闭目含笑_恬静满足.png" alt="安安·恬静满足">
+    </div>
+  </div><!-- /cam -->
+
+  <div id="dim"></div>
+  <div id="lbT"></div><div id="lbB"></div>
+
+  <div class="corner" id="chap">Part3 / 收尾</div>
+  <div class="corner" id="src"><img class="cdb" src="doubaoicon.png" alt="豆包">#人类对豆包的开发不足百分之一 #豆包还能干这个</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 5-2 · 指定句与三连 · 20s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [底盘] 时间轴引擎 ===== */
+const DUR=20000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+const after=(ms,f)=>on(performance.now()-t0+ms,f);
+function fly(el,x1,y1,x2,y2,dur,arc,ease,done){tws.push({t:performance.now()-t0,d:dur,e:ease||eio,done,f:p=>{el.style.left=(x1+(x2-x1)*p)+'px';el.style.top=(y1+(y2-y1)*p-Math.sin(p*Math.PI)*(arc||0))+'px'}})}
+function cnt(el,from,to,dur){tws.push({t:performance.now()-t0,d:dur,e:eo,f:p=>{el.textContent=Math.round(from+(to-from)*p).toLocaleString('en-US')}})}
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [底盘] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+
+/* ===== 手写逐字 ===== */
+function buildChars(el,text,step){
+  el.innerHTML='';
+  [...text].forEach((c,i)=>{
+    const s=document.createElement('span');s.className='ch';
+    s.style.transitionDelay=(i*step)+'ms';
+    s.textContent=c===' '?'\u00A0':c;el.appendChild(s);
+  });
+}
+buildChars($('#hw'),'我自己要干的，就是最后动脑子判断',85);
+const bq=$('#bquestion');
+bq.innerHTML='';
+[...'你是怎么用豆包|提高科研效率的？'].forEach((c,i)=>{
+  if(c==='|'){bq.appendChild(document.createElement('br'));return}
+  const s=document.createElement('span');s.className='ch'+(i>=7?' qhl':'');
+  s.style.transitionDelay=(i*95)+'ms';s.textContent=c;bq.appendChild(s);
+});
+
+/* ────────────────────────────────────────────────
+   本镜头 cue（20s）
+   ──────────────────────────────────────────────── */
+on(300,()=>{camTo(0,0,1,1.8);$('#pcardWrap').classList.add('in')});
+on(700,()=>$('#flow').classList.add('show'));
+['#fs1','#fs2','#fs3','#fs4','#fs5'].forEach((id,i)=>on(900+i*420,()=>$(id).classList.add('lit')));
+on(1500,()=>$('#postmark').classList.add('stamp'));
+
+on(5000,()=>$('#hw').classList.add('write'));
+on(6500,()=>$('#hwline').classList.add('go'));
+
+on(7000,()=>{camFocus(960,640,1.12,0.9);$('#quote').classList.add('in')});
+on(7500,()=>$('#anan15').classList.add('show'));
+on(9000,()=>$('#hlR').classList.add('brush'));
+on(12000,()=>$('#hlG').classList.add('brush'));
+
+on(11000,()=>{camTo(0,0,1,0.8);$('#anan15').classList.remove('show')});
+on(12000,()=>$('#pcard').classList.add('flipped'));
+on(12300,()=>{const p=$('#plane');p.style.opacity='1';fly(p,-260,640,2120,240,2400,150,eio,()=>{p.style.opacity='0'})});
+on(16000,()=>$('#bquestion').classList.add('write'));
+on(16700,()=>$('#dbLogo').classList.add('stampIn'));   // “豆包”二字手写落定 → logo 贴纸啪地贴上
+on(16500,()=>{$('#bcta').classList.add('show');$('#barrow').classList.add('go')});
+
+on(14000,()=>{camFocus(1180,620,1.14,0.8);$('#triple').classList.add('in');$('#btriLab').classList.add('show')});
+on(14500,()=>$('#t1').classList.add('lit'));
+on(15100,()=>$('#t2').classList.add('lit'));
+on(15700,()=>$('#t3').classList.add('lit'));
+on(16300,()=>{$('#triple').classList.add('merge');$('#halo').classList.add('go')});
+on(17500,()=>$('#thanks').classList.add('show'));
+
+on(19000,()=>{$('#sign').classList.add('show');$('#anan10').classList.add('show')});
+
+on(19500,()=>{camTo(0,0,1,1.7);$('#postmark2').classList.add('stamp')});
+
+/* ===== 音效 ===== */
+on(300,()=>__sfx.whoosh(1.4,0.7));
+on(900,()=>__sfx.pop(0.55));
+on(1320,()=>__sfx.pop(0.55));
+on(1740,()=>__sfx.pop(0.55));
+on(2160,()=>__sfx.pop(0.55));
+on(2580,()=>__sfx.pop(0.55));
+on(1500,()=>__sfx.thud(0.55));
+on(5000,()=>__sfx.pop(0.5));
+for(let i=0;i<14;i++)on(5000+i*85,()=>__sfx.type(0.32));
+on(6500,()=>__sfx.swipe(0.55));
+on(7000,()=>__sfx.swipe(0.7));
+on(7500,()=>__sfx.pop(0.6));
+on(9000,()=>__sfx.swipe(0.45));
+on(12000,()=>__sfx.swipe(0.45));
+on(11000,()=>__sfx.whoosh(0.8,0.6));
+on(12000,()=>__sfx.swipe(0.9));
+on(12300,()=>__sfx.whoosh(1.8,0.55));
+on(16500,()=>__sfx.pop(0.55));
+on(14000,()=>__sfx.pop(0.6));
+on(14500,()=>__sfx.ding(0.75));
+on(15100,()=>__sfx.ding(0.75));
+on(15700,()=>__sfx.ding(0.75));
+on(16300,()=>__sfx.pop(0.65));
+on(19000,()=>__sfx.pop(0.6));
+on(17500,()=>__sfx.ding(0.7));
+on(16000,()=>__sfx.pop(0.4));                                                             // 提问手写起笔
+for(let i=0;i<10;i++)on(16050+i*160,()=>__sfx.type(0.24));                                // 提问逐字键音
+on(16700,()=>__sfx.thud(0.5));                                                            // 豆包贴纸贴上
+on(19500,()=>__sfx.whoosh(1.5,0.55));
+on(19500,()=>__sfx.thud(0.6));                                                            // 邮戳②盖章（原18900提前600ms已归位）
+</script>
+</body>
+</html>
