@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](./LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](#contributing)
-[![Skills count](https://img.shields.io/badge/Skills-7-orange?style=flat-square)](#skills-gallery)
+[![Skills count](https://img.shields.io/badge/Skills-8-orange?style=flat-square)](#skills-gallery)
 [![Spec](https://img.shields.io/badge/Spec-SKILL.md-black?style=flat-square)](https://agentskills.io)
 
 🌐 **中文版**: [`README.md`](README.md)
@@ -27,6 +27,7 @@ One sentence is all it takes:
 - 📝 **Scholar notes** — beautiful handwritten-notebook-style HTML study notes, two template styles
 - 🎴 **Card theater** — sidebar narrative + 3D card carousel for protocol flows / product features / step-by-step explainers
 - 🎬 **Video shot demos** — cinematic "one HTML per shot" demo animations: 29 rotating styles, camera pushes, WebAudio SFX — fullscreen-record it and it's a finished film
+- 📱 **Phone UI demos** — a "real phone" performing a choreographed screen recording: lockscreen notifications, chats, settings, App screens shot by shot, HyperOS-grade motion + a 3D-posture phone actor
 
 <div align="center">
 
@@ -70,7 +71,13 @@ One sentence is all it takes:
 </td>
 </tr>
 <tr>
-<td colspan="4" valign="top" align="center">
+<td colspan="2" valign="top" align="center">
+<!-- TODO: add preview image -->
+<a href="#phone-ui-demos"><img width="2560" height="1440" alt="phone-ui-demos" src="https://via.placeholder.com/2560x1440/0c1024/67e8f9?text=phone-ui-demos" /></a>
+<br/><a href="#phone-ui-demos"><strong>phone-ui-demos</strong></a>
+<br/><sub>Phone system UI / choreographed recordings</sub>
+</td>
+<td colspan="2" valign="top" align="center">
 <a href="#video-shot-demos"><img width="2560" height="1440" alt="video-shot-demos" src="https://github.com/user-attachments/assets/ee93829f-91c5-48df-925e-342cd2be4557" /></a>
 <br/><a href="#video-shot-demos"><strong>video-shot-demos</strong></a>
 <br/><sub>Cinematic per-shot demo animations</sub>
@@ -306,6 +313,52 @@ Links: [README](./skills/card-theater/README.md) · [SKILL.md](./skills/card-the
 
 <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
 
+#### `phone-ui-demos`
+
+<a href="./skills/phone-ui-demos">
+<!-- TODO: add preview image --><img width="2560" height="1440" alt="phone-ui-demos preview" src="https://via.placeholder.com/2560x1440/0c1024/67e8f9?text=phone-ui-demos" />
+</a>
+
+**Category:** Phone system UI / choreographed recording animations
+**For:** product feature demos, App onboarding, course explainers, brand videos — anywhere you need "a real phone performing a carefully choreographed screen recording".
+
+`phone-ui-demos` turns any content into a phone-system-UI-style web animation: a fully detailed phone center stage (punch-hole camera, side keys, antenna bands, screen glare, status bar), with content delivered shot by shot through lockscreen notifications, chats, settings pages, control center, and App screens. The whole series shares one HyperOS/MIUI design language (big radii + frosted glass + dynamic wallpaper gradients), and the phone is an actor with 3D posture — swaying, leaning in, rotating to landscape, shaking on stamps, spinning away at screen-off. Ships with 8 production-grade sample shots (an AI tutor "Kexue" product demo) + a starter skeleton.
+
+Highlights:
+- phoneTo 3D posture system: six degrees of freedom driving a "living phone", ≥2 3D moves per shot; the signature App-open morph transition (icon's exact position/size/radius → full screen)
+- Background mega-captions: voiceover copy rendered as 58px+ gradient headlines flanking the phone, 11 entrance effects (glow-rise / per-char wave / slam / flip…) rotating per shot
+- Content translation map: points → lockscreen notifications, dialogue → chat bubbles (typing indicator), data → rings & sliders, flows → settings lists, comparisons → action sheets, wrap-ups → screen-off brand card
+- Continuity rules: one ambience for the whole series, entrance animation only in shot 1, later shots inherit the previous posture — 8 standalone HTMLs feel like one continuous recording
+- Cinematic player: virtual-clock black-screen start / clickable segmented progress / ← → shot switching / muted-by-default speaker toggle
+- Zero-dependency single files: all icons inline SVG, wallpapers pure CSS gradients, SFX WebAudio-synthesized — double-click to run offline
+
+<table>
+<tr>
+<td align="center" width="16.6%"><!-- TODO: add preview image --><img width="2560" height="1440" alt="lockscreen notifications" src="https://via.placeholder.com/2560x1440/0c1024/a5b4fc?text=shot-1" /></td>
+<td align="center" width="16.6%"><!-- TODO: add preview image --><img width="2560" height="1440" alt="app open transition" src="https://via.placeholder.com/2560x1440/f3f5fa/2563eb?text=shot-2" /></td>
+<td align="center" width="16.6%"><!-- TODO: add preview image --><img width="2560" height="1440" alt="socratic dialogue" src="https://via.placeholder.com/2560x1440/1a1030/fb7185?text=shot-4" /></td>
+<td align="center" width="16.6%"><!-- TODO: add preview image --><img width="2560" height="1440" alt="knowledge nebula" src="https://via.placeholder.com/2560x1440/12081f/a855f7?text=shot-6" /></td>
+<td align="center" width="16.6%"><!-- TODO: add preview image --><img width="2560" height="1440" alt="landscape dashboard" src="https://via.placeholder.com/2560x1440/06202a/2dd4bf?text=shot-7" /></td>
+<td align="center" width="16.6%"><!-- TODO: add preview image --><img width="2560" height="1440" alt="screen-off finale" src="https://via.placeholder.com/2560x1440/090c1a/6ee7b7?text=shot-8" /></td>
+</tr>
+<tr>
+<td align="center"><sub><code>Lockscreen</code><br />3D entrance</sub></td>
+<td align="center"><sub><code>App open</code><br />signature morph</sub></td>
+<td align="center"><sub><code>Socratic chat</code><br />stamp + shake</sub></td>
+<td align="center"><sub><code>Knowledge nebula</code><br />drill-down graph</sub></td>
+<td align="center"><sub><code>Landscape dash</code><br />rz:-90 rotation</sub></td>
+<td align="center"><sub><code>Screen-off</code><br />3D spin-out finale</sub></td>
+</tr>
+</table>
+
+<sub>↑ 6 of 8 system scenes — <a href="./skills/phone-ui-demos/README.md"><b>open the full component library & specs</b></a> (8 runnable production samples).</sub>
+
+Links: [README](./skills/phone-ui-demos/README.md) · [SKILL.md](./skills/phone-ui-demos/SKILL.md)
+
+---
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
 #### `video-shot-demos`
 
 <a href="./skills/video-shot-demos">
@@ -432,6 +485,10 @@ Use card-theater to demonstrate IPsec data flow, with mode switching (transport 
 Use video-shot-demos to turn this video's voiceover script into per-shot demo animations, one HTML per shot, output to demo/
 ```
 
+```
+Use phone-ui-demos to turn this App's features into a phone-recording-style demo animation — show me the storyboard first
+```
+
 ### Directory Structure
 
 ```text
@@ -478,6 +535,11 @@ ai-animation-skills/
 │       ├── assets/              ← Starter skeleton template.html
 │       │   └── examples/        ← Two production sets (glm 29 shots + doubao 11 shots, each with character sprites & icons)
 │       └── scripts/             ← Headless screenshot QA tool
+│   ├── phone-ui-demos/
+│       ├── SKILL.md             ← Storyboard-confirmation workflow + checklist
+│       ├── README.md
+│       ├── references/          ← Player/phone-stage/bg-captions/system-components specs
+│       └── assets/              ← Starter skeleton + kexue 8-shot production example
 ├── web_animation/               ← Original example HTML (historical archive)
 ├── UI/                          ← UI design reference images
 ├── prompt.md                    ← Prompt template collection
