@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+  可学 · 手机系统 UI 演示动画 —— 镜头 7 / 8 · 能力仪表盘（16s）
+  叙事：总掌握度圆环点亮 → 学科条 stagger → 遗忘曲线预警（红区+临界点）
+        → 薄弱点 TOP3 列表自动排队
+============================================================= -->
+<script>
+/* ===== 播放器引导：虚拟时钟 + 黑场起手（整辑共用，勿改） ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== SFX 引擎：WebAudio 合成（整辑共用，勿改） ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){if(!ok())return;vol=vol||1;var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';var f=330+Math.random()*90;o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);}
+  function whoosh(durS,vol){if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);}
+  function swipe(vol){if(!ok())return;vol=vol||1;var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);}
+  function type(vol){if(!ok())return;vol=vol||1;var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();o.type='square';o.frequency.value=1400+Math.random()*900;var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;env(g,t,0.004,0.1*vol,0.05);o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);}
+  function ding(vol){if(!ok())return;vol=vol||1;var t=ctx.currentTime;[[660,0.2],[990,0.09]].forEach(function(p){var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);});}
+  function thud(vol){if(!ok())return;vol=vol||1;var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);}
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 7/8 · 能力仪表盘 · 可学</title>
+<style>
+/* ============ 整辑共用底盘样式 ============ */
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#070912;overflow:hidden;
+  font-family:MiSans,-apple-system,"HarmonyOS Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased}
+body.paused *{animation-play-state:paused!important}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden}
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1.14);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10;perspective:1900px}
+
+#amb{position:absolute;inset:0;transition:opacity 1.6s ease;
+  background:
+    radial-gradient(1000px 640px at 16% 20%,rgba(99,102,241,.17),transparent 62%),
+    radial-gradient(1100px 740px at 84% 80%,rgba(56,189,248,.13),transparent 62%),
+    radial-gradient(780px 540px at 60% 8%,rgba(168,85,247,.09),transparent 60%),
+    linear-gradient(158deg,#0c1024,#0e1330 52%,#090c1a)}
+#amb::before{content:'';position:absolute;inset:0;
+  background-image:linear-gradient(rgba(165,180,252,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(165,180,252,.05) 1px,transparent 1px);
+  background-size:64px 64px;
+  mask-image:radial-gradient(closest-side at 50% 50%,#000 30%,transparent 100%);
+  -webkit-mask-image:radial-gradient(closest-side at 50% 50%,#000 30%,transparent 100%)}
+#amb::after{content:'';position:absolute;inset:0;opacity:.055;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+#phone{position:absolute;left:50%;top:50%;width:412px;height:868px;transform:translate(-50%,-50%);
+  transition:opacity 1.2s ease,transform 1.3s cubic-bezier(.22,1,.36,1);
+  filter:drop-shadow(0 46px 80px rgba(0,0,0,.55));z-index:8}
+#bez{position:absolute;inset:0;background:linear-gradient(150deg,#2b2f3a,#14161d 40%,#1e222c);border-radius:60px;
+  box-shadow:inset 0 0 0 2px rgba(255,255,255,.07),inset 0 0 22px rgba(0,0,0,.8)}
+#scr{position:absolute;left:11px;top:11px;width:390px;height:846px;border-radius:48px;overflow:hidden;
+  background:linear-gradient(168deg,#101c30 0%,#0c1524 55%,#090f1b 100%)}
+#scr::after{content:'';position:absolute;inset:0;border-radius:48px;pointer-events:none;z-index:60;
+  box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.09),inset 0 -26px 60px rgba(0,0,0,.3)}
+#punch{position:absolute;left:50%;top:24px;width:13px;height:13px;margin-left:-6.5px;border-radius:50%;z-index:61;
+  background:radial-gradient(circle at 35% 30%,#3a3f4d,#05060a 68%);box-shadow:0 0 0 3px rgba(0,0,0,.85)}
+#punch::after{content:'';position:absolute;left:3px;top:2.5px;width:3.5px;height:3.5px;border-radius:50%;background:rgba(170,205,255,.55);filter:blur(.3px)}
+/* 机身细节：侧键 / 天线带 / 背光 / 屏幕反光 */
+#phoneGlow{position:absolute;left:50%;top:50%;width:600px;height:1020px;transform:translate(-50%,-50%);z-index:-1;pointer-events:none;
+  background:radial-gradient(closest-side,rgba(99,102,241,.2),rgba(56,189,248,.06) 55%,transparent 76%)}
+.kbtn{position:absolute;width:4px;border-radius:3px;background:linear-gradient(180deg,#3d4250,#181b23);box-shadow:0 0 4px rgba(0,0,0,.7)}
+#kPow{right:-3.5px;top:206px;height:88px}
+#kVolU{left:-3.5px;top:176px;height:54px}
+#kVolD{left:-3.5px;top:242px;height:54px}
+.kant{position:absolute;left:30px;right:30px;height:2.5px;border-radius:2px;background:rgba(255,255,255,.05)}
+#kAntT{top:5px}#kAntB{bottom:5px}
+#glare{position:absolute;inset:0;z-index:58;pointer-events:none;border-radius:48px;
+  background:linear-gradient(118deg,transparent 32%,rgba(255,255,255,.05) 44%,rgba(255,255,255,.1) 47%,rgba(255,255,255,.05) 50%,transparent 64%)}
+#wake{position:absolute;inset:0;background:#000;z-index:55;opacity:1;transition:opacity .9s ease;pointer-events:none}
+
+#sb{position:absolute;left:0;right:0;top:0;height:56px;z-index:44;display:flex;align-items:flex-end;justify-content:space-between;
+  padding:0 34px 6px;color:#fff;pointer-events:none;transition:opacity .4s ease}
+body.land #sb{opacity:0}
+#sb .t{font-size:15px;font-weight:600;letter-spacing:.5px;font-variant-numeric:tabular-nums;text-shadow:0 1px 6px rgba(0,0,0,.3)}
+#sb .ics{display:flex;align-items:center;gap:7px}
+#sb svg{display:block}
+#homebar{position:absolute;left:50%;bottom:9px;width:134px;height:5px;margin-left:-67px;border-radius:3px;background:rgba(255,255,255,.92);z-index:44;transition:opacity .4s ease}
+body.land #homebar{opacity:0}
+
+/* ============ 竖屏层：生成中 splash + 收尾卡（横屏时隐藏） ============ */
+#dashPort{position:absolute;inset:0;z-index:24;transition:opacity .45s ease}
+body.land #dashPort{opacity:0}
+#portSplash{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;
+  opacity:0;transform:translateY(16px);transition:all .7s cubic-bezier(.22,1,.36,1)}
+#portSplash.in{opacity:1;transform:translateY(0)}
+body.end #portSplash{display:none}
+.psRing{width:122px;height:122px}
+.psRing svg{width:100%;height:100%;animation:psSpin 1.5s linear infinite}
+@keyframes psSpin{to{transform:rotate(360deg)}}
+.psT{font-size:27px;font-weight:800;color:#ecfdf5;letter-spacing:3px}
+.psS{font-size:12.5px;color:rgba(167,243,208,.55);letter-spacing:1.5px}
+#endCard{display:none;position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;gap:15px;
+  opacity:0;transform:translateY(16px) scale(.96);transition:all .7s cubic-bezier(.22,1,.36,1)}
+body.end #endCard{display:flex}
+#endCard.in{opacity:1;transform:translateY(0) scale(1)}
+.ecCk{width:88px;height:88px;border-radius:50%;background:linear-gradient(140deg,#34d399,#2dd4bf);
+  display:flex;align-items:center;justify-content:center;box-shadow:0 0 46px rgba(52,211,153,.5)}
+.ecT{font-size:26px;font-weight:800;color:#ecfdf5;letter-spacing:2px}
+.ecS{font-size:12.5px;color:rgba(167,243,208,.6);letter-spacing:1.2px}
+
+/* ============ 横屏仪表盘层（层内逆时针旋 90° 铺满屏幕，机身横置时内容正向） ============ */
+#dashL{position:absolute;left:50%;top:50%;width:846px;height:390px;z-index:20;opacity:0;pointer-events:none;
+  transform:translate(-50%,-50%) rotate(90deg);transition:opacity .45s ease}
+body.land #dashL{opacity:1}
+.lHead{position:absolute;left:24px;right:24px;top:14px;display:flex;justify-content:space-between;align-items:flex-end;z-index:3}
+.lHead h2{font-size:21px;font-weight:800;color:#ecfdf5;letter-spacing:1px}
+.lHead .ld{margin-top:4px;font-size:11px;color:rgba(167,243,208,.5);letter-spacing:1.2px}
+.lHead .lr{font-size:11.5px;color:rgba(209,250,229,.5);letter-spacing:1.2px;font-variant-numeric:tabular-nums}
+.lGrid{position:absolute;left:16px;right:16px;top:64px;bottom:14px;display:flex;gap:14px}
+.lHome{position:absolute;left:50%;bottom:5px;width:122px;height:4.5px;margin-left:-61px;border-radius:3px;background:rgba(255,255,255,.85);z-index:4}
+
+.card{position:relative;z-index:2;border-radius:22px;
+  background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.09);
+  box-shadow:0 12px 30px rgba(0,0,0,.28);
+  opacity:0;transform:translateY(20px) scale(.96);transition:all .7s cubic-bezier(.22,1,.36,1)}
+.card.in{opacity:1;transform:translateY(0) scale(1)}
+.card .ct{position:absolute;left:16px;top:12px;font-size:11.5px;font-weight:700;color:rgba(209,250,229,.55);letter-spacing:2px}
+
+/* 圆环卡 */
+#ringCard{flex:0 0 252px;display:flex;flex-direction:column;padding:32px 14px 12px;gap:4px}
+#ringBox{position:relative;width:118px;height:118px;margin:0 auto;flex:none}
+#ringBox svg{width:118px;height:118px;transform:rotate(-90deg)}
+#ringFg{stroke-dasharray:339.3;stroke-dashoffset:339.3;transition:stroke-dashoffset 1.6s cubic-bezier(.22,1,.36,1)}
+#ringMid{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+#ringNum{font-size:27px;font-weight:800;color:#6ee7b7;font-variant-numeric:tabular-nums;letter-spacing:-.5px;text-shadow:0 0 24px rgba(52,211,153,.4)}
+#ringNum i{font-style:normal;font-size:14px;font-weight:700}
+#ringMid .rl{margin-top:2px;font-size:9.5px;color:rgba(209,250,229,.5);letter-spacing:1.6px}
+#ringSide{flex:1;display:flex;flex-direction:column;justify-content:center;gap:9px;width:100%}
+.sb2{display:flex;flex-direction:column;gap:5px}
+.sb2 .sl{display:flex;justify-content:space-between;font-size:10.5px;color:rgba(209,250,229,.75)}
+.sb2 .sl b{font-variant-numeric:tabular-nums;font-weight:800}
+.sb2 .tr{height:5px;border-radius:3px;background:rgba(255,255,255,.09);overflow:hidden}
+.sb2 .fl{height:100%;width:0;border-radius:3px;transition:width 1s cubic-bezier(.22,1,.36,1)}
+.fl.m{background:linear-gradient(90deg,#34d399,#2dd4bf)}
+.fl.p{background:linear-gradient(90deg,#818cf8,#6366f1)}
+.fl.c{background:linear-gradient(90deg,#fbbf24,#f59e0b)}
+
+/* 遗忘曲线卡 */
+#curveCard{flex:1;display:flex;flex-direction:column;padding:0 14px 12px}
+#curveSvg{position:relative;width:100%;height:104px;margin-top:34px;flex:none}
+#cLine{fill:none;stroke:#5eead4;stroke-width:2.6;stroke-linecap:round;
+  stroke-dasharray:400;stroke-dashoffset:400;transition:stroke-dashoffset 1.5s cubic-bezier(.4,0,.2,1)}
+#cLine.draw{stroke-dashoffset:0}
+#cZone{fill:url(#zgrad);opacity:0;transition:opacity .8s ease}
+#cZone.on{opacity:1}
+#cDot{opacity:0;transform-origin:196px 66px;transform:scale(.2);transition:all .45s cubic-bezier(.34,1.56,.64,1)}
+#cDot.on{opacity:1;transform:scale(1)}
+#cWarn{position:relative;display:flex;align-items:center;gap:9px;margin-top:8px;
+  background:rgba(251,113,133,.12);border:1px solid rgba(251,113,133,.32);border-radius:14px;padding:8px 11px;
+  opacity:0;transform:translateY(10px);transition:all .55s cubic-bezier(.22,1,.36,1)}
+#cWarn.in{opacity:1;transform:translateY(0)}
+#cWarn .wi{flex:none;width:22px;height:22px;border-radius:50%;background:rgba(251,113,133,.2);display:flex;align-items:center;justify-content:center;color:#fda4af}
+#cWarn .wt{flex:1;font-size:11px;color:#fecdd3;font-weight:600;line-height:1.35}
+#cWarn .wt b{color:#fb7185;font-weight:800}
+#cWarn .wb{flex:none;font-size:10px;font-weight:800;color:#0c1524;background:linear-gradient(140deg,#fda4af,#fb7185);
+  border-radius:999px;padding:5.5px 10px;letter-spacing:.5px;box-shadow:0 4px 12px rgba(251,113,133,.4)}
+#cWarn.pulse .wb{animation:wbp 1s ease infinite}
+@keyframes wbp{50%{transform:scale(1.08)}}
+
+/* 薄弱点列表卡 */
+#weakCard{flex:0 0 252px;padding:36px 12px 8px}
+.wrow{display:flex;align-items:center;gap:9px;padding:10px 4px;border-radius:14px;
+  opacity:0;transform:translateX(-18px);transition:all .55s cubic-bezier(.22,1,.36,1)}
+.wrow.in{opacity:1;transform:translateX(0)}
+.wrow+.wrow{border-top:1px solid rgba(255,255,255,.05)}
+.wrow .rk{flex:none;width:25px;height:25px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:800;font-variant-numeric:tabular-nums}
+#w1 .rk{background:rgba(251,113,133,.16);color:#fda4af}
+#w2 .rk{background:rgba(251,191,36,.14);color:#fcd34d}
+#w3 .rk{background:rgba(251,191,36,.08);color:rgba(252,211,77,.6)}
+.wrow .wn{flex:none;width:84px;font-size:12.5px;font-weight:700;color:#e2f5ec}
+.wrow .wg{flex:1;display:flex;flex-direction:column;gap:5px}
+.wrow .wtr{display:block;height:5px;border-radius:3px;background:rgba(255,255,255,.09);overflow:hidden}
+.wrow .wfl{display:block;height:100%;width:0;border-radius:3px;transition:width .9s cubic-bezier(.22,1,.36,1)}
+#w1 .wfl{background:linear-gradient(90deg,#fb7185,#f43f5e)}
+#w2 .wfl{background:linear-gradient(90deg,#fbbf24,#f59e0b)}
+#w3 .wfl{background:linear-gradient(90deg,#fcd34d,#fbbf24)}
+.wrow .wp{flex:none;width:36px;text-align:right;font-size:12.5px;font-weight:800;font-variant-numeric:tabular-nums;color:rgba(226,245,236,.85)}
+#wTag{position:absolute;right:10px;top:10px;font-size:9px;font-weight:800;color:#fda4af;background:rgba(251,113,133,.12);
+  border:1px solid rgba(251,113,133,.3);border-radius:999px;padding:4px 8px;letter-spacing:1px}
+.wrow.hot{background:rgba(251,113,133,.08);box-shadow:inset 0 0 0 1px rgba(251,113,133,.28)}
+
+/* 镜头徽章 */
+#badge{position:absolute;left:52px;top:46px;opacity:0;transform:translateY(-14px);transition:all .6s cubic-bezier(.22,1,.36,1);z-index:20}
+#badge.show{opacity:1;transform:translateY(0)}
+#badge .no{display:inline-block;font-size:13px;letter-spacing:2.5px;color:#c7caff;border:1px solid rgba(199,202,255,.4);border-radius:999px;padding:6px 16px;font-weight:600}
+#badge h1{margin-top:12px;font-size:34px;font-weight:800;letter-spacing:1.5px;color:#f0f1ff;text-shadow:0 2px 18px rgba(80,70,220,.45)}
+#badge .sub{margin-top:6px;font-size:14px;letter-spacing:2px;color:rgba(199,202,255,.55)}
+#sideNote{position:absolute;right:52px;top:52px;text-align:right;opacity:0;transition:opacity .8s ease .3s;z-index:20;color:rgba(199,202,255,.4);font-size:13px;letter-spacing:2px;line-height:2}
+#sideNote.show{opacity:1}
+
+/* ============ 背景层大字幕（手机图层下方 · 渐变色 · 本镜头：疾滑入位 + 推近聚焦 + 逐字弹跳） ============ */
+.bgtW{position:absolute;top:50%;height:0;z-index:5;pointer-events:none;width:620px}
+.bgtW.L{left:80px}
+.bgtW.R{right:80px;text-align:right}
+.bgt-t{position:absolute;left:0;right:0;top:0;width:100%;opacity:0;transform:translateY(-50%);
+  font-size:58px;font-weight:800;line-height:1.55;letter-spacing:2px;
+  background:linear-gradient(118deg,#f5f7ff 22%,#a5b4fc 58%,#67e8f9 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  transition:opacity .9s ease,filter .9s ease,transform .9s cubic-bezier(.22,1,.36,1),letter-spacing .9s ease,clip-path .9s ease}
+.bgt-t.show{opacity:1}
+.bgt-t b{background:linear-gradient(118deg,#fff 8%,#7dd3fc 92%);-webkit-background-clip:text;background-clip:text;color:transparent}
+/* 疾滑入位：斜切滑入 + 去模糊 */
+.fx-slide{transform:translateY(-50%) translateX(-72px) skewX(-8deg);filter:blur(4px)}
+.fx-slide.show{transform:translateY(-50%) translateX(0) skewX(0deg);filter:blur(0)}
+.bgtW.R .fx-slide{transform:translateY(-50%) translateX(72px) skewX(8deg);filter:blur(4px)}
+.bgtW.R .fx-slide.show{transform:translateY(-50%) translateX(0) skewX(0deg);filter:blur(0)}
+/* 推近聚焦：放大模糊 → 收缩清晰 */
+.fx-zoom{transform:translateY(-50%) scale(1.3);filter:blur(11px);letter-spacing:9px}
+.fx-zoom.show{transform:translateY(-50%) scale(1);filter:blur(0);letter-spacing:2px}
+/* 逐字弹跳：每个字错峰上浮弹入（JS 拆字 + stagger）· 渐变逐字自裁剪，兼容无头渲染 */
+.fx-pop{background:none}
+.fx-pop .ch{display:inline-block;opacity:0;transform:translateY(44px) rotate(-6deg);
+  background:linear-gradient(118deg,#f5f7ff 22%,#a5b4fc 58%,#67e8f9 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  transition:opacity .5s ease,transform .6s cubic-bezier(.22,1.4,.36,1)}
+.fx-pop.show .ch{opacity:1;transform:translateY(0) rotate(0)}
+.fx-pop b{background:none}
+.fx-pop b .ch{background:linear-gradient(118deg,#fff 8%,#7dd3fc 92%);
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.corner{position:absolute;font-size:13px;color:rgba(199,202,255,.42);letter-spacing:2px;z-index:9}
+#chap{left:52px;bottom:30px}
+#src{right:52px;bottom:30px}
+
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:"Cascadia Mono",Consolas,monospace;pointer-events:none}
+#segs{display:flex;gap:3px;height:5px;background:rgba(255,255,255,.06)}
+#segs .seg{flex:1;background:rgba(255,255,255,.08);position:relative;cursor:pointer;pointer-events:auto}
+#segs .seg i{position:absolute;inset:0;width:0;background:linear-gradient(90deg,#6366f1,#22d3ee);display:block}
+#segs .seg.full i{width:100%}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:7px 16px;font-size:12px;color:#cce;background:rgba(7,5,18,.94)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #3d3a6b;color:#b6b4e8;font-family:inherit;font-size:12px;padding:3px 12px;margin-left:8px;border-radius:4px;cursor:pointer}
+#hud button:hover{background:rgba(255,255,255,.1)}
+#hud button svg{vertical-align:-3px}
+#replay.done{animation:pulse 1.2s infinite;border-color:#818cf8;color:#818cf8}
+@keyframes pulse{50%{box-shadow:0 0 14px rgba(129,140,248,.7)}}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="amb"></div>
+  <div id="cam">
+    <div id="badge">
+      <span class="no">SHOT 7 / 8 · DASHBOARD</span>
+      <h1>能力，被看得一清二楚</h1>
+      <div class="sub">MASTERY · FORGETTING CURVE · WEAK SPOTS</div>
+    </div>
+    <div id="sideNote">掌握度总览<br>遗忘预警 · 薄弱点排队</div>
+
+    <div class="bgtW L"><div class="bgt-t fx-slide" id="bg1">你的能力<br><b>一眼看清</b></div><div class="bgt-t fx-pop" id="bg3">薄弱点自动排队<br><b>逐个攻克</b></div></div>
+    <div class="bgtW R"><div class="bgt-t fx-zoom" id="bg2">遗忘，在发生之前<br>被 <b>提前拦住</b></div></div>
+
+    <div id="phone">
+      <div id="phoneGlow"></div>
+      <div class="kbtn" id="kVolU"></div>
+      <div class="kbtn" id="kVolD"></div>
+      <div class="kbtn" id="kPow"></div>
+      <div class="kant" id="kAntT"></div>
+      <div class="kant" id="kAntB"></div>
+      <div id="bez">
+        <div id="scr">
+
+          <!-- 竖屏层：生成中 splash / 收尾卡 -->
+          <div id="dashPort">
+            <div id="portSplash">
+              <div class="psRing">
+                <svg viewBox="0 0 122 122">
+                  <defs><linearGradient id="psgrad" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stop-color="#34d399"/><stop offset="1" stop-color="#22d3ee"/>
+                  </linearGradient></defs>
+                  <circle cx="61" cy="61" r="52" fill="none" stroke="rgba(255,255,255,.09)" stroke-width="9"/>
+                  <circle cx="61" cy="61" r="52" fill="none" stroke="url(#psgrad)" stroke-width="9" stroke-linecap="round" stroke-dasharray="96 230.7"/>
+                </svg>
+              </div>
+              <div class="psT">能力仪表盘</div>
+              <div class="psS">正在生成本周能力报告…</div>
+            </div>
+            <div id="endCard">
+              <div class="ecCk"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#06281c" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5l5 5L19.5 7"/></svg></div>
+              <div class="ecT">下周计划已生成</div>
+              <div class="ecS">12 个知识点 · 已按遗忘曲线排期</div>
+            </div>
+          </div>
+
+          <!-- 横屏仪表盘层 -->
+          <div id="dashL">
+            <div class="lHead">
+              <div><h2>能力仪表盘</h2><div class="ld">8月25日 周二 · 本周已学 42 个知识点</div></div>
+              <div class="lr">10:05 · 本周报告</div>
+            </div>
+            <div class="lGrid">
+
+              <!-- 圆环卡 -->
+              <div class="card" id="ringCard">
+                <div class="ct">总掌握度</div>
+                <div id="ringBox">
+                  <svg width="142" height="142" viewBox="0 0 142 142">
+                    <defs>
+                      <linearGradient id="rgrad" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0" stop-color="#34d399"/><stop offset="1" stop-color="#2dd4bf"/>
+                      </linearGradient>
+                    </defs>
+                    <circle cx="71" cy="71" r="54" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="13"/>
+                    <circle id="ringFg" cx="71" cy="71" r="54" fill="none" stroke="url(#rgrad)" stroke-width="13" stroke-linecap="round"/>
+                  </svg>
+                  <div id="ringMid">
+                    <div id="ringNum">0<i>%</i></div>
+                    <div class="rl">已掌握 164 点</div>
+                  </div>
+                </div>
+                <div id="ringSide">
+                  <div class="sb2"><div class="sl"><span>数学</span><b>82%</b></div><div class="tr"><div class="fl m" id="fM"></div></div></div>
+                  <div class="sb2"><div class="sl"><span>物理</span><b>64%</b></div><div class="tr"><div class="fl p" id="fP"></div></div></div>
+                  <div class="sb2"><div class="sl"><span>化学</span><b>71%</b></div><div class="tr"><div class="fl c" id="fC"></div></div></div>
+                </div>
+              </div>
+
+              <!-- 遗忘曲线卡 -->
+              <div class="card" id="curveCard">
+                <div class="ct">遗忘曲线预警</div>
+                <svg id="curveSvg" viewBox="0 0 334 96">
+                  <defs>
+                    <linearGradient id="zgrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0" stop-color="rgba(251,113,133,.28)"/><stop offset="1" stop-color="rgba(251,113,133,0)"/>
+                    </linearGradient>
+                  </defs>
+                  <line x1="8" y1="90" x2="326" y2="90" stroke="rgba(255,255,255,.14)" stroke-width="1"/>
+                  <path id="cZone" d="M196 66 L326 84 L326 90 L196 90 Z"/>
+                  <path id="cLine" d="M8 16 C 46 18, 66 30, 96 45 C 130 62, 160 66, 196 66 C 240 68, 290 80, 326 84"/>
+                  <g id="cDot">
+                    <circle cx="196" cy="66" r="10" fill="rgba(251,113,133,.25)"/>
+                    <circle cx="196" cy="66" r="4.5" fill="#fb7185"/>
+                    <text x="206" y="60" font-size="10" font-weight="700" fill="#fda4af">遗忘临界点</text>
+                  </g>
+                  <text x="8" y="10" font-size="9" fill="rgba(209,250,229,.4)">记忆保持率</text>
+                </svg>
+                <div id="cWarn">
+                  <span class="wi"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 4 2.5 20h19L12 4z" stroke-linejoin="round"/><path d="M12 10v4.5"/><circle cx="12" cy="17.4" r=".6" fill="currentColor"/></svg></span>
+                  <span class="wt"><b>3 个知识点</b>将在 48 小时内进入遗忘区</span>
+                  <span class="wb">立即复习</span>
+                </div>
+              </div>
+
+              <!-- 薄弱点卡 -->
+              <div class="card" id="weakCard">
+                <div class="ct">薄弱点 TOP 3</div>
+                <span id="wTag">已自动排入今日计划</span>
+                <div class="wrow" id="w1"><span class="rk">1</span><span class="wn">配方法</span><span class="wg"><span class="wtr"><span class="wfl" id="wf1"></span></span></span><span class="wp" id="wp1">0%</span></div>
+                <div class="wrow" id="w2"><span class="rk">2</span><span class="wn">判别式</span><span class="wg"><span class="wtr"><span class="wfl" id="wf2"></span></span></span><span class="wp" id="wp2">0%</span></div>
+                <div class="wrow" id="w3"><span class="rk">3</span><span class="wn">二次函数图象</span><span class="wg"><span class="wtr"><span class="wfl" id="wf3"></span></span></span><span class="wp" id="wp3">0%</span></div>
+              </div>
+
+            </div>
+            <div class="lHome"></div>
+          </div>
+
+          <div id="sb">
+            <span class="t" id="sbTime">10:05</span>
+            <span class="ics">
+              <svg width="18" height="12" viewBox="0 0 18 12"><rect x="0" y="7" width="3" height="5" rx="1" fill="#fff"/><rect x="5" y="5" width="3" height="7" rx="1" fill="#fff"/><rect x="10" y="2.5" width="3" height="9.5" rx="1" fill="#fff"/><rect x="15" y="0" width="3" height="12" rx="1" fill="#fff" opacity=".45"/></svg>
+              <svg width="17" height="13" viewBox="0 0 24 18" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M2.5 6.5a14 14 0 0 1 19 0"/><path d="M6 10.5a9 9 0 0 1 12 0"/><circle cx="12" cy="14.8" r="1.7" fill="#fff" stroke="none"/></svg>
+              <svg width="25" height="12" viewBox="0 0 27 13"><rect x="0.8" y="0.8" width="21" height="11.4" rx="3.2" fill="none" stroke="#fff" stroke-opacity=".5" stroke-width="1.2"/><rect x="2.8" y="2.8" width="15" height="7.4" rx="1.8" fill="#fff"/><rect x="23.6" y="4.2" width="2.6" height="4.6" rx="1.3" fill="#fff" opacity=".5"/></svg>
+            </span>
+          </div>
+          <div id="homebar"></div>
+          <div id="wake"></div>
+          <div id="glare"></div>
+        </div>
+        <div id="punch"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="corner" id="chap">07 / 复盘 · 能力仪表盘</div>
+  <div class="corner" id="src">可学 App · 系统 UI 演示</div>
+</div>
+
+<div id="hud">
+  <div id="segs"></div>
+  <div id="hudrow">
+    <span>镜头 7/8 · 能力仪表盘 · 16s</span>
+    <span><span id="tc" style="margin-right:10px">00:00</span><button id="prevB">&#8592;</button><button id="pauseBtn">暂停</button><button id="nextB">&#8594;</button><button id="muteB"></button><button id="replay" onclick="location.reload()">重播</button></span>
+  </div>
+</div>
+
+<script>
+/* ===== 时间轴引擎 ===== */
+const DUR=16000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+const after=(ms,f)=>on(performance.now()-t0+ms,f);
+function cnt(el,from,to,dur,suf,st){const now=performance.now()-t0;
+  if(st!==undefined&&now>=st+dur){el.innerHTML=to+(suf||'');return}
+  tws.push({t:st!==undefined?st:now,d:dur,e:eo,f:p=>{el.innerHTML=Math.round(from+(to-from)*p)+(suf||'')}})}
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f(c.t)}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  const pc=Math.min(1,el/DUR);const seg=$('#segs .seg.cur i');if(seg)seg.style.width=(pc*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== 静音开关 ===== */
+let MUTED=true;
+const sfx={pop:v=>!MUTED&&__sfx.pop(v),whoosh:(d,v)=>!MUTED&&__sfx.whoosh(d,v),swipe:v=>!MUTED&&__sfx.swipe(v),type:v=>!MUTED&&__sfx.type(v),ding:v=>!MUTED&&__sfx.ding(v),thud:v=>!MUTED&&__sfx.thud(v)};
+const ICO_ON='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6.5 9H3v6h3.5L11 19z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
+const ICO_OFF='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6.5 9H3v6h3.5L11 19z"/><path d="m16 9 5 6M21 9l-5 6"/></svg>';
+function paintMute(){$('#muteB').innerHTML=MUTED?ICO_OFF:ICO_ON;$('#muteB').title=MUTED?'开启音效':'静音'}
+$('#muteB').onclick=()=>{MUTED=!MUTED;paintMute()};paintMute();
+
+/* ===== HUD 分段进度 ===== */
+const SHOT=7,TOTAL=8;
+for(let i=1;i<=TOTAL;i++){
+  const s=document.createElement('span');s.className='seg'+(i<SHOT?' full':'')+(i===SHOT?' cur':'');
+  s.appendChild(document.createElement('i'));
+  s.onclick=()=>{if(i!==SHOT)location.href='shot-'+i+'.html'};
+  $('#segs').appendChild(s);
+}
+$('#prevB').onclick=()=>{if(SHOT>1)location.href='shot-'+(SHOT-1)+'.html'};
+$('#nextB').onclick=()=>{if(SHOT<TOTAL)location.href='shot-'+(SHOT+1)+'.html'};
+addEventListener('keydown',e=>{
+  if(e.code==='Space'){e.preventDefault();$('#pauseBtn').click()}
+  else if(e.key==='ArrowLeft'&&SHOT>1)location.href='shot-'+(SHOT-1)+'.html';
+  else if(e.key==='ArrowRight'&&SHOT<TOTAL)location.href='shot-'+(SHOT+1)+'.html';
+  else if(e.key==='r'||e.key==='R')location.reload();
+});
+
+/* ===== 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;sfx.whoosh(dur,0.6)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+
+/* ===== 手机 3D 姿态控制（整辑通用）：rotateY/X/Z + scale + 升降 ===== */
+const P={ry:0,rx:0,rz:0,s:1,ty:0,op:1};
+function phoneTo(patch,dur){
+  Object.assign(P,patch);
+  const p=$('#phone'),d=(dur==null?1.2:dur);
+  p.style.transition=`opacity ${d}s ease,transform ${d}s cubic-bezier(.22,1,.36,1)`;
+  p.style.opacity=P.op;
+  p.style.transform=`translate(-50%,-50%) translateY(${P.ty}px) rotateY(${P.ry}deg) rotateX(${P.rx}deg) rotateZ(${P.rz}deg) scale(${P.s})`;
+  if(d>0)sfx.whoosh(Math.min(d,1.2),.38);
+}
+
+/* ===== 大字幕拆字（整辑通用）：逐字包 span.ch，保留 <br>/<b> 结构 ===== */
+function splitChars(el){
+  (function walk(node){
+    Array.prototype.slice.call(node.childNodes).forEach(n=>{
+      if(n.nodeType===3){
+        const frag=document.createDocumentFragment();
+        n.textContent.split('').forEach(c=>{
+          if(c===' '){frag.appendChild(document.createTextNode(' '));return;}
+          const s=document.createElement('span');s.className='ch';s.textContent=c;frag.appendChild(s);
+        });
+        node.replaceChild(frag,n);
+      }else if(n.nodeType===1&&n.tagName!=='BR')walk(n);
+    });
+  })(el);
+  return Array.from(el.querySelectorAll('.ch'));
+}
+function stagger(chs,step){chs.forEach((c,i)=>c.style.transitionDelay=(i*step)+'ms');}
+stagger(splitChars($('#bg3')),48);                                // bg3 逐字弹跳预备
+
+/* ────────────────────────────────────────────────
+   镜头 7 cue 表（16s）· 手机 3D 翻转转横屏
+   ──────────────────────────────────────────────── */
+on(0,()=>phoneTo({ry:-6,rx:1},0));                                 // 初始姿态：接续镜头6余韵
+on(350,()=>{$('#wake').style.opacity='0';sfx.pop(.8)});            // 亮屏（手机本就在场，保持镜头连续）
+on(500,()=>camTo(0,0,1,2.0));                                      // 开场拉镜
+on(500,()=>phoneTo({ry:0,rx:0},1.7));                              // 缓缓回正
+on(800,()=>{$('#badge').classList.add('show');$('#sideNote').classList.add('show')});
+on(1000,()=>{$('#portSplash').classList.add('in');$('#bg1').classList.add('show')}); // splash + 背景大字①：疾滑入位
+on(1900,()=>phoneTo({ry:-24,rz:-90,s:1.05},1.5));                  // ★ 3D 翻转：竖屏 → 横屏
+on(2600,()=>{document.body.classList.add('land');sfx.thud(.5)});   // 翻转中点：切换横屏内容
+on(3400,()=>{$('#ringCard').classList.add('in');sfx.pop(.8)});     // 圆环卡入场
+on(3800,(ct)=>{                                                    // 圆环点亮 + 数字滚动
+  $('#ringFg').style.strokeDashoffset=(339.3*(1-0.76)).toFixed(1);
+  cnt($('#ringNum'),0,76,1500,'<i>%</i>',ct);sfx.ding(.6);
+});
+for(let i=0;i<9;i++)on(3800+i*150,()=>sfx.type(.3));               // 连击键音
+on(5400,()=>{                                                      // 学科条 stagger
+  $('#fM').style.width='82%';sfx.swipe(.5);
+  after(180,()=>{$('#fP').style.width='64%';sfx.swipe(.45)});
+  after(360,()=>{$('#fC').style.width='71%';sfx.swipe(.45)});
+});
+on(5900,()=>phoneTo({ry:-13},1.1));                                // 角度缓收，视线转向曲线
+on(6100,()=>{$('#bg1').classList.remove('show');$('#bg2').classList.add('show')}); // 背景大字②：推近聚焦
+on(6400,()=>{$('#curveCard').classList.add('in');sfx.pop(.8)});    // 曲线卡入场
+on(6800,()=>{$('#cLine').classList.add('draw');sfx.swipe(.6)});    // 曲线绘制
+on(8100,()=>{$('#cZone').classList.add('on');$('#cDot').classList.add('on');sfx.thud(.7)}); // 红区+临界点
+on(8600,()=>{$('#cWarn').classList.add('in');sfx.pop(.9)});        // 预警条
+on(8600,()=>phoneTo({ry:-21,rx:3},0.9));                           // 预警冲击：手机前倾
+on(9200,()=>{$('#cWarn').classList.add('pulse');sfx.ding(.5)});    // 复习按钮脉动
+on(9700,()=>camFocus(960,540,1.1,0.9));                            // 推近仪表盘
+on(10800,()=>camTo(0,0,1,1.0));                                    // 拉回
+on(10800,()=>phoneTo({ry:-12,rx:0},1.0));                          // 回缓
+on(11000,()=>{$('#bg2').classList.remove('show');$('#bg3').classList.add('show')}); // 背景大字③：逐字弹跳
+on(11200,()=>{$('#weakCard').classList.add('in');sfx.pop(.8)});    // 薄弱点卡入场
+[['#w1','#wf1',58,'#wp1'],['#w2','#wf2',61,'#wp2'],['#w3','#wf3',65,'#wp3']].forEach((r,i)=>{
+  on(11800+i*260,(ct)=>{                                           // 行 stagger + 条 + 数字
+    $(r[0]).classList.add('in');$(r[1]).style.width=r[2]+'%';
+    cnt($(r[3]),0,r[2],850,'%',ct);sfx.pop(.6);
+  });
+});
+on(13300,()=>{$('#w1').classList.add('hot');sfx.ding(.7)});        // 头号薄弱点高亮
+on(13800,()=>phoneTo({ry:0,rx:0,rz:0,s:1},1.6));                   // ★ 3D 翻回：横屏 → 竖屏（接续镜头8）
+on(14350,()=>{document.body.classList.remove('land');document.body.classList.add('end');sfx.pop(.7)}); // 翻回中点：换收尾卡
+on(15000,()=>{$('#endCard').classList.add('in');sfx.ding(.8)});    // 下周计划已生成
+</script>
+</body>
+</html>

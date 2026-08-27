@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](./LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](#贡献与许可)
-[![Skills count](https://img.shields.io/badge/Skills-7-orange?style=flat-square)](#skills-gallery)
+[![Skills count](https://img.shields.io/badge/Skills-8-orange?style=flat-square)](#skills-gallery)
 [![Spec](https://img.shields.io/badge/Spec-SKILL.md-black?style=flat-square)](https://agentskills.io)
 
 🌐 **English version**: [`README_EN.md`](README_EN.md)
@@ -27,6 +27,7 @@
 - 📝 **学霸笔记** — 手写笔记本风格的精美 HTML 学习笔记，两种模板风格
 - 🎴 **卡片剧场** — 侧边栏叙事 + 3D 卡片轮播，协议流程 / 产品特性 / 分步讲解的叙事感演示
 - 🎬 **视频分镜演示** — 电影级"一个镜头一个 HTML"演示动画：29 种风格轮换、镜头推拉、WebAudio 音效、角色表情吐槽，全屏录屏即成片
+- 📱 **手机系统 UI 演示** — 一台"真手机"的电影化编排录屏：锁屏通知、聊天、设置页、App 界面逐镜头呈现，HyperOS 级手感动效 + 3D 姿态手机演员
 
 <div align="center">
 
@@ -70,7 +71,13 @@
 </td>
 </tr>
 <tr>
-<td colspan="4" valign="top" align="center">
+<td colspan="2" valign="top" align="center">
+<!-- TODO: 补充预览图 -->
+<a href="#phone-ui-demos"><img width="2560" height="1440" alt="phone-ui-demos" src="https://via.placeholder.com/2560x1440/0c1024/67e8f9?text=phone-ui-demos" /></a>
+<br/><a href="#phone-ui-demos"><strong>phone-ui-demos</strong></a>
+<br/><sub>手机系统 UI / 编排录屏动画</sub>
+</td>
+<td colspan="2" valign="top" align="center">
 <a href="#video-shot-demos"><img width="2560" height="1440" alt="video-shot-demos" src="https://github.com/user-attachments/assets/ee93829f-91c5-48df-925e-342cd2be4557" /></a>
 <br/><a href="#video-shot-demos"><strong>video-shot-demos</strong></a>
 <br/><sub>视频分镜演示 / 电影级镜头动画</sub>
@@ -306,6 +313,52 @@ Links: [README](./skills/card-theater/README.md) · [SKILL.md](./skills/card-the
 
 <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
 
+#### `phone-ui-demos`
+
+<a href="./skills/phone-ui-demos">
+<!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="phone-ui-demos preview" src="https://via.placeholder.com/2560x1440/0c1024/67e8f9?text=phone-ui-demos" />
+</a>
+
+**分类:** 手机系统 UI / 编排录屏动画
+**适用于:** 产品功能演示、App 上手引导、课程科普、品牌视频——需要"看起来像真手机精心编排录屏"的电影化演示场景。
+
+`phone-ui-demos` 把任意内容做成一辑手机系统 UI 风格的网页动画：舞台中央一台全细节真手机（挖孔/侧键/天线带/屏幕反光/状态栏），内容通过锁屏通知、聊天、设置页、控制中心、App 界面等系统组件逐镜头呈现。全系列统一 HyperOS/MIUI 设计语言（大圆角 + 毛玻璃 + 动态壁纸渐变），手机是有 3D 姿态的演员——摇摆、前倾、横屏、盖章震动、熄屏旋走。内置 8 个成片级镜头样板（AI 私教「可学」产品演示）+ 起步骨架。
+
+亮点:
+- phoneTo 3D 姿态系统：六自由度控制一台"活手机"，每镜头 ≥2 次 3D 动作；标志性 App 打开 morph 转场（图标精确位变 → 铺满屏幕）
+- 背景层大字幕：口播文案在手机两侧做 58px+ 渐变大字，11 种入场效果（流光上浮/逐字波浪/砸落/翻转…）每镜轮换
+- 内容转译映射：论点→锁屏通知、对话→聊天气泡（打字指示器）、数据→圆环滑条、流程→设置列表、对比→ActionSheet、总结→熄屏品牌卡
+- 镜头连续性铁律：整辑统一氛围、首镜头才登台、后续镜头初始姿态接续上镜余韵——8 个独立 HTML 像一镜到底的录屏
+- 电影化播放器：虚拟时钟黑场起手 / HUD 分段进度点击跳镜头 / ←→ 切镜头 / 默认静音喇叭开关
+- 零依赖单文件：图标全内联 SVG、壁纸全 CSS 渐变、音效 WebAudio 合成，双击离线可跑
+
+<table>
+<tr>
+<td align="center" width="16.6%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="锁屏通知" src="https://via.placeholder.com/2560x1440/0c1024/a5b4fc?text=shot-1" /></td>
+<td align="center" width="16.6%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="App 打开转场" src="https://via.placeholder.com/2560x1440/f3f5fa/2563eb?text=shot-2" /></td>
+<td align="center" width="16.6%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="苏格拉底对话" src="https://via.placeholder.com/2560x1440/1a1030/fb7185?text=shot-4" /></td>
+<td align="center" width="16.6%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="知识星云下钻" src="https://via.placeholder.com/2560x1440/12081f/a855f7?text=shot-6" /></td>
+<td align="center" width="16.6%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="横屏仪表盘" src="https://via.placeholder.com/2560x1440/06202a/2dd4bf?text=shot-7" /></td>
+<td align="center" width="16.6%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="锁屏熄屏收尾" src="https://via.placeholder.com/2560x1440/090c1a/6ee7b7?text=shot-8" /></td>
+</tr>
+<tr>
+<td align="center"><sub><code>锁屏通知</code><br />手机 3D 登台</sub></td>
+<td align="center"><sub><code>App 打开</code><br />标志性 morph 转场</sub></td>
+<td align="center"><sub><code>苏格拉底对话</code><br />盖章 + 手机震动</sub></td>
+<td align="center"><sub><code>知识星云</code><br />多级下钻图谱</sub></td>
+<td align="center"><sub><code>横屏仪表盘</code><br />rz:-90 转横</sub></td>
+<td align="center"><sub><code>熄屏收尾</code><br />3D 旋走落幕</sub></td>
+</tr>
+</table>
+
+<sub>↑ 8 镜头中的 6 个系统场景 — <a href="./skills/phone-ui-demos/README.md"><b>打开完整组件库与规范</b></a>（8 个成片样板可直接运行）。</sub>
+
+Links: [README](./skills/phone-ui-demos/README.md) · [SKILL.md](./skills/phone-ui-demos/SKILL.md)
+
+---
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
 #### `video-shot-demos`
 
 <a href="./skills/video-shot-demos">
@@ -373,6 +426,7 @@ npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/dy
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/scholar-notes
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/card-theater
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/video-shot-demos
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/phone-ui-demos
 ```
 
 > **默认安装 `main` 分支最新版本。** CLI 会从源码树直接读取每个 Skill 的最新 `SKILL.md`。
@@ -432,6 +486,10 @@ git clone https://github.com/Unclecheng-li/AI_Animation.git
 用 video-shot-demos 把这期视频的口播稿做成分镜演示动画，每个镜头一个 HTML，输出到 demo/
 ```
 
+```
+用 phone-ui-demos 把这个 App 的功能做成手机录屏风格的演示动画，先出分镜表我确认
+```
+
 ### 目录结构
 
 ```text
@@ -478,6 +536,11 @@ ai-animation-skills/
 │       ├── assets/              ← 起步骨架 template.html
 │       │   └── examples/        ← 两套成片实例（glm 29 镜头 + doubao 11 镜头，各带安安表情与图标）
 │       └── scripts/             ← 无头截图质检工具
+│   ├── phone-ui-demos/
+│       ├── SKILL.md             ← 分镜表确认工作流 + 交付标准
+│       ├── README.md
+│       ├── references/          ← 播放器/手机舞台/大字幕/系统组件 四份规范
+│       └── assets/              ← 起步骨架 + kexue 8 镜头成片实例
 ├── web_animation/               ← 原始示例 HTML（历史存档）
 ├── UI/                          ← UI 设计参考图
 ├── prompt.md                    ← Prompt 模板集合
