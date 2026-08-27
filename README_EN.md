@@ -72,8 +72,7 @@ One sentence is all it takes:
 </tr>
 <tr>
 <td colspan="2" valign="top" align="center">
-<!-- TODO: add preview image -->
-<a href="#phone-ui-demos"><img width="2560" height="1440" alt="phone-ui-demos" src="https://via.placeholder.com/2560x1440/0c1024/67e8f9?text=phone-ui-demos" /></a>
+<a href="#phone-ui-demos"><img width="2560" height="1440" alt="phone-ui-demos" src="https://github.com/user-attachments/assets/653d8b46-fc07-43d9-bf36-4899dfc35c7b" /></a>
 <br/><a href="#phone-ui-demos"><strong>phone-ui-demos</strong></a>
 <br/><sub>Phone system UI / choreographed recordings</sub>
 </td>
@@ -316,7 +315,7 @@ Links: [README](./skills/card-theater/README.md) · [SKILL.md](./skills/card-the
 #### `phone-ui-demos`
 
 <a href="./skills/phone-ui-demos">
-<!-- TODO: add preview image --><img width="2560" height="1440" alt="phone-ui-demos preview" src="https://via.placeholder.com/2560x1440/0c1024/67e8f9?text=phone-ui-demos" />
+<img width="2560" height="1440" alt="phone-ui-demos preview" src="https://github.com/user-attachments/assets/653d8b46-fc07-43d9-bf36-4899dfc35c7b" />
 </a>
 
 **Category:** Phone system UI / choreographed recording animations
@@ -334,12 +333,12 @@ Highlights:
 
 <table>
 <tr>
-<td align="center" width="16.6%"><!-- TODO: add preview image --><img width="2560" height="1440" alt="lockscreen notifications" src="https://via.placeholder.com/2560x1440/0c1024/a5b4fc?text=shot-1" /></td>
-<td align="center" width="16.6%"><!-- TODO: add preview image --><img width="2560" height="1440" alt="app open transition" src="https://via.placeholder.com/2560x1440/f3f5fa/2563eb?text=shot-2" /></td>
-<td align="center" width="16.6%"><!-- TODO: add preview image --><img width="2560" height="1440" alt="socratic dialogue" src="https://via.placeholder.com/2560x1440/1a1030/fb7185?text=shot-4" /></td>
-<td align="center" width="16.6%"><!-- TODO: add preview image --><img width="2560" height="1440" alt="knowledge nebula" src="https://via.placeholder.com/2560x1440/12081f/a855f7?text=shot-6" /></td>
-<td align="center" width="16.6%"><!-- TODO: add preview image --><img width="2560" height="1440" alt="landscape dashboard" src="https://via.placeholder.com/2560x1440/06202a/2dd4bf?text=shot-7" /></td>
-<td align="center" width="16.6%"><!-- TODO: add preview image --><img width="2560" height="1440" alt="screen-off finale" src="https://via.placeholder.com/2560x1440/090c1a/6ee7b7?text=shot-8" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="lockscreen notifications" src="https://github.com/user-attachments/assets/653d8b46-fc07-43d9-bf36-4899dfc35c7b" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="app open transition" src="https://github.com/user-attachments/assets/5140d795-191d-4cab-a256-15b7fc6d02da" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="socratic dialogue" src="https://github.com/user-attachments/assets/4fbda860-93f3-4e0d-9fbe-4af9aeea6845" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="knowledge nebula" src="https://github.com/user-attachments/assets/84922771-761b-4ef2-bf3d-f76ec041ea79" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="landscape dashboard" src="https://github.com/user-attachments/assets/8cdc8cfc-68e8-40d1-9c85-b49c90678cb5" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="screen-off finale" src="https://github.com/user-attachments/assets/eea3d8d7-70e1-4586-9f90-bcf281d443f5" /></td>
 </tr>
 <tr>
 <td align="center"><sub><code>Lockscreen</code><br />3D entrance</sub></td>

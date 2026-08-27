@@ -72,8 +72,7 @@
 </tr>
 <tr>
 <td colspan="2" valign="top" align="center">
-<!-- TODO: 补充预览图 -->
-<a href="#phone-ui-demos"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/653d8b46-fc07-43d9-bf36-4899dfc35c7b" /></a>
+<a href="#phone-ui-demos"><img width="2560" height="1440" alt="phone-ui-demos" src="https://github.com/user-attachments/assets/653d8b46-fc07-43d9-bf36-4899dfc35c7b" /></a>
 <br/><a href="#phone-ui-demos"><strong>phone-ui-demos</strong></a>
 <br/><sub>手机系统 UI / 编排录屏动画</sub>
 </td>
@@ -316,7 +315,7 @@ Links: [README](./skills/card-theater/README.md) · [SKILL.md](./skills/card-the
 #### `phone-ui-demos`
 
 <a href="./skills/phone-ui-demos">
-<!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/653d8b46-fc07-43d9-bf36-4899dfc35c7b" />
+<img width="2560" height="1440" alt="phone-ui-demos preview" src="https://github.com/user-attachments/assets/653d8b46-fc07-43d9-bf36-4899dfc35c7b" />
 </a>
 
 **分类:** 手机系统 UI / 编排录屏动画
@@ -334,12 +333,12 @@ Links: [README](./skills/card-theater/README.md) · [SKILL.md](./skills/card-the
 
 <table>
 <tr>
-<td align="center" width="16.6%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/653d8b46-fc07-43d9-bf36-4899dfc35c7b" /></td>
-<td align="center" width="16.6%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/5140d795-191d-4cab-a256-15b7fc6d02da" /></td>
-<td align="center" width="16.6%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/4fbda860-93f3-4e0d-9fbe-4af9aeea6845" /></td>
-<td align="center" width="16.6%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/84922771-761b-4ef2-bf3d-f76ec041ea79" /></td>
-<td align="center" width="16.6%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/8cdc8cfc-68e8-40d1-9c85-b49c90678cb5" /></td>
-<td align="center" width="16.6%"><!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/eea3d8d7-70e1-4586-9f90-bcf281d443f5" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="锁屏通知" src="https://github.com/user-attachments/assets/653d8b46-fc07-43d9-bf36-4899dfc35c7b" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="App 打开转场" src="https://github.com/user-attachments/assets/5140d795-191d-4cab-a256-15b7fc6d02da" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="苏格拉底对话" src="https://github.com/user-attachments/assets/4fbda860-93f3-4e0d-9fbe-4af9aeea6845" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="知识星云下钻" src="https://github.com/user-attachments/assets/84922771-761b-4ef2-bf3d-f76ec041ea79" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="横屏仪表盘" src="https://github.com/user-attachments/assets/8cdc8cfc-68e8-40d1-9c85-b49c90678cb5" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="锁屏熄屏收尾" src="https://github.com/user-attachments/assets/eea3d8d7-70e1-4586-9f90-bcf281d443f5" /></td>
 </tr>
 <tr>
 <td align="center"><sub><code>锁屏通知</code><br />手机 3D 登台</sub></td>
