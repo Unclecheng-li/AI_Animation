@@ -73,7 +73,7 @@
 <tr>
 <td colspan="2" valign="top" align="center">
 <!-- TODO: 补充预览图 -->
-<a href="#phone-ui-demos"><img width="2560" height="1440" alt="phone-ui-demos" src="https://via.placeholder.com/2560x1440/0c1024/67e8f9?text=phone-ui-demos" /></a>
+<a href="#phone-ui-demos"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/653d8b46-fc07-43d9-bf36-4899dfc35c7b" /></a>
 <br/><a href="#phone-ui-demos"><strong>phone-ui-demos</strong></a>
 <br/><sub>手机系统 UI / 编排录屏动画</sub>
 </td>
@@ -316,7 +316,7 @@ Links: [README](./skills/card-theater/README.md) · [SKILL.md](./skills/card-the
 #### `phone-ui-demos`
 
 <a href="./skills/phone-ui-demos">
-<!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="phone-ui-demos preview" src="https://via.placeholder.com/2560x1440/0c1024/67e8f9?text=phone-ui-demos" />
+<!-- TODO: 补充预览图 --><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/653d8b46-fc07-43d9-bf36-4899dfc35c7b" />
 </a>
 
 **分类:** 手机系统 UI / 编排录屏动画
