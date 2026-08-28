@@ -50,7 +50,7 @@
 - **起步骨架** `assets/template.html` —— 已内置全部底盘系统，复制后只改画面层
 - **质检工具** `scripts/shot.js` —— 无头截图快进到任意毫秒
 
-## 风格预览（节选自两辑 40 风格，完整清单见 SKILL.md / references/style-library.md）
+## 风格预览（节选自两辑 40 风格，完整清单见 SKILL.md / references/style-cards.md）
 
 | 风格 | 样板页 | 适合内容 |
 |------|--------|---------|
@@ -90,4 +90,4 @@
 
 ## Prompt 参考
 
-详见 `references/`（player-system / camera / sfx / style-library / character-reactions 五份子系统规范）
+详见 `references/`（mechanics 播放器+镜头+音效 / style-cards 40 风格卡片 / character-reactions 角色与气泡，三份浓缩规范——Skill 采用 cp 模板 + 定位读取的 Token 经济工作流，不要求通读成片样板）
