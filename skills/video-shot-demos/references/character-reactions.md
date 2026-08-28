@@ -30,7 +30,7 @@
 
 ```html
 <div id="mascot">                                  <!-- 底部角落，宽 300–420px，部分出血 -->
-  <div class="say">吐槽台词，<b>关键词</b>高亮</div>  <!-- 白色气泡，CSS 三角尾巴指向脸 -->
+  <div class="say">吐槽台词，<b>关键词</b>高亮</div>  <!-- 统一气泡（见下方强约束），尾巴指向脸 -->
   <img src="表情包/12_粉颊捧笺_娇羞雀跃.png">
 </div>
 ```
@@ -39,11 +39,35 @@
 #mascot{position:absolute;left:-10px;bottom:-8px;width:400px;opacity:0;transition:opacity .9s ease}
 #mascot.show{opacity:1}                             /* 淡入淡出：9s 缓入，不是弹跳 */
 #mascot img{width:100%;animation:bob 3.1s ease-in-out infinite alternate}   /* 常驻上下漂浮 */
-#mascot .say{position:absolute;right:-160px;top:96px;width:230px;background:#fff;
-  border-radius:16px;padding:13px 17px;font-size:24px;font-weight:900;
-  opacity:0;transform:scale(.6);transition:all .45s cubic-bezier(.34,1.6,.64,1)}
-#mascot.show .say{opacity:1;transform:scale(1);transition-delay:.45s}        /* 人先现，话后到 */
 ```
+
+#### 吐槽气泡强约束（形态锁定，跨项目统一）
+
+气泡四件套**形态必须逐字采用以下模板**（基准：DSH 安全教程 shot-2-1），**只允许改 4 个颜色参数**与朝向镜像。不得加边框、不得改字号/圆角/偏移/箭头尺寸/入场曲线。
+
+```css
+/* 立绘在右 → 气泡朝左（原版朝向） */
+#mascot .say{position:absolute;left:-200px;top:80px;width:220px;background:<气泡底色>;border-radius:16px;padding:13px 17px;
+  font-size:23px;font-weight:900;color:<文字色>;line-height:1.45;opacity:0;transform:scale(.6);transition:all .45s cubic-bezier(.34,1.6,.64,1);box-shadow:0 12px 34px <阴影色>}
+#mascot .say::after{content:'';position:absolute;right:24px;bottom:-18px;border:9px solid transparent;border-top:11px solid <气泡底色>}
+#mascot .say b{color:<强调色>}
+#mascot.show .say{opacity:1;transform:scale(1);transition-delay:.45s}   /* 人先现，话后到 */
+
+/* 立绘在左 → 镜像：left:-200px 换 right:-200px，箭头 right:24px 换 left:24px，其余不变 */
+```
+
+**锁定的形态参数**：无边框 ｜ 圆角 16px ｜ 内边距 13px 17px ｜ 宽 220px ｜ 23px/900/行高 1.45 ｜ top:80px（立绘头部侧位）｜ 水平偏移 ±200px ｜ 入场 scale(.6)→1 弹性曲线 cubic-bezier(.34,1.6,.64,1) 0.45s、delay .45s ｜ 箭头 9px/11px、距边 24px、探出 18px、颜色=气泡底色 ｜ 柔影 0 12px 34px。
+
+**允许按页面调整的 4 个配色**（写在模板参数位）：
+
+| 参数 | 规则 |
+|---|---|
+| 气泡底色 | 跟随页面材质（纸面页用纸色、暗夜页可用深底）；箭头永远=气泡底色 |
+| 文字色 | 与气泡底强对比；深底配浅字、浅底配深字 |
+| `<b>` 强调色 | 页面主题色系，但**必须与气泡底有足够对比**（浅底禁浅金/浅蓝，改深红/深蓝；深底用亮金/亮红） |
+| 阴影色 | 页面主题色调，rgba(…,.25)；台词无 `<b>` 时 `<b>` 规则也照写 |
+
+字体不声明（继承页面字体，书法页自动书法体）。台词一句以内，`<b>` 最多 1–2 处。
 
 ### 使用规则
 
