@@ -374,7 +374,7 @@ Highlights:
 - Camera language: opening pull-back / key-moment push-in / follow shots / Ken Burns slow push / impact slams; slow-mo segments auto-dress with letterbox bars + vignette + millisecond counter
 - WebAudio SFX: zero audio files, 6 primitives (pop/whoosh/swipe/type/ding/thud); camera moves automatically get a whoosh
 - 40-style library (two example collections, 29 + 11): every style ships with font pairings, suitable content types, and a production-grade reference page — no two consecutive shots share a style
-- Character close-ups: 15 emotion sprites picked per narrative beat, 400px closeups + speech bubbles easing in
+- Duo commentary cast: AnAn (15 emotions) + Shery (20 emotions, the "dummy" tsukkomi); ≥2 appearances per page (mid-shot sprite-swapping flash + finale), with Shery quipping → AnAn following up 1.2s later on highlight pages
 - Caption bars aligned sentence-by-sentence with the voiceover script, keywords highlighted; source footnotes for data, cross-page score continuity
 - Headless screenshot QA: fast-forward the virtual clock to any millisecond and capture frames to hunt for overlaps, occlusions, and animation glitches
 

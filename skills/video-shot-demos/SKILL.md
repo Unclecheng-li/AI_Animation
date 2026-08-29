@@ -27,6 +27,7 @@ description: 为视频/课程/解说文案制作"每镜头一个 HTML"的高完�
 
 ```bash
 cp -r "assets/examples/<项目>/anan - emotion rename" <输出目录>/    # 安安 15 情绪立绘；图标同理
+cp -r "assets/shery - emotion rename" <输出目录>/                   # 橘雪莉 20 情绪（笨蛋吐槽役，重点页与安安同框）
 ```
 
 **第 1 步 · 逐页实现**（cp 起步，只读标记区）：
@@ -38,7 +39,7 @@ grep -n "改这里\|DUR=" "<输出目录>/shot-x-x_名称.html"    # 行号地�
 
 用 Read 的 offset/limit 只读标记行附近区域（字体 link+舞台底色 / 画面层 CSS / 画面 HTML / cue 表+DUR），逐一替换：① 字体与配色（Google Fonts 随风格）；② 重画画面层；③ 按口播时间戳写 cue（注释引用口播句，如 `// 5:20「正常充值」`）；④ `DUR`=规定时长±0.5s。底盘（引导脚本/音效引擎/时间轴/镜头调度/HUD）不动。
 
-按需读参考（都很小）：`references/mechanics.md` 播放器+镜头+音效机制 ｜ `references/style-cards.md` 40 种风格卡片（字体/主色/材质/样板页号） ｜ `references/character-reactions.md` 安安情绪表+气泡强约束模板+字幕条规范。
+按需读参考（都很小）：`references/mechanics.md` 播放器+镜头+音效机制 ｜ `references/style-cards.md` 40 种风格卡片（字体/主色/材质/样板页号） ｜ `references/character-reactions.md` 双角色吐槽体系（安安×橘雪莉情绪表、中段快闪切立绘、双人同框 cue、气泡强约束模板）。
 
 **第 2 步 · 质检**：`node scripts/shot.js 页面.html <毫秒> _t.png [fx fy scale]` 多时间点无头截图，逐张查重叠遮挡/中间态穿帮/收尾定格，最后完整播一遍。
 
@@ -51,5 +52,5 @@ grep -n "改这里\|DUR=" "<输出目录>/shot-x-x_名称.html"    # 行号地�
 - [ ] 黑场「启动播放」起手，2s 渐变后开演；1920×1080 自适应；HUD 底部唤出；可暂停重播；DUR 准确
 - [ ] 相邻镜头风格/字体/配色不同；无默认科技暗色；emoji→内联扁平 SVG
 - [ ] 关键节拍有镜头运动（推/拉/跟/摇）+ whoosh；关键动作有音效；计数滚动有连击键音
-- [ ] 角色表情特写+气泡（有素材时）：气泡**必须用统一强约束模板**（形态锁定，仅 4 个配色参数可调，见 character-reactions.md）
+- [ ] 角色出场**每页 ≥2 次**（中段 30–45% DUR 快闪 + 结尾 75–85% 定场，短页仅结尾）：快闪=同一元素换台词换立绘、160ms 闪换重弹；重点页双角色（雪莉先吐槽→安安 1.2s 后接茬，同框退场）；气泡**必须用统一强约束模板**（形态锁定，仅 4 配色可调，见 character-reactions.md）
 - [ ] 字幕条逐句对齐口播、关键词高亮；截图验证无重叠遮挡；数据角注出处；index 可逐页打开
