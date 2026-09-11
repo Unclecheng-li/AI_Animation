@@ -39,7 +39,7 @@ grep -n "改这里\|DUR=" "<输出目录>/shot-x-x_名称.html"    # 行号地�
 
 用 Read 的 offset/limit 只读标记行附近区域（字体 link+舞台底色 / 画面层 CSS / 画面 HTML / cue 表+DUR），逐一替换：① 字体与配色（Google Fonts 随风格）；② 重画画面层；③ 按口播时间戳写 cue（注释引用口播句，如 `// 5:20「正常充值」`）；④ `DUR`=规定时长±0.5s。底盘（引导脚本/音效引擎/时间轴/镜头调度/HUD）不动。
 
-按需读参考（都很小）：`references/mechanics.md` 播放器+镜头+音效机制 ｜ `references/style-cards.md` 40 种风格卡片（字体/主色/材质/样板页号） ｜ `references/character-reactions.md` 双角色吐槽体系（安安×橘雪莉情绪表、中段快闪切立绘、双人同框 cue、气泡强约束模板）。
+按需读参考（都很小）：`references/mechanics.md` 播放器+镜头+音效机制 ｜ `references/style-cards.md` 41 种风格卡片（字体/主色/材质/样板页号） ｜ `references/character-reactions.md` 双角色吐槽体系（安安×橘雪莉情绪表、中段快闪切立绘、双人同框 cue、气泡强约束模板）。
 
 **第 2 步 · 质检**：`node scripts/shot.js 页面.html <毫秒> _t.png [fx fy scale]` 多时间点无头截图，逐张查重叠遮挡/中间态穿帮/收尾定格，最后完整播一遍。
 
