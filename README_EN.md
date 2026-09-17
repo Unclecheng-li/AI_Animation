@@ -85,8 +85,7 @@ One sentence is all it takes:
 </tr>
 <tr>
 <td colspan="4" valign="top" align="center">
-<!-- TODO: replace with an uploaded preview image -->
-<a href="#stacked-data-cards"><img width="2560" height="1440" alt="stacked-data-cards" src="https://placehold.co/2560x1440/0b0f19/ff5f3c?text=stacked-data-cards" /></a>
+<a href="#stacked-data-cards"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/ac863d4f-0d48-4c05-a0c2-2e28874a1c62" /></a>
 <br/><a href="#stacked-data-cards"><strong>stacked-data-cards</strong></a>
 <br/><sub>Stacked data cards / timeline argument animation</sub>
 </td>
@@ -415,8 +414,7 @@ Links: [README](./skills/video-shot-demos/README.md) · [SKILL.md](./skills/vide
 #### `stacked-data-cards`
 
 <a href="./skills/stacked-data-cards">
-<!-- TODO: replace with an uploaded preview image -->
-<img width="2560" height="1440" alt="stacked-data-cards preview" src="https://placehold.co/2560x1440/0b0f19/ff5f3c?text=stacked-data-cards" />
+<img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/76ad63cf-e2b7-4153-b21e-cd19c3387c77" />
 </a>
 
 **Category:** Stacked data cards / timeline argument animation
@@ -434,10 +432,9 @@ Highlights:
 
 <table>
 <tr>
-<!-- TODO: replace with an uploaded preview image -->
-<td align="center" width="33%"><a href="./skills/stacked-data-cards/README.md"><img width="2560" height="1440" alt="template" src="https://placehold.co/2560x1440/0b0f19/9ca3af?text=template" /></a><br /><sub><code>template</code><br />Starter skeleton</sub></td>
-<td align="center" width="33%"><a href="./skills/stacked-data-cards/README.md"><img width="2560" height="1440" alt="orange theme" src="https://placehold.co/2560x1440/0b0f19/ff5f3c?text=orange+theme" /></a><br /><sub><code>Example A</code><br />Orange-red · trend argument</sub></td>
-<td align="center" width="33%"><a href="./skills/stacked-data-cards/README.md"><img width="2560" height="1440" alt="blue theme" src="https://placehold.co/2560x1440/0b0f19/3b82f6?text=blue+theme" /></a><br /><sub><code>Example B</code><br />Blue-violet · data reveal</sub></td>
+<td align="center" width="33%"><a href="./skills/stacked-data-cards/README.md"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/40cd0e6e-14f2-4168-ab8c-3b645d66eb58" /></a><br /><sub><code>template</code><br />Starter skeleton</sub></td>
+<td align="center" width="33%"><a href="./skills/stacked-data-cards/README.md"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/747cbddd-97ea-48e5-9d9c-d1f732c3b099" /></a><br /><sub><code>Example A</code><br />Orange-red · trend argument</sub></td>
+<td align="center" width="33%"><a href="./skills/stacked-data-cards/README.md"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/781f3c90-3fda-4a18-b84c-84d3dd9d3a41" /></a><br /><sub><code>Example B</code><br />Blue-violet · data reveal</sub></td>
 </tr>
 </table>
 
