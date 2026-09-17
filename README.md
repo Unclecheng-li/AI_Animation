@@ -85,8 +85,7 @@
 </tr>
 <tr>
 <td colspan="4" valign="top" align="center">
-<!-- TODO: 替换为实际上传的预览图 -->
-<a href="#stacked-data-cards"><img width="2560" height="1440" alt="stacked-data-cards" src="https://placehold.co/2560x1440/0b0f19/ff5f3c?text=stacked-data-cards" /></a>
+<a href="#stacked-data-cards"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/ac863d4f-0d48-4c05-a0c2-2e28874a1c62" /></a>
 <br/><a href="#stacked-data-cards"><strong>stacked-data-cards</strong></a>
 <br/><sub>叠放数据卡 / 时间线论点动画</sub>
 </td>
@@ -415,8 +414,7 @@ Links: [README](./skills/video-shot-demos/README.md) · [SKILL.md](./skills/vide
 #### `stacked-data-cards`
 
 <a href="./skills/stacked-data-cards">
-<!-- TODO: 替换为实际上传的预览图 -->
-<img width="2560" height="1440" alt="stacked-data-cards preview" src="https://placehold.co/2560x1440/0b0f19/ff5f3c?text=stacked-data-cards" />
+<img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/76ad63cf-e2b7-4153-b21e-cd19c3387c77" />
 </a>
 
 **分类:** 叠放数据卡 / 时间线论点动画
@@ -434,10 +432,9 @@ Links: [README](./skills/video-shot-demos/README.md) · [SKILL.md](./skills/vide
 
 <table>
 <tr>
-<!-- TODO: 替换为实际上传的预览图 -->
-<td align="center" width="33%"><a href="./skills/stacked-data-cards/README.md"><img width="2560" height="1440" alt="template" src="https://placehold.co/2560x1440/0b0f19/9ca3af?text=template" /></a><br /><sub><code>template</code><br />起步骨架</sub></td>
-<td align="center" width="33%"><a href="./skills/stacked-data-cards/README.md"><img width="2560" height="1440" alt="orange theme" src="https://placehold.co/2560x1440/0b0f19/ff5f3c?text=orange+theme" /></a><br /><sub><code>实例 A</code><br />橙红 · 趋势论证</sub></td>
-<td align="center" width="33%"><a href="./skills/stacked-data-cards/README.md"><img width="2560" height="1440" alt="blue theme" src="https://placehold.co/2560x1440/0b0f19/3b82f6?text=blue+theme" /></a><br /><sub><code>实例 B</code><br />蓝紫 · 数据揭示</sub></td>
+<td align="center" width="33%"><a href="./skills/stacked-data-cards/README.md"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/40cd0e6e-14f2-4168-ab8c-3b645d66eb58" /></a><br /><sub><code>template</code><br />起步骨架</sub></td>
+<td align="center" width="33%"><a href="./skills/stacked-data-cards/README.md"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/747cbddd-97ea-48e5-9d9c-d1f732c3b099" /></a><br /><sub><code>实例 A</code><br />橙红 · 趋势论证</sub></td>
+<td align="center" width="33%"><a href="./skills/stacked-data-cards/README.md"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/781f3c90-3fda-4a18-b84c-84d3dd9d3a41" /></a><br /><sub><code>实例 B</code><br />蓝紫 · 数据揭示</sub></td>
 </tr>
 </table>
 
