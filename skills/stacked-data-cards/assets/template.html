@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stacked Data Cards — 起步骨架</title>
+  <style>
+    /* =========================================================
+       设计变量：换主题只改这里
+       ========================================================= */
+    :root {
+      --bg: #0b0f19;
+      --bg-glow: radial-gradient(circle at 30% 30%, rgba(255, 95, 60, 0.12), transparent 45%),
+                 radial-gradient(circle at 70% 70%, rgba(255, 59, 92, 0.10), transparent 45%);
+      --card-bg: rgba(255, 255, 255, 0.97);
+      --card-shadow: 0 28px 70px rgba(0, 0, 0, 0.35), 0 10px 24px rgba(0, 0, 0, 0.18);
+      --accent: #ff5f3c;          /* 主题色：橙红。蓝 #3b82f6 / 绿 #10b981 / 紫 #8b5cf6 */
+      --accent-light: #ff9f6b;
+      --accent-end: #ff3b5c;
+      --green: #10b981;           /* 对照组 / 正面指标 */
+      --green-light: #34d399;
+      --gray-line: #9ca3af;       /* 停滞 / 水平对照线 */
+      --text: #1f2937;
+      --muted: #6b7280;
+      --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+      --ease-elastic: cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+
+    html, body {
+      margin: 0; padding: 0; width: 100%; height: 100%;
+      background: var(--bg); color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      overflow: hidden;
+    }
+
+    /* =========================================================
+       舞台与三态卡片（核心机制，勿改参数逻辑）
+       ========================================================= */
+    .stage {
+      position: relative; width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--bg-glow);
+    }
+
+    .card-deck { position: absolute; inset: 0; transition: transform 1s var(--ease-out), opacity 0.6s ease; }
+    .card-deck.exit { transform: translateX(-120vw); opacity: 0; }
+
+    .card {
+      position: absolute; top: 50%; left: 50%;
+      width: min(92vw, 940px); max-height: 92vh;
+      min-height: clamp(440px, 66vh, 600px);
+      padding: clamp(1.5rem, 3.6vw, 2.6rem);
+      background: var(--card-bg);
+      border-radius: clamp(18px, 2.5vw, 28px);
+      box-shadow: var(--card-shadow);
+      opacity: 0;
+      transform: translate(-50%, 60vh) scale(0.82);   /* upcoming：屏外待命 */
+      transition: transform 0.8s var(--ease-out), opacity 0.55s ease;
+      will-change: transform, opacity;
+      z-index: 1; overflow-y: auto;
+    }
+
+    .card.active { opacity: 1; transform: translate(-50%, -50%) scale(1); z-index: 10; }
+
+    .card.stacked {
+      opacity: 0.72;
+      transform:
+        translate(calc(-110% - var(--stack-i, 0) * 22%), -50%)
+        scale(calc(0.76 - var(--stack-i, 0) * 0.07))
+        rotate(calc(-4deg - var(--stack-i, 0) * 5deg));
+      z-index: 4;
+    }
+
+    .card-badge {
+      position: absolute; top: clamp(1rem, 2.5vw, 1.6rem); left: clamp(1rem, 2.5vw, 1.6rem);
+      font-size: clamp(2.4rem, 6vw, 4rem); font-weight: 900;
+      color: rgba(0, 0, 0, 0.08); line-height: 1;
+      user-select: none; pointer-events: none;
+    }
+
+    .card-content { position: relative; min-height: 100%; display: flex; flex-direction: column; }
+    .card-header { margin-bottom: clamp(1rem, 2.2vw, 1.6rem); }
+    .card-title { margin: 0 0 0.35rem; font-size: clamp(1.3rem, 3vw, 2rem); font-weight: 900; line-height: 1.25; }
+    .card-subtitle { margin: 0; font-size: clamp(0.85rem, 1.8vw, 1.1rem); color: var(--muted); line-height: 1.5; }
+    .card-body { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: clamp(1rem, 2.5vw, 1.6rem); }
+
+    .corner-note {
+      position: absolute; bottom: clamp(0.8rem, 1.8vw, 1.2rem); right: clamp(1rem, 2.5vw, 1.6rem);
+      font-size: clamp(0.65rem, 1.3vw, 0.85rem); color: var(--muted); font-weight: 700;
+      font-family: 'SF Mono', 'JetBrains Mono', Consolas, monospace;
+      opacity: 0; transition: opacity 0.5s ease;
+    }
+    .card.active .corner-note { opacity: 1; transition-delay: 2.2s; }
+
+    /* =========================================================
+       通用级联入场：.fade-up + delay-N
+       ========================================================= */
+    .fade-up { opacity: 0; transform: translateY(18px); transition: opacity 0.5s ease, transform 0.6s var(--ease-out); }
+    .card.active .fade-up { opacity: 1; transform: translateY(0); }
+    .card.active .delay-1 { transition-delay: 0.4s; }
+    .card.active .delay-2 { transition-delay: 0.8s; }
+    .card.active .delay-3 { transition-delay: 1.2s; }
+    .card.active .delay-4 { transition-delay: 1.6s; }
+    .card.active .delay-5 { transition-delay: 2.0s; }
+
+    /* =========================================================
+       组件：折线对比图（trim-paths 描边）
+       ========================================================= */
+    .chart-svg { width: 100%; height: auto; max-height: 300px; overflow: visible; }
+    .grid-line { stroke: #f3f4f6; stroke-width: 1; }
+    .axis { stroke: #e5e7eb; stroke-width: 2; }
+    .axis-label { font-size: 11px; fill: var(--muted); font-weight: 700; font-family: 'SF Mono', 'JetBrains Mono', Consolas, monospace; }
+    .line-flat { fill: none; stroke: var(--gray-line); stroke-width: 4; stroke-linecap: round; }
+    .line-rise {
+      fill: none; stroke: var(--accent); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round;
+      transition: stroke-dashoffset 1.5s var(--ease-out);
+    }
+    .dot {
+      fill: #fff; stroke: var(--accent); stroke-width: 3;
+      opacity: 0; transform-box: fill-box; transform-origin: center; transform: scale(0);
+      transition: opacity 0.3s ease, transform 0.4s var(--ease-elastic);
+    }
+    .card.active .dot { opacity: 1; transform: scale(1); }
+    .card.active .dot.d1 { transition-delay: 1.6s; }
+    .card.active .dot.d2 { transition-delay: 1.8s; }
+
+    /* =========================================================
+       组件：大数字 + 环形仪表 + 对比条
+       ========================================================= */
+    .stat-row { display: flex; align-items: center; gap: clamp(1.5rem, 4vw, 3rem); flex-wrap: wrap; }
+    .big-number {
+      font-size: clamp(4rem, 12vw, 7rem); font-weight: 900; line-height: 1;
+      background: linear-gradient(135deg, var(--accent), var(--accent-end));
+      -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .gauge { position: relative; width: clamp(90px, 14vw, 130px); height: clamp(90px, 14vw, 130px); flex-shrink: 0; }
+    .gauge svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .gauge-track { fill: none; stroke: #f3f4f6; stroke-width: 8; }
+    .gauge-progress {
+      fill: none; stroke: var(--accent); stroke-width: 8; stroke-linecap: round;
+      stroke-dasharray: 283; stroke-dashoffset: 283;
+      transition: stroke-dashoffset 1.2s var(--ease-out) 0.4s;
+    }
+    .card.active .gauge-progress { stroke-dashoffset: var(--gauge-offset, 283); }
+    .gauge-text {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      font-weight: 900; font-size: clamp(1.1rem, 2.2vw, 1.5rem); color: var(--accent);
+    }
+    .stat-desc { font-size: clamp(0.95rem, 2vw, 1.25rem); color: var(--muted); font-weight: 700; }
+
+    .bar-row { display: flex; align-items: center; gap: 0.7rem; font-size: clamp(0.8rem, 1.7vw, 0.95rem); font-weight: 700; }
+    .bar-row > span:first-child { width: 6em; flex-shrink: 0; }
+    .bar { flex: 1; height: 10px; background: #f3f4f6; border-radius: 999px; overflow: hidden; }
+    .bar-fill { height: 100%; width: 0; border-radius: 999px; transition: width 1s var(--ease-out); }
+    .bar-fill.a { background: linear-gradient(90deg, var(--accent), var(--accent-end)); }
+    .bar-fill.b { background: linear-gradient(90deg, var(--green), var(--green-light)); }
+    .card.active .bar-fill.a { width: var(--w, 50%); transition-delay: 1.0s; }
+    .card.active .bar-fill.b { width: var(--w, 50%); transition-delay: 1.3s; }
+
+    /* =========================================================
+       组件：图标卡组 + 金句横幅
+       ========================================================= */
+    .icon-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(0.8rem, 2vw, 1.4rem); }
+    .icon-item {
+      display: flex; flex-direction: column; align-items: center; gap: 0.6rem;
+      padding: clamp(0.9rem, 2vw, 1.3rem);
+      background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 20px;
+      opacity: 0; transform: translateY(30px) scale(0.92);
+      transition: opacity 0.5s ease, transform 0.5s var(--ease-out), border-color 0.3s ease;
+    }
+    .icon-item:hover { border-color: var(--accent); }
+    .card.active .icon-item { opacity: 1; transform: translateY(0) scale(1); }
+    .card.active .icon-item:nth-child(1) { transition-delay: 0.3s; }
+    .card.active .icon-item:nth-child(2) { transition-delay: 0.55s; }
+    .card.active .icon-item:nth-child(3) { transition-delay: 0.8s; }
+    .icon-svg { width: clamp(48px, 7vw, 64px); height: clamp(48px, 7vw, 64px); }
+    .icon-title { font-size: clamp(0.9rem, 1.9vw, 1.15rem); font-weight: 900; text-align: center; }
+    .icon-desc { font-size: clamp(0.72rem, 1.5vw, 0.88rem); color: var(--muted); text-align: center; line-height: 1.5; }
+
+    .banner {
+      width: 100%; padding: clamp(0.7rem, 1.6vw, 1rem) clamp(1rem, 2.5vw, 1.6rem);
+      background: var(--accent); border-radius: 12px;
+      font-size: clamp(1rem, 2.2vw, 1.5rem); font-weight: 800; color: #fff; text-align: center;
+      opacity: 0; transform: translateY(20px) scaleX(0.96);
+      transition: opacity 0.5s ease, transform 0.6s var(--ease-out);
+    }
+    .card.active .banner { opacity: 1; transform: translateY(0) scaleX(1); transition-delay: 1.8s; }
+
+    /* =========================================================
+       响应式
+       ========================================================= */
+    @media (max-width: 760px) {
+      .icon-grid { grid-template-columns: 1fr; }
+      .card.stacked {
+        opacity: 0.55;
+        transform:
+          translate(calc(-85% - var(--stack-i, 0) * 14%), -50%)
+          scale(calc(0.62 - var(--stack-i, 0) * 0.06))
+          rotate(calc(-4deg - var(--stack-i, 0) * 5deg));
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="stage">
+    <div class="card-deck" id="deck">
+
+      <!-- 卡 1：折线对比图 —— "A 上升，B 停滞"类论点 -->
+      <article class="card" data-index="0">
+        <span class="card-badge">01</span>
+        <div class="card-content">
+          <div class="card-header">
+            <h2 class="card-title">论点一：写一句趋势判断</h2>
+            <p class="card-subtitle">补充说明：哪条线在涨，哪条线不动</p>
+          </div>
+          <div class="card-body">
+            <svg class="chart-svg" viewBox="0 0 860 340" preserveAspectRatio="xMidYMid meet">
+              <line class="grid-line" x1="80" y1="80" x2="780" y2="80"/>
+              <line class="grid-line" x1="80" y1="140" x2="780" y2="140"/>
+              <line class="grid-line" x1="80" y1="200" x2="780" y2="200"/>
+              <line class="grid-line" x1="80" y1="260" x2="780" y2="260"/>
+              <line class="axis" x1="80" y1="60" x2="80" y2="280"/>
+              <line class="axis" x1="80" y1="280" x2="780" y2="280"/>
+              <text class="axis-label" x="35" y="170" transform="rotate(-90 35 170)">指标</text>
+              <path class="line-flat" d="M 90 200 L 770 200"/>
+              <path class="line-rise" id="lineRise" d="M 90 240 L 250 210 L 420 170 L 600 120 L 770 85"/>
+              <circle class="dot d1" cx="770" cy="85" r="6"/>
+              <circle class="dot d2" cx="770" cy="200" r="6" style="stroke: var(--gray-line);"/>
+              <text class="axis-label" x="90" y="305">样本A</text>
+              <text class="axis-label" x="420" y="305">样本B</text>
+              <text class="axis-label" x="740" y="305">样本C</text>
+            </svg>
+            <div class="banner">金句结论：<strong>写在这里</strong></div>
+          </div>
+          <div class="corner-note">数据来源 · 样本量</div>
+        </div>
+      </article>
+
+      <!-- 卡 2：大数字 + 环形仪表 + 对比条 —— 震撼比例类论点 -->
+      <article class="card" data-index="1">
+        <span class="card-badge">02</span>
+        <div class="card-content">
+          <div class="card-header">
+            <h2 class="card-title">论点二：甩出一个震撼数字</h2>
+            <p class="card-subtitle">补充说明：这个数字意味着什么</p>
+          </div>
+          <div class="card-body">
+            <div class="stat-row">
+              <div class="big-number count-up" data-target="45" data-suffix="%" data-delay="300" data-duration="1200">0%</div>
+              <div class="gauge">
+                <svg viewBox="0 0 100 100">
+                  <circle class="gauge-track" cx="50" cy="50" r="45"/>
+                  <circle class="gauge-progress" cx="50" cy="50" r="45" style="--gauge-offset: 156;"/><!-- 283×(1-0.45) -->
+                </svg>
+                <div class="gauge-text">45%</div>
+              </div>
+              <div class="stat-desc fade-up delay-2">这个数字对应的一句人话解释</div>
+            </div>
+            <div class="fade-up delay-3" style="display:flex;flex-direction:column;gap:0.7rem;">
+              <div class="bar-row">
+                <span>对象 A</span>
+                <div class="bar"><div class="bar-fill a" style="--w: 45%;"></div></div>
+                <span class="count-up" data-target="45" data-suffix="%" data-delay="1000" data-duration="800">0%</span>
+              </div>
+              <div class="bar-row">
+                <span>对象 B</span>
+                <div class="bar"><div class="bar-fill b" style="--w: 12%;"></div></div>
+                <span class="count-up" data-target="12" data-suffix="%" data-delay="1300" data-duration="800">0%</span>
+              </div>
+            </div>
+          </div>
+          <div class="corner-note">数据来源 · 样本量</div>
+        </div>
+      </article>
+
+      <!-- 卡 3：图标卡组 + 金句横幅 —— 并列要点类论点 -->
+      <article class="card" data-index="2">
+        <span class="card-badge">03</span>
+        <div class="card-content">
+          <div class="card-header">
+            <h2 class="card-title">论点三：并列的几个要点</h2>
+            <p class="card-subtitle">补充说明：它们共同的结论是什么</p>
+          </div>
+          <div class="card-body">
+            <div class="icon-grid">
+              <div class="icon-item">
+                <svg class="icon-svg" viewBox="0 0 64 64" fill="none" stroke="#4b5563" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="32" cy="32" r="22"/><path d="M32 20v12l8 6" stroke="var(--accent)"/>
+                </svg>
+                <div class="icon-title">要点 A</div>
+                <div class="icon-desc">一句话解释这个要点</div>
+              </div>
+              <div class="icon-item">
+                <svg class="icon-svg" viewBox="0 0 64 64" fill="none" stroke="#4b5563" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="12" y="12" width="40" height="40" rx="8"/><path d="M22 32l7 7 13-14" stroke="var(--accent)"/>
+                </svg>
+                <div class="icon-title">要点 B</div>
+                <div class="icon-desc">一句话解释这个要点</div>
+              </div>
+              <div class="icon-item">
+                <svg class="icon-svg" viewBox="0 0 64 64" fill="none" stroke="#4b5563" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M32 8l22 12v14c0 12-14 20-22 22-8-2-22-10-22-22V20z"/><path d="M24 24l16 16M40 24L24 40" stroke="var(--accent)"/>
+                </svg>
+                <div class="icon-title">要点 C</div>
+                <div class="icon-desc">一句话解释这个要点</div>
+              </div>
+            </div>
+            <div class="banner">收尾金句：<strong>写结论</strong></div>
+          </div>
+        </div>
+      </article>
+
+    </div>
+  </main>
+
+  <script>
+    (function () {
+      /* =========================================================
+         时间线常量（毫秒）：与口播对齐。卡间间隔 = 该卡驻留时长。
+         铁律：卡内最后一个动画结束时刻 < 切卡时刻 - 1500ms
+         ========================================================= */
+      const TIMING = {
+        card1: 0,
+        card2: 7000,    // 卡 1 驻留 7s
+        card3: 14000,   // 卡 2 驻留 7s
+        exit: 21000     // 卡 3 驻留 7s 后整副退场（不需要可注释掉）
+      };
+
+      const cards = document.querySelectorAll('.card');
+      const deck = document.getElementById('deck');
+
+      /* 三态切换：当前 active，之前 stacked（--stack-i 从 0 递增），之后 upcoming */
+      function activate(index) {
+        cards.forEach((card, i) => {
+          card.classList.remove('active', 'stacked', 'upcoming');
+          card.style.removeProperty('--stack-i');
+          if (i === index) {
+            card.classList.add('active');
+          } else if (i < index) {
+            card.classList.add('stacked');
+            card.style.setProperty('--stack-i', index - 1 - i);
+          } else {
+            card.classList.add('upcoming');
+          }
+        });
+        runCounters(index);
+      }
+
+      /* 数字滚动：ease-out cubic，支持前缀/后缀/小数位 */
+      function countUp(el, target, duration, suffix, prefix, decimals) {
+        const start = performance.now();
+        const factor = Math.pow(10, decimals);
+        function frame(now) {
+          const p = Math.min((now - start) / duration, 1);
+          const eased = 1 - Math.pow(1 - p, 3);
+          el.textContent = prefix + (Math.round(eased * target * factor) / factor).toFixed(decimals) + suffix;
+          if (p < 1) requestAnimationFrame(frame);
+        }
+        requestAnimationFrame(frame);
+      }
+
+      function runCounters(index) {
+        const card = cards[index];
+        if (!card) return;
+        card.querySelectorAll('.count-up').forEach(el => {
+          const target = parseFloat(el.dataset.target || '0');
+          const suffix = el.dataset.suffix || '';
+          const prefix = el.dataset.prefix || '';
+          const decimals = parseInt(el.dataset.decimals || '0', 10);
+          const delay = parseInt(el.dataset.delay || '300', 10);
+          const duration = parseInt(el.dataset.duration || '900', 10);
+          el.textContent = prefix + (0).toFixed(decimals) + suffix;
+          setTimeout(() => countUp(el, target, duration, suffix, prefix, decimals), delay);
+        });
+      }
+
+      /* 折线 trim-paths 描边：先初始化 dashoffset，再强制重绘防初帧闪线 */
+      function initChart() {
+        document.querySelectorAll('.line-rise, .line-flat').forEach(line => {
+          const len = line.getTotalLength();
+          line.style.strokeDasharray = len;
+          line.style.strokeDashoffset = len;
+          line.getBoundingClientRect();
+        });
+        setTimeout(() => {
+          document.querySelectorAll('.line-rise, .line-flat').forEach(line => {
+            line.style.strokeDashoffset = '0';
+          });
+        }, 500);
+      }
+
+      /* 可选：低音 thud（WebAudio 合成，自动播放被拦截时静默失败） */
+      function playThud() {
+        try {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (!AudioContext) return;
+          const ctx = new AudioContext();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(80, ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(40, ctx.currentTime + 0.25);
+          gain.gain.setValueAtTime(0.5, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.start(); osc.stop(ctx.currentTime + 0.4);
+        } catch (e) { /* 静默失败 */ }
+      }
+
+      /* 主时间线 */
+      function run() {
+        activate(0);
+        initChart();
+        setTimeout(() => activate(1), TIMING.card2);
+        setTimeout(() => activate(2), TIMING.card3);
+        setTimeout(() => deck.classList.add('exit'), TIMING.exit); // 不需要退场时删除本行
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', run);
+      } else {
+        run();
+      }
+    })();
+  </script>
+</body>
+</html>

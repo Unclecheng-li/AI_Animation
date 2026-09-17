@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](./LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](#贡献与许可)
-[![Skills count](https://img.shields.io/badge/Skills-8-orange?style=flat-square)](#skills-gallery)
+[![Skills count](https://img.shields.io/badge/Skills-9-orange?style=flat-square)](#skills-gallery)
 [![Spec](https://img.shields.io/badge/Spec-SKILL.md-black?style=flat-square)](https://agentskills.io)
 
 🌐 **English version**: [`README_EN.md`](README_EN.md)
@@ -28,6 +28,7 @@
 - 🎴 **卡片剧场** — 侧边栏叙事 + 3D 卡片轮播，协议流程 / 产品特性 / 分步讲解的叙事感演示
 - 🎬 **视频分镜演示** — 电影级"一个镜头一个 HTML"演示动画：29 种风格轮换、镜头推拉、WebAudio 音效、角色表情吐槽，全屏录屏即成片
 - 📱 **手机系统 UI 演示** — 一台"真手机"的电影化编排录屏：锁屏通知、聊天、设置页、App 界面逐镜头呈现，HyperOS 级手感动效 + 3D 姿态手机演员
+- 🗂️ **叠放数据卡** — 论点卡从底部依次弹入、旧卡左叠成牌堆：折线描边 / 数字滚动 / 环形仪表按毫秒级时间线级联入场，自动播放对齐口播，录屏即成片
 
 <div align="center">
 
@@ -80,6 +81,14 @@
 <a href="#video-shot-demos"><img width="2560" height="1440" alt="video-shot-demos" src="https://github.com/user-attachments/assets/ee93829f-91c5-48df-925e-342cd2be4557" /></a>
 <br/><a href="#video-shot-demos"><strong>video-shot-demos</strong></a>
 <br/><sub>视频分镜演示 / 电影级镜头动画</sub>
+</td>
+</tr>
+<tr>
+<td colspan="4" valign="top" align="center">
+<!-- TODO: 替换为实际上传的预览图 -->
+<a href="#stacked-data-cards"><img width="2560" height="1440" alt="stacked-data-cards" src="https://placehold.co/2560x1440/0b0f19/ff5f3c?text=stacked-data-cards" /></a>
+<br/><a href="#stacked-data-cards"><strong>stacked-data-cards</strong></a>
+<br/><sub>叠放数据卡 / 时间线论点动画</sub>
 </td>
 </tr>
 </table>
@@ -403,6 +412,43 @@ Links: [README](./skills/video-shot-demos/README.md) · [SKILL.md](./skills/vide
 
 <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
 
+#### `stacked-data-cards`
+
+<a href="./skills/stacked-data-cards">
+<!-- TODO: 替换为实际上传的预览图 -->
+<img width="2560" height="1440" alt="stacked-data-cards preview" src="https://placehold.co/2560x1440/0b0f19/ff5f3c?text=stacked-data-cards" />
+</a>
+
+**分类:** 叠放数据卡 / 时间线论点动画
+**适用于:** 视频中的数据论证段落、研究结论展示、观点陈列、反直觉点揭示——需要"卡片即论点、数据即证据、自动播放对齐口播"的场景。
+
+`stacked-data-cards` 生成叠放式数据论点卡的自动播放动画 HTML。深色舞台中央，白色数据卡一张张从底部弹入；新卡弹入时旧卡向左叠放成缩小、倾斜的牌堆。卡内数据组件（折线描边、数字滚动、环形仪表、对比条、数据表格、图标卡组）按毫秒级时间线级联入场，整段时长精确对齐口播秒数，结尾可整副牌堆滑出衔接下一镜头。零依赖、零交互，全屏录屏即成片。
+
+亮点:
+- 三态卡片机制：`upcoming → active → stacked`，旧卡左叠成牌堆，论点之间有"累积感"
+- 毫秒级时间线：`TIMING` 常量表对齐口播句读，每卡驻留时长可调，末个动画结束预留 1.5s 阅读时间
+- 数据组件库：折线 trim-paths 描边 / count-up 数字滚动 / 环形仪表 / 对比条 / 行内迷你条形表格 / 图标卡组 / 金句横幅 / 角注
+- WebAudio 合成低音 thud 点缀关键揭示时刻，零音频文件，自动播放被拦截时静默失败
+- 主题变量化：改 `--accent` 一个变量即可整体换色（橙红 / 蓝 / 绿 / 紫）
+- 零依赖单文件：无 CDN、无外部图片，双击离线可跑
+
+<table>
+<tr>
+<!-- TODO: 替换为实际上传的预览图 -->
+<td align="center" width="33%"><a href="./skills/stacked-data-cards/README.md"><img width="2560" height="1440" alt="template" src="https://placehold.co/2560x1440/0b0f19/9ca3af?text=template" /></a><br /><sub><code>template</code><br />起步骨架</sub></td>
+<td align="center" width="33%"><a href="./skills/stacked-data-cards/README.md"><img width="2560" height="1440" alt="orange theme" src="https://placehold.co/2560x1440/0b0f19/ff5f3c?text=orange+theme" /></a><br /><sub><code>实例 A</code><br />橙红 · 趋势论证</sub></td>
+<td align="center" width="33%"><a href="./skills/stacked-data-cards/README.md"><img width="2560" height="1440" alt="blue theme" src="https://placehold.co/2560x1440/0b0f19/3b82f6?text=blue+theme" /></a><br /><sub><code>实例 B</code><br />蓝紫 · 数据揭示</sub></td>
+</tr>
+</table>
+
+<sub>↑ 起步骨架 + 2 个成片实例预览 — <a href="./skills/stacked-data-cards/README.md"><b>查看完整说明</b></a>（实例可直接运行）。</sub>
+
+Links: [README](./skills/stacked-data-cards/README.md) · [SKILL.md](./skills/stacked-data-cards/SKILL.md)
+
+---
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
 ### 安装
 
 | # | 方式 | 适用于 | 指定版本? |
@@ -426,6 +472,7 @@ npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/sc
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/card-theater
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/video-shot-demos
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/phone-ui-demos
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/stacked-data-cards
 ```
 
 > **默认安装 `main` 分支最新版本。** CLI 会从源码树直接读取每个 Skill 的最新 `SKILL.md`。
@@ -489,6 +536,10 @@ git clone https://github.com/Unclecheng-li/AI_Animation.git
 用 phone-ui-demos 把这个 App 的功能做成手机录屏风格的演示动画，先出分镜表我确认
 ```
 
+```
+用 stacked-data-cards 把这三个论点做成叠放数据卡动画，整段 25 秒，橙红主题，结尾整副滑出
+```
+
 ### 目录结构
 
 ```text
@@ -540,6 +591,11 @@ ai-animation-skills/
 │       ├── README.md
 │       ├── references/          ← 播放器/手机舞台/大字幕/系统组件 四份规范
 │       └── assets/              ← 起步骨架 + kexue 8 镜头成片实例
+│   ├── stacked-data-cards/
+│       ├── SKILL.md             ← 三态卡片机制 + 时间线规范 + 生成标准
+│       ├── README.md
+│       ├── references/          ← Prompt 参考 + 组件规格手册
+│       └── assets/              ← 起步骨架 template.html + 2 个成片实例（橙红/蓝紫）
 ├── web_animation/               ← 原始示例 HTML（历史存档）
 ├── UI/                          ← UI 设计参考图
 ├── prompt.md                    ← Prompt 模板集合

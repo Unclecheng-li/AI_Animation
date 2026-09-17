@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scene 1-3-2 - 三个反直觉点</title>
+  <style>
+    /* =========================================================
+       基础变量
+       ========================================================= */
+    :root {
+      --bg: #0b0f19;
+      --bg-glow: #0b0f19;
+      --card-bg: rgba(255, 255, 255, 0.97);
+      --card-shadow: 0 28px 70px rgba(0, 0, 0, 0.35), 0 10px 24px rgba(0, 0, 0, 0.18);
+      --accent: #3b82f6;
+      --accent-light: #60a5fa;
+      --accent-end: #8b5cf6;
+      --accent-glow: rgba(59, 130, 246, 0.25);
+      --c-teal: #14b8a6;
+      --c-teal-light: #2dd4bf;
+      --c-amber: #f59e0b;
+      --c-amber-light: #fbbf24;
+      --c-rose: #f43f5e;
+      --c-rose-light: #fb7185;
+      --gray: #9ca3af;
+      --gray-line: #9ca3af;
+      --green: #10b981;
+      --green-light: #34d399;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+      --ease-elastic: cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', 'Source Han Sans SC', 'Microsoft YaHei', 'PingFang SC', sans-serif;
+      overflow: hidden;
+    }
+
+    /* =========================================================
+       舞台与卡片层
+       ========================================================= */
+    .stage {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-glow);
+    }
+
+    .card-deck {
+      position: absolute;
+      inset: 0;
+      transition: transform 1s var(--ease-out), opacity 0.6s ease;
+    }
+
+    .card-deck.exit {
+      transform: translateX(-120vw);
+      opacity: 0;
+    }
+
+    .card {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: min(92vw, 980px);
+      max-height: 92vh;
+      background: var(--card-bg);
+      border-radius: clamp(18px, 2.5vw, 28px);
+      box-shadow: var(--card-shadow);
+      opacity: 0;
+      transform: translate(-50%, 60vh) scale(0.82);
+      transition:
+        transform 0.8s var(--ease-out),
+        opacity 0.55s ease,
+        z-index 0s linear 0s;
+      will-change: transform, opacity;
+      z-index: 1;
+      overflow-y: auto;
+    }
+
+    .card.active {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1) rotate(0deg);
+      z-index: 10;
+    }
+
+    .card.stacked {
+      opacity: 0.72;
+      transform:
+        translate(calc(-110% - var(--stack-i, 0) * 22%), -50%)
+        scale(calc(0.76 - var(--stack-i, 0) * 0.07))
+        rotate(calc(-4deg - var(--stack-i, 0) * 5deg));
+      z-index: 4;
+    }
+
+    .card.upcoming {
+      transform: translate(-50%, 60vh) scale(0.82);
+    }
+
+    .card-inner {
+      position: relative;
+      width: 100%;
+      min-height: 100%;
+      padding: clamp(1.5rem, 3.6vw, 2.6rem);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card-badge {
+      position: absolute;
+      top: clamp(1rem, 2.5vw, 1.6rem);
+      left: clamp(1rem, 2.5vw, 1.6rem);
+      font-size: clamp(2.4rem, 6vw, 4rem);
+      font-weight: 900;
+      color: rgba(0, 0, 0, 0.08);
+      line-height: 1;
+      user-select: none;
+      pointer-events: none;
+    }
+
+    .card-title {
+      margin: 0 0 0.35rem 0;
+      font-size: clamp(1.3rem, 3vw, 2rem);
+      font-weight: 900;
+      color: var(--text);
+      line-height: 1.25;
+    }
+
+    .card-body {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      position: relative;
+      margin-top: 0.6rem;
+    }
+
+    .corner-note {
+      position: absolute;
+      bottom: clamp(0.8rem, 1.8vw, 1.2rem);
+      right: clamp(1rem, 2.5vw, 1.6rem);
+      font-size: clamp(0.65rem, 1.3vw, 0.85rem);
+      color: var(--muted);
+      font-weight: 700;
+      font-family: 'SF Mono', 'JetBrains Mono', Consolas, monospace;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+    }
+
+    .card.active .corner-note.visible { opacity: 1; }
+
+    /* =========================================================
+       公共动画工具
+       ========================================================= */
+    .fade-up {
+      opacity: 0;
+      transform: translateY(18px);
+      transition: opacity 0.5s ease, transform 0.6s var(--ease-out);
+    }
+
+    .card.active .fade-up.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .banner {
+      width: 100%;
+      padding: clamp(0.7rem, 1.6vw, 1rem) clamp(1rem, 2.5vw, 1.6rem);
+      background: var(--accent);
+      border-radius: 12px;
+      font-size: clamp(1rem, 2.2vw, 1.5rem);
+      font-weight: 800;
+      color: #fff;
+      text-align: center;
+      opacity: 0;
+      transform: translateY(20px) scaleX(0.96);
+      transition: opacity 0.5s ease, transform 0.6s var(--ease-out);
+      transform-origin: center;
+    }
+
+    .card.active .banner.visible {
+      opacity: 1;
+      transform: translateY(0) scaleX(1);
+    }
+
+    .banner strong {
+      font-size: 1.25em;
+      font-weight: 900;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.25);
+    }
+
+    /* =========================================================
+       卡①：双折线图
+       ========================================================= */
+    .chart-wrap {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 0.5rem 0;
+    }
+
+    .chart-svg {
+      width: 100%;
+      height: auto;
+      max-height: 360px;
+      overflow: visible;
+    }
+
+    .grid-line {
+      stroke: #f3f4f6;
+      stroke-width: 1;
+    }
+
+    .axis {
+      stroke: #e5e7eb;
+      stroke-width: 2;
+    }
+
+    .axis-label {
+      font-size: 11px;
+      fill: var(--muted);
+      font-weight: 700;
+      font-family: 'SF Mono', 'JetBrains Mono', Consolas, monospace;
+    }
+
+    .line-safe {
+      fill: none;
+      stroke: var(--gray-line);
+      stroke-width: 4;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      transform-origin: center;
+    }
+
+    .line-safe.wiggle {
+      animation: wiggleLine 0.5s ease-in-out 2;
+    }
+
+    @keyframes wiggleLine {
+      0%, 100% { transform: translateY(0); }
+      25% { transform: translateY(-3px); }
+      75% { transform: translateY(3px); }
+    }
+
+    .line-syntax {
+      fill: none;
+      stroke: var(--accent);
+      stroke-width: 5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .dot {
+      fill: #ffffff;
+      stroke-width: 3;
+      opacity: 0;
+      transform-box: fill-box;
+      transform-origin: center;
+      transform: scale(0);
+      transition: opacity 0.3s ease, transform 0.4s var(--ease-elastic);
+    }
+
+    .dot.syntax { stroke: var(--accent); }
+    .dot.safe { stroke: var(--gray-line); }
+
+    .dot.visible {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .end-label {
+      font-size: 12px;
+      font-weight: 800;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+
+    .end-label.syntax { fill: var(--accent); }
+    .end-label.safe { fill: var(--gray-line); }
+
+    .end-label.visible { opacity: 1; }
+
+    /* =========================================================
+       卡②：45% 数据与 mini 场景
+       ========================================================= */
+    .card2-body {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1.4fr;
+      gap: clamp(1rem, 3vw, 2.5rem);
+      align-items: center;
+      padding: 0.5rem 0;
+    }
+
+    .stat-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.6rem;
+    }
+
+    .big-number {
+      font-size: clamp(5.5rem, 16vw, 10rem);
+      font-weight: 900;
+      line-height: 1;
+      color: var(--c-teal);
+      text-shadow: 0 0 50px rgba(20, 184, 166, 0.25);
+    }
+
+    .stat-label {
+      font-size: clamp(1.1rem, 2.6vw, 1.65rem);
+      color: var(--muted);
+      font-weight: 800;
+      line-height: 1.4;
+    }
+
+    .veracode-note {
+      font-size: clamp(0.85rem, 1.8vw, 1.2rem);
+      font-weight: 800;
+      color: var(--muted);
+      margin-top: auto;
+      padding-top: 1.2rem;
+    }
+
+    .mini-scene {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: clamp(0.8rem, 2vw, 1.4rem);
+      background: #f3f4f6;
+      border: 1px solid rgba(0,0,0,0.06);
+      border-radius: 20px;
+      padding: clamp(0.9rem, 2vw, 1.4rem);
+    }
+
+    .char-row {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-around;
+      gap: 1rem;
+    }
+
+    .character {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.5s ease, transform 0.5s var(--ease-out);
+    }
+
+    .character.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .char-avatar {
+      position: relative;
+      width: clamp(80px, 11vw, 130px);
+      height: clamp(80px, 11vw, 130px);
+      border-radius: 50%;
+      overflow: hidden;
+      border: 3px solid rgba(0,0,0,0.1);
+      background: #ffffff;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+    }
+
+    .char-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .stick-figure {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .char-tag {
+      padding: 0.25rem 0.7rem;
+      border-radius: 999px;
+      font-size: clamp(0.7rem, 1.5vw, 0.9rem);
+      font-weight: 800;
+      background: rgba(0,0,0,0.08);
+      color: var(--text);
+    }
+
+    .char-tag.ai { background: rgba(20, 184, 166, 0.14); color: var(--c-teal); }
+
+    .flow-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+      margin-top: 0.3rem;
+    }
+
+    .speech-bubble {
+      position: relative;
+      background: #fff;
+      color: #1f2937;
+      padding: 0.45rem 0.9rem;
+      border-radius: 16px;
+      font-weight: 800;
+      font-size: clamp(0.75rem, 1.6vw, 1rem);
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      opacity: 0;
+      transform: translateY(12px) scale(0.9);
+      transition: opacity 0.4s ease, transform 0.45s var(--ease-elastic);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.2);
+    }
+
+    .speech-bubble.visible {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+
+    .speech-bubble::after {
+      content: '';
+      position: absolute;
+      bottom: -7px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-width: 8px 6px 0;
+      border-style: solid;
+      border-color: #fff transparent transparent transparent;
+    }
+
+    .flow-arrow {
+      display: flex;
+      align-items: center;
+      color: var(--muted);
+      font-size: clamp(0.75rem, 1.6vw, 1rem);
+      font-weight: 700;
+      opacity: 0;
+      transform: translateX(-10px);
+      transition: opacity 0.4s ease, transform 0.4s var(--ease-out), color 0.4s ease;
+    }
+
+    .flow-arrow.visible {
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    .flow-arrow.lit {
+      color: var(--c-teal);
+    }
+
+    .flow-arrow svg {
+      width: 24px;
+      height: 16px;
+      fill: currentColor;
+    }
+
+    .burst-text {
+      position: relative;
+      color: var(--c-teal);
+      font-weight: 900;
+      font-size: clamp(0.85rem, 1.8vw, 1.15rem);
+      opacity: 0;
+      transform: scale(0.8);
+      transition: opacity 0.35s ease, transform 0.4s var(--ease-elastic);
+    }
+
+    .burst-text.visible {
+      opacity: 1;
+      transform: scale(1);
+      animation: burstPop 0.6s ease-out;
+    }
+
+    @keyframes burstPop {
+      0% { text-shadow: 0 0 0 rgba(20, 184, 166, 0); }
+      40% { text-shadow: 0 0 24px rgba(20, 184, 166, 0.8); }
+      100% { text-shadow: 0 0 8px rgba(20, 184, 166, 0.3); }
+    }
+
+    .logic-chain {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.8rem;
+      padding: 0.7rem 1rem;
+      background: #f3f4f6;
+      border-radius: 12px;
+      font-size: clamp(0.75rem, 1.6vw, 1rem);
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .logic-step {
+      opacity: 0.35;
+      transition: opacity 0.4s ease, color 0.4s ease, transform 0.4s var(--ease-out);
+    }
+
+    .logic-step.visible {
+      opacity: 1;
+      color: var(--text);
+      transform: translateY(-2px);
+    }
+
+    .logic-arrow {
+      color: var(--gray);
+      opacity: 0.35;
+      transition: color 0.4s ease, opacity 0.4s ease;
+    }
+
+    .logic-arrow.visible {
+      opacity: 1;
+      color: var(--c-teal);
+    }
+
+    /* =========================================================
+       卡③：三个图标卡
+       ========================================================= */
+    .card3-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: clamp(1.2rem, 3vw, 2rem);
+    }
+
+    .icon-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: clamp(0.8rem, 2vw, 1.4rem);
+      position: relative;
+      padding-top: 2.2rem;
+    }
+
+    .icon-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.7rem;
+      padding: clamp(0.9rem, 2vw, 1.4rem);
+      background: #f9fafb;
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 20px;
+      opacity: 0;
+      transform: translateY(40px) scale(0.92);
+      transition: opacity 0.5s ease, transform 0.6s var(--ease-out), border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .icon-card.visible {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+
+    .icon-card:nth-child(2).visible {
+      border-color: rgba(59, 130, 246, 0.35);
+      box-shadow: 0 0 30px rgba(59, 130, 246, 0.08);
+    }
+
+    .icon-card:nth-child(3).visible {
+      border-color: rgba(139, 92, 246, 0.35);
+      box-shadow: 0 0 30px rgba(139, 92, 246, 0.08);
+    }
+
+    .icon-card:nth-child(4).visible {
+      border-color: rgba(245, 158, 11, 0.35);
+      box-shadow: 0 0 30px rgba(245, 158, 11, 0.08);
+    }
+
+    .icon-svg {
+      width: clamp(80px, 12vw, 120px);
+      height: clamp(80px, 12vw, 120px);
+    }
+
+    .icon-title {
+      font-size: clamp(1rem, 2.2vw, 1.35rem);
+      font-weight: 900;
+      color: var(--text);
+      text-align: center;
+    }
+
+    .icon-desc {
+      font-size: clamp(0.85rem, 1.8vw, 1.1rem);
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.5;
+    }
+
+    .code-snippet {
+      font-family: 'SF Mono', 'JetBrains Mono', Consolas, monospace;
+      font-size: clamp(0.75rem, 1.6vw, 0.95rem);
+      color: var(--muted);
+      background: rgba(0,0,0,0.06);
+      padding: 0.35rem 0.6rem;
+      border-radius: 8px;
+      word-break: break-all;
+    }
+
+    .error-box {
+      padding: 0.35rem 0.7rem;
+      border: 1px solid rgba(244, 63, 94, 0.5);
+      border-radius: 8px;
+      color: var(--c-rose);
+      font-weight: 800;
+      font-size: clamp(0.8rem, 1.7vw, 1rem);
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.4s ease, transform 0.4s var(--ease-out);
+    }
+
+    .error-box.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .ai-tag {
+      position: absolute;
+      top: -6px;
+      left: 50%;
+      z-index: 5;
+      transform: translateX(-50%) translateY(-10px) scale(0.8);
+      padding: 0.35rem 0.9rem;
+      background: var(--c-rose);
+      color: #fff;
+      border-radius: 999px;
+      font-size: clamp(0.8rem, 1.7vw, 1.05rem);
+      font-weight: 900;
+      opacity: 0;
+      transition: opacity 0.5s ease, transform 0.5s var(--ease-elastic);
+      box-shadow: 0 6px 20px rgba(244, 63, 94, 0.3);
+      white-space: nowrap;
+    }
+
+    .ai-tag.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0) scale(1);
+    }
+
+    .card3-body .banner {
+      margin-top: 0.5rem;
+      font-size: clamp(1.1rem, 2.4vw, 1.65rem);
+      text-shadow: 0 1px 4px rgba(0,0,0,0.25);
+    }
+
+    .highlight {
+      color: var(--c-amber);
+      font-weight: 900;
+    }
+
+    .card3-body .banner .highlight {
+      color: #ffffff;
+      text-shadow: 0 1px 6px rgba(0,0,0,0.45);
+      text-decoration: underline;
+      text-decoration-color: rgba(245, 158, 11, 0.9);
+      text-underline-offset: 4px;
+    }
+
+    /* 文件裂开动画 */
+    .crack-left, .crack-right {
+      transform-origin: center;
+      transition: transform 0.5s var(--ease-out);
+    }
+
+    .icon-card.visible .crack-left { transform: translateX(-3px) rotate(-4deg); }
+    .icon-card.visible .crack-right { transform: translateX(3px) rotate(4deg); }
+
+    /* =========================================================
+       响应式
+       ========================================================= */
+    @media (max-width: 760px) {
+      .card2-body {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+      }
+      .stat-panel {
+        align-items: center;
+        text-align: center;
+      }
+      .mini-scene {
+        order: 2;
+      }
+      .icon-row {
+        grid-template-columns: 1fr;
+        padding-top: 1.8rem;
+      }
+      .ai-tag {
+        top: -12px;
+      }
+      .card.stacked {
+        opacity: 0.55;
+        transform:
+          translate(calc(-85% - var(--stack-i, 0) * 14%), -50%)
+          scale(calc(0.62 - var(--stack-i, 0) * 0.06))
+          rotate(calc(-4deg - var(--stack-i, 0) * 5deg));
+      }
+    }
+
+    @media (max-width: 520px) {
+      .card { height: min(88vh, 720px); }
+      .card-inner { padding: 1.2rem 1.1rem; }
+      .char-row { gap: 0.5rem; }
+      .flow-row { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <main class="stage">
+    <div class="card-deck" id="deck">
+
+      <!-- 卡① -->
+      <article class="card" data-index="0">
+        <div class="card-inner">
+          <div class="card-badge">01</div>
+          <h2 class="card-title">模型越聪明，代码越不安全</h2>
+          <div class="card-body">
+            <div class="chart-wrap">
+              <svg class="chart-svg" viewBox="0 0 860 340" preserveAspectRatio="xMidYMid meet">
+                <!-- 网格线 -->
+                <line class="grid-line" x1="80" y1="80" x2="780" y2="80"/>
+                <line class="grid-line" x1="80" y1="140" x2="780" y2="140"/>
+                <line class="grid-line" x1="80" y1="200" x2="780" y2="200"/>
+                <line class="grid-line" x1="80" y1="260" x2="780" y2="260"/>
+                <!-- 坐标轴 -->
+                <line class="axis" x1="80" y1="60" x2="80" y2="280"/>
+                <line class="axis" x1="80" y1="280" x2="780" y2="280"/>
+                <!-- Y 轴标签 -->
+                <text class="axis-label" x="35" y="170" transform="rotate(-90 35 170)">通过率 %</text>
+                <text class="axis-label" x="70" y="285">0</text>
+                <text class="axis-label" x="70" y="180">50</text>
+                <text class="axis-label" x="70" y="80">100</text>
+                <!-- 安全线（水平） -->
+                <path class="line-safe" id="lineSafe" d="M 90 200 L 770 200"/>
+                <!-- 语法线（上升） -->
+                <path class="line-syntax" id="lineSyntax" d="M 90 240 L 205 225 L 320 200 L 435 170 L 550 145 L 665 110 L 770 85"/>
+                <!-- 数据点 -->
+                <circle class="dot syntax" cx="770" cy="85" r="6"/>
+                <circle class="dot safe" cx="770" cy="200" r="6"/>
+                <!-- 末端标注 -->
+                <text class="end-label syntax" x="790" y="90">语法↑</text>
+                <text class="end-label safe" x="790" y="205">安全→</text>
+                <!-- X 轴标签 -->
+                <g class="x-labels" fill="#6b7280" font-size="11" font-weight="700" font-family="SF Mono, JetBrains Mono, Consolas, monospace">
+                  <text x="90" y="305" text-anchor="middle" transform="rotate(30 90 305)">豆包</text>
+                  <text x="205" y="305" text-anchor="middle" transform="rotate(30 205 305)">Minimax-M3</text>
+                  <text x="320" y="305" text-anchor="middle" transform="rotate(30 320 305)">hy3</text>
+                  <text x="435" y="305" text-anchor="middle" transform="rotate(30 435 305)">deepseek-v4-pro</text>
+                  <text x="550" y="305" text-anchor="middle" transform="rotate(30 550 305)">GLM-5.2</text>
+                  <text x="665" y="305" text-anchor="middle" transform="rotate(30 665 305)">kimi-k3</text>
+                  <text x="770" y="305" text-anchor="middle" transform="rotate(30 770 305)">GPT-5.6</text>
+                </g>
+              </svg>
+            </div>
+            <div class="banner" id="card1Banner">
+              Scaling Law <strong>解决不了</strong> 安全问题
+            </div>
+          </div>
+          <div class="corner-note" id="card1Note">Veracode 2025 · 100+ 模型 · 80 任务</div>
+        </div>
+      </article>
+
+      <!-- 卡② -->
+      <article class="card" data-index="1">
+        <div class="card-inner">
+          <div class="card-badge">02</div>
+          <h2 class="card-title">AI 写的代码一半是错的，看起来全是对的</h2>
+          <div class="card-body">
+            <div class="card2-body">
+              <div class="stat-panel">
+                <div class="big-number" id="pct45">0%</div>
+                <div class="stat-label">AI 代码含 OWASP Top 10 漏洞</div>
+                <div class="veracode-note">Veracode 2025</div>
+              </div>
+
+              <div class="mini-scene">
+                <div class="char-row">
+                  <!-- 用 AI -->
+                  <div class="character" id="charAi">
+                    <div class="char-avatar" style="border-color:rgba(20, 184, 166, 0.45);">
+                      <img src="png/muzimi.jpg" alt="用 AI">
+                    </div>
+                    <div class="char-tag ai">用 AI</div>
+                  </div>
+
+                  <!-- 不用 AI -->
+                  <div class="character" id="charHuman">
+                    <div class="char-avatar">
+                      <img src="png/muzimi2.jpg" alt="不用 AI">
+                    </div>
+                    <div class="char-tag">不用 AI</div>
+                  </div>
+                </div>
+
+                <div class="flow-row">
+                  <div class="speech-bubble" id="safeBubble">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    我很安全
+                  </div>
+                  <div class="flow-arrow" id="arrow1">
+                    <svg viewBox="0 0 24 16"><path d="M0 8h20M14 2l6 6-6 6" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    审得更松
+                  </div>
+                  <div class="flow-arrow" id="arrow2">
+                    <svg viewBox="0 0 24 16"><path d="M0 8h20M14 2l6 6-6 6" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span class="burst-text" id="burstText">漏洞上线</span>
+                  </div>
+                </div>
+
+                <div class="corner-note visible" style="position:static; margin-left:auto; font-size:0.6rem;">Stanford 2023 · 47 人对照实验</div>
+              </div>
+            </div>
+            <div class="logic-chain" id="logicChain">
+              <span class="logic-step" id="step1">代码能编译·能上线</span>
+              <span class="logic-arrow" id="arr1">→</span>
+              <span class="logic-step" id="step2">审得更松</span>
+              <span class="logic-arrow" id="arr2">→</span>
+              <span class="logic-step" id="step3">漏洞拖到生产才暴露</span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <!-- 卡③ -->
+      <article class="card" data-index="2">
+        <div class="card-inner">
+          <div class="card-badge">03</div>
+          <h2 class="card-title">AI 漏洞和手工漏洞不是同一回事</h2>
+          <div class="card-body">
+            <div class="card3-body">
+              <div class="icon-row" id="iconRow">
+                <div class="ai-tag" id="aiTag">AI 特有</div>
+
+                <!-- 幻觉包 -->
+                <div class="icon-card" id="icon1">
+                  <svg class="icon-svg" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="12" y="22" width="56" height="44" rx="8" fill="rgba(0,0,0,0.04)" stroke="#9ca3af" stroke-width="3"/>
+                    <path d="M12 30h56" stroke="#9ca3af" stroke-width="2"/>
+                    <circle cx="28" cy="52" r="5" fill="#9ca3af" opacity="0.6"/>
+                    <circle cx="52" cy="52" r="5" fill="#9ca3af" opacity="0.6"/>
+                    <path d="M34 62c4 4 12 4 16 0" stroke="#9ca3af" stroke-width="2.5" stroke-linecap="round"/>
+                    <rect x="56" y="10" width="18" height="14" rx="3" fill="#ffffff" stroke="#3b82f6" stroke-width="2"/>
+                    <text x="65" y="20" text-anchor="middle" font-size="8" fill="#3b82f6" font-weight="800">npm</text>
+                  </svg>
+                  <div class="code-snippet">npm install react-codemorph</div>
+                  <div class="error-box" id="err1">E404 不存在</div>
+                  <div class="icon-desc">AI 编出根本不存在的包</div>
+                </div>
+
+                <!-- 漏掉授权 -->
+                <div class="icon-card" id="icon2">
+                  <svg class="icon-svg" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="22" y="10" width="36" height="58" rx="4" fill="rgba(0,0,0,0.04)" stroke="#9ca3af" stroke-width="3"/>
+                    <path d="M22 22h36" stroke="#9ca3af" stroke-width="2"/>
+                    <circle cx="40" cy="50" r="4" fill="#9ca3af"/>
+                    <g transform="translate(14, 28)">
+                      <circle cx="8" cy="8" r="8" fill="#ffffff" stroke="#10b981" stroke-width="2"/>
+                      <polyline points="5 8 7 10 11 6" stroke="#10b981" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                    </g>
+                    <text x="22" y="26" text-anchor="middle" font-size="6" fill="#10b981" font-weight="800">登录</text>
+                    <g transform="translate(52, 28)">
+                      <circle cx="8" cy="8" r="8" fill="#ffffff" stroke="#f43f5e" stroke-width="2"/>
+                      <path d="M5 5l6 6M11 5l-6 6" stroke="#f43f5e" stroke-width="2" stroke-linecap="round"/>
+                    </g>
+                    <text x="60" y="26" text-anchor="middle" font-size="6" fill="#f43f5e" font-weight="800">授权</text>
+                  </svg>
+                  <div class="icon-title">漏掉授权</div>
+                  <div class="icon-desc">系统性漏掉授权逻辑</div>
+                </div>
+
+                <!-- 配置即执行 -->
+                <div class="icon-card" id="icon3">
+                  <svg class="icon-svg" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <g transform="translate(12, 16)">
+                      <path class="crack-left" d="M0 0h28v44H0z" fill="rgba(0,0,0,0.04)" stroke="#9ca3af" stroke-width="3"/>
+                      <path class="crack-right" d="M28 0h28v44H28z" fill="rgba(0,0,0,0.04)" stroke="#9ca3af" stroke-width="3"/>
+                      <path class="crack-left" d="M28 0v44" stroke="#9ca3af" stroke-width="1" stroke-dasharray="2 2"/>
+                    </g>
+                    <text x="40" y="10" text-anchor="middle" font-size="10" fill="#9ca3af" font-weight="800">.mcp.json</text>
+                    <path d="M40 46l-8 14h16l-8-14z" fill="#f59e0b" opacity="0"/>
+                    <path id="execLightning" d="M38 48l-6 10h6l-2 8 10-12h-6l4-6" fill="none" stroke="#fbbf24" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0"/>
+                    <text x="40" y="76" text-anchor="middle" font-size="8" fill="#fbbf24" font-weight="800" opacity="0" id="execText">exec()</text>
+                  </svg>
+                  <div class="icon-title">配置即执行</div>
+                  <div class="icon-desc">配置文件变成可执行代码</div>
+                </div>
+              </div>
+
+              <div class="banner" id="card3Banner">
+                这些编程问题，<span class="highlight">人类基本不犯</span> → 传统安全工具也抓不到
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+    </div>
+  </main>
+
+  <script>
+    (function () {
+      /* =========================================================
+         时间线常量（单位：毫秒，对应 0:24-1:17）
+         ========================================================= */
+      const TIMING = {
+        card1Start: 0,
+        card1Duration: 13000,   // 0:24-0:37
+        card2Start: 13000,      // 0:37
+        card2Duration: 17000,   // 0:37-0:54
+        card3Start: 30000,      // 0:54
+        card3Duration: 23000,   // 0:54-1:17
+        exitStart: 53000        // 1:17 整体向左滑出
+      };
+
+      const cards = document.querySelectorAll('.card');
+      const deck = document.getElementById('deck');
+
+      /* =========================================================
+         卡片切换：激活当前卡片，前面卡片叠放到左侧
+         ========================================================= */
+      function activate(index) {
+        cards.forEach((card, i) => {
+          card.classList.remove('active', 'stacked', 'upcoming');
+          card.style.removeProperty('--stack-i');
+          if (i === index) {
+            card.classList.add('active');
+            card.style.zIndex = 10;
+          } else if (i < index) {
+            card.classList.add('stacked');
+            card.style.setProperty('--stack-i', index - 1 - i);
+            card.style.zIndex = 5 - (index - 1 - i);
+          } else {
+            card.classList.add('upcoming');
+            card.style.zIndex = 1;
+          }
+        });
+      }
+
+      /* =========================================================
+         数字滚动
+         ========================================================= */
+      function countUp(el, target, duration, suffix) {
+        const start = performance.now();
+        function frame(now) {
+          const p = Math.min((now - start) / duration, 1);
+          const eased = 1 - Math.pow(1 - p, 3);
+          const value = Math.round(eased * target);
+          el.textContent = value + suffix;
+          if (p < 1) requestAnimationFrame(frame);
+        }
+        requestAnimationFrame(frame);
+      }
+
+      /* =========================================================
+         低音音效（Web Audio API）
+         ========================================================= */
+      function playThud() {
+        try {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (!AudioContext) return;
+          const ctx = new AudioContext();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(80, ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(40, ctx.currentTime + 0.25);
+          gain.gain.setValueAtTime(0.5, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.4);
+        } catch (e) {
+          // 浏览器自动播放策略可能阻止，静默失败
+        }
+      }
+
+      /* =========================================================
+         通用工具函数
+         ========================================================= */
+      function reveal(selector, baseDelay = 0, stagger = 0) {
+        const els = Array.from(document.querySelectorAll(selector));
+        els.forEach((el, i) => {
+          setTimeout(() => el.classList.add('visible'), baseDelay + i * stagger);
+        });
+      }
+
+      /* =========================================================
+         卡①：折线图 + 金句条
+         ========================================================= */
+      function initCard1() {
+        const safeLine = document.getElementById('lineSafe');
+        const syntaxLine = document.getElementById('lineSyntax');
+        const safeLen = safeLine.getTotalLength();
+        const syntaxLen = syntaxLine.getTotalLength();
+
+        // 初始化 stroke-dasharray，准备 Trim Paths 动画
+        [safeLine, syntaxLine].forEach(line => {
+          const len = line.getTotalLength();
+          line.style.strokeDasharray = len;
+          line.style.strokeDashoffset = len;
+          // 强制重绘，确保起点为隐藏，避免初始完整线条再回退的 Bug
+          line.getBoundingClientRect();
+          line.style.transition = 'stroke-dashoffset 1.5s cubic-bezier(0.16, 1, 0.3, 1)';
+        });
+
+        // 卡片入场后 500ms 开始描线
+        setTimeout(() => {
+          safeLine.style.strokeDashoffset = '0';
+          syntaxLine.style.strokeDashoffset = '0';
+        }, 500);
+
+        // 描线结束后显示数据点、末端标注、金句条
+        setTimeout(() => {
+          reveal('.dot', 0, 120);
+          reveal('.end-label', 300, 0);
+          document.getElementById('card1Banner').classList.add('visible');
+          document.getElementById('card1Note').classList.add('visible');
+        }, 2100);
+
+        // 灰线 wiggle + 低音“咚”
+        setTimeout(() => {
+          safeLine.classList.add('wiggle');
+          playThud();
+          setTimeout(() => safeLine.classList.remove('wiggle'), 1000);
+        }, 2300);
+      }
+
+      /* =========================================================
+         卡②：45% 计数器 + mini 对比场景
+         ========================================================= */
+      function initCard2() {
+        setTimeout(() => {
+          // 45% 数字滚动
+          countUp(document.getElementById('pct45'), 45, 1200, '%');
+
+          // 两个角色入场
+          document.getElementById('charAi').classList.add('visible');
+          document.getElementById('charHuman').classList.add('visible');
+        }, 400);
+
+        // “我很安全”气泡
+        setTimeout(() => {
+          document.getElementById('safeBubble').classList.add('visible');
+        }, 2000);
+
+        // 流程箭头依次亮起
+        setTimeout(() => {
+          document.getElementById('arrow1').classList.add('visible', 'lit');
+        }, 3200);
+        setTimeout(() => {
+          const a2 = document.getElementById('arrow2');
+          a2.classList.add('visible', 'lit');
+          document.getElementById('burstText').classList.add('visible');
+        }, 4400);
+
+        // 底部逻辑链依次高亮
+        setTimeout(() => {
+          document.getElementById('step1').classList.add('visible');
+        }, 6000);
+        setTimeout(() => {
+          document.getElementById('arr1').classList.add('visible', 'lit');
+          document.getElementById('step2').classList.add('visible');
+        }, 6800);
+        setTimeout(() => {
+          document.getElementById('arr2').classList.add('visible', 'lit');
+          document.getElementById('step3').classList.add('visible');
+        }, 7600);
+      }
+
+      /* =========================================================
+         卡③：三个图标卡 + AI 特有标签
+         ========================================================= */
+      function initCard3() {
+        setTimeout(() => document.getElementById('icon1').classList.add('visible'), 500);
+        setTimeout(() => document.getElementById('icon2').classList.add('visible'), 900);
+        setTimeout(() => {
+          document.getElementById('icon3').classList.add('visible');
+          // 文件裂开露出 exec() 闪电
+          setTimeout(() => {
+            document.getElementById('execLightning').style.opacity = '1';
+            document.getElementById('execText').style.opacity = '1';
+          }, 400);
+        }, 1300);
+
+        // E404 错误提示
+        setTimeout(() => document.getElementById('err1').classList.add('visible'), 1600);
+
+        // 底部金句条
+        setTimeout(() => document.getElementById('card3Banner').classList.add('visible'), 2200);
+
+        // 三个图标上方汇聚生成 “AI 特有” 标签
+        setTimeout(() => document.getElementById('aiTag').classList.add('visible'), 2600);
+      }
+
+      /* =========================================================
+         主时间线
+         ========================================================= */
+      function runTimeline() {
+        activate(0);
+        initCard1();
+
+        setTimeout(() => {
+          activate(1);
+          initCard2();
+        }, TIMING.card2Start);
+
+        setTimeout(() => {
+          activate(2);
+          initCard3();
+        }, TIMING.card3Start);
+
+        setTimeout(() => {
+          deck.classList.add('exit');
+        }, TIMING.exitStart);
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', runTimeline);
+      } else {
+        runTimeline();
+      }
+    })();
+  </script>
+</body>
+</html>

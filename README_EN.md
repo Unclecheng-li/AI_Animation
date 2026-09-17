@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](./LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](#contributing)
-[![Skills count](https://img.shields.io/badge/Skills-8-orange?style=flat-square)](#skills-gallery)
+[![Skills count](https://img.shields.io/badge/Skills-9-orange?style=flat-square)](#skills-gallery)
 [![Spec](https://img.shields.io/badge/Spec-SKILL.md-black?style=flat-square)](https://agentskills.io)
 
 🌐 **中文版**: [`README.md`](README.md)
@@ -28,6 +28,7 @@ One sentence is all it takes:
 - 🎴 **Card theater** — sidebar narrative + 3D card carousel for protocol flows / product features / step-by-step explainers
 - 🎬 **Video shot demos** — cinematic "one HTML per shot" demo animations: 29 rotating styles, camera pushes, WebAudio SFX — fullscreen-record it and it's a finished film
 - 📱 **Phone UI demos** — a "real phone" performing a choreographed screen recording: lockscreen notifications, chats, settings, App screens shot by shot, HyperOS-grade motion + a 3D-posture phone actor
+- 🗂️ **Stacked data cards** — argument cards pop in from the bottom while used ones stack to the left as a deck: line-drawing, count-ups, gauges and more cascade in on a millisecond timeline synced to the voiceover — fullscreen-record it and it's a finished cut
 
 <div align="center">
 
@@ -80,6 +81,14 @@ One sentence is all it takes:
 <a href="#video-shot-demos"><img width="2560" height="1440" alt="video-shot-demos" src="https://github.com/user-attachments/assets/ee93829f-91c5-48df-925e-342cd2be4557" /></a>
 <br/><a href="#video-shot-demos"><strong>video-shot-demos</strong></a>
 <br/><sub>Cinematic per-shot demo animations</sub>
+</td>
+</tr>
+<tr>
+<td colspan="4" valign="top" align="center">
+<!-- TODO: replace with an uploaded preview image -->
+<a href="#stacked-data-cards"><img width="2560" height="1440" alt="stacked-data-cards" src="https://placehold.co/2560x1440/0b0f19/ff5f3c?text=stacked-data-cards" /></a>
+<br/><a href="#stacked-data-cards"><strong>stacked-data-cards</strong></a>
+<br/><sub>Stacked data cards / timeline argument animation</sub>
 </td>
 </tr>
 </table>
@@ -403,6 +412,43 @@ Links: [README](./skills/video-shot-demos/README.md) · [SKILL.md](./skills/vide
 
 <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
 
+#### `stacked-data-cards`
+
+<a href="./skills/stacked-data-cards">
+<!-- TODO: replace with an uploaded preview image -->
+<img width="2560" height="1440" alt="stacked-data-cards preview" src="https://placehold.co/2560x1440/0b0f19/ff5f3c?text=stacked-data-cards" />
+</a>
+
+**Category:** Stacked data cards / timeline argument animation
+**For:** data-argument segments in videos, research finding showcases, opinion stacks, counterintuitive reveals — anywhere you need "cards as arguments, data as evidence, auto-playing in sync with the voiceover".
+
+`stacked-data-cards` generates auto-playing stacked argument-card animation HTML. Centered on a dark stage, white data cards pop in from the bottom one by one; as each new card enters, the previous ones stack to the left as a shrinking, tilting deck. Inside each card, data components (line-drawing charts, count-ups, gauges, comparison bars, data tables, icon card grids) cascade in on a millisecond timeline, with the total runtime precisely synced to the voiceover — and the whole deck can slide off-screen to hand over to the next shot. Zero dependencies, zero interaction: fullscreen-record it and it's a finished cut.
+
+Highlights:
+- Three-state card mechanics: `upcoming → active → stacked` — used cards pile up on the left, giving arguments a sense of accumulation
+- Millisecond timeline: a `TIMING` constant table synced to voiceover phrasing; per-card dwell time is tunable, with the last animation finishing ≥1.5s before the cut
+- Data component library: SVG trim-paths line drawing / count-up numbers / ring gauges / comparison bars / tables with in-cell mini bars / icon card grids / verdict banners / source corner-notes
+- WebAudio-synthesized low thud punctuates key reveals — zero audio files, silently degrades when autoplay is blocked
+- Theming via variables: change a single `--accent` to re-skin the whole scene (orange-red / blue / green / purple)
+- Zero-dependency single file: no CDN, no external images — double-click to run offline
+
+<table>
+<tr>
+<!-- TODO: replace with an uploaded preview image -->
+<td align="center" width="33%"><a href="./skills/stacked-data-cards/README.md"><img width="2560" height="1440" alt="template" src="https://placehold.co/2560x1440/0b0f19/9ca3af?text=template" /></a><br /><sub><code>template</code><br />Starter skeleton</sub></td>
+<td align="center" width="33%"><a href="./skills/stacked-data-cards/README.md"><img width="2560" height="1440" alt="orange theme" src="https://placehold.co/2560x1440/0b0f19/ff5f3c?text=orange+theme" /></a><br /><sub><code>Example A</code><br />Orange-red · trend argument</sub></td>
+<td align="center" width="33%"><a href="./skills/stacked-data-cards/README.md"><img width="2560" height="1440" alt="blue theme" src="https://placehold.co/2560x1440/0b0f19/3b82f6?text=blue+theme" /></a><br /><sub><code>Example B</code><br />Blue-violet · data reveal</sub></td>
+</tr>
+</table>
+
+<sub>↑ Starter skeleton + 2 production examples — <a href="./skills/stacked-data-cards/README.md"><b>see full details</b></a> (examples run as-is).</sub>
+
+Links: [README](./skills/stacked-data-cards/README.md) · [SKILL.md](./skills/stacked-data-cards/SKILL.md)
+
+---
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
 ### Installation
 
 | # | Method | Best for | Pin a version? |
@@ -425,6 +471,7 @@ npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/dy
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/scholar-notes
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/card-theater
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/video-shot-demos
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/stacked-data-cards
 ```
 
 > **Installs the latest `main` by default.** The CLI reads each skill's latest `SKILL.md` straight from the source tree.
@@ -488,6 +535,10 @@ Use video-shot-demos to turn this video's voiceover script into per-shot demo an
 Use phone-ui-demos to turn this App's features into a phone-recording-style demo animation — show me the storyboard first
 ```
 
+```
+Use stacked-data-cards to turn these three arguments into a stacked data-card animation, 25 seconds total, orange-red theme, deck slides out at the end
+```
+
 ### Directory Structure
 
 ```text
@@ -539,6 +590,11 @@ ai-animation-skills/
 │       ├── README.md
 │       ├── references/          ← Player/phone-stage/bg-captions/system-components specs
 │       └── assets/              ← Starter skeleton + kexue 8-shot production example
+│   ├── stacked-data-cards/
+│       ├── SKILL.md             ← Three-state card mechanics + timeline rules + generation spec
+│       ├── README.md
+│       ├── references/          ← Prompt references + component handbook
+│       └── assets/              ← Starter skeleton template.html + 2 production examples (orange/blue)
 ├── web_animation/               ← Original example HTML (historical archive)
 ├── UI/                          ← UI design reference images
 ├── prompt.md                    ← Prompt template collection
