@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<script>
+/* ===== [不动] 播放器引导：劫持 performance.now/rAF 成虚拟时钟 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 21 · 根目录结论 · 删不难，难的是判断 · 39s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700;900&family=Cascadia+Mono&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#111;overflow:hidden;font-family:"Segoe UI","Microsoft YaHei","Noto Sans SC",sans-serif}
+body.paused *{animation-play-state:paused!important}
+/* ===== 舞台：Windows 11 桌面（Bloom 壁纸·仿真镜头统一底）===== */
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;
+  background:#16366e}
+#wpl{position:absolute;inset:0;background:url("material/w11.jfif") center/cover no-repeat}
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:translate(-115px,-42px) scale(1.12);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ───── WIN11 仿真套件（同 shot-01 母版）───── */
+.dicon{position:absolute;left:34px;width:92px;text-align:center;opacity:0;transform:translateY(-8px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+.dicon.show{opacity:1;transform:translateY(0)}
+.dicon .dic{width:46px;height:46px;margin:0 auto 6px;display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 2px 3px rgba(0,0,0,.4))}
+.dicon span{display:inline-block;font-size:12.5px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.7);padding:1px 4px;border-radius:3px;line-height:1.25}
+#taskbar{position:absolute;left:0;right:0;bottom:0;height:48px;background:rgba(238,244,252,.82);backdrop-filter:blur(18px);z-index:36;display:flex;align-items:center;box-shadow:0 -1px 0 rgba(0,0,0,.08)}
+#taskbar .tb-apps{position:absolute;left:50%;transform:translateX(-50%);display:flex;gap:6px;align-items:center}
+#taskbar .tb{width:40px;height:40px;border-radius:6px;display:flex;align-items:center;justify-content:center;position:relative}
+#taskbar .tb.active::after{content:'';position:absolute;bottom:3px;left:50%;transform:translateX(-50%);width:14px;height:3px;border-radius:2px;background:#0067c0}
+#tray{position:absolute;right:10px;display:flex;align-items:center;gap:9px;font-size:12px;color:#1b1b1b}
+#tray .t-time{text-align:right;line-height:1.15}
+.win{position:absolute;background:#f3f6fb;border:1px solid rgba(0,0,0,.14);border-radius:10px;box-shadow:0 24px 70px rgba(2,16,46,.45),0 2px 8px rgba(2,16,46,.2);overflow:hidden;opacity:0;transform:translateY(26px) scale(.97);transition:all .7s cubic-bezier(.16,1,.3,1)}
+.win.show{opacity:1;transform:translateY(0) scale(1)}
+.win.faded{filter:grayscale(.35) brightness(.72)}
+.wtitle{height:44px;display:flex;align-items:center;background:#f3f6fb;padding:0 10px;gap:8px}
+.wtitle .wic{width:20px;height:20px}
+.wtitle .wtab{font-size:12.5px;color:#1b1b1b;background:rgba(255,255,255,.7);border-radius:6px 6px 0 0;padding:5px 12px;border:1px solid rgba(0,0,0,.06);border-bottom:none}
+.wbtns{margin-left:auto;display:flex}
+.wbtns i{width:44px;height:32px;display:flex;align-items:center;justify-content:center;color:#444}
+.wbtns i svg{width:11px;height:11px}
+.waddr{height:46px;display:flex;align-items:center;gap:8px;padding:0 12px;background:#f3f6fb;border-bottom:1px solid rgba(0,0,0,.07)}
+.waddr .navs{display:flex;gap:2px;color:#555}
+.waddr .navs i{width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:5px}
+.addrbar{flex:1;height:32px;border:1px solid rgba(0,0,0,.12);border-radius:5px;background:#fff;display:flex;align-items:center;padding:0 10px;font-size:12.5px;color:#222;gap:6px}
+.addrbar .crumb{color:#666;margin:0 3px}
+.addrbar .hl{background:rgba(0,103,192,.14);border-radius:3px;padding:0 3px}
+.searchbox{width:230px;height:32px;border:1px solid rgba(0,0,0,.12);border-radius:5px;background:#fff;display:flex;align-items:center;padding:0 10px;font-size:12.5px;color:#777;gap:7px}
+.wcmd{height:44px;display:flex;align-items:center;gap:3px;padding:0 12px;background:#f3f6fb;border-bottom:1px solid rgba(0,0,0,.07);font-size:12.5px;color:#222}
+.cmd{display:flex;align-items:center;gap:6px;padding:6px 9px;border-radius:5px;white-space:nowrap}
+.cmd.ic{width:32px;justify-content:center;padding:6px 0}
+.wcmd .sep{width:1px;height:22px;background:rgba(0,0,0,.1);margin:0 5px}
+.wbody{display:flex;height:calc(100% - 44px - 46px - 44px - 26px)}
+.wnav{width:216px;padding:10px 8px;font-size:12.5px;color:#222;border-right:1px solid rgba(0,0,0,.05)}
+.wnav .ni{display:flex;align-items:center;gap:9px;padding:6px 10px;border-radius:5px;color:#333}
+.wnav .ni.on{background:rgba(0,103,192,.1)}
+.wnav .ni b{font-weight:400}
+.wmain{flex:1;position:relative;background:#fff;overflow:hidden}
+.wstatus{height:26px;display:flex;align-items:center;padding:0 14px;font-size:12px;color:#555;background:#f3f6fb;border-top:1px solid rgba(0,0,0,.06);gap:18px}
+
+/* ───── 本镜专属：详细信息清单 + 逐个打叉 ───── */
+.view{position:absolute;inset:0;padding:8px 10px;transition:opacity .4s ease,transform .4s ease}
+.view.hide{opacity:0;transform:scale(.99);pointer-events:none}
+.lvh{display:grid;grid-template-columns:28px 1fr 170px 110px 130px;align-items:center;height:30px;border-bottom:1px solid #e3e3e3;font-size:12px;color:#444;padding:0 10px}
+.lrow{position:relative;display:grid;grid-template-columns:28px 1fr 170px 110px 130px;align-items:center;height:34px;padding:0 10px;border-radius:5px;font-size:12.5px;color:#1b1b1b;opacity:0;transform:translateY(7px);transition:opacity .35s cubic-bezier(.16,1,.3,1),transform .35s cubic-bezier(.16,1,.3,1),background .3s}
+.lrow.in{opacity:1;transform:translateY(0)}
+.lrow .ld,.lrow .lt{color:#555}
+.lrow .ls{text-align:right;font-variant-numeric:tabular-nums;color:#555}
+.lrow.gh .ln,.lrow.gh .ld,.lrow.gh .lt,.lrow.gh .ls,.lrow.gh .fic-mini,.lrow.gh .fic-file{opacity:.42}
+/* 迷你文件夹/文件图标（CSS 画，免 40 枚内联 SVG） */
+.fic-mini{width:20px;height:15px;background:#ffce73;border:1px solid #e0a83c;border-radius:2.5px;position:relative}
+.fic-mini::before{content:'';position:absolute;left:-1px;top:-4.5px;width:9px;height:4px;background:#ffd88a;border:1px solid #e0a83c;border-bottom:none;border-radius:2.5px 2.5px 0 0}
+.fic-file{width:15px;height:19px;background:#fff;border:1.4px solid #c3ccd6;border-radius:2px;position:relative;margin-left:2px}
+.fic-file::after{content:'';position:absolute;right:-1.4px;top:-1.4px;width:5px;height:5px;background:#e3e9f0;border-left:1.4px solid #c3ccd6;border-bottom:1.4px solid #c3ccd6;border-radius:0 0 0 2px}
+/* 打叉标记：红色「✗ 不能整个删」章 */
+.xchip{position:absolute;right:14px;top:50%;display:flex;align-items:center;gap:5px;background:#fff5f5;border:1.5px solid #c42b1c;color:#c42b1c;font-size:12px;font-weight:700;border-radius:999px;padding:3px 11px 3px 8px;box-shadow:0 3px 10px rgba(196,43,28,.22);opacity:0;transform:translateY(-50%) scale(.4) rotate(-8deg);transition:all .28s cubic-bezier(.34,1.6,.64,1);pointer-events:none;white-space:nowrap}
+.lrow.stamped .xchip{opacity:1;transform:translateY(-50%) scale(1) rotate(-2deg)}
+.lrow.stamped{background:#fdeef0}
+.lrow.stamped .ln{color:#8a8a8a}
+.lrow.stamped .ld,.lrow.stamped .lt{color:#b0a0a0}
+/* Temp 扫空与回长 */
+.lrow.swept{opacity:.14!important;transform:translateX(10px)!important;transition:all .6s ease}
+.regrow-tag{position:absolute;left:370px;top:50%;transform:translateY(-50%) scale(.4);font-size:11.5px;font-weight:700;color:#1a7f37;background:#e9f7ee;border:1.4px solid #1a7f37;border-radius:999px;padding:2.5px 10px;opacity:0;transition:all .3s cubic-bezier(.34,1.6,.64,1);white-space:nowrap}
+.lrow.regrow .regrow-tag{opacity:1;transform:translateY(-50%) scale(1)}
+.lrow.regrow{opacity:1!important;transform:translateX(0)!important;background:#f2fbf5}
+/* 下钻深度徽章 */
+#depth{position:absolute;right:18px;bottom:16px;z-index:5;display:flex;align-items:center;gap:7px;background:#1c2430;color:#fff;font-family:"Cascadia Mono",monospace;font-size:12.5px;letter-spacing:1px;border-radius:6px;padding:6px 13px;box-shadow:0 6px 18px rgba(2,16,46,.3);opacity:0;transform:translateY(8px);transition:all .4s cubic-bezier(.16,1,.3,1)}
+#depth.in{opacity:1;transform:translateY(0)}
+#depth b{color:#ffd23f;font-size:14px}
+/* 花字 */
+.hua{position:absolute;font-size:23px;font-weight:700;color:#1b1b1b;background:rgba(255,255,255,.94);border:1px solid rgba(0,0,0,.12);border-radius:8px;padding:9px 20px;z-index:27;opacity:0;transform:translateY(10px);transition:all .5s cubic-bezier(.16,1,.3,1);box-shadow:0 10px 28px rgba(2,16,46,.22)}
+.hua.in{opacity:1;transform:translateY(0)}
+.hua b{color:#c42b1c}
+.hua.bl b{color:#0067c0}
+/* 闪回小窗（微软文档 / 虚拟机）共用 */
+.flash{position:absolute;background:#fff;border:1px solid rgba(0,0,0,.18);border-radius:10px;box-shadow:0 30px 80px rgba(2,16,46,.5);overflow:hidden;z-index:34;opacity:0;transform:translateY(24px) scale(.94);transition:all .5s cubic-bezier(.16,1,.3,1)}
+.flash.in{opacity:1;transform:translateY(0) scale(1)}
+.flash-tag{position:absolute;left:14px;top:12px;z-index:6;font-family:"Cascadia Mono",monospace;font-size:12px;letter-spacing:2px;color:#ffd23f;background:rgba(10,14,22,.82);border:1px dashed rgba(255,210,63,.55);border-radius:5px;padding:4px 11px}
+#docWin .flash-tag{top:auto;bottom:14px}
+#vmWin .flash-tag{left:auto;right:14px;top:auto;bottom:12px}
+/* 微软 Learn 文档页 */
+.doc-tb{height:38px;background:#e8ecf2;display:flex;align-items:flex-end;padding:0 8px;gap:4px}
+.doc-tab{display:flex;align-items:center;gap:8px;background:#fff;border-radius:7px 7px 0 0;font-size:12px;color:#333;padding:8px 14px 9px;border:1px solid rgba(0,0,0,.08);border-bottom:none}
+.doc-url{height:42px;background:#fff;display:flex;align-items:center;padding:0 14px;border-bottom:1px solid #e3e3e3;gap:10px}
+.doc-url .u{flex:1;background:#f2f4f8;border-radius:999px;height:28px;display:flex;align-items:center;padding:0 14px;font-size:12.5px;color:#333;gap:7px}
+.doc-body{height:calc(100% - 38px - 42px);overflow:hidden;padding:26px 40px;color:#1b1b1b}
+.doc-bc{font-size:12px;color:#666;margin-bottom:10px}
+.doc-h1{font-size:27px;font-weight:700;margin-bottom:8px}
+.doc-meta{font-size:12px;color:#666;border-bottom:1px solid #e3e3e3;padding-bottom:12px;margin-bottom:16px}
+.doc-p{font-size:13.5px;line-height:1.85;color:#222;margin-bottom:13px}
+.doc-p a{color:#0067c0;text-decoration:none}
+.doc-note{border-left:3.5px solid #0067c0;background:#f2f7fd;padding:11px 16px;font-size:13px;line-height:1.7;color:#222;border-radius:0 6px 6px 0;transition:box-shadow .5s,background .5s}
+.doc-note b{display:block;font-size:12px;color:#0067c0;margin-bottom:3px;letter-spacing:1px}
+.doc-note.hl{box-shadow:0 0 0 3px rgba(255,210,63,.85);background:#fffbe8}
+/* 虚拟机蓝屏窗 */
+.vm-t{height:34px;background:#20242c;display:flex;align-items:center;padding:0 12px;gap:8px;font-size:12px;color:#d7dce4}
+.vm-t i{margin-left:auto;font-style:normal;color:#8a93a3;font-size:13px}
+.vm-bar{height:32px;background:#2b313c;display:flex;align-items:center;gap:4px;padding:0 10px}
+.vm-bar span{font-size:11.5px;color:#aab3c2;padding:5px 10px;border-radius:4px}
+.vm-scr{height:calc(100% - 34px - 32px);background:#0078d7;color:#fff;padding:64px 70px;position:relative;overflow:hidden}
+.vm-sad{font-size:120px;font-weight:300;line-height:1;margin-bottom:34px}
+.vm-msg{font-size:21px;line-height:1.75;font-weight:300;max-width:640px}
+.vm-pct{font-size:17px;margin-top:26px;font-variant-numeric:tabular-nums}
+.vm-stop{position:absolute;bottom:36px;left:70px;font-size:11.5px;opacity:.85;line-height:1.7}
+/* 收束结论卡 */
+#endCard{position:absolute;left:1080px;top:400px;width:740px;background:#fffdf8;border:3px solid #20242c;border-radius:18px;box-shadow:14px 14px 0 rgba(4,10,26,.35);padding:40px 46px 36px;z-index:33;opacity:0;transform:translateY(36px) scale(.94);transition:all .7s cubic-bezier(.16,1,.3,1)}
+#endCard.in{opacity:1;transform:translateY(0) scale(1)}
+.ec-kick{font-family:"Cascadia Mono",monospace;font-size:13px;letter-spacing:3px;color:#c42b1c;margin-bottom:16px}
+.ec-l1{font-size:44px;font-weight:900;color:#3a3f4a;letter-spacing:2px;transition:opacity .6s,color .6s}
+.ec-l1.dim{opacity:.32}
+.ec-l1 b{color:#1a7f37}
+.ec-l2{font-size:64px;font-weight:900;color:#20242c;letter-spacing:3px;margin:8px 0 4px;opacity:0;transform:scale(.7);transition:all .5s cubic-bezier(.34,1.55,.64,1)}
+.ec-l2.in{opacity:1;transform:scale(1)}
+.ec-l2 b{color:#c42b1c;border-bottom:6px solid #c42b1c;padding-bottom:2px}
+.ec-chips{display:flex;flex-direction:column;gap:9px;margin:20px 0 22px}
+.echip{display:inline-flex;align-items:center;gap:9px;align-self:flex-start;font-size:19px;font-weight:700;color:#20242c;background:#f3f0e8;border:1.5px solid #d8d2c2;border-radius:999px;padding:8px 20px;opacity:0;transform:translateX(-18px);transition:all .45s cubic-bezier(.16,1,.3,1)}
+.echip.in{opacity:1;transform:translateX(0)}
+.echip svg{flex:none}
+.ec-final{display:flex;align-items:center;gap:13px;border-top:2px dashed #d8d2c2;padding-top:20px;font-size:27px;font-weight:900;color:#20242c;opacity:0;transform:translateY(12px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+.ec-final.in{opacity:1;transform:translateY(0)}
+.ec-final b{color:#c42b1c}
+.ec-final img{height:44px;filter:drop-shadow(0 3px 6px rgba(0,0,0,.25))}
+/* 光标 */
+#cur{position:absolute;left:1700px;top:950px;z-index:38;width:26px;pointer-events:none;filter:drop-shadow(0 2px 2px rgba(0,0,0,.35));opacity:0;transition:opacity .4s}
+#cur.show{opacity:1}
+/* 大肥鱼反应表情包（#stage 直属） */
+.fish{position:absolute;left:780px;top:480px;width:230px;z-index:38;opacity:0;transform:translateY(26px) scale(.68);transition:all .5s cubic-bezier(.34,1.6,.64,1);pointer-events:none;filter:drop-shadow(0 10px 24px rgba(2,10,30,.4))}
+.fish.show{opacity:1;transform:translateY(0) scale(1)}
+.fish img{width:100%;display:block}
+#brand{position:absolute;right:26px;top:18px;height:34px;z-index:35;opacity:0;transition:opacity .9s;filter:drop-shadow(0 2px 6px rgba(0,0,0,.35))}
+#brand.in{opacity:.62}
+
+/* ───── 底盘区（不动）───── */
+.corner{position:absolute;font-family:"Cascadia Mono","Consolas",monospace;font-size:15px;color:rgba(255,255,255,.92);letter-spacing:2px;z-index:37;text-shadow:0 1px 4px rgba(8,24,60,.8),0 0 3px rgba(8,24,60,.6);padding:3px 9px;border-radius:6px;background:rgba(8,20,46,.45)}
+#chap{left:52px;bottom:58px}
+#src{right:52px;bottom:58px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'Cascadia Mono','Consolas',monospace;pointer-events:none}
+#track{height:5px;background:rgba(0,0,0,.25)}
+#bar{height:100%;width:0;background:#c42b1c;box-shadow:0 0 10px rgba(196,43,28,.6)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(10,12,18,.92);color:#ccc;backdrop-filter:blur(4px)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #999;color:#ccc;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(255,255,255,.12)}
+#replay.done{animation:pulse 1.2s infinite;border-color:#ffd23f;color:#ffd23f}
+@keyframes pulse{50%{box-shadow:0 0 14px rgba(255,210,63,.8)}}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="cam">
+    <div id="wpl"></div>
+    <!-- 桌面图标 -->
+    <div class="dicon" style="top:26px"><div class="dic"><svg width="42" height="42" viewBox="0 0 48 48"><rect x="3" y="7" width="42" height="30" rx="2.5" fill="#4aa3e8"/><rect x="5.5" y="9.5" width="37" height="25" rx="1.5" fill="#dff0fd"/><rect x="5.5" y="9.5" width="37" height="5.5" fill="#2f80d8"/><rect x="15" y="39" width="18" height="3.5" fill="#8a8a8a"/><rect x="11" y="42.5" width="26" height="3" rx="1.5" fill="#9b9b9b"/></svg></div><span>此电脑</span></div>
+    <div class="dicon" style="top:128px"><div class="dic"><svg width="40" height="40" viewBox="0 0 48 48"><path d="M13 14h22l-2.4 27.5a3 3 0 0 1-3 2.5H18.4a3 3 0 0 1-3-2.5L13 14Z" fill="#e8f0f8" stroke="#b9c6d4" stroke-width="1.6"/><path d="M10 14h28" stroke="#b9c6d4" stroke-width="2.6" stroke-linecap="round"/><path d="M19 14v-3.4A2.6 2.6 0 0 1 21.6 8h4.8A2.6 2.6 0 0 1 29 10.6V14" fill="none" stroke="#b9c6d4" stroke-width="2"/><path d="M20 21v14M28 21v14" stroke="#b9c6d4" stroke-width="2"/></svg></div><span>回收站</span></div>
+    <div class="dicon" style="top:230px"><div class="dic"><svg width="42" height="42" viewBox="0 0 48 48"><rect x="4" y="8" width="40" height="32" rx="4" fill="#2b3245"/><path d="M9 14h30v20H9z" fill="none" stroke="#68739c" stroke-width="1.5"/><path d="M21 20l9 4-9 4v-8Z" fill="#ffd23f"/><path d="M4 16h40M4 32h40" stroke="#68739c" stroke-width="2"/></svg></div><span>视频剪辑</span></div>
+
+    <!-- 资源管理器：详细信息清单视图 -->
+    <div class="win" id="expWin" style="left:170px;top:72px;width:1580px;height:896px">
+      <div class="wtitle">
+        <svg class="wic" viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2.5h9A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5v-12Z" fill="#ffce73" stroke="#e0a83c"/></svg>
+        <span class="wtab" id="wtabTxt">本地磁盘 (C:)</span>
+        <div class="wbtns">
+          <i><svg viewBox="0 0 12 12"><path d="M1 6h10" stroke="currentColor" stroke-width="1.2"/></svg></i>
+          <i><svg viewBox="0 0 12 12"><rect x="1.5" y="1.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></i>
+          <i><svg viewBox="0 0 12 12"><path d="M1 1l10 10M11 1L1 11" stroke="currentColor" stroke-width="1.2"/></svg></i>
+        </div>
+      </div>
+      <div class="waddr">
+        <div class="navs">
+          <i><svg width="13" height="13" viewBox="0 0 14 14"><path d="M9 2.5 4.5 7 9 11.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i>
+          <i><svg width="13" height="13" viewBox="0 0 14 14"><path d="M5 2.5 9.5 7 5 11.5" fill="none" stroke="#b0b0b0" stroke-width="1.6" stroke-linecap="round"/></svg></i>
+          <i><svg width="13" height="13" viewBox="0 0 14 14"><path d="M2.5 9 7 4.5 11.5 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i>
+          <i><svg width="13" height="13" viewBox="0 0 14 14"><path d="M2 7a5 5 0 1 0 1.6-3.7M2.5 1.5v3h3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></i>
+        </div>
+        <div class="addrbar"><svg width="13" height="13" viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2.5h9A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5v-12Z" fill="#ffce73"/></svg><span id="addrTxt">此电脑 <span class="crumb">›</span> <span class="hl">本地磁盘 (C:)</span></span></div>
+        <div class="searchbox"><svg width="13" height="13" viewBox="0 0 14 14"><circle cx="6" cy="6" r="4.4" fill="none" stroke="#777" stroke-width="1.5"/><path d="m9.4 9.4 3 3" stroke="#777" stroke-width="1.5" stroke-linecap="round"/></svg><span id="searchTxt">搜索 本地磁盘 (C:)</span></div>
+      </div>
+      <div class="wcmd">
+        <div class="cmd"><svg width="13" height="13" viewBox="0 0 14 14"><path d="M7 2v10M2 7h10" stroke="#0067c0" stroke-width="1.6" stroke-linecap="round"/></svg>新建<svg width="9" height="9" viewBox="0 0 10 10"><path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="#666" stroke-width="1.3" stroke-linecap="round"/></svg></div>
+        <div class="sep"></div>
+        <div class="cmd ic"><svg width="14" height="14" viewBox="0 0 14 14"><rect x="4" y="4" width="8" height="8" rx="1" fill="none" stroke="#555" stroke-width="1.2"/><path d="M10 4V2.5A1.5 1.5 0 0 0 8.5 1H3.5A1.5 1.5 0 0 0 2 2.5v5A1.5 1.5 0 0 0 3.5 9H4" fill="none" stroke="#555" stroke-width="1.2"/></svg></div>
+        <div class="cmd ic"><svg width="14" height="14" viewBox="0 0 14 14"><rect x="2" y="3" width="10" height="9" rx="1.5" fill="none" stroke="#555" stroke-width="1.2"/><path d="M5 3V2h4v1" fill="none" stroke="#555" stroke-width="1.2"/></svg></div>
+        <div class="sep"></div>
+        <div class="cmd">重命名</div><div class="cmd">共享</div><div class="cmd">删除</div>
+        <div class="sep"></div>
+        <div class="cmd">排序<svg width="9" height="9" viewBox="0 0 10 10"><path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="#666" stroke-width="1.3" stroke-linecap="round"/></svg></div>
+        <div class="cmd">查看<svg width="9" height="9" viewBox="0 0 10 10"><path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="#666" stroke-width="1.3" stroke-linecap="round"/></svg></div>
+        <div class="sep"></div>
+        <div class="cmd ic"><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="3" cy="7" r="1.3" fill="#555"/><circle cx="7" cy="7" r="1.3" fill="#555"/><circle cx="11" cy="7" r="1.3" fill="#555"/></svg></div>
+      </div>
+      <div class="wbody">
+        <div class="wnav">
+          <div class="ni"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M12 3l9 8h-3v9h-4v-6H10v6H6v-9H3l9-8Z" fill="#5aa2e6"/></svg><b>主页</b></div>
+          <div class="ni"><svg width="16" height="16" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="13" rx="1.5" fill="#4aa3e8"/><rect x="6" y="5" width="12" height="9" fill="#dff0fd"/><rect x="9" y="18" width="6" height="2" fill="#8a8a8a"/></svg><b>图库</b></div>
+          <div class="ni on"><svg width="16" height="16" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="1.5" fill="#4aa3e8"/><rect x="5" y="6" width="14" height="10" fill="#dff0fd"/><rect x="4" y="6" width="14" height="2.4" fill="#2f80d8"/></svg><b>此电脑</b></div>
+          <div class="ni"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M12 3l2.7 5.6 6.1.8-4.5 4.2 1.1 6L12 16.7 6.6 19.6l1.1-6L3.2 9.4l6.1-.8L12 3Z" fill="#f5c04e"/></svg><b>收藏夹</b></div>
+          <div class="ni"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4" stroke="#7ec36a" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M4 15v4a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 20 19v-4" stroke="#7ec36a" stroke-width="2" fill="none" stroke-linecap="round"/></svg><b>下载</b></div>
+          <div class="ni"><svg width="16" height="16" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="1.5" fill="#e8e8e8"/><rect x="7" y="7" width="10" height="1.8" fill="#9ab"/><rect x="7" y="11" width="10" height="1.8" fill="#9ab"/><rect x="7" y="15" width="6" height="1.8" fill="#9ab"/></svg><b>文档</b></div>
+        </div>
+        <div class="wmain">
+          <div id="depth">下钻 <b id="depthN">第 1 层</b></div>
+          <!-- 视图 0：C:\ 根目录 -->
+          <div class="view" id="v0">
+            <div class="lvh"><span></span><span>名称</span><span>修改日期</span><span>类型</span><span style="text-align:right">大小</span></div>
+            <div class="lrow" data-x="1"><i class="fic-mini"></i><span class="ln">Windows</span><span class="ld">2025/11/8 3:14</span><span class="lt">文件夹</span><span class="ls"></span><span class="xchip"><svg width="11" height="11" viewBox="0 0 12 12"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9" stroke="#c42b1c" stroke-width="2.2" stroke-linecap="round"/></svg>不能整个删</span></div>
+            <div class="lrow" data-x="1"><i class="fic-mini"></i><span class="ln">Program Files</span><span class="ld">2025/12/19 22:40</span><span class="lt">文件夹</span><span class="ls"></span><span class="xchip"><svg width="11" height="11" viewBox="0 0 12 12"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9" stroke="#c42b1c" stroke-width="2.2" stroke-linecap="round"/></svg>不能整个删</span></div>
+            <div class="lrow" data-x="1"><i class="fic-mini"></i><span class="ln">Program Files (x86)</span><span class="ld">2025/12/19 22:40</span><span class="lt">文件夹</span><span class="ls"></span><span class="xchip"><svg width="11" height="11" viewBox="0 0 12 12"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9" stroke="#c42b1c" stroke-width="2.2" stroke-linecap="round"/></svg>不能整个删</span></div>
+            <div class="lrow" data-x="1"><i class="fic-mini"></i><span class="ln">Users</span><span class="ld">2025/11/8 3:14</span><span class="lt">文件夹</span><span class="ls"></span><span class="xchip"><svg width="11" height="11" viewBox="0 0 12 12"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9" stroke="#c42b1c" stroke-width="2.2" stroke-linecap="round"/></svg>不能整个删</span></div>
+            <div class="lrow gh" data-x="1"><i class="fic-mini"></i><span class="ln">ProgramData</span><span class="ld">2025/11/8 3:14</span><span class="lt">文件夹</span><span class="ls"></span><span class="xchip"><svg width="11" height="11" viewBox="0 0 12 12"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9" stroke="#c42b1c" stroke-width="2.2" stroke-linecap="round"/></svg>不能整个删</span></div>
+            <div class="lrow gh" data-x="1"><i class="fic-mini"></i><span class="ln">$Recycle.Bin</span><span class="ld">2026/9/12 18:02</span><span class="lt">文件夹</span><span class="ls"></span><span class="xchip"><svg width="11" height="11" viewBox="0 0 12 12"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9" stroke="#c42b1c" stroke-width="2.2" stroke-linecap="round"/></svg>不能整个删</span></div>
+            <div class="lrow gh" data-x="1"><i class="fic-mini"></i><span class="ln">System Volume Information</span><span class="ld">2026/9/20 7:31</span><span class="lt">文件夹</span><span class="ls"></span><span class="xchip"><svg width="11" height="11" viewBox="0 0 12 12"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9" stroke="#c42b1c" stroke-width="2.2" stroke-linecap="round"/></svg>不能整个删</span></div>
+            <div class="lrow" data-x="1"><i class="fic-mini"></i><span class="ln">PerfLogs</span><span class="ld">2025/11/8 3:14</span><span class="lt">文件夹</span><span class="ls"></span><span class="xchip"><svg width="11" height="11" viewBox="0 0 12 12"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9" stroke="#c42b1c" stroke-width="2.2" stroke-linecap="round"/></svg>不能整个删</span></div>
+            <div class="lrow" data-x="1"><i class="fic-mini"></i><span class="ln">Drivers</span><span class="ld">2026/3/15 12:06</span><span class="lt">文件夹</span><span class="ls"></span><span class="xchip"><svg width="11" height="11" viewBox="0 0 12 12"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9" stroke="#c42b1c" stroke-width="2.2" stroke-linecap="round"/></svg>不能整个删</span></div>
+            <div class="lrow" data-x="1"><i class="fic-mini"></i><span class="ln">课件备份</span><span class="ld">2026/8/30 21:44</span><span class="lt">文件夹</span><span class="ls"></span><span class="xchip"><svg width="11" height="11" viewBox="0 0 12 12"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9" stroke="#c42b1c" stroke-width="2.2" stroke-linecap="round"/></svg>不能整个删</span></div>
+          </div>
+          <!-- 视图 1：C:\Users -->
+          <div class="view hide" id="v1">
+            <div class="lvh"><span></span><span>名称</span><span>修改日期</span><span>类型</span><span style="text-align:right">大小</span></div>
+            <div class="lrow"><i class="fic-mini"></i><span class="ln">你的用户名</span><span class="ld">2026/9/21 9:12</span><span class="lt">文件夹</span><span class="ls"></span></div>
+            <div class="lrow gh"><i class="fic-mini"></i><span class="ln">Default</span><span class="ld">2025/11/8 3:14</span><span class="lt">文件夹</span><span class="ls"></span></div>
+            <div class="lrow"><i class="fic-mini"></i><span class="ln">Public</span><span class="ld">2025/11/8 3:14</span><span class="lt">文件夹</span><span class="ls"></span></div>
+          </div>
+          <!-- 视图 2：C:\Users\你的用户名 -->
+          <div class="view hide" id="v2">
+            <div class="lvh"><span></span><span>名称</span><span>修改日期</span><span>类型</span><span style="text-align:right">大小</span></div>
+            <div class="lrow gh"><i class="fic-mini"></i><span class="ln">AppData</span><span class="ld">2026/9/21 9:12</span><span class="lt">文件夹</span><span class="ls"></span></div>
+            <div class="lrow"><i class="fic-mini"></i><span class="ln">Contacts</span><span class="ld">2025/11/8 3:20</span><span class="lt">文件夹</span><span class="ls"></span></div>
+            <div class="lrow"><i class="fic-mini"></i><span class="ln">Desktop</span><span class="ld">2026/9/22 20:31</span><span class="lt">文件夹</span><span class="ls"></span></div>
+            <div class="lrow"><i class="fic-mini"></i><span class="ln">Documents</span><span class="ld">2026/9/19 14:07</span><span class="lt">文件夹</span><span class="ls"></span></div>
+            <div class="lrow"><i class="fic-mini"></i><span class="ln">Downloads</span><span class="ld">2026/9/22 22:58</span><span class="lt">文件夹</span><span class="ls"></span></div>
+            <div class="lrow"><i class="fic-mini"></i><span class="ln">Pictures</span><span class="ld">2026/9/10 16:25</span><span class="lt">文件夹</span><span class="ls"></span></div>
+            <div class="lrow"><i class="fic-mini"></i><span class="ln">Videos</span><span class="ld">2026/8/30 21:40</span><span class="lt">文件夹</span><span class="ls"></span></div>
+          </div>
+          <!-- 视图 3：AppData -->
+          <div class="view hide" id="v3">
+            <div class="lvh"><span></span><span>名称</span><span>修改日期</span><span>类型</span><span style="text-align:right">大小</span></div>
+            <div class="lrow"><i class="fic-mini"></i><span class="ln">Local</span><span class="ld">2026/9/23 8:47</span><span class="lt">文件夹</span><span class="ls"></span></div>
+            <div class="lrow"><i class="fic-mini"></i><span class="ln">LocalLow</span><span class="ld">2026/7/2 11:19</span><span class="lt">文件夹</span><span class="ls"></span></div>
+            <div class="lrow"><i class="fic-mini"></i><span class="ln">Roaming</span><span class="ld">2026/9/22 23:10</span><span class="lt">文件夹</span><span class="ls"></span></div>
+          </div>
+          <!-- 视图 4：AppData\Local -->
+          <div class="view hide" id="v4">
+            <div class="lvh"><span></span><span>名称</span><span>修改日期</span><span>类型</span><span style="text-align:right">大小</span></div>
+            <div class="lrow"><i class="fic-mini"></i><span class="ln">Temp</span><span class="ld">2026/9/23 9:02</span><span class="lt">文件夹</span><span class="ls"></span></div>
+            <div class="lrow"><i class="fic-mini"></i><span class="ln">Microsoft</span><span class="ld">2026/9/23 8:59</span><span class="lt">文件夹</span><span class="ls"></span></div>
+            <div class="lrow"><i class="fic-mini"></i><span class="ln">Packages</span><span class="ld">2026/9/22 18:33</span><span class="lt">文件夹</span><span class="ls"></span></div>
+            <div class="lrow"><i class="fic-mini"></i><span class="ln">Programs</span><span class="ld">2026/9/5 13:26</span><span class="lt">文件夹</span><span class="ls"></span></div>
+            <div class="lrow"><i class="fic-mini"></i><span class="ln">Google</span><span class="ld">2026/9/22 21:15</span><span class="lt">文件夹</span><span class="ls"></span></div>
+          </div>
+          <!-- 视图 5：Temp 到底了 -->
+          <div class="view hide" id="v5">
+            <div class="lvh"><span></span><span>名称</span><span>修改日期</span><span>类型</span><span style="text-align:right">大小</span></div>
+            <div class="lrow" data-tmp="1"><i class="fic-file"></i><span class="ln">~DF2A41.tmp</span><span class="ld">2026/9/23 8:58</span><span class="lt">TMP 文件</span><span class="ls">2,140 KB</span><span class="regrow-tag">刚长出来</span></div>
+            <div class="lrow"><i class="fic-file"></i><span class="ln">chrome_installer_5821.tmp</span><span class="ld">2026/9/22 23:41</span><span class="lt">TMP 文件</span><span class="ls">1,332 KB</span></div>
+            <div class="lrow"><i class="fic-file"></i><span class="ln">7zE9B1.tmp</span><span class="ld">2026/9/22 21:07</span><span class="lt">TMP 文件</span><span class="ls">884 KB</span></div>
+            <div class="lrow" data-tmp="1"><i class="fic-file"></i><span class="ln">etilqs_0f3a91c2.sqlite</span><span class="ld">2026/9/22 20:14</span><span class="lt">SQLITE 文件</span><span class="ls">176 KB</span><span class="regrow-tag">刚长出来</span></div>
+            <div class="lrow"><i class="fic-file"></i><span class="ln">setupact.log</span><span class="ld">2026/9/21 9:33</span><span class="lt">LOG 文件</span><span class="ls">92 KB</span></div>
+            <div class="lrow"><i class="fic-file"></i><span class="ln">mat-debug-0918.log</span><span class="ld">2026/9/18 15:52</span><span class="lt">LOG 文件</span><span class="ls">45 KB</span></div>
+            <div class="lrow" data-tmp="1"><i class="fic-file"></i><span class="ln">wctA31F.tmp</span><span class="ld">2026/9/18 10:29</span><span class="lt">TMP 文件</span><span class="ls">512 KB</span><span class="regrow-tag">刚长出来</span></div>
+            <div class="lrow"><i class="fic-file"></i><span class="ln">{9BE2A1F0-7C4D}.tmp</span><span class="ld">2026/9/15 19:36</span><span class="lt">TMP 文件</span><span class="ls">233 KB</span></div>
+            <div class="lrow"><i class="fic-file"></i><span class="ln">crashpad_0902.dmp</span><span class="ld">2026/9/2 22:03</span><span class="lt">DMP 文件</span><span class="ls">68,412 KB</span></div>
+            <div class="lrow"><i class="fic-file"></i><span class="ln">aria2_session.lock</span><span class="ld">2026/8/30 21:44</span><span class="lt">LOCK 文件</span><span class="ls">0 KB</span></div>
+            <div class="lrow"><i class="fic-file"></i><span class="ln">tmp8F2D.tmp</span><span class="ld">2026/8/27 13:58</span><span class="lt">TMP 文件</span><span class="ls">96 KB</span></div>
+            <div class="lrow"><i class="fic-mini"></i><span class="ln">low</span><span class="ld">2026/8/20 9:15</span><span class="lt">文件夹</span><span class="ls"></span></div>
+          </div>
+        </div>
+      </div>
+      <div class="wstatus"><span id="statL">10 个项目</span><span id="statR"></span></div>
+    </div>
+
+    <!-- 闪回小窗 1：微软文档 -->
+    <div class="flash" id="docWin" style="left:520px;top:170px;width:1060px;height:640px">
+      <div class="flash-tag">闪回 · 查证过程</div>
+      <div class="doc-tb">
+        <div class="doc-tab"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M12 3 2 8l10 5 10-5-10-5Z" fill="#0067c0"/><path d="m5 10.5V16c0 1.7 3.1 3.5 7 3.5s7-1.8 7-3.5v-5.5" fill="none" stroke="#0067c0" stroke-width="1.6"/></svg>了解 AppData 文件夹 - Microsoft Learn<span style="color:#999;margin-left:6px">✕</span></div>
+      </div>
+      <div class="doc-url">
+        <svg width="13" height="13" viewBox="0 0 14 14"><path d="M9 2.5 4.5 7 9 11.5" fill="none" stroke="#666" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <svg width="13" height="13" viewBox="0 0 14 14"><path d="M5 2.5 9.5 7 5 11.5" fill="none" stroke="#b0b0b0" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <svg width="13" height="13" viewBox="0 0 14 14"><path d="M2 7a5 5 0 1 0 1.6-3.7M2.5 1.5v3h3" fill="none" stroke="#666" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <div class="u"><svg width="11" height="11" viewBox="0 0 12 12"><rect x="2" y="5" width="8" height="6" rx="1" fill="none" stroke="#1a7f37" stroke-width="1.2"/><path d="M4 5V3.5a2 2 0 0 1 4 0V5" fill="none" stroke="#1a7f37" stroke-width="1.2"/></svg>learn.microsoft.com/zh-cn/windows/apps/appdata-programdata</div>
+      </div>
+      <div class="doc-body">
+        <div class="doc-bc">Learn › Windows › 应用 › 文件系统</div>
+        <div class="doc-h1">了解 AppData 与 ProgramData 文件夹</div>
+        <div class="doc-meta">2026/06/30 · 4 位参与者 · 本文内容均由人工审核</div>
+        <div class="doc-p"><b>AppData</b> 文件夹包含应用程序为特定用户存储的设置、缓存与临时数据，默认处于隐藏状态。其下分为 <a href="#">Local</a>、<a href="#">LocalLow</a> 与 <a href="#">Roaming</a> 三个子文件夹；其中 <a href="#">Local\Temp</a> 用于存放安装与运行期产生的临时文件。</div>
+        <div class="doc-p">应用程序卸载后，部分数据仍会残留在这些目录中。临时文件通常可以安全删除，但系统或应用正在使用的文件会被锁定。</div>
+        <div class="doc-note" id="docNote"><b>注意</b>不建议在不清楚文件归属的情况下手动删除 AppData 中的内容。误删应用配置可能导致程序无法启动或丢失个人数据。如需清理，请使用「磁盘清理」或「存储感知」等系统自带工具。</div>
+      </div>
+    </div>
+
+    <!-- 闪回小窗 2：虚拟机删坏那次 -->
+    <div class="flash" id="vmWin" style="left:560px;top:190px;width:980px;height:620px">
+      <div class="flash-tag">闪回 · 删坏的那一次</div>
+      <div class="vm-t"><svg width="14" height="14" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="14" rx="2" fill="none" stroke="#8a93a3" stroke-width="1.6"/><path d="M8 21h8" stroke="#8a93a3" stroke-width="1.6" stroke-linecap="round"/></svg>win11-test — 虚拟机连接<i>✕</i></div>
+      <div class="vm-bar"><span>操作</span><span>媒体</span><span>剪贴板</span><span>查看</span><span style="margin-left:auto;color:#7c8494">正在运行</span></div>
+      <div class="vm-scr">
+        <div class="vm-sad">:(</div>
+        <div class="vm-msg">你的电脑遇到问题，需要重新启动。我们正在收集某些错误信息，然后你可以重新启动。</div>
+        <div class="vm-pct"><span id="bsodPct">0</span>% 完成</div>
+        <div class="vm-stop">终止代码：SYSTEM_THREAD_EXCEPTION_NOT_HANDLED<br>失败的操作：WinSxS\amd64_microsoft-windows-servicingstack</div>
+      </div>
+    </div>
+
+    <!-- 花字 -->
+    <div class="hua" id="huaTemp" style="left:1130px;top:776px">临时文件 · 真正的清理目标<b>藏在这里</b></div>
+    <div class="hua" id="huaNet" style="left:1150px;top:300px">网上说法<b>各不一样</b>，越查越糊涂</div>
+    <div class="hua" id="huaGrow" style="left:1130px;top:776px">缓存删了<b>还会再长</b> ↻</div>
+
+    <!-- 收束结论卡 -->
+    <div id="endCard">
+      <div class="ec-kick">CONCLUSION / 根目录结论</div>
+      <div class="ec-l1" id="ec1">删，<b>其实很简单</b></div>
+      <div class="ec-l2" id="ec2">难的是 <b>判断</b></div>
+      <div class="ec-chips">
+        <span class="echip" id="ec3a"><svg width="15" height="15" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.6" fill="none" stroke="#c42b1c" stroke-width="1.6"/><path d="M6 6.2a2 2 0 1 1 2.7 1.9c-.7.3-.7.8-.7 1.5" fill="none" stroke="#c42b1c" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.6" r=".9" fill="#c42b1c"/></svg>这个文件是干嘛的？</span>
+        <span class="echip" id="ec3b"><svg width="15" height="15" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2" fill="none" stroke="#c42b1c" stroke-width="1.6"/><path d="M2 6.5h12" stroke="#c42b1c" stroke-width="1.6"/></svg>它属于哪个软件？</span>
+        <span class="echip" id="ec3c"><svg width="15" height="15" viewBox="0 0 16 16"><path d="M8 1.8 14.5 13.5H1.5L8 1.8Z" fill="none" stroke="#c42b1c" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 6.3v3.2" stroke="#c42b1c" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="11.3" r=".9" fill="#c42b1c"/></svg>删了会不会出问题？</span>
+      </div>
+      <div class="ec-final" id="ec4">这种判断 <b>→ 交给工具</b><img src="wukong/icon.png" alt="悟空安全"></div>
+    </div>
+
+    <!-- 光标 -->
+    <div id="cur"><svg width="26" height="26" viewBox="0 0 26 26"><path d="M6 2 21 14.5 13.8 15.5 17.5 23 14.5 24.5 10.8 17 6 20.5V2Z" fill="#fff" stroke="#111" stroke-width="1.4"/></svg></div>
+
+    <img id="brand" src="悟空安全logo+icon/0添加/悟空安全0添加-彩.png" alt="">
+  
+  <div id="taskbar">
+      <div class="tb-apps">
+        <div class="tb"><svg width="22" height="22" viewBox="0 0 22 22"><rect x="1" y="1" width="9" height="9" fill="#00a2ed"/><rect x="12" y="1" width="9" height="9" fill="#00a2ed"/><rect x="1" y="12" width="9" height="9" fill="#00a2ed"/><rect x="12" y="12" width="9" height="9" fill="#00a2ed"/></svg></div>
+        <div class="tb"><svg width="20" height="20" viewBox="0 0 20 20"><circle cx="8.5" cy="8.5" r="6" fill="none" stroke="#444" stroke-width="2"/><path d="m13 13 4.5 4.5" stroke="#444" stroke-width="2" stroke-linecap="round"/></svg></div>
+        <div class="tb active"><svg width="20" height="20" viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2.5h9A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5v-12Z" fill="#ffce73" stroke="#e0a83c"/></svg></div>
+        <div class="tb"><svg width="20" height="20" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="15" rx="2" fill="#5aa2e6"/><rect x="5.5" y="5.5" width="13" height="10" fill="#dff0fd"/></svg></div>
+        <div class="tb"><svg width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#e8f3ff" stroke="#8fc0ee"/><path d="M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18M3.6 9.5h16.8M3.6 14.5h16.8" fill="none" stroke="#4aa3e8" stroke-width="1.4"/></svg></div>
+      </div>
+      <div id="tray">
+        <svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 6.5a9 9 0 0 1 12 0" fill="none" stroke="#333" stroke-width="1.5" stroke-linecap="round"/><path d="M4.5 9.4a5.5 5.5 0 0 1 7 0" fill="none" stroke="#333" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="12" r="1.4" fill="#333"/></svg>
+        <svg width="17" height="16" viewBox="0 0 17 16"><rect x="1" y="5" width="12" height="7" rx="1.5" fill="none" stroke="#333" stroke-width="1.3"/><rect x="3" y="7" width="6" height="3" fill="#333"/><rect x="13.8" y="7" width="2" height="3" rx="1" fill="#333"/></svg>
+        <div class="t-time">12:30<br>2026/9/22</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 大肥鱼（#stage 直属，不进 #cam） -->
+  <div class="fish" id="fishA"><img src="Shark-GIF/047_手指放下巴思考若有所思.gif" alt=""></div>
+
+
+  <!-- 任务栏 -->
+
+
+  <div class="corner" id="chap">镜头 21 · 根目录结论</div>
+  <div class="corner" id="src">界面为演示还原 · Windows 11 版式</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 21 · 根目录结论 · 删不难，难的是判断 · 39s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=39000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+const after=(ms,f)=>on(performance.now()-t0+ms,f);
+function fly(el,x1,y1,x2,y2,dur,arc,ease,done){tws.push({t:performance.now()-t0,d:dur,e:ease||eio,done,f:p=>{el.style.left=(x1+(x2-x1)*p)+'px';el.style.top=(y1+(y2-y1)*p-Math.sin(p*Math.PI)*(arc||0))+'px'}})}
+function cnt(el,from,to,dur){tws.push({t:performance.now()-t0,d:dur,e:eo,f:p=>{el.textContent=Math.round(from+(to-from)*p).toLocaleString('en-US')}})}
+/* 绝对时刻补间：无头快进截图时也能落到正确中间/末态 */
+function twA(start,dur,e,f){if(f===undefined){f=e;e=eo}tws.push({t:start,d:dur,e:e||eio,f:f})}
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+
+/* ────────────────────────────────────────────────
+   本镜头 cue（镜头起点 9:06，cue = 口播绝对时间 − 9:06）
+   ──────────────────────────────────────────────── */
+const PATHS=[['此电脑','本地磁盘 (C:)'],['此电脑','本地磁盘 (C:)','Users'],['此电脑','本地磁盘 (C:)','Users','你的用户名'],['此电脑','本地磁盘 (C:)','Users','你的用户名','AppData'],['此电脑','本地磁盘 (C:)','Users','你的用户名','AppData','Local'],['此电脑','本地磁盘 (C:)','Users','你的用户名','AppData','Local','Temp']];
+const TABS=['本地磁盘 (C:)','Users','你的用户名','AppData','Local','Temp'];
+const CNTS=['10 个项目','3 个项目','7 个项目','3 个项目','5 个项目','12 个项目'];
+let curView=0;
+function setPath(i){
+  $('#addrTxt').innerHTML=PATHS[i].map((s,k)=>k===PATHS[i].length-1?`<span class="hl">${s}</span>`:`${s} <span class="crumb">›</span>`).join(' ');
+  $('#wtabTxt').textContent=TABS[i];
+  $('#searchTxt').textContent='搜索 '+TABS[i];
+  $('#statL').textContent=CNTS[i];
+}
+function goView(i){
+  $('#v'+curView).classList.add('hide');
+  curView=i;
+  $('#v'+i).classList.remove('hide');
+  setPath(i);
+  /* 新视图行入场 */
+  document.querySelectorAll('#v'+i+' .lrow').forEach((r,k)=>{r.classList.remove('in');setTimeout(()=>r.classList.add('in'),60+k*45)});
+  __sfx.swipe(0.5);
+}
+function setDepth(n,txt){
+  const d=$('#depth');d.classList.add('in');
+  $('#depthN').textContent=txt||('第 '+n+' 层');
+}
+/* 光标：绝对时刻两段移动 + 点击脉冲 */
+const cur=$('#cur');
+function curTo(x,y,start,dur){twA(start,dur,eio,p=>{cur.style.left=x+'px';cur.style.top=y+'px'})}
+function curJump(x,y,t){twA(t,1,p=>{cur.style.left=x+'px';cur.style.top=y+'px'});
+  twA(t+120,260,p=>{cur.style.transform=`scale(${1-0.28*Math.sin(p*Math.PI)})`})}
+
+/* 开场：窗口与桌面入场，镜头由近拉到全景 */
+on(300,()=>{$('#expWin').classList.add('show');camTo(0,0,1,2.0);
+  document.querySelectorAll('.dicon').forEach((d,i)=>setTimeout(()=>d.classList.add('show'),200+i*140));
+  document.querySelectorAll('#v0 .lrow').forEach((r,k)=>setTimeout(()=>r.classList.add('in'),400+k*70))});
+on(2000,()=>{$('#brand').classList.add('in')});                                   // 品牌角标
+on(2100,()=>{camFocus(880,470,1.08,1.2)});                                       // (9:08)「大家会发现这一层」
+
+/* (9:10)「没有一个是可以放心整个删掉的」逐个打叉 */
+const stamps=[4000,4750,5500,6250,7000,7550,8100,8550,9000,9350];
+document.querySelectorAll('#v0 .lrow').forEach((r,i)=>{
+  on(stamps[i],()=>{r.classList.add('stamped');__sfx.pop(i<4?0.62:0.45)});
+});
+
+/* (9:13-9:15)「真正能清理的，都藏在四五层深的 AppData 和临时文件夹里」一路下钻 */
+on(9500,()=>{camTo(0,0,1,0.9);$('#cur').classList.add('show');setDepth(1)});
+curTo(536,363,9500,700);
+on(9900,()=>{curJump(536,363,9900)});                                            // 双击 Users
+on(10100,()=>{goView(1);setDepth(1);__sfx.type(0.5)});                           // → C:\Users
+on(10900,()=>{curJump(536,261,10900)});                                          // 双击 你的用户名
+on(11100,()=>{goView(2);setDepth(2);__sfx.type(0.5)});
+on(11900,()=>{curJump(536,261,11900)});                                          // 双击 AppData（隐藏项目）
+on(12100,()=>{goView(3);setDepth(3);__sfx.type(0.5)});                           // (9:17)「这个AppData和临时文件夹里面」
+on(12900,()=>{curJump(536,261,12900)});                                          // 双击 Local
+on(13100,()=>{goView(4);setDepth(4);__sfx.type(0.5)});
+on(13700,()=>{curJump(536,261,13700)});                                          // 双击 Temp
+on(13900,()=>{goView(5);setDepth(5,'第 5 层 · 到底');$('#cur').classList.remove('show');
+  $('#huaTemp').classList.add('in');camFocus(880,470,1.06,1.0);__sfx.ding(0.6)});
+on(16100,()=>{$('#huaTemp').classList.remove('in')});
+
+/* (9:17-9:19)「名字还都是英文的，非常复杂」 */
+/* (9:19)「网上的说法也各不一样」 */
+on(15000,()=>{$('#huaNet').classList.add('in')});
+on(16200,()=>{$('#huaNet').classList.remove('in')});
+
+/* (9:22-9:24)「对着微软的文档…一个文件夹一个文件夹对的」文档闪回 ≈2.4s */
+on(16500,()=>{$('#docWin').classList.add('in');camFocus(1050,470,1.1,0.9);__sfx.whoosh(0.8,0.55)});
+on(17600,()=>{$('#docNote').classList.add('hl');__sfx.ding(0.45)});
+on(19000,()=>{$('#docWin').classList.remove('in');camTo(0,0,1,0.9)});
+
+/* (9:26)「还在虚拟机里面删坏过一次」虚拟机蓝屏闪回 ≈2.4s */
+on(20300,()=>{$('#vmWin').classList.add('in');camFocus(1050,480,1.1,0.8);__sfx.thud(0.9)});
+twA(20300,600,p=>{$('#vmWin').style.left=(560+Math.sin(p*26)*7*(1-p))+'px'});    // 蓝屏震屏
+twA(20600,1900,eo,p=>{$('#bsodPct').textContent=Math.round(41*p)});              // 收集进度 0→41%
+on(22800,()=>{$('#vmWin').classList.remove('in');camTo(0,0,1,1.0)});
+/* (9:27-9:30)「普通人真的没有必要拿自己的电脑去试」 */
+
+/* (9:30-9:34)「缓存删了还会再长」Temp 扫空 → 回长 */
+on(24200,()=>{document.querySelectorAll('#v5 .lrow').forEach(r=>r.classList.add('swept'));__sfx.swipe(0.8)});
+on(26200,()=>{$('#huaGrow').classList.add('in')});                               // (9:32)「你这次清理干净过几周又有」
+document.querySelectorAll('#v5 .lrow[data-tmp]').forEach((r,i)=>{
+  on(26400+i*320,()=>{r.classList.remove('swept');r.classList.add('regrow');__sfx.pop(0.5)});
+});
+on(28600,()=>{$('#huaGrow').classList.remove('in');camTo(0,0,1,1.1)});           // (9:34)「不可能每次都自己这样手动翻」
+
+/* (9:36-9:45) 收束：删不难，难的是判断 → 交给工具 */
+on(29500,()=>{
+  $('#endCard').classList.add('in');camFocus(1080,520,1.06,1.3);__sfx.ding(0.8)}); // (9:36)「所以清理C盘删东西其实很简单」
+on(33000,()=>{$('#ec1').classList.add('dim');$('#ec2').classList.add('in');__sfx.thud(0.85)}); // (9:39)「难的是判断」
+on(33100,()=>{$('#fishA').classList.add('show');__sfx.pop(.55)});            // 大肥鱼思考：难的是判断
+on(34000,()=>{$('#ec3a').classList.add('in');__sfx.pop(0.5)});                   // (9:40)「就是判断这个文件是干嘛的」
+on(35500,()=>{$('#ec3b').classList.add('in');__sfx.pop(0.5)});                   // (9:42)「属于哪个软件」
+on(37000,()=>{$('#ec3c').classList.add('in');__sfx.pop(0.5)});                   // (9:43)「删了会不会出问题」
+on(38000,()=>{$('#ec4').classList.add('in');__sfx.ding(0.9)});                   // (9:44)「就是这种判断」→ 交给工具
+</script>
+</body>
+</html>

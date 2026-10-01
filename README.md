@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](./LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](#贡献与许可)
-[![Skills count](https://img.shields.io/badge/Skills-9-orange?style=flat-square)](#skills-gallery)
+[![Skills count](https://img.shields.io/badge/Skills-10-orange?style=flat-square)](#skills-gallery)
 [![Spec](https://img.shields.io/badge/Spec-SKILL.md-black?style=flat-square)](https://agentskills.io)
 
 🌐 **English version**: [`README_EN.md`](README_EN.md)
@@ -29,6 +29,7 @@
 - 🎬 **视频分镜演示** — 电影级"一个镜头一个 HTML"演示动画：29 种风格轮换、镜头推拉、WebAudio 音效、角色表情吐槽，全屏录屏即成片
 - 📱 **手机系统 UI 演示** — 一台"真手机"的电影化编排录屏：锁屏通知、聊天、设置页、App 界面逐镜头呈现，HyperOS 级手感动效 + 3D 姿态手机演员
 - 🗂️ **叠放数据卡** — 论点卡从底部依次弹入、旧卡左叠成牌堆：折线描边 / 数字滚动 / 环形仪表按毫秒级时间线级联入场，自动播放对齐口播，录屏即成片
+- 🖥️ **仿 Win11 系统仿真** — 1:1 还原真电脑：资源管理器、开始菜单、系统弹窗、蓝屏修复逐镜头呈现，光标演出引导操作 + 教学标记层，全屏录屏即成片
 
 <div align="center">
 
@@ -84,10 +85,15 @@
 </td>
 </tr>
 <tr>
-<td colspan="4" valign="top" align="center">
+<td colspan="2" valign="top" align="center">
 <a href="#stacked-data-cards"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/ac863d4f-0d48-4c05-a0c2-2e28874a1c62" /></a>
 <br/><a href="#stacked-data-cards"><strong>stacked-data-cards</strong></a>
 <br/><sub>叠放数据卡 / 时间线论点动画</sub>
+</td>
+<td colspan="2" valign="top" align="center">
+<a href="#win11-ui-demos"><img width="2560" height="1440" alt="win11-ui-demos" src="./skills/win11-ui-demos/assets/preview/main.png" /></a>
+<br/><a href="#win11-ui-demos"><strong>win11-ui-demos</strong></a>
+<br/><sub>仿 Win11 系统仿真 / 光标演出动画</sub>
 </td>
 </tr>
 </table>
@@ -446,6 +452,53 @@ Links: [README](./skills/stacked-data-cards/README.md) · [SKILL.md](./skills/st
 
 <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
 
+#### `win11-ui-demos`
+
+<a href="./skills/win11-ui-demos">
+<img width="2560" height="1440" alt="win11-ui-demos preview" src="./skills/win11-ui-demos/assets/preview/main.png" />
+</a>
+
+**分类:** 仿 Win11 系统仿真 / 光标演出动画
+**适用于:** 电脑教学视频、软件操作教程、系统知识科普、安全意识宣传——需要"看起来像一台真 Win11 电脑在自己操作"的写实演示场景。
+
+`win11-ui-demos` 制作仿 Windows 11 系统 UI 的写实仿真演示动画：Bloom 壁纸桌面、亚克力任务栏、资源管理器逐层打开、系统弹窗报错、蓝屏自动修复——17 类组件按 Light Fluent 实测色值 1:1 还原，一支全程可见的鼠标（弧线飞行→悬停→单击→双击）引导观众看完全程，问号徽章/容量爆红/poof 删除等教学标记叠加在真界面上讲解。内置 21 个成片镜头（悟空安全 C 盘清理商单仿真子集）+ 全套仿真套件模板。
+
+亮点:
+- Win11 仿真套件：桌面/任务栏/资源管理器五段结构/开始菜单/右键菜单/系统对话框/通知/WinRE 蓝屏，窗底 #f3f6fb、accent #0067c0、亚克力 blur(18px) 像素级还原
+- 光标演出：curTo 弧线飞行 + clickFx 点击缩放 + 双击节奏——没有光标的系统演示只是截图集
+- 视图切换三同步：标签页/地址栏面包屑/状态栏项目数随导航同步更新，缺一处即穿帮
+- 教学标记层与还原层分离：问号徽章逐一 pop 悬念、poof 删除动画、容量条爆红呼吸——"老师的手"轻盈不遮界面
+- 真实系统文案：0xc0000142 错误码、"存储空间不足"通知原文、面包屑 ›——细节可信度来源
+- 因果链叙事：乱删 → 报错 → 蓝屏修复，系统界面天然的剧情弧
+- 角色 GIF 吐槽（大肥鱼）按情绪锚点登场；每页带"界面为演示还原"声明角注
+
+<table>
+<tr>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="此电脑爆红" src="./skills/win11-ui-demos/assets/preview/shot-01.png" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="开始菜单" src="./skills/win11-ui-demos/assets/preview/shot-04.png" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="蓝屏自动修复" src="./skills/win11-ui-demos/assets/preview/shot-05.png" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="根目录问号徽章" src="./skills/win11-ui-demos/assets/preview/shot-15.png" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="双窗对比" src="./skills/win11-ui-demos/assets/preview/shot-17.png" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="右键回收站" src="./skills/win11-ui-demos/assets/preview/shot-19.png" /></td>
+</tr>
+<tr>
+<td align="center"><sub><code>此电脑爆红</code><br />光标双击开演</sub></td>
+<td align="center"><sub><code>开始菜单</code><br />删除警告链</sub></td>
+<td align="center"><sub><code>蓝屏修复</code><br />WinRE 百分比</sub></td>
+<td align="center"><sub><code>根目录导览</code><br />问号徽章悬念</sub></td>
+<td align="center"><sub><code>双窗对比</code><br />并排资源管理器</sub></td>
+<td align="center"><sub><code>右键回收站</code><br />桌面交互三步</sub></td>
+</tr>
+</table>
+
+<sub>↑ 6 / 21 个仿真镜头示例 — <a href="./skills/win11-ui-demos/README.md"><b>打开完整套件规范</b></a>（21 个成片样板可直接运行）。</sub>
+
+Links: [README](./skills/win11-ui-demos/README.md) · [SKILL.md](./skills/win11-ui-demos/SKILL.md)
+
+---
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
 ### 安装
 
 | # | 方式 | 适用于 | 指定版本? |
@@ -469,6 +522,7 @@ npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/sc
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/card-theater
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/video-shot-demos
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/phone-ui-demos
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/win11-ui-demos
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/stacked-data-cards
 ```
 
@@ -537,6 +591,10 @@ git clone https://github.com/Unclecheng-li/AI_Animation.git
 用 stacked-data-cards 把这三个论点做成叠放数据卡动画，整段 25 秒，橙红主题，结尾整副滑出
 ```
 
+```
+用 win11-ui-demos 把这段 Windows 教程的操作过程做成光标演示仿真动画，先出分镜表我确认
+```
+
 ### 目录结构
 
 ```text
@@ -593,6 +651,11 @@ ai-animation-skills/
 │       ├── README.md
 │       ├── references/          ← Prompt 参考 + 组件规格手册
 │       └── assets/              ← 起步骨架 template.html + 2 个成片实例（橙红/蓝紫）
+│   ├── win11-ui-demos/
+│       ├── SKILL.md             ← 光标演出哲学 + cp 工作流 + 交付标准
+│       ├── README.md
+│       ├── references/          ← win11-kit 组件规格 / simulation-patterns 叙事手法
+│       └── assets/              ← Win11 仿真套件模板 + wukong 21 镜头实例 + 预览图
 ├── web_animation/               ← 原始示例 HTML（历史存档）
 ├── UI/                          ← UI 设计参考图
 ├── prompt.md                    ← Prompt 模板集合

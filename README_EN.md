@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](./LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](#contributing)
-[![Skills count](https://img.shields.io/badge/Skills-9-orange?style=flat-square)](#skills-gallery)
+[![Skills count](https://img.shields.io/badge/Skills-10-orange?style=flat-square)](#skills-gallery)
 [![Spec](https://img.shields.io/badge/Spec-SKILL.md-black?style=flat-square)](https://agentskills.io)
 
 🌐 **中文版**: [`README.md`](README.md)
@@ -29,6 +29,7 @@ One sentence is all it takes:
 - 🎬 **Video shot demos** — cinematic "one HTML per shot" demo animations: 29 rotating styles, camera pushes, WebAudio SFX — fullscreen-record it and it's a finished film
 - 📱 **Phone UI demos** — a "real phone" performing a choreographed screen recording: lockscreen notifications, chats, settings, App screens shot by shot, HyperOS-grade motion + a 3D-posture phone actor
 - 🗂️ **Stacked data cards** — argument cards pop in from the bottom while used ones stack to the left as a deck: line-drawing, count-ups, gauges and more cascade in on a millisecond timeline synced to the voiceover — fullscreen-record it and it's a finished cut
+- 🖥️ **Windows 11 simulation** — a "real PC" rebuilt 1:1: Explorer, Start menu, system dialogs and the blue repair screen shot by shot, with a performing cursor leading the viewer and teaching markers layered on top
 
 <div align="center">
 
@@ -84,10 +85,15 @@ One sentence is all it takes:
 </td>
 </tr>
 <tr>
-<td colspan="4" valign="top" align="center">
+<td colspan="2" valign="top" align="center">
 <a href="#stacked-data-cards"><img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/ac863d4f-0d48-4c05-a0c2-2e28874a1c62" /></a>
 <br/><a href="#stacked-data-cards"><strong>stacked-data-cards</strong></a>
 <br/><sub>Stacked data cards / timeline argument animation</sub>
+</td>
+<td colspan="2" valign="top" align="center">
+<a href="#win11-ui-demos"><img width="2560" height="1440" alt="win11-ui-demos" src="./skills/win11-ui-demos/assets/preview/main.png" /></a>
+<br/><a href="#win11-ui-demos"><strong>win11-ui-demos</strong></a>
+<br/><sub>Windows 11 simulation / cursor performance</sub>
 </td>
 </tr>
 </table>
@@ -446,6 +452,53 @@ Links: [README](./skills/stacked-data-cards/README.md) · [SKILL.md](./skills/st
 
 <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
 
+#### `win11-ui-demos`
+
+<a href="./skills/win11-ui-demos">
+<img width="2560" height="1440" alt="win11-ui-demos preview" src="./skills/win11-ui-demos/assets/preview/main.png" />
+</a>
+
+**Category:** Windows 11 simulation / cursor performance
+**For:** PC tutorial videos, software walkthroughs, system-knowledge explainers, security-awareness content — anywhere you need "a real Windows 11 PC operating itself".
+
+`win11-ui-demos` produces pixel-faithful Windows 11 simulation animations: a Bloom-wallpaper desktop, acrylic taskbar, Explorer windows drilling down level by level, error dialogs, and the blue automatic-repair screen — 17 component classes rebuilt with Light Fluent's exact values. A fully visible cursor (arc flight → hover → click → double-click) leads the viewer through every step, while teaching markers (question badges, red capacity bars, poof deletes) layer explanations on top of the real UI. Ships with 21 production shots (the simulation subset of a Wukong-Security C-drive-cleaning sponsored video) + a full simulation-kit template.
+
+Highlights:
+- Win11 simulation kit: desktop / taskbar / five-part Explorer / Start menu / context menu / dialogs / toasts / WinRE screen, with exact values (#f3f6fb windows, #0067c0 accent, acrylic blur 18px)
+- Cursor performance: curTo arc flights + clickFx feedback + double-click rhythm — a system demo without a cursor is just screenshots
+- Three-way sync on view switches: tab title, breadcrumb address bar, and status-bar item count update together
+- Teaching layer kept separate from the replica layer: question badges pop one by one, poof deletes, pulsing red capacity bars — a light "teacher's hand" that never covers the UI
+- Authentic system copy: 0xc0000142 error codes, the real low-storage notification text, › breadcrumbs
+- Causal-chain storytelling: reckless delete → error dialogs → blue-screen repair
+- GIF mascot reactions (the chubby shark) at emotional beats; every page carries the "UI rebuilt for demo" disclaimer
+
+<table>
+<tr>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="drive full" src="./skills/win11-ui-demos/assets/preview/shot-01.png" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="start menu" src="./skills/win11-ui-demos/assets/preview/shot-04.png" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="blue repair" src="./skills/win11-ui-demos/assets/preview/shot-05.png" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="root tour" src="./skills/win11-ui-demos/assets/preview/shot-15.png" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="dual windows" src="./skills/win11-ui-demos/assets/preview/shot-17.png" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="recycle bin" src="./skills/win11-ui-demos/assets/preview/shot-19.png" /></td>
+</tr>
+<tr>
+<td align="center"><sub><code>Drive full</code><br />cursor double-click</sub></td>
+<td align="center"><sub><code>Start menu</code><br />delete warning chain</sub></td>
+<td align="center"><sub><code>Blue repair</code><br />WinRE percentage</sub></td>
+<td align="center"><sub><code>Root tour</code><br />question badges</sub></td>
+<td align="center"><sub><code>Dual windows</code><br />side-by-side Explorer</sub></td>
+<td align="center"><sub><code>Recycle bin</code><br />3-step interaction</sub></td>
+</tr>
+</table>
+
+<sub>↑ 6 of 21 simulation shots — <a href="./skills/win11-ui-demos/README.md"><b>open the full simulation kit</b></a> (21 runnable production samples).</sub>
+
+Links: [README](./skills/win11-ui-demos/README.md) · [SKILL.md](./skills/win11-ui-demos/SKILL.md)
+
+---
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
 ### Installation
 
 | # | Method | Best for | Pin a version? |
@@ -469,6 +522,7 @@ npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/sc
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/card-theater
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/video-shot-demos
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/stacked-data-cards
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/win11-ui-demos
 ```
 
 > **Installs the latest `main` by default.** The CLI reads each skill's latest `SKILL.md` straight from the source tree.
@@ -536,6 +590,10 @@ Use phone-ui-demos to turn this App's features into a phone-recording-style demo
 Use stacked-data-cards to turn these three arguments into a stacked data-card animation, 25 seconds total, orange-red theme, deck slides out at the end
 ```
 
+```
+Use win11-ui-demos to turn this Windows tutorial's operations into cursor-driven simulation animations — show me the storyboard first
+```
+
 ### Directory Structure
 
 ```text
@@ -592,6 +650,11 @@ ai-animation-skills/
 │       ├── README.md
 │       ├── references/          ← Prompt references + component handbook
 │       └── assets/              ← Starter skeleton template.html + 2 production examples (orange/blue)
+│   ├── win11-ui-demos/
+│       ├── SKILL.md             ← Cursor-performance philosophy + cp workflow
+│       ├── README.md
+│       ├── references/          ← win11-kit specs / simulation-patterns playbook
+│       └── assets/              ← Simulation-kit template + 21-shot example + previews
 ├── web_animation/               ← Original example HTML (historical archive)
 ├── UI/                          ← UI design reference images
 ├── prompt.md                    ← Prompt template collection

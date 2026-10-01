@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<script>
+/* ===== [不动] 播放器引导：劫持 performance.now/rAF 成虚拟时钟 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 18 · 程序和功能 · 32s</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#111;overflow:hidden;font-family:"Segoe UI","Microsoft YaHei","Noto Sans SC",sans-serif}
+body.paused *{animation-play-state:paused!important}
+/* ===== 舞台：Windows 11 桌面（Bloom 壁纸）===== */
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;
+  background:#16366e}
+#wpl{position:absolute;inset:0;background:url("material/w11.jfif") center/cover no-repeat}
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:translate(0,0) scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ───── WIN11 仿真套件 ───── */
+#taskbar{position:absolute;left:0;right:0;bottom:0;height:48px;background:rgba(238,244,252,.82);backdrop-filter:blur(18px);z-index:36;display:flex;align-items:center;box-shadow:0 -1px 0 rgba(0,0,0,.08)}
+#taskbar .tb-apps{position:absolute;left:50%;transform:translateX(-50%);display:flex;gap:6px;align-items:center}
+#taskbar .tb{width:40px;height:40px;border-radius:6px;display:flex;align-items:center;justify-content:center;position:relative}
+#taskbar .tb.active::after{content:'';position:absolute;bottom:3px;left:50%;transform:translateX(-50%);width:14px;height:3px;border-radius:2px;background:#0067c0}
+#tray{position:absolute;right:10px;display:flex;align-items:center;gap:9px;font-size:12px;color:#1b1b1b}
+#tray .t-time{text-align:right;line-height:1.15}
+#cur{position:absolute;left:1760px;top:960px;z-index:38;width:26px;pointer-events:none;filter:drop-shadow(0 2px 2px rgba(0,0,0,.35));opacity:0;transition:opacity .4s,left .16s linear,top .16s linear}
+#cur.show{opacity:1}
+#cur.click{animation:curClick .28s ease}
+@keyframes curClick{45%{transform:scale(.82)}}
+/* Win11 属性对话框 */
+.prop{position:absolute;background:#fff;border:1px solid rgba(0,0,0,.18);border-radius:8px;box-shadow:0 24px 70px rgba(2,16,46,.45),0 2px 8px rgba(2,16,46,.2);overflow:hidden;opacity:0;transform:scale(.92) translateY(16px);transition:all .5s cubic-bezier(.2,1.2,.4,1);z-index:24}
+.prop.in{opacity:1;transform:scale(1) translateY(0)}
+.prop.out{opacity:0;transform:scale(.95) translateY(40px)}
+.pt{height:31px;display:flex;align-items:center;gap:7px;padding:0 0 0 11px;font-size:12px;color:#1b1b1b}
+.pt .px{margin-left:auto;width:42px;height:31px;display:flex;align-items:center;justify-content:center;color:#444}
+.ptabs{display:flex;gap:2px;padding:0 8px;border-bottom:1px solid rgba(0,0,0,.09);font-size:12.5px}
+.ptabs span{padding:6px 13px 7px;position:relative;color:#555}
+.ptabs span.on{color:#0067c0}
+.ptabs span.on::after{content:'';position:absolute;left:10px;right:10px;bottom:0;height:2.5px;border-radius:2px;background:#0067c0}
+.pb{padding:16px 20px 12px;position:relative}
+.phead{display:flex;align-items:center;gap:14px;margin-bottom:12px}
+.picon{width:52px;height:52px;display:flex;align-items:center;justify-content:center;flex:none}
+.pname{flex:1;font-size:13.5px;border:1px solid rgba(0,0,0,.16);padding:6px 10px;border-radius:3px;color:#1b1b1b;background:#fff}
+.psep{height:1px;background:rgba(0,0,0,.08);margin:10px 0}
+.prow{display:flex;font-size:13px;line-height:2.05;color:#1b1b1b;border-radius:4px;padding:0 8px;margin:0 -8px}
+.prow .pk{width:96px;flex:none;text-align:right;color:#666;margin-right:14px}
+.prow .pv{flex:1}
+.prow.lit{background:#e8f2fc;box-shadow:0 0 0 1.5px #9cc8ef}
+.pv b.big{font-size:27px;font-weight:800;color:#c42b1c}
+.pbytes{color:#8a8a8a;font-size:12px;margin-left:8px}
+.ck{display:inline-flex;align-items:center;gap:7px;margin-right:20px;color:#1b1b1b}
+.ck i{width:15px;height:15px;border:1px solid #777;border-radius:2px;display:inline-block;background:#fff}
+.pf{display:flex;justify-content:flex-end;gap:8px;padding:10px 14px;background:#f7f7f7;border-top:1px solid rgba(0,0,0,.07)}
+.btn{font-size:12.5px;padding:5px 0;border-radius:4px;border:1px solid #8f8f8f;background:#fbfbfb;color:#1b1b1b;min-width:84px;text-align:center}
+.btn.pri{background:#0067c0;border-color:#0067c0;color:#fff}
+.btn.dis{color:#9a9a9a;border-color:#c8c8c8}
+/* 位数角标 */
+.bbit{position:absolute;top:6px;right:48px;font-size:12px;font-weight:800;color:#fff;border-radius:4px;padding:2px 9px;opacity:0;transform:scale(.5);transition:all .35s cubic-bezier(.34,1.6,.64,1);z-index:5}
+.bbit.pop{opacity:1;transform:scale(1)}
+.bbit.b64{background:#0f6cbd}
+.bbit.b32{background:#6b7a8d}
+/* 控制面板窗口 */
+.win2{position:absolute;left:180px;top:110px;width:1560px;height:820px;background:#f3f6fb;border:1px solid rgba(0,0,0,.14);border-radius:10px;box-shadow:0 24px 70px rgba(2,16,46,.45),0 2px 8px rgba(2,16,46,.2);overflow:hidden;opacity:0;transform:translateY(30px) scale(.97);transition:all .7s cubic-bezier(.16,1,.3,1);z-index:22}
+.win2.show{opacity:1;transform:translateY(0) scale(1)}
+.wtitle{height:44px;display:flex;align-items:center;background:#f3f6fb;padding:0 10px;gap:8px}
+.wtitle .wic{width:20px;height:20px}
+.wtitle .wtab{font-size:12.5px;color:#1b1b1b;background:rgba(255,255,255,.7);border-radius:6px 6px 0 0;padding:5px 12px;border:1px solid rgba(0,0,0,.06);border-bottom:none}
+.wbtns{margin-left:auto;display:flex}
+.wbtns i{width:44px;height:32px;display:flex;align-items:center;justify-content:center;color:#444}
+.wbtns i svg{width:11px;height:11px}
+.cptools{height:40px;display:flex;align-items:center;gap:10px;padding:0 12px;background:#f3f6fb;border-bottom:1px solid rgba(0,0,0,.07)}
+.tbtn{font-size:12.5px;color:#1b1b1b;background:#fff;border:1px solid rgba(0,0,0,.14);border-radius:5px;padding:5px 12px;display:flex;align-items:center;gap:6px}
+.tbtn.dis{color:#9a9a9a}
+.cpsrch{margin-left:auto;width:230px;height:28px;border:1px solid rgba(0,0,0,.12);border-radius:5px;background:#fff;display:flex;align-items:center;padding:0 10px;font-size:12px;color:#777;gap:7px}
+.plist{position:absolute;left:0;right:0;top:84px;bottom:26px;background:#fff;overflow:hidden}
+.phrow{position:absolute;left:0;right:0;top:0;height:34px;display:flex;align-items:center;border-bottom:1px solid rgba(0,0,0,.09);font-size:12px;color:#444;background:#fff;z-index:2}
+.col{padding:0 10px;box-sizing:border-box}
+.c-name{flex:1;display:flex;align-items:center;gap:9px;min-width:0}
+.c-pub{width:240px;flex:none}
+.c-date{width:150px;flex:none}
+.c-size{width:140px;flex:none;text-align:right;padding-right:26px}
+#rowsWrap{position:absolute;left:0;right:0;top:34px;transition:transform .14s linear}
+.r2{height:54px;display:flex;align-items:center;font-size:12.5px;color:#1b1b1b;border-bottom:1px solid rgba(0,0,0,.045);opacity:0;transform:translateX(-14px);transition:opacity .35s,transform .35s,background .3s}
+.r2.in{opacity:1;transform:translateX(0)}
+.r2.sel{background:#e8f2fc}
+.app-ic{width:27px;height:27px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12.5px;font-weight:800;flex:none;margin-left:10px}
+.wstatus{position:absolute;left:0;right:0;bottom:0;height:26px;display:flex;align-items:center;padding:0 14px;font-size:12px;color:#555;background:#f3f6fb;border-top:1px solid rgba(0,0,0,.06);gap:18px}
+/* 右键菜单 */
+.ctx{position:absolute;background:#fff;border:1px solid rgba(0,0,0,.14);border-radius:7px;box-shadow:0 10px 30px rgba(2,16,46,.3);padding:4px;z-index:33;font-size:12.5px;opacity:0;transform:scale(.9);transform-origin:top left;transition:all .18s}
+.ctx.pop{opacity:1;transform:scale(1)}
+.ctx .mi{padding:6px 30px 6px 28px;border-radius:4px;color:#1b1b1b;position:relative;white-space:nowrap}
+.ctx .mi.hov{background:#e8f2fc}
+/* ───── 后段重设计：安装解剖（管道 + 主体 + 系统层）───── */
+#pipes{position:absolute;inset:0;z-index:23;pointer-events:none}
+.pipe{fill:none;stroke-width:3;stroke-dasharray:8 7;opacity:0}
+.pipe.draw{opacity:1;animation:pipeIn .7s ease}
+@keyframes pipeIn{from{stroke-dashoffset:130;opacity:0}to{stroke-dashoffset:0;opacity:1}}
+.pipe.flow{animation:march .8s linear infinite}
+@keyframes march{to{stroke-dashoffset:-30}}
+.pipe.pB{stroke:#0f6cbd;filter:drop-shadow(0 0 4px rgba(15,108,189,.5))}
+.pipe.pA{stroke:#e8a33d;filter:drop-shadow(0 0 4px rgba(232,163,61,.5))}
+.pipe.red{stroke:#c42b1c;filter:drop-shadow(0 0 6px rgba(194,43,28,.6))}
+.pipe.dead{stroke:#9aa4ae;opacity:.25;animation:none;filter:none}
+/* 应用安装卡 */
+.appcard{position:absolute;left:170px;top:400px;width:250px;background:#fff;border:1px solid rgba(0,0,0,.14);border-radius:12px;box-shadow:0 18px 50px rgba(2,16,46,.32);z-index:25;padding:24px 22px 20px;text-align:center;opacity:0;transform:translateY(44px) scale(.8);transition:all .5s cubic-bezier(.34,1.4,.64,1)}
+.appcard.pop{opacity:1;transform:translateY(0) scale(1)}
+.acic{width:84px;height:84px;border-radius:20px;background:#c4514f;color:#fff;font-size:34px;font-weight:800;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;box-shadow:0 8px 20px rgba(196,81,79,.4)}
+.acname{font-size:16px;font-weight:700;color:#1b1b1b}
+.acsub{font-family:Consolas,monospace;font-size:12px;color:#777;margin-top:6px}
+.acbar{height:6px;border-radius:3px;background:#eee;margin-top:16px;overflow:hidden}
+.acbar i{display:block;height:100%;width:18%;border-radius:3px;background:#0067c0;animation:acfill 2.2s ease-in-out infinite alternate}
+@keyframes acfill{from{width:16%}to{width:88%}}
+/* Program Files 主体卡 */
+.pfcard{position:absolute;width:440px;background:#fff;border:1px solid rgba(15,108,189,.35);border-radius:10px;box-shadow:0 14px 40px rgba(2,16,46,.3),0 0 0 3px rgba(15,108,189,.12);z-index:25;padding:18px;opacity:0;transform:scale(.7);transition:all .45s cubic-bezier(.34,1.4,.64,1)}
+.pfcard.pop{opacity:1;transform:scale(1)}
+.pfcard.poofGo{animation:pfPoof .55s cubic-bezier(.3,1.3,.5,1) forwards}
+@keyframes pfPoof{35%{transform:scale(1.08) rotate(-5deg);opacity:1}100%{transform:scale(.05) rotate(14deg);opacity:0}}
+.pftag{position:absolute;top:-14px;left:18px;background:#0f6cbd;color:#fff;font-size:12px;font-weight:800;border-radius:99px;padding:4px 13px;letter-spacing:1px;box-shadow:0 4px 10px rgba(15,108,189,.4)}
+.pfrow{display:flex;align-items:center;gap:14px}
+.pfpath{font-family:Consolas,monospace;font-size:13.5px;font-weight:700;color:#1b1b1b}
+.pfsize{font-size:12.5px;color:#666;margin-top:6px}
+.pfsize b{color:#0f6cbd;font-size:15px;transition:color .3s}
+.pfsize b.hl{color:#c42b1c}
+/* 系统层暗面板 */
+#sysPanel{position:absolute;left:1050px;top:170px;width:740px;height:560px;background:rgba(16,26,38,.93);border:1px solid rgba(120,160,210,.28);border-radius:14px;box-shadow:0 24px 70px rgba(2,10,30,.5);z-index:22;opacity:0;transform:translateX(70px);transition:all .7s cubic-bezier(.16,1,.3,1)}
+#sysPanel.show{opacity:1;transform:translateX(0)}
+.sphead{height:58px;display:flex;align-items:center;gap:10px;padding:0 22px;color:#cfe0f5;font-size:14.5px;font-weight:700;letter-spacing:1px;border-bottom:1px solid rgba(140,170,220,.18)}
+.spbadge{margin-left:auto;background:#c42b1c;color:#fff;font-size:12.5px;font-weight:800;border-radius:99px;padding:6px 14px;opacity:0;transform:scale(.6);transition:all .35s cubic-bezier(.34,1.6,.64,1);box-shadow:0 0 18px rgba(194,43,28,.55)}
+.spbadge.pop{opacity:1;transform:scale(1)}
+.srow{position:absolute;left:24px;right:24px;height:120px;background:rgba(255,255,255,.06);border:1px solid rgba(140,170,220,.22);border-radius:10px;display:flex;align-items:center;gap:15px;padding:0 20px;opacity:0;transform:translateX(44px);transition:all .45s cubic-bezier(.2,1.2,.4,1)}
+.srow.pop{opacity:1;transform:translateX(0)}
+.srow.bad{border-color:rgba(229,83,75,.65);background:rgba(194,43,28,.16);box-shadow:0 0 0 1.5px rgba(229,83,75,.5),0 0 28px rgba(229,83,75,.28)}
+.sric{width:48px;height:48px;flex:none;border-radius:11px;background:rgba(232,163,61,.16);border:1px solid rgba(232,163,61,.42);display:flex;align-items:center;justify-content:center}
+.sric svg{width:26px;height:26px;stroke:#f0b45c;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.srow.bad .sric{background:rgba(229,83,75,.16);border-color:rgba(229,83,75,.6)}
+.srow.bad .sric svg{stroke:#ff9a8f}
+.srtxt b{display:block;color:#eaf2ff;font-size:15.5px}
+.srtxt span{display:block;font-family:Consolas,monospace;font-size:12.5px;color:#9db4d0;margin-top:6px}
+.rtag{margin-left:auto;background:#c42b1c;color:#fff;font-style:normal;font-size:12px;font-weight:800;border-radius:99px;padding:5px 13px;opacity:0;transform:scale(.5);transition:all .3s .08s}
+.srow.bad .rtag{opacity:1;transform:scale(1)}
+/* 文件夹碎片 */
+.frag{position:absolute;width:36px;height:26px;border-radius:5px;z-index:26;opacity:0;pointer-events:none}
+.frag.go{animation:fragGo .85s cubic-bezier(.2,.7,.5,1) forwards}
+@keyframes fragGo{0%{opacity:1;transform:translate(0,0) rotate(0)}100%{opacity:0;transform:translate(var(--dx),var(--dy)) rotate(var(--rr))}}
+/* 删不干净印章 */
+#stamp{position:absolute;left:392px;top:330px;z-index:34;font-size:58px;font-weight:900;color:#c42b1c;border:5px double #c42b1c;border-radius:10px;padding:14px 34px;letter-spacing:10px;background:rgba(255,244,240,.92);transform:rotate(-10deg) scale(1.7);opacity:0;transition:all .28s cubic-bezier(.2,1.4,.4,1);box-shadow:0 12px 34px rgba(194,43,28,.32)}
+#stamp.in{opacity:1;transform:rotate(-10deg) scale(1)}
+/* 再次安装小队 */
+#retry{position:absolute;left:60px;top:320px;z-index:30;display:flex;align-items:center;gap:12px;opacity:0;transition:opacity .3s}
+#retry.show{opacity:1}
+#retry .rr{background:#fff;border:1px solid rgba(0,0,0,.14);border-radius:10px;padding:10px 16px;display:flex;align-items:center;gap:10px;box-shadow:0 10px 26px rgba(2,16,46,.3);font-size:13.5px;font-weight:700;color:#1b1b1b;transition:transform .25s,border-color .25s}
+#retry.hit .rr{border-color:#c42b1c;transform:rotate(-7deg)}
+#retry .ric{width:30px;height:30px;border-radius:8px;background:#c4514f;color:#fff;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center}
+#retry .nox{background:#c42b1c;color:#fff;font-size:13px;font-weight:800;border-radius:99px;padding:7px 15px;opacity:0;transform:scale(.5);transition:all .3s .1s;box-shadow:0 6px 16px rgba(194,43,28,.4)}
+#retry.hit .nox{opacity:1;transform:scale(1)}
+/* 冲突火花 */
+#spark{position:absolute;left:442px;top:236px;width:96px;height:96px;z-index:31;opacity:0;pointer-events:none}
+#spark.go{animation:sparkGo .65s ease-out forwards}
+@keyframes sparkGo{0%{opacity:0;transform:scale(.3)}22%{opacity:1;transform:scale(1.15)}100%{opacity:0;transform:scale(1.65)}}
+/* 已卸载绿章 / 倒带标签 */
+.okchip{position:absolute;left:660px;top:214px;z-index:35;background:#107c10;color:#fff;font-size:13px;font-weight:800;border-radius:99px;padding:8px 18px;opacity:0;transform:scale(.6);transition:all .35s cubic-bezier(.34,1.6,.64,1);box-shadow:0 8px 20px rgba(16,124,16,.35)}
+.okchip.pop{opacity:1;transform:scale(1)}
+.rwtag{position:absolute;left:50%;top:60px;transform:translateX(-50%) scale(.6);z-index:27;display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;color:#3c3c3c;background:#fff;border:1px solid rgba(0,0,0,.14);border-radius:99px;padding:9px 20px;opacity:0;transition:all .35s cubic-bezier(.34,1.6,.64,1);box-shadow:0 8px 22px rgba(2,16,46,.22)}
+.rwtag.pop{opacity:1;transform:translateX(-50%) scale(1)}
+.r2{overflow:hidden}
+.r2.gone{opacity:0;height:0;border-bottom:none;transition:height .5s ease,opacity .35s}
+.win2.out{opacity:0;transform:translateY(50px) scale(.94)}
+/* 浮动 chip / 花字 */
+.fchip{position:absolute;font-size:15px;font-weight:800;border-radius:99px;padding:8px 18px;z-index:27;opacity:0;transform:scale(.6);transition:all .4s cubic-bezier(.34,1.6,.64,1);box-shadow:0 8px 22px rgba(2,16,46,.3);white-space:nowrap}
+.fchip.pop{opacity:1;transform:scale(1)}
+.fchip.r{background:#c42b1c;color:#fff}
+.fchip.big{font-size:20px;padding:11px 24px}
+/* 冲突对话框 */
+.dlg{position:absolute;background:#fff;border:1px solid rgba(0,0,0,.16);border-radius:9px;box-shadow:0 22px 64px rgba(2,16,46,.4);z-index:32;opacity:0;transform:scale(.86);transition:all .4s cubic-bezier(.2,1.3,.4,1)}
+.dlg.in{opacity:1;transform:scale(1)}
+.dlg .dt{height:38px;display:flex;align-items:center;padding:0 12px;font-size:12.5px;color:#1b1b1b;background:#f7f7f7;border-bottom:1px solid rgba(0,0,0,.07);border-radius:9px 9px 0 0}
+.dlg .dt i{margin-left:auto;font-style:normal;color:#666;font-size:14px}
+.dlg .dbody{padding:18px 20px;display:flex;gap:14px;align-items:flex-start}
+.dlg .dbody .txt{font-size:13px;color:#1b1b1b;line-height:1.65}
+.dlg .dft{padding:0 20px 16px;display:flex;justify-content:flex-end;gap:8px}
+.cfchips{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.cfchips span{font-family:Consolas,monospace;font-size:12px;font-weight:700;color:#c42b1c;background:rgba(194,43,28,.09);border:1px solid rgba(194,43,28,.4);border-radius:5px;padding:4px 10px}
+/* 大肥鱼反应表情包（#stage 直属，不随镜头运动） */
+.fish{position:absolute;left:80px;top:600px;width:230px;z-index:36;opacity:0;transform:translateY(26px) scale(.68);transition:all .5s cubic-bezier(.34,1.6,.64,1);pointer-events:none;filter:drop-shadow(0 10px 24px rgba(2,10,30,.4))}
+.fish.show{opacity:1;transform:translateY(0) scale(1)}
+.fish img{width:100%;display:block}
+#brand{position:absolute;right:26px;top:18px;height:34px;z-index:37;opacity:0;transition:opacity .8s;filter:drop-shadow(0 2px 6px rgba(0,0,0,.35))}
+#brand.show{opacity:.55}
+/* ───── 底盘区（不动）───── */
+.corner{position:absolute;font-family:"Cascadia Mono","Consolas",monospace;font-size:15px;color:rgba(255,255,255,.92);letter-spacing:2px;z-index:37;text-shadow:0 1px 4px rgba(8,24,60,.8),0 0 3px rgba(8,24,60,.6);padding:3px 9px;border-radius:6px;background:rgba(8,20,46,.45)}
+#chap{left:52px;bottom:58px}
+#src{right:52px;bottom:58px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'Cascadia Mono','Consolas',monospace;pointer-events:none}
+#track{height:5px;background:rgba(0,0,0,.25)}
+#bar{height:100%;width:0;background:#d13438;box-shadow:0 0 10px rgba(209,52,56,.6)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(10,12,18,.92);color:#ccc;backdrop-filter:blur(4px)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #999;color:#ccc;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(255,255,255,.12)}
+#replay.done{animation:pulse 1.2s infinite;border-color:#ffd23f;color:#ffd23f}
+@keyframes pulse{50%{box-shadow:0 0 14px rgba(255,210,63,.8)}}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="cam">
+    <div id="wpl"></div>
+    <!-- 前段：两个属性对话框 -->
+    <div class="prop" id="propL" style="left:250px;top:210px;width:640px">
+      <div class="pt">
+        <svg width="15" height="15" viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2.5h9A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5v-12Z" fill="#ffce73" stroke="#e0a83c"/></svg>
+        <span>Program Files 属性</span>
+        <span class="bbit b64" id="bit64">64 位</span>
+        <span class="px"><svg width="11" height="11" viewBox="0 0 12 12"><path d="M1 1l10 10M11 1L1 11" stroke="currentColor" stroke-width="1.2"/></svg></span>
+      </div>
+      <div class="ptabs"><span class="on">常规</span><span>安全</span><span>以前的版本</span><span>自定义</span></div>
+      <div class="pb">
+        <div class="phead">
+          <div class="picon"><svg width="48" height="40" viewBox="0 0 66 52"><path d="M3 10a3 3 0 0 1 3-3h17l5 6h32a3 3 0 0 1 3 3v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V10Z" fill="#ffd88a"/><path d="M3 16h60v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V16Z" fill="#ffce73"/><path d="M3 16h60v4H3z" fill="#f5b955"/></svg></div>
+          <div class="pname">Program Files</div>
+        </div>
+        <div class="psep"></div>
+        <div class="prow"><span class="pk">文件类型:</span><span class="pv">文件夹</span></div>
+        <div class="prow"><span class="pk">位置:</span><span class="pv">C:\</span></div>
+        <div class="prow lit"><span class="pk">大小:</span><span class="pv"><b class="big" id="szL">计算中…</b><span class="pbytes" id="byL"></span></span></div>
+        <div class="prow"><span class="pk">占用空间:</span><span class="pv">26.1 GB (28,028,862,464 字节)</span></div>
+        <div class="prow"><span class="pk">包含:</span><span class="pv">文件: 86,120，文件夹: 4,207</span></div>
+        <div class="prow"><span class="pk">创建时间:</span><span class="pv">2024年5月17日, 08:31:40</span></div>
+        <div class="psep"></div>
+        <div class="prow"><span class="pk">属性:</span><span class="pv"><span class="ck"><i></i>只读</span><span class="ck"><i></i>隐藏</span></span></div>
+      </div>
+      <div class="pf"><span class="btn pri">确定</span><span class="btn">取消</span><span class="btn dis">应用(A)</span></div>
+    </div>
+    <div class="prop" id="propR" style="left:1030px;top:210px;width:640px">
+      <div class="pt">
+        <svg width="15" height="15" viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2.5h9A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5v-12Z" fill="#ffce73" stroke="#e0a83c"/></svg>
+        <span>Program Files (x86) 属性</span>
+        <span class="bbit b32" id="bit32">32 位</span>
+        <span class="px"><svg width="11" height="11" viewBox="0 0 12 12"><path d="M1 1l10 10M11 1L1 11" stroke="currentColor" stroke-width="1.2"/></svg></span>
+      </div>
+      <div class="ptabs"><span class="on">常规</span><span>安全</span><span>以前的版本</span><span>自定义</span></div>
+      <div class="pb">
+        <div class="phead">
+          <div class="picon"><svg width="48" height="40" viewBox="0 0 66 52"><path d="M3 10a3 3 0 0 1 3-3h17l5 6h32a3 3 0 0 1 3 3v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V10Z" fill="#ffd88a"/><path d="M3 16h60v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V16Z" fill="#ffce73"/><path d="M3 16h60v4H3z" fill="#f5b955"/></svg></div>
+          <div class="pname">Program Files (x86)</div>
+        </div>
+        <div class="psep"></div>
+        <div class="prow"><span class="pk">文件类型:</span><span class="pv">文件夹</span></div>
+        <div class="prow"><span class="pk">位置:</span><span class="pv">C:\</span></div>
+        <div class="prow lit"><span class="pk">大小:</span><span class="pv"><b class="big" id="szR">计算中…</b><span class="pbytes" id="byR"></span></span></div>
+        <div class="prow"><span class="pk">占用空间:</span><span class="pv">13.9 GB (14,924,414,976 字节)</span></div>
+        <div class="prow"><span class="pk">包含:</span><span class="pv">文件: 42,733，文件夹: 2,018</span></div>
+        <div class="prow"><span class="pk">创建时间:</span><span class="pv">2024年5月17日, 08:31:40</span></div>
+        <div class="psep"></div>
+        <div class="prow"><span class="pk">属性:</span><span class="pv"><span class="ck"><i></i>只读</span><span class="ck"><i></i>隐藏</span></span></div>
+      </div>
+      <div class="pf"><span class="btn pri">确定</span><span class="btn">取消</span><span class="btn dis">应用(A)</span></div>
+    </div>
+    <div class="fchip r big" id="chipSum" style="left:800px;top:700px">合计 40+ GB</div>
+
+    <!-- 后段：程序和功能 -->
+    <div class="win2" id="cpWin">
+      <div class="wtitle">
+        <svg class="wic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2" fill="#4aa3e8"/><rect x="5" y="7" width="14" height="10" fill="#dff0fd"/><path d="M10 20h4" stroke="#8a8a8a" stroke-width="2"/></svg>
+        <span class="wtab">程序和功能</span>
+        <div class="wbtns"><i><svg viewBox="0 0 12 12"><path d="M1 6h10" stroke="currentColor" stroke-width="1.2"/></svg></i><i><svg viewBox="0 0 12 12"><rect x="1.5" y="1.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></i><i><svg viewBox="0 0 12 12"><path d="M1 1l10 10M11 1L1 11" stroke="currentColor" stroke-width="1.2"/></svg></i></div>
+      </div>
+      <div class="cptools">
+        <span class="tbtn">组织 <svg width="9" height="9" viewBox="0 0 10 10"><path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="#555" stroke-width="1.5"/></svg></span>
+        <span class="tbtn" id="btnUn">卸载 / 更改</span>
+        <span class="cpsrch"><svg width="12" height="12" viewBox="0 0 14 14"><circle cx="6" cy="6" r="4.4" fill="none" stroke="#777" stroke-width="1.5"/><path d="m9.4 9.4 3 3" stroke="#777" stroke-width="1.5" stroke-linecap="round"/></svg>搜索程序和功能</span>
+      </div>
+      <div class="plist">
+        <div class="phrow">
+          <div class="col c-name">名称 <svg width="8" height="8" viewBox="0 0 10 10"><path d="M5 8 2 3h6L5 8Z" fill="#888"/></svg></div>
+          <div class="col c-pub">发布者</div>
+          <div class="col c-date">安装时间</div>
+          <div class="col c-size">大小</div>
+        </div>
+        <div id="rowsWrap"></div>
+      </div>
+      <div class="wstatus"><span id="statP">16 个程序</span></div>
+    </div>
+
+    <!-- 右键菜单 -->
+    <div class="ctx" id="ctx" style="left:545px;top:272px">
+      <div class="mi" id="miUn">卸载(U)</div>
+      <div class="mi">更改(C)</div>
+    </div>
+
+    <!-- 安装解剖：写入管道 -->
+    <svg id="pipes" viewBox="0 0 1920 1080">
+      <path class="pipe pB" id="p1" d="M420 535 C 500 535 490 255 552 255"/>
+      <path class="pipe pA" id="p2" d="M420 535 C 650 535 760 318 1042 318"/>
+      <path class="pipe pA" id="p3" d="M420 535 C 690 535 790 466 1042 466"/>
+      <path class="pipe pA" id="p4" d="M420 535 C 730 535 810 614 1042 614"/>
+    </svg>
+
+    <div class="rwtag" id="rwTag"><svg width="15" height="15" viewBox="0 0 24 24"><path d="M11 8.5 6 12l5 3.5v-7Zm7 0L13 12l5 3.5v-7Z" fill="#3c3c3c"/></svg>倒带 · 安装那天</div>
+
+    <div class="appcard" id="appCard">
+      <div class="acic">剪</div>
+      <div class="acname">视频剪辑大师</div>
+      <div class="acsub">安装程序 setup.exe</div>
+      <div class="acbar"><i></i></div>
+    </div>
+
+    <div class="pfcard" id="pfCard" style="left:560px;top:190px">
+      <div class="pftag">看得见的部分</div>
+      <div class="pfrow">
+        <svg width="52" height="42" viewBox="0 0 66 52" style="flex:none"><path d="M3 10a3 3 0 0 1 3-3h17l5 6h32a3 3 0 0 1 3 3v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V10Z" fill="#ffd88a"/><path d="M3 16h60v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V16Z" fill="#ffce73"/><path d="M3 16h60v4H3z" fill="#f5b955"/></svg>
+        <div>
+          <div class="pfpath">C:\Program Files\视频剪辑大师</div>
+          <div class="pfsize">程序主体 · <b id="pfGB">8.42 GB</b></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 系统层（平时看不见） -->
+    <div id="sysPanel">
+      <div class="sphead">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8fb4dd" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l18 18M10.6 5.1A9.8 9.8 0 0 1 12 5c5 0 9 3.5 10.5 7-.5 1.2-1.4 2.5-2.7 3.7M6.6 6.6C4 8 2.3 10 1.5 12c1.5 3.5 5.5 7 10.5 7 1.6 0 3.2-.4 4.5-1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>
+        Windows 系统层 · 平时看不见的地方
+        <span class="spbadge" id="spBadge">仍残留 3 类</span>
+      </div>
+      <div class="srow" id="sr1" style="top:88px">
+        <span class="sric"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5 5l2.1 2.1M16.9 16.9 19 19M19 5l-2.1 2.1M7.1 16.9 5 19"/></svg></span>
+        <div class="srtxt"><b>系统配置</b><span>C:\ProgramData\VCMaster · 计划任务 ×2</span></div>
+        <i class="rtag">残留</i>
+      </div>
+      <div class="srow" id="sr2" style="top:236px">
+        <span class="sric"><svg viewBox="0 0 24 24"><path d="M4 7.5 12 3l8 4.5-8 4.5-8-4.5Z"/><path d="M4 12.5l8 4.5 8-4.5"/><path d="M4 17.5l8 4.5 8-4.5"/></svg></span>
+        <div class="srtxt"><b>后台组件</b><span>服务 VCMasterSvc · 开机自启项</span></div>
+        <i class="rtag">残留</i>
+      </div>
+      <div class="srow" id="sr3" style="top:384px">
+        <span class="sric"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5.5" rx="7.5" ry="3"/><path d="M4.5 5.5v13c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-13"/><path d="M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3"/></svg></span>
+        <div class="srtxt"><b>注册表</b><span>HKLM\SOFTWARE\VCMaster · 卸载信息</span></div>
+        <i class="rtag">残留</i>
+      </div>
+    </div>
+
+    <!-- 删除右键菜单 / 文件夹碎片 -->
+    <div class="ctx" id="ctx2" style="left:786px;top:282px">
+      <div class="mi" id="miDel">删除(D)</div>
+    </div>
+    <div class="frag" style="left:610px;top:216px;--dx:-150px;--dy:-130px;--rr:-75deg;background:#ffce73"></div>
+    <div class="frag" style="left:740px;top:200px;--dx:60px;--dy:-170px;--rr:55deg;background:#ffd88a"></div>
+    <div class="frag" style="left:880px;top:236px;--dx:190px;--dy:-90px;--rr:100deg;background:#ffce73"></div>
+    <div class="frag" style="left:680px;top:262px;--dx:-90px;--dy:150px;--rr:130deg;background:#f5b955"></div>
+    <div class="frag" style="left:930px;top:270px;--dx:130px;--dy:140px;--rr:-110deg;background:#e8a33d"></div>
+
+    <div class="fchip r" id="pillNo" style="left:806px;top:60px">不要直接删文件夹！</div>
+    <div id="stamp">删不干净</div>
+
+    <!-- 再次安装（撞上残留） -->
+    <div id="retry">
+      <div class="rr"><span class="ric">剪</span>再次安装<svg width="16" height="16" viewBox="0 0 24 24"><path d="M4 12h14m-6-6 6 6-6 6" fill="none" stroke="#107c10" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <span class="nox">✗ 冲突</span>
+    </div>
+    <div id="spark"><svg viewBox="0 0 96 96"><path d="M48 4 56 36 88 30 60 48 84 66 52 60 48 92 40 60 8 66 36 48 12 30 44 36Z" fill="#ffd23f" stroke="#c42b1c" stroke-width="3" stroke-linejoin="round"/></svg></div>
+
+    <div class="okchip" id="okChip">已卸载 ✓</div>
+
+    <!-- 冲突提示 -->
+    <div class="dlg" id="dlgCf" style="left:620px;top:300px;width:680px">
+      <div class="dt">安装程序 · 视频剪辑大师<i>✕</i></div>
+      <div class="dbody">
+        <svg width="40" height="40" viewBox="0 0 40 40" style="flex:none"><path d="M20 3 37 34H3L20 3Z" fill="#ffb900"/><rect x="18.2" y="13" width="3.6" height="11" fill="#3a3000"/><circle cx="20" cy="28.5" r="2.2" fill="#3a3000"/></svg>
+        <div class="txt"><b>检测到上次安装残留的配置与注册表项。</b><br>残留的后台组件可能与本次安装发生冲突，导致安装失败或运行异常。
+          <div class="cfchips"><span>系统配置残留</span><span>后台组件残留</span><span>注册表残留</span></div>
+        </div>
+      </div>
+      <div class="dft"><span class="btn pri">确定</span></div>
+    </div>
+
+    <!-- 光标 -->
+    <div id="cur"><svg width="26" height="26" viewBox="0 0 26 26"><path d="M6 2 21 14.5 13.8 15.5 17.5 23 14.5 24.5 10.8 17 6 20.5V2Z" fill="#fff" stroke="#111" stroke-width="1.4"/></svg></div>
+
+  <div id="taskbar">
+      <div class="tb-apps">
+        <div class="tb"><svg width="22" height="22" viewBox="0 0 22 22"><rect x="1" y="1" width="9" height="9" fill="#00a2ed"/><rect x="12" y="1" width="9" height="9" fill="#00a2ed"/><rect x="1" y="12" width="9" height="9" fill="#00a2ed"/><rect x="12" y="12" width="9" height="9" fill="#00a2ed"/></svg></div>
+        <div class="tb"><svg width="20" height="20" viewBox="0 0 20 20"><circle cx="8.5" cy="8.5" r="6" fill="none" stroke="#444" stroke-width="2"/><path d="m13 13 4.5 4.5" stroke="#444" stroke-width="2" stroke-linecap="round"/></svg></div>
+        <div class="tb active"><svg width="20" height="20" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="15" rx="2" fill="#5aa2e6"/><rect x="5.5" y="5.5" width="13" height="10" fill="#dff0fd"/></svg></div>
+        <div class="tb"><svg width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#e8f3ff" stroke="#8fc0ee"/><path d="M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18M3.6 9.5h16.8M3.6 14.5h16.8" fill="none" stroke="#4aa3e8" stroke-width="1.4"/></svg></div>
+      </div>
+      <div id="tray">
+        <svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 6.5a9 9 0 0 1 12 0" fill="none" stroke="#333" stroke-width="1.5" stroke-linecap="round"/><path d="M4.5 9.4a5.5 5.5 0 0 1 7 0" fill="none" stroke="#333" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="12" r="1.4" fill="#333"/></svg>
+        <svg width="17" height="16" viewBox="0 0 17 16"><rect x="1" y="5" width="12" height="7" rx="1.5" fill="none" stroke="#333" stroke-width="1.3"/><rect x="3" y="7" width="6" height="3" fill="#333"/><rect x="13.8" y="7" width="2" height="3" rx="1" fill="#333"/></svg>
+        <div class="t-time">12:30<br>2026/9/22</div>
+      </div>
+    </div>
+  </div>
+
+
+
+
+  <div class="fish" id="fishA"><img src="Shark-GIF/041_趴键盘愤怒符号抓狂打字.gif" alt=""></div>
+  <img id="brand" src="wukong/icon.png" alt="">
+
+  <div class="corner" id="chap">章 2 · 显眼的文件夹，一个都不能直接删</div>
+  <div class="corner" id="src">界面为演示还原 · Windows 11 版式</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 18 · 程序和功能 · 32s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=32000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+const after=(ms,f)=>on(performance.now()-t0+ms,f);
+function fly(el,x1,y1,x2,y2,dur,arc,ease,done){tws.push({t:performance.now()-t0,d:dur,e:ease||eio,done,f:p=>{el.style.left=(x1+(x2-x1)*p)+'px';el.style.top=(y1+(y2-y1)*p-Math.sin(p*Math.PI)*(arc||0))+'px'}})}
+function cnt(el,from,to,dur){tws.push({t:performance.now()-t0,d:dur,e:eo,f:p=>{el.textContent=Math.round(from+(to-from)*p).toLocaleString('en-US')}})}
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+
+/* ────────────────────────────────────────────────
+   本镜头 cue · 7:29–8:01「Program Files ×2 · 要卸载不要删」
+   ──────────────────────────────────────────────── */
+/* 程序列表（中性示例名） */
+const APPS=[
+ ['视频剪辑大师','星辰软件','2025/11/2','8.42 GB','#c4514f'],
+ ['办公套件 2024','示例科技','2025/9/18','5.98 GB','#d2653a'],
+ ['设计工具 Pro','白石设计','2025/5/21','4.35 GB','#7a5fd0'],
+ ['即时通讯','云帆网络','2026/1/12','3.27 GB','#4a90d9'],
+ ['游戏平台','蓝海工作室','2025/7/30','2.91 GB','#3c4454'],
+ ['浏览器 Pro','示例科技','2026/3/8','1.86 GB','#2f9e8f'],
+ ['云同步盘','云帆网络','2025/12/4','1.12 GB','#5a9e4b'],
+ ['播放器 X','星辰软件','2025/3/15','864 MB','#b8860b'],
+ ['驱动管家','北桥驱动','2025/10/3','692 MB','#6b7a8d'],
+ ['笔记软件','白石设计','2026/4/1','534 MB','#8a6d3b'],
+ ['输入法','示例科技','2026/2/14','458 MB','#4a7ba6'],
+ ['压缩工具','青石工具','2024/11/9','312 MB','#9678b6'],
+ ['下载工具','蓝海工作室','2025/8/22','276 MB','#c9752e'],
+ ['截图工具','青石工具','2025/6/11','128 MB','#5b8c5a'],
+ ['密码管理器','锁钥安全','2025/4/27','96 MB','#8d6b9e'],
+ ['字体管家','青石工具','2024/8/19','74 MB','#b0653a']
+];
+const wrap=$('#rowsWrap');
+APPS.forEach(a=>{
+  const r=document.createElement('div');r.className='r2';
+  r.innerHTML=`<div class="col c-name"><span class="app-ic" style="background:${a[4]}">${a[0][0]}</span>${a[0]}</div><div class="col c-pub">${a[1]}</div><div class="col c-date">${a[2]}</div><div class="col c-size">${a[3]}</div>`;
+  wrap.appendChild(r);
+});
+const rows=[...wrap.children];
+
+/* 阶梯滚动（QA 冻结安全） */
+function rollGB(t,el,byEl,to,bytes){
+  const N=12;
+  for(let k=0;k<N;k++)on(t+k*70,()=>{el.textContent=(to*(1-Math.pow(1-(k+1)/N,3))).toFixed(1)+' GB';__sfx.type(.28)});
+  on(t+N*70+60,()=>{el.textContent=to.toFixed(1)+' GB';byEl.textContent=bytes;__sfx.ding(.45)});
+}
+/* 光标：阶梯路径 */
+function curPath(t,pts,step){
+  pts.forEach((p,i)=>on(t+i*step,()=>{const c=$('#cur');c.style.left=p[0]+'px';c.style.top=p[1]+'px'}));
+}
+
+on(300,()=>camTo(0,0,1,2.0));
+on(400,()=>{$('#propL').classList.add('in');__sfx.pop(.45)});         // (7:29) Program Files
+on(600,()=>$('#brand').classList.add('show'));                        // 品牌角标全程在
+on(700,()=>{$('#propR').classList.add('in');__sfx.pop(.45)});         // 和 Program Files (x86)
+rollGB(1100,$('#szL'),$('#byL'),26.3,'(28,235,929,792 字节)');
+rollGB(1800,$('#szR'),$('#byR'),14.1,'(15,139,250,112 字节)');
+on(3000,()=>{$('#chipSum').classList.add('pop');__sfx.ding(.6);camFocus(960,560,1.04,0.9)}); // (7:32) 加起来40多个G
+on(5000,()=>camFocus(960,520,1.03,1.0));                            // (7:34) 你自己安装的一些软件·双窗总览
+on(7800,()=>camFocus(580,500,1.08,0.9));                            // 推向左窗
+on(8000,()=>{$('#bit64').classList.add('pop');__sfx.pop(.5)});        // (7:37) 一个放64位的
+on(9700,()=>camFocus(1340,500,1.08,0.9));                           // 推向右窗
+on(10000,()=>{$('#bit32').classList.add('pop');__sfx.pop(.5)});       // (7:39) 另一个放32位的
+on(10600,()=>{                                                        // 转场：换控制面板版式
+  $('#propL').classList.add('out');$('#propR').classList.add('out');$('#chipSum').classList.remove('pop');
+  camTo(0,0,1,0.8);__sfx.swipe(.6);
+});
+on(11000,()=>{$('#cpWin').classList.add('show');__sfx.pop(.5)});      // (7:40) 如果软件不想要了
+rows.forEach((r,i)=>on(11050+i*45,()=>{r.classList.add('in');if(i<6)__sfx.type(.22)}));
+on(11600,()=>{$('#cur').classList.add('show')});
+curPath(11700,[[900,400],[720,330],[560,276],[524,262]],130);
+on(12150,()=>{rows[0].classList.add('sel');$('#ctx').classList.add('pop');__sfx.type(.5)}); // (7:41) 记得去卸载·右键
+on(12500,()=>{$('#miUn').classList.add('hov');__sfx.pop(.4)});        // 卸载(U) 悬停
+on(12700,()=>{const c=$('#cur');c.classList.add('click');$('#ctx').classList.remove('pop');__sfx.pop(.5)});
+/* ── 第一幕：卸载正路（11–14.4s）── */
+on(12900,()=>{rows[0].classList.add('gone');$('#okChip').classList.add('pop');__sfx.ding(.55)}); // 已卸载 ✓
+on(13300,()=>{$('#pillNo').classList.add('pop');__sfx.ding(.5)});     // (7:42) 不要直接删文件夹
+on(14000,()=>$('#cur').classList.remove('show'));
+/* ── 第二幕：安装解剖（14.4–24s）── */
+on(14400,()=>{                                                        // 转场：倒带到安装那天
+  $('#cpWin').classList.add('out');$('#okChip').classList.remove('pop');
+  camTo(0,0,1,0.8);__sfx.swipe(.6);
+});
+on(14600,()=>$('#pillNo').classList.remove('pop'));
+on(15000,()=>{$('#rwTag').classList.add('pop');$('#appCard').classList.add('pop');__sfx.thud(.45)}); // (7:44) 软件安装的时候
+on(15500,()=>camFocus(620,470,1.06,1.0));
+on(16000,()=>{$('#p1').classList.add('draw');__sfx.whoosh(.5,.4)});   // (7:45) 往 Program Files 装主体
+on(16600,()=>{$('#p1').classList.add('flow');$('#pfCard').classList.add('pop');__sfx.pop(.55)});
+on(18000,()=>{$('#pfGB').classList.add('hl');__sfx.ding(.4)});
+on(19600,()=>{$('#sysPanel').classList.add('show');__sfx.whoosh(.7,.5)}); // (7:49) 还会往系统里写配置
+on(20000,()=>$('#p2').classList.add('draw'));
+on(20500,()=>{$('#p2').classList.add('flow');$('#sr1').classList.add('pop');__sfx.pop(.5)}); // 系统配置
+on(21200,()=>camFocus(1230,500,1.05,1.0));
+on(21800,()=>$('#p3').classList.add('draw'));
+on(22200,()=>{$('#p3').classList.add('flow');$('#sr2').classList.add('pop');__sfx.pop(.5)}); // (7:51) 后台组件
+on(22800,()=>$('#p4').classList.add('draw'));
+on(23100,()=>{$('#p4').classList.add('flow');$('#sr3').classList.add('pop');__sfx.pop(.5)}); // (7:52) 注册表
+/* ── 第三幕：直接删文件夹 → 残留（24–28.6s）── */
+on(24000,()=>{camTo(0,0,1,0.8);const c=$('#cur');c.style.left='300px';c.style.top='700px';c.classList.add('show')}); // (7:53) 如果直接删文件夹
+curPath(24300,[[420,500],[560,330],[700,262],[760,255]],110);
+on(24750,()=>{$('#ctx2').classList.add('pop');__sfx.type(.5)});
+on(24950,()=>{$('#miDel').classList.add('hov');__sfx.pop(.4)});
+on(25200,()=>{                                                        // 删除！文件夹消失，管道断
+  $('#ctx2').classList.remove('pop');const c=$('#cur');c.classList.add('click');
+  $('#pfCard').classList.add('poofGo');$('#p1').classList.add('dead');
+  document.querySelectorAll('.frag').forEach(f=>f.classList.add('go'));
+  __sfx.swipe(.7);
+});
+on(25600,()=>$('#cur').classList.remove('show'));
+on(25800,()=>{$('#sr1').classList.add('bad');$('#p2').classList.add('red');__sfx.thud(.4)}); // (7:54) 还会留在系统里
+on(26200,()=>{$('#sr2').classList.add('bad');$('#p3').classList.add('red');__sfx.thud(.4)});
+on(26600,()=>{$('#sr3').classList.add('bad');$('#p4').classList.add('red');__sfx.thud(.4)});
+on(27000,()=>{$('#spBadge').classList.add('pop');__sfx.pop(.5)});
+on(27400,()=>{$('#stamp').classList.add('in');__sfx.thud(1)});        // (7:56) 删不干净
+on(28600,()=>$('#stamp').classList.remove('in'));
+/* ── 第四幕：重装冲突（29–32s）── */
+on(29000,()=>{                                                        // (7:58) 下一次再安装
+  const r=$('#retry');r.classList.add('show');__sfx.whoosh(.6,.5);
+  fly(r,60,320,480,272,800,40,eio);
+});
+on(29900,()=>{                                                        // 撞上残留力场
+  $('#spark').classList.add('go');__sfx.thud(.9);
+  const r=$('#retry');r.classList.add('hit');fly(r,480,272,210,340,600,30,ei);
+});
+on(30400,()=>{$('#dlgCf').classList.add('in');camFocus(960,500,1.05,0.8);__sfx.pop(.65)}); // 冲突弹窗
+on(30900,()=>{$('#fishA').classList.add('show');__sfx.pop(.55)});     // 大肥鱼抓狂：重装还打架，气死
+</script>
+</body>
+</html>

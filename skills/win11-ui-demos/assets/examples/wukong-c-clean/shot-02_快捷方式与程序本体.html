@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+  ◆ 分镜演示页模板底盘（复制本文件后只改"画面层"与 cue）◆
+  内置：虚拟时钟黑场播放器 / WebAudio 音效引擎 / 1920×1080 舞台
+        镜头层 camTo·camFocus / 时间轴引擎(cue+补间+暂停) / HUD
+        角色特写位 / 电影黑边（不做底部字幕条，口播以 cue 注释对齐）
+  机制说明见 Skill 的 references/ 目录，此处只标"改这里"。
+============================================================= -->
+<script>
+/* ===== [不动] 播放器引导：劫持 performance.now/rAF 成虚拟时钟 =====
+   一切动画(JS cue 与 CSS animation)都走同一虚拟时钟，
+   点击「启动播放」前时间恒为 0 —— 黑场干净起手，录屏无闪跳。 */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;   /* 本次点击同时解锁下方 AudioContext */
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成音效，零音频文件 =====
+   pop(波·弹出) whoosh(呼·镜头/大幅移动,dur,vol) swipe(唰·快切)
+   type(键盘轻击) ding(叮·落定) thud(咚·撞击/盖章) */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 02 · 快捷方式只有几KB，程序本体几百MB</title>
+
+<!-- XP 年代感：Tahoma/宋体像素风 + 手写便签体 -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zhi+Mang+Xing&family=Long+Cang&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#111;overflow:hidden;font-family:Tahoma,"宋体",sans-serif}
+body.paused *{animation-play-state:paused!important}
+/* 舞台：Windows XP Bliss 印象 · 蓝天绿地 */
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:#2f74d4}
+#wpl{position:absolute;inset:0;background:url("material/winxp.png") center/cover no-repeat}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ────────────────────────────────────────────────
+   [改这里] 画面层：以下到「底盘区」为止全部重写
+   ──────────────────────────────────────────────── */
+/* ═══════════ XP 仿真套件 · 桌面图标 / 任务栏 / Luna 窗口 / 属性对话框 ═══════════ */
+/* 桌面图标 */
+.dicon{position:absolute;width:96px;text-align:center;z-index:5;opacity:0;transform:translateY(-6px);transition:opacity .4s,transform .4s}
+.dicon.show{opacity:1;transform:translateY(0)}
+.dicon .dic{width:42px;height:42px;margin:0 auto 4px;position:relative;filter:drop-shadow(0 2px 2px rgba(0,0,0,.35))}
+.dicon .dic svg{width:100%;height:100%}
+.dicon>span{display:inline-block;font-size:11.5px;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.8);padding:1px 4px;line-height:1.3;border-radius:2px;max-width:96px}
+.dicon.sel>span{background:#0b5ad7}
+.dicon .lnk{position:absolute;left:-2px;bottom:-2px;width:15px;height:15px;background:#fff;border:1px solid #888;border-radius:2px;display:flex;align-items:center;justify-content:center}
+.dicon .lnk svg{width:10px;height:10px}
+.dicon .ring{position:absolute;inset:-9px;border:3px solid #ffd34e;border-radius:10px;opacity:0;transform:scale(.8);transition:all .4s cubic-bezier(.34,1.6,.64,1)}
+.dicon.hi .ring{opacity:1;transform:scale(1);animation:ringPulse 1s ease-in-out infinite alternate}
+@keyframes ringPulse{to{box-shadow:0 0 22px rgba(255,211,78,.9)}}
+.dicon .brk{position:absolute;inset:0;display:none}
+.dicon.broken .brk{display:block}
+.dicon.broken .nor{visibility:hidden}
+/* XP 任务栏 */
+#taskbar{position:absolute;left:0;right:0;bottom:0;height:36px;z-index:36;display:flex;align-items:stretch;
+  background:linear-gradient(180deg,#2a6ae3 0%,#3f8cf3 9%,#2f6fe8 30%,#245edb 62%,#1941a5 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.35)}
+#startBtn{width:112px;display:flex;align-items:center;justify-content:center;gap:6px;color:#fff;font-style:italic;font-weight:700;font-size:16px;text-shadow:0 1px 2px rgba(0,0,0,.5);
+  background:linear-gradient(180deg,#5dac46 0%,#71c257 12%,#4c9a35 55%,#3a7d27 100%);border-radius:0 14px 14px 0;box-shadow:inset 0 1px 0 rgba(255,255,255,.4),2px 0 6px rgba(0,0,0,.25)}
+#startBtn svg{width:19px;height:19px}
+#tbmid{flex:1;display:flex;align-items:center;gap:6px;padding:0 10px}
+#tbmid .tbb{height:26px;padding:0 14px;display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.14);border-radius:4px;color:#fff;font-size:12px;box-shadow:inset 0 1px 0 rgba(255,255,255,.18);opacity:0;transition:opacity .4s}
+#tbmid .tbb.show{opacity:1}
+#tbmid .tbb svg{width:15px;height:15px}
+#trayXP{display:flex;align-items:center;gap:8px;padding:0 14px;color:#fff;font-size:11.5px;background:linear-gradient(180deg,#128ee8 0%,#19a2f5 12%,#0d85d8 60%,#0a6bb8 100%);box-shadow:inset 1px 0 0 rgba(255,255,255,.25)}
+/* Luna 窗口 */
+.xwin{position:absolute;background:#ece9d8;border-radius:9px 9px 4px 4px;box-shadow:3px 6px 22px rgba(10,20,60,.45),0 0 0 1px rgba(0,30,120,.35);overflow:hidden;opacity:0;transform:scale(.94) translateY(14px);transition:all .5s cubic-bezier(.16,1,.3,1);z-index:12}
+.xwin.show{opacity:1;transform:scale(1) translateY(0)}
+.xwin.bye{opacity:0;transform:scale(.9) translateY(10px)}
+.xt{height:30px;display:flex;align-items:center;padding:0 6px 0 9px;gap:7px;color:#fff;font-size:13px;font-weight:700;text-shadow:1px 1px 2px rgba(0,0,20,.55);
+  background:linear-gradient(180deg,#0997ff 0%,#0053ee 9%,#0050ee 42%,#0060f7 88%,#003ccc 100%)}
+.xt .tic{width:17px;height:17px}
+.xt .tic svg{width:100%;height:100%}
+.xbtns{margin-left:auto;display:flex;gap:2px}
+.xbtns i{width:22px;height:21px;border-radius:4px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.55);
+  background:linear-gradient(180deg,#3f8cf7 0%,#1e63e8 50%,#0f4ecb 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.4)}
+.xbtns i.xc{background:linear-gradient(180deg,#f39c8e 0%,#e26452 30%,#d1422c 65%,#b93422 100%)}
+.xbtns svg{width:10px;height:10px}
+/* 窗口工具栏/地址栏 */
+.xtool{display:flex;align-items:center;gap:4px;padding:5px 8px;background:#ece9d8;border-bottom:1px solid #d4d0c8;font-size:11.5px;color:#222}
+.xtool .tl{display:flex;align-items:center;gap:5px;padding:3px 8px;border-radius:3px}
+.xtool .tl svg{width:16px;height:16px}
+.xaddr{display:flex;align-items:center;gap:7px;padding:4px 8px;background:#ece9d8;border-bottom:1px solid #d4d0c8;font-size:11.5px;color:#444}
+.xaddr .ab{flex:1;height:22px;background:#fff;border:1px solid #7f9db9;display:flex;align-items:center;padding:0 7px;gap:6px;font-size:11.5px;color:#111}
+.xaddr .ab svg{width:14px;height:14px}
+.xbody{position:relative;background:#fff;overflow:hidden}
+.xstatus{height:22px;display:flex;align-items:center;gap:16px;padding:0 10px;font-size:11px;color:#333;background:#ece9d8;border-top:1px solid #d4d0c8}
+/* 我的电脑：驱动器 */
+.drvRow{display:flex;align-items:center;gap:14px;padding:11px 16px;border-bottom:1px dashed #e3ddc8}
+.drvRow .dico{width:38px;height:38px;flex:none}
+.drvRow .dico svg{width:100%;height:100%}
+.drvRow .dmeta{flex:1}
+.drvRow .dname{font-size:12px;color:#111;margin-bottom:5px}
+.xbar{height:11px;border:1px solid #8aa0b8;background:#fff;border-radius:2px;overflow:hidden}
+.xbar i{display:block;height:100%;width:0;background:linear-gradient(180deg,#7db3ec,#2f6fd0);transition:width 1.2s cubic-bezier(.2,.8,.3,1),background .4s}
+.xbar i.red{background:linear-gradient(180deg,#f08a80,#cf2318);animation:barBlink .9s step-end infinite alternate}
+@keyframes barBlink{to{filter:brightness(1.35)}}
+.dcap{font-size:11px;color:#555;margin-top:4px}
+/* 文件夹网格 */
+.fgrid{position:absolute;inset:0;padding:16px 18px;display:flex;flex-wrap:wrap;align-content:flex-start;gap:8px 6px}
+.fitem{width:92px;text-align:center;padding:7px 2px 5px;border-radius:3px;position:relative;opacity:0;transform:translateY(8px);transition:opacity .35s,transform .35s,background .15s}
+.fitem.in{opacity:1;transform:translateY(0)}
+.fitem.sel{background:rgba(49,106,197,.18);outline:1px dotted rgba(49,106,197,.7)}
+.fitem .fic{width:40px;height:40px;margin:0 auto 3px}
+.fitem .fic svg{width:100%;height:100%}
+.fitem span{font-size:11.5px;color:#111;line-height:1.25;display:inline-block;padding:0 3px}
+.fitem.sel span{background:#316ac5;color:#fff}
+/* 右键菜单 */
+.rmenu{position:absolute;width:190px;background:#f8f6ee;border:1px solid #9c9a8c;box-shadow:3px 3px 8px rgba(0,0,0,.3);padding:2px;z-index:30;font-size:12px;color:#111;opacity:0;transform:scale(.92);transform-origin:top left;transition:all .18s}
+.rmenu.show{opacity:1;transform:scale(1)}
+.rmenu .mi{padding:6px 12px 6px 26px;position:relative}
+.rmenu .mi:hover{background:#316ac5;color:#fff}
+.rmenu .mi.hot{background:#316ac5;color:#fff;font-weight:700}
+.rmenu hr{border:none;border-top:1px solid #d4d0c8;margin:2px 6px}
+/* XP 属性对话框 */
+.pdlg{position:absolute;width:430px;background:#ece9d8;border-radius:9px 9px 4px 4px;box-shadow:4px 8px 26px rgba(10,20,60,.5),0 0 0 1px rgba(0,30,120,.4);opacity:0;transform:scale(.92);transition:all .45s cubic-bezier(.16,1,.3,1);z-index:22;overflow:hidden}
+.pdlg.show{opacity:1;transform:scale(1)}
+.ptabs{display:flex;gap:1px;padding:8px 10px 0;background:#ece9d8}
+.ptabs i{font-style:normal;font-size:12px;color:#111;padding:4px 14px 3px;background:#e1ddd0;border:1px solid #a09c8c;border-bottom:none;border-radius:4px 4px 0 0;position:relative;top:1px}
+.ptabs i.on{background:#fff;z-index:2;padding-top:5px;font-weight:700}
+.ppage{margin:0 10px;background:#fff;border:1px solid #a09c8c;padding:14px 16px 12px;min-height:230px;position:relative}
+.prow{display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:12px;color:#111}
+.prow .pl{width:76px;text-align:right;color:#444;flex:none}
+.prow .pv{flex:1}
+.prow .ptx{border:1px solid #7f9db9;background:#fff;padding:3px 7px;font-size:12px;color:#111;width:100%}
+.prow .ptx.hot{border-color:#e25303;box-shadow:0 0 0 2px rgba(255,180,60,.55);background:#fffbe8}
+.picon{width:40px;height:40px;flex:none}
+.picon svg{width:100%;height:100%}
+.pbtns{display:flex;justify-content:flex-end;gap:7px;padding:10px 12px 12px}
+.pbtns b{width:82px;height:24px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:400;color:#111;background:linear-gradient(180deg,#fff,#ece9d8 45%,#d6d2c2);border:1px solid #7b7767;border-radius:3px}
+.pbtns b.pri{border-color:#003c74;background:linear-gradient(180deg,#fff,#e3edfd 45%,#b9cff5)}
+.pbtns b.dis{color:#a09c8c}
+.pdlg .szBig{font-size:15px;font-weight:700;color:#c1440e}
+fieldset.grp{border:1px solid #d0ccc0;border-radius:3px;margin:2px 0 10px;padding:8px 10px 10px;font-size:11px;color:#6a664f;position:relative}
+fieldset.grp legend{padding:0 5px}
+.pchk{display:flex;gap:18px;font-size:12px;color:#111}
+.pchk span{display:flex;align-items:center;gap:5px}
+.pchk em{width:13px;height:13px;border:1px solid #7f9db9;background:#fff;display:inline-block;border-radius:2px;font-style:normal}
+/* 错误对话框 */
+.errdlg{position:absolute;width:480px;background:#ece9d8;border-radius:9px 9px 4px 4px;box-shadow:4px 8px 26px rgba(10,20,60,.55),0 0 0 1px rgba(0,30,120,.4);opacity:0;transform:scale(.85);transition:all .35s cubic-bezier(.2,1.4,.4,1);z-index:26;overflow:hidden}
+.errdlg.show{opacity:1;transform:scale(1)}
+.errdlg .ebody{display:flex;gap:14px;padding:18px 18px 10px;background:#fff;margin:0 0 0;border-top:1px solid #d4d0c8}
+.errdlg .eico{width:38px;height:38px;flex:none}
+.errdlg .etxt{font-size:12.5px;color:#111;line-height:1.6}
+.errdlg .etxt b{color:#c1440e}
+.errdlg .ebtns{display:flex;justify-content:center;gap:10px;padding:12px 0 16px;background:#fff}
+.errdlg .ebtns b{min-width:110px;height:25px;padding:0 12px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:400;background:linear-gradient(180deg,#fff,#ece9d8 45%,#d6d2c2);border:1px solid #7b7767;border-radius:3px}
+/* 维修收据小票 */
+#receipt{position:absolute;left:50%;top:42%;transform:translate(-50%,-50%) rotate(-4deg) translateY(-760px);width:420px;background:linear-gradient(180deg,#fffef5,#fdf7e3);border:1px solid #d8cfae;box-shadow:0 18px 44px rgba(20,30,70,.4);padding:26px 30px 30px;z-index:24;font-family:'Long Cang',"楷体",cursive;transition:transform .8s cubic-bezier(.2,1.2,.35,1)}
+#receipt.drop{transform:translate(-50%,-50%) rotate(-4deg) translateY(0)}
+#receipt h3{text-align:center;font-size:26px;color:#333;letter-spacing:6px;border-bottom:1px dashed #b9ad86;padding-bottom:10px;margin-bottom:12px}
+#receipt .rrow{display:flex;justify-content:space-between;font-size:21px;color:#3a352a;margin:7px 0}
+#receipt .rrow b{font-family:'Zhi Mang Xing',cursive;font-size:30px;color:#a02215}
+#receipt .stamp{position:absolute;right:26px;bottom:18px;width:112px;height:112px;border:4px solid rgba(190,30,20,.85);border-radius:50%;display:flex;align-items:center;justify-content:center;text-align:center;color:rgba(190,30,20,.9);font-family:'Zhi Mang Xing';font-size:24px;line-height:1.25;transform:rotate(14deg) scale(2.4);opacity:0;transition:all .3s cubic-bezier(.2,1.6,.4,1)}
+#receipt .stamp.on{opacity:1;transform:rotate(14deg) scale(1)}
+#receipt .rno{margin-top:14px;font-size:15px;color:#8a8064;letter-spacing:2px}
+/* 手写花字便签 */
+.hzw{position:absolute;left:50%;top:64px;z-index:32;font-family:"Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif;font-weight:900;color:#fffbe8;background:rgba(20,40,110,.68);border-radius:14px;padding:12px 26px;font-size:38px;letter-spacing:3px;box-shadow:0 10px 30px rgba(5,15,60,.4);opacity:0;transform:translateX(-50%) translateY(18px) rotate(-1.6deg);transition:all .5s cubic-bezier(.16,1,.3,1);pointer-events:none;text-align:center;line-height:1.4;white-space:nowrap}
+.hzw.show{opacity:1;transform:translateX(-50%) translateY(0) rotate(-1.6deg)}
+.hzw b{color:#ffd34e}
+.hzw .sub{display:block;font-family:inherit;font-weight:700;font-size:22px;opacity:.85;letter-spacing:2px;margin-top:4px}
+/* 连线 SVG 层 */
+#wires{position:absolute;inset:0;z-index:18;pointer-events:none}
+#wires path{fill:none;stroke:#ff8c1a;stroke-width:4;stroke-dasharray:1000;stroke-dashoffset:1000;opacity:0;filter:drop-shadow(0 2px 5px rgba(120,50,0,.5));transition:stroke-dashoffset 1.3s cubic-bezier(.4,0,.3,1),opacity .3s}
+#wires path.draw{opacity:1;stroke-dashoffset:0}
+#wires path.flow{stroke-dasharray:14 10;animation:march 1.5s linear infinite}
+@keyframes march{to{stroke-dashoffset:-240}}
+.flyGhost{position:absolute;width:40px;height:40px;z-index:29;pointer-events:none;filter:drop-shadow(0 4px 6px rgba(0,0,0,.3))}
+.flyGhost svg{width:100%;height:100%}
+/* 大小对比条 */
+#vs{position:absolute;left:50%;bottom:170px;transform:translateX(-50%) translateY(60px);width:1060px;background:rgba(255,254,244,.96);border:2px solid #b9ad86;border-radius:14px;box-shadow:0 16px 44px rgba(10,20,60,.42);padding:18px 28px 20px;z-index:25;opacity:0;transition:all .6s cubic-bezier(.16,1,.3,1)}
+#vs.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#vs .vrow{display:flex;align-items:center;gap:16px;margin:9px 0}
+#vs .vlab{width:190px;font-size:15px;color:#3a352a;font-weight:700;text-align:right}
+#vs .vbarwrap{flex:1;height:26px;background:#e8e2cc;border-radius:5px;border:1px solid #c8c0a0;overflow:hidden}
+#vs .vbar{height:100%;width:0;border-radius:4px;transition:width 1.4s cubic-bezier(.2,.8,.3,1)}
+#vs .vnum{width:150px;font-size:17px;font-weight:700}
+/* 大肥鱼反应表情包 */
+.fish{position:absolute;left:40px;top:460px;width:290px;z-index:29;opacity:0;transform:translateY(26px) scale(.68);transition:all .5s cubic-bezier(.34,1.6,.64,1);pointer-events:none;filter:drop-shadow(0 10px 24px rgba(2,10,30,.4))}
+.fish.show{opacity:1;transform:translateY(0) scale(1)}
+.fish img{width:100%;display:block}
+/* 年份角标 */
+#yr{position:absolute;right:54px;top:44px;z-index:8;font-family:'Zhi Mang Xing';font-size:34px;color:rgba(255,255,255,.92);letter-spacing:4px;text-shadow:0 2px 8px rgba(10,30,80,.5);opacity:0;transition:opacity .8s}
+#yr.show{opacity:1}
+#yr .en{display:block;font-family:Tahoma;font-size:13px;letter-spacing:5px;opacity:.75;margin-top:2px}
+
+/* ────────────────────────────────────────────────
+   [不动] 底盘区：黑边 / 暗角 / 角注 / HUD（无字幕条）
+   ──────────────────────────────────────────────── */
+
+.corner{position:absolute;font-family:'Share Tech Mono';font-size:15px;color:rgba(44,42,38,.55);letter-spacing:2px;z-index:9}
+#chap{left:52px;bottom:34px}
+#src{right:52px;bottom:34px}
+
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'Share Tech Mono';pointer-events:none}
+#track{height:5px;background:rgba(0,0,0,.15)}
+#bar{height:100%;width:0;background:#b53929;box-shadow:0 0 10px rgba(181,57,41,.6)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(10,8,6,.92);backdrop-filter:blur(4px)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #999;color:#ccc;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(255,255,255,.12)}
+#replay.done{animation:pulse 1.2s infinite;border-color:#ffd23f;color:#ffd23f}
+@keyframes pulse{50%{box-shadow:0 0 14px rgba(255,210,63,.8)}}
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <!-- 画面层：XP 桌面世界 -->
+  <div id="cam">
+    <div id="wpl"></div>
+    <!-- 年份角标 -->
+    <div id="yr">2006 年 · 夏<span class="en">THE OLD FAMILY PC</span></div>
+
+    <!-- 桌面图标 · 第一列 -->
+    <div class="dicon" id="diPC" style="left:28px;top:56px"><div class="dic"><svg viewBox="0 0 42 42"><rect x="3" y="4" width="36" height="26" rx="2" fill="#dfe7f2" stroke="#5a6a80"/><rect x="5" y="6" width="32" height="22" fill="#3f7edb"/><rect x="14" y="32" width="14" height="3" fill="#8a97a8"/><rect x="9" y="35" width="24" height="3" rx="1" fill="#6a7788"/></svg></div><span>我的电脑</span></div>
+    <div class="dicon" id="diDoc" style="left:28px;top:172px"><div class="dic"><svg viewBox="0 0 42 42"><path d="M6 12 a3 3 0 0 1 3-3 h9 l4 4 h14 a3 3 0 0 1 3 3 v18 a3 3 0 0 1-3 3 H9 a3 3 0 0 1-3-3 z" fill="#ffd764" stroke="#c89b2a"/><rect x="12" y="18" width="14" height="12" rx="1" fill="#fff" stroke="#b9ad86"/><path d="M14 22h10M14 25h10M14 28h7" stroke="#8aa0b8" stroke-width="1.4"/></svg></div><span>我的文档</span></div>
+    <div class="dicon prog" id="diIE" style="left:28px;top:288px"><div class="dic">
+      <div class="ring"></div>
+      <svg class="nor" viewBox="0 0 42 42"><circle cx="21" cy="21" r="15" fill="#3f8cf3" stroke="#1256b0" stroke-width="1.6"/><path d="M8 24 q6 -16 26 -12 q-4 -4 -13 -4 q-14 0 -13 16" fill="#7db3ec"/><text x="21" y="29" font-size="21" font-weight="bold" font-family="Georgia" fill="#fff" text-anchor="middle" font-style="italic">e</text><ellipse cx="21" cy="21" rx="18" ry="7" fill="none" stroke="#f4c53d" stroke-width="2.6" transform="rotate(-18 21 21)"/></svg>
+      <svg class="brk" viewBox="0 0 42 42"><path d="M10 4 h15 l7 7 v27 a2 2 0 0 1-2 2 H10 a2 2 0 0 1-2-2 V6 a2 2 0 0 1 2-2z" fill="#fff" stroke="#9a9a9a"/><path d="M25 4 v7 h7" fill="#e8e8e8" stroke="#9a9a9a"/><path d="M14 20 l6 6 M20 20 l-6 6" stroke="#c1440e" stroke-width="2.4"/><path d="M22 30 l5 5 M27 30 l-5 5" stroke="#c1440e" stroke-width="2.4"/></svg>
+      <div class="lnk"><svg viewBox="0 0 10 10"><path d="M2 8 L8 2 M4 2 h4 v4" stroke="#0b5ad7" stroke-width="1.8" fill="none"/></svg></div>
+    </div><span>浏览器</span></div>
+    <div class="dicon" id="diBin" style="left:28px;top:838px"><div class="dic">
+      <svg class="binE" viewBox="0 0 42 42"><path d="M12 10 h18 l-2 26 a2 2 0 0 1-2 2 H14 a2 2 0 0 1-2-2 z" fill="#c8d4e0" stroke="#7a8a9a"/><path d="M9 10 h24 M16 10 v-3 a2 2 0 0 1 2-2 h6 a2 2 0 0 1 2 2 v3" fill="none" stroke="#7a8a9a" stroke-width="2"/><path d="M17 15 v18 M21 15 v18 M25 15 v18" stroke="#8a9aaa" stroke-width="1.6"/></svg>
+      <svg class="binF" style="display:none" viewBox="0 0 42 42"><path d="M12 10 h18 l-2 26 a2 2 0 0 1-2 2 H14 a2 2 0 0 1-2-2 z" fill="#c8d4e0" stroke="#7a8a9a"/><path d="M9 10 h24 M16 10 v-3 a2 2 0 0 1 2-2 h6 a2 2 0 0 1 2 2 v3" fill="none" stroke="#7a8a9a" stroke-width="2"/><path d="M15 6 q4 -4 7 0 q3 -3 5 1 q3 -1 2 3" fill="#fff" stroke="#9a9a9a"/><path d="M17 15 v18 M21 15 v18 M25 15 v18" stroke="#8a9aaa" stroke-width="1.6"/></svg>
+    </div><span>回收站</span></div>
+    <!-- 桌面图标 · 第二列（程序们，稍后全灭） -->
+    <div class="dicon prog" id="diGame" style="left:142px;top:56px"><div class="dic">
+      <svg class="nor" viewBox="0 0 42 42"><rect x="8" y="6" width="18" height="26" rx="2" fill="#fff" stroke="#8a8a8a" transform="rotate(-8 17 19)"/><rect x="17" y="10" width="18" height="26" rx="2" fill="#fff" stroke="#8a8a8a" transform="rotate(6 26 23)"/><text x="26" y="28" font-size="14" fill="#c1440e" text-anchor="middle" font-family="Georgia">A</text></svg>
+      <svg class="brk" viewBox="0 0 42 42"><path d="M10 4 h15 l7 7 v27 a2 2 0 0 1-2 2 H10 a2 2 0 0 1-2-2 V6 a2 2 0 0 1 2-2z" fill="#fff" stroke="#9a9a9a"/><path d="M25 4 v7 h7" fill="#e8e8e8" stroke="#9a9a9a"/><path d="M14 20 l6 6 M20 20 l-6 6" stroke="#c1440e" stroke-width="2.4"/><path d="M22 30 l5 5 M27 30 l-5 5" stroke="#c1440e" stroke-width="2.4"/></svg>
+      <div class="lnk"><svg viewBox="0 0 10 10"><path d="M2 8 L8 2 M4 2 h4 v4" stroke="#0b5ad7" stroke-width="1.8" fill="none"/></svg></div>
+    </div><span>打牌游戏</span></div>
+    <div class="dicon prog" id="diMusic" style="left:142px;top:172px"><div class="dic">
+      <svg class="nor" viewBox="0 0 42 42"><circle cx="21" cy="21" r="16" fill="#e8f0fa" stroke="#7a8a9a"/><circle cx="21" cy="21" r="5" fill="#7a8a9a"/><path d="M26 12 v14 a4 4 0 1 1-3-4 V14 q6 -1 8 3 q-1 -5 -8 -6z" fill="#3f8cf3"/></svg>
+      <svg class="brk" viewBox="0 0 42 42"><path d="M10 4 h15 l7 7 v27 a2 2 0 0 1-2 2 H10 a2 2 0 0 1-2-2 V6 a2 2 0 0 1 2-2z" fill="#fff" stroke="#9a9a9a"/><path d="M25 4 v7 h7" fill="#e8e8e8" stroke="#9a9a9a"/><path d="M14 20 l6 6 M20 20 l-6 6" stroke="#c1440e" stroke-width="2.4"/><path d="M22 30 l5 5 M27 30 l-5 5" stroke="#c1440e" stroke-width="2.4"/></svg>
+      <div class="lnk"><svg viewBox="0 0 10 10"><path d="M2 8 L8 2 M4 2 h4 v4" stroke="#0b5ad7" stroke-width="1.8" fill="none"/></svg></div>
+    </div><span>音乐播放器</span></div>
+    <div class="dicon prog" id="diChat" style="left:142px;top:288px"><div class="dic">
+      <svg class="nor" viewBox="0 0 42 42"><path d="M21 7 q13 0 13 10 q0 10 -13 10 q-3 0 -5 -1 l-7 4 2 -6 q-3 -3 -3 -7 q0 -10 13 -10z" fill="#8fd0ff" stroke="#4a90c8"/><circle cx="15" cy="17" r="1.8" fill="#1256b0"/><circle cx="21" cy="17" r="1.8" fill="#1256b0"/><circle cx="27" cy="17" r="1.8" fill="#1256b0"/></svg>
+      <svg class="brk" viewBox="0 0 42 42"><path d="M10 4 h15 l7 7 v27 a2 2 0 0 1-2 2 H10 a2 2 0 0 1-2-2 V6 a2 2 0 0 1 2-2z" fill="#fff" stroke="#9a9a9a"/><path d="M25 4 v7 h7" fill="#e8e8e8" stroke="#9a9a9a"/><path d="M14 20 l6 6 M20 20 l-6 6" stroke="#c1440e" stroke-width="2.4"/><path d="M22 30 l5 5 M27 30 l-5 5" stroke="#c1440e" stroke-width="2.4"/></svg>
+      <div class="lnk"><svg viewBox="0 0 10 10"><path d="M2 8 L8 2 M4 2 h4 v4" stroke="#0b5ad7" stroke-width="1.8" fill="none"/></svg></div>
+    </div><span>聊天软件</span></div>
+    <div class="dicon prog" id="diPaint" style="left:142px;top:404px"><div class="dic">
+      <svg class="nor" viewBox="0 0 42 42"><rect x="8" y="8" width="26" height="20" rx="1" fill="#fff" stroke="#8a8a8a"/><path d="M10 24 l7 -7 5 5 4 -4 6 6" fill="none" stroke="#5aa03c" stroke-width="2"/><circle cx="16" cy="14" r="2" fill="#f4c53d"/><path d="M26 30 l8 -8 4 4 -8 8 -5 1z" fill="#f4c53d" stroke="#a87b1a"/></svg>
+      <svg class="brk" viewBox="0 0 42 42"><path d="M10 4 h15 l7 7 v27 a2 2 0 0 1-2 2 H10 a2 2 0 0 1-2-2 V6 a2 2 0 0 1 2-2z" fill="#fff" stroke="#9a9a9a"/><path d="M25 4 v7 h7" fill="#e8e8e8" stroke="#9a9a9a"/><path d="M14 20 l6 6 M20 20 l-6 6" stroke="#c1440e" stroke-width="2.4"/><path d="M22 30 l5 5 M27 30 l-5 5" stroke="#c1440e" stroke-width="2.4"/></svg>
+      <div class="lnk"><svg viewBox="0 0 10 10"><path d="M2 8 L8 2 M4 2 h4 v4" stroke="#0b5ad7" stroke-width="1.8" fill="none"/></svg></div>
+    </div><span>画图工具</span></div>
+
+    <!-- 窗口①：我的电脑 -->
+    <div class="xwin" id="wPC" style="left:330px;top:170px;width:820px">
+      <div class="xt"><span class="tic"><svg viewBox="0 0 17 17"><rect x="1" y="1" width="15" height="10" rx="1" fill="#3f7edb"/><rect x="6" y="12" width="5" height="2" fill="#8a97a8"/><rect x="3" y="14" width="11" height="2" fill="#6a7788"/></svg></span>我的电脑<div class="xbtns"><i><svg viewBox="0 0 10 10"><path d="M1 8 h8" stroke="#fff" stroke-width="2"/></svg></i><i><svg viewBox="0 0 10 10"><rect x="1.5" y="1.5" width="7" height="7" fill="none" stroke="#fff" stroke-width="1.6"/></svg></i><i class="xc"><svg viewBox="0 0 10 10"><path d="M2 2 l6 6 M8 2 l-6 6" stroke="#fff" stroke-width="2"/></svg></i></div></div>
+      <div class="xtool"><span class="tl">文件(F)</span><span class="tl">编辑(E)</span><span class="tl">查看(V)</span><span class="tl">收藏(A)</span><span class="tl">工具(T)</span><span class="tl">帮助(H)</span></div>
+      <div class="xaddr">地址(A)<div class="ab"><svg viewBox="0 0 14 14"><rect x="1" y="1" width="12" height="8" rx="1" fill="#3f7edb"/><rect x="5" y="10" width="4" height="2" fill="#8a97a8"/></svg>我的电脑</div></div>
+      <div class="xbody" style="height:300px">
+        <div class="drvRow"><div class="dico"><svg viewBox="0 0 38 38"><rect x="3" y="10" width="32" height="20" rx="2" fill="#c8d4e0" stroke="#7a8a9a"/><rect x="3" y="10" width="32" height="7" fill="#a8b8c8"/><circle cx="31" cy="26" r="2" fill="#5aa03c"/></svg></div>
+          <div class="dmeta"><div class="dname">本地磁盘 (C:)</div><div class="xbar"><i id="barC"></i></div><div class="dcap" id="capC">可用空间：41.2 GB　共 74.5 GB</div></div></div>
+        <div class="drvRow"><div class="dico"><svg viewBox="0 0 38 38"><rect x="3" y="10" width="32" height="20" rx="2" fill="#c8d4e0" stroke="#7a8a9a"/><rect x="3" y="10" width="32" height="7" fill="#a8b8c8"/><circle cx="31" cy="26" r="2" fill="#5aa03c"/></svg></div>
+          <div class="dmeta"><div class="dname">本地磁盘 (D:)</div><div class="xbar"><i id="barD"></i></div><div class="dcap">可用空间：88.6 GB　共 148 GB</div></div></div>
+        <div class="drvRow" style="border-bottom:none"><div class="dico"><svg viewBox="0 0 38 38"><circle cx="19" cy="19" r="15" fill="#e8f0fa" stroke="#7a8a9a"/><circle cx="19" cy="19" r="4" fill="#a8b8c8"/></svg></div>
+          <div class="dmeta"><div class="dname">CD 驱动器 (E:)</div><div class="dcap" style="margin-top:8px">插入光盘…</div></div></div>
+      </div>
+      <div class="xstatus"><span>3 个对象</span><span style="margin-left:auto">我的电脑</span></div>
+    </div>
+
+    <!-- 窗口②：C:\Program Files -->
+    <div class="xwin" id="wPF" style="left:780px;top:120px;width:920px">
+      <div class="xt"><span class="tic"><svg viewBox="0 0 17 17"><path d="M1 5 a1 1 0 0 1 1-1 h4 l2 2 h7 a1 1 0 0 1 1 1 v7 a1 1 0 0 1-1 1 H2 a1 1 0 0 1-1-1z" fill="#ffd764" stroke="#c89b2a"/></svg></span>C:\Program Files<div class="xbtns"><i><svg viewBox="0 0 10 10"><path d="M1 8 h8" stroke="#fff" stroke-width="2"/></svg></i><i><svg viewBox="0 0 10 10"><rect x="1.5" y="1.5" width="7" height="7" fill="none" stroke="#fff" stroke-width="1.6"/></svg></i><i class="xc"><svg viewBox="0 0 10 10"><path d="M2 2 l6 6 M8 2 l-6 6" stroke="#fff" stroke-width="2"/></svg></i></div></div>
+      <div class="xtool"><span class="tl">文件(F)</span><span class="tl">编辑(E)</span><span class="tl">查看(V)</span><span class="tl">收藏(A)</span><span class="tl">工具(T)</span><span class="tl">帮助(H)</span></div>
+      <div class="xaddr">地址(A)<div class="ab"><svg viewBox="0 0 14 14"><path d="M1 4 a1 1 0 0 1 1-1 h3 l2 2 h5 a1 1 0 0 1 1 1 v6 H1z" fill="#ffd764" stroke="#c89b2a"/></svg>C:\Program Files</div></div>
+      <div class="xbody" style="height:460px">
+        <div class="fgrid" id="pfGrid">
+          <div class="fitem del" id="fBrowser"><div class="fic"><svg viewBox="0 0 40 40"><path d="M5 12 a2 2 0 0 1 2-2 h10 l3 3 h13 a2 2 0 0 1 2 2 v17 a2 2 0 0 1-2 2 H7 a2 2 0 0 1-2-2z" fill="#ffd764" stroke="#c89b2a"/><text x="20" y="29" font-size="13" font-weight="bold" font-style="italic" font-family="Georgia" fill="#3f8cf3" text-anchor="middle">e</text></svg></div><span>浏览器</span></div>
+          <div class="fitem del" id="fGame"><div class="fic"><svg viewBox="0 0 40 40"><path d="M5 12 a2 2 0 0 1 2-2 h10 l3 3 h13 a2 2 0 0 1 2 2 v17 a2 2 0 0 1-2 2 H7 a2 2 0 0 1-2-2z" fill="#ffd764" stroke="#c89b2a"/><text x="20" y="29" font-size="13" fill="#c1440e" text-anchor="middle" font-family="Georgia">A</text></svg></div><span>打牌游戏</span></div>
+          <div class="fitem del" id="fMusic"><div class="fic"><svg viewBox="0 0 40 40"><path d="M5 12 a2 2 0 0 1 2-2 h10 l3 3 h13 a2 2 0 0 1 2 2 v17 a2 2 0 0 1-2 2 H7 a2 2 0 0 1-2-2z" fill="#ffd764" stroke="#c89b2a"/><circle cx="20" cy="23" r="6" fill="none" stroke="#3f8cf3" stroke-width="2"/></svg></div><span>音乐播放器</span></div>
+          <div class="fitem del" id="fChat"><div class="fic"><svg viewBox="0 0 40 40"><path d="M5 12 a2 2 0 0 1 2-2 h10 l3 3 h13 a2 2 0 0 1 2 2 v17 a2 2 0 0 1-2 2 H7 a2 2 0 0 1-2-2z" fill="#ffd764" stroke="#c89b2a"/><circle cx="15" cy="22" r="2" fill="#1256b0"/><circle cx="21" cy="22" r="2" fill="#1256b0"/><circle cx="27" cy="22" r="2" fill="#1256b0"/></svg></div><span>聊天软件</span></div>
+          <div class="fitem del" id="fPaint"><div class="fic"><svg viewBox="0 0 40 40"><path d="M5 12 a2 2 0 0 1 2-2 h10 l3 3 h13 a2 2 0 0 1 2 2 v17 a2 2 0 0 1-2 2 H7 a2 2 0 0 1-2-2z" fill="#ffd764" stroke="#c89b2a"/><path d="M14 26 l6 -6 3 3 -6 6 -4 1z" fill="#f4c53d" stroke="#a87b1a"/></svg></div><span>画图工具</span></div>
+          <div class="fitem"><div class="fic"><svg viewBox="0 0 40 40"><path d="M5 12 a2 2 0 0 1 2-2 h10 l3 3 h13 a2 2 0 0 1 2 2 v17 a2 2 0 0 1-2 2 H7 a2 2 0 0 1-2-2z" fill="#ffd764" stroke="#c89b2a"/></svg></div><span>Common Files</span></div>
+          <div class="fitem"><div class="fic"><svg viewBox="0 0 40 40"><path d="M5 12 a2 2 0 0 1 2-2 h10 l3 3 h13 a2 2 0 0 1 2 2 v17 a2 2 0 0 1-2 2 H7 a2 2 0 0 1-2-2z" fill="#ffd764" stroke="#c89b2a"/></svg></div><span>Windows NT</span></div>
+          <div class="fitem"><div class="fic"><svg viewBox="0 0 40 40"><path d="M5 12 a2 2 0 0 1 2-2 h10 l3 3 h13 a2 2 0 0 1 2 2 v17 a2 2 0 0 1-2 2 H7 a2 2 0 0 1-2-2z" fill="#ffd764" stroke="#c89b2a"/></svg></div><span>microsoft shared</span></div>
+        </div>
+      </div>
+      <div class="xstatus"><span id="pfCnt">8 个对象</span><span style="margin-left:auto">C:\Program Files</span></div>
+    </div>
+
+    <!-- 右键菜单 -->
+    <div class="rmenu" id="rmenu" style="left:96px;top:300px">
+      <div class="mi">打开(O)</div><hr>
+      <div class="mi">发送到(N)</div>
+      <div class="mi">剪切(T)</div>
+      <div class="mi">复制(C)</div><hr>
+      <div class="mi">删除(D)</div>
+      <div class="mi">重命名(M)</div><hr>
+      <div class="mi hot" id="miProp">属性(R)</div>
+    </div>
+
+    <!-- 属性对话框：快捷方式（双页签） -->
+    <div class="pdlg" id="pLnk" style="left:1060px;top:150px">
+      <div class="xt">浏览器.lnk 属性<div class="xbtns"><i class="xc"><svg viewBox="0 0 10 10"><path d="M2 2 l6 6 M8 2 l-6 6" stroke="#fff" stroke-width="2"/></svg></i></div></div>
+      <div class="ptabs"><i id="tabLnk1" class="on">常规</i><i id="tabLnk2">快捷方式</i><i>兼容性</i></div>
+      <div class="ppage" id="pgLnk1">
+        <div class="prow"><div class="picon"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="14" fill="#3f8cf3" stroke="#1256b0"/><text x="20" y="27" font-size="19" font-weight="bold" font-family="Georgia" fill="#fff" text-anchor="middle" font-style="italic">e</text></svg></div><div class="pv" style="font-size:13px">浏览器.lnk</div></div>
+        <div class="prow"><div class="pl">文件类型：</div><div class="pv">快捷方式 (.lnk)</div></div>
+        <div class="prow"><div class="pl">位置：</div><div class="pv">C:\Documents and Settings\我\桌面</div></div>
+        <div class="prow"><div class="pl">大小：</div><div class="pv"><span class="szBig" id="szLnk">1.20 KB</span> (1,234 字节)</div></div>
+        <div class="prow"><div class="pl">创建时间：</div><div class="pv">2006年7月12日，15:42:08</div></div>
+        <fieldset class="grp"><legend>属性</legend><div class="pchk"><span><em>✓</em>只读</span><span><em></em>隐藏</span><span><em></em>存档</span></div></fieldset>
+      </div>
+      <div class="ppage" id="pgLnk2" style="display:none">
+        <div class="prow"><div class="pl">目标类型：</div><div class="pv">应用程序</div></div>
+        <div class="prow"><div class="pl">目标位置：</div><div class="pv">Browser</div></div>
+        <div class="prow"><div class="pl">目标(T)：</div><div class="pv"><input class="ptx" id="txtTarget" readonly value="C:\Program Files\Browser\Browser.exe"></div></div>
+        <div class="prow"><div class="pl">起始位置：</div><div class="pv"><input class="ptx" readonly value="C:\Program Files\Browser"></div></div>
+        <div class="prow"><div class="pl">快捷键(K)：</div><div class="pv">无</div></div>
+        <div class="prow"><div class="pl">运行方式：</div><div class="pv">常规窗口</div></div>
+        <div class="prow"><div class="pl">备注(O)：</div><div class="pv">双击我，顺着地址去找程序</div></div>
+      </div>
+      <div class="pbtns"><b class="pri">确定</b><b>取消</b><b class="dis">应用(A)</b></div>
+    </div>
+
+    <!-- 属性对话框：程序本体文件夹 -->
+    <div class="pdlg" id="pFolder" style="left:420px;top:200px">
+      <div class="xt">Browser 属性<div class="xbtns"><i class="xc"><svg viewBox="0 0 10 10"><path d="M2 2 l6 6 M8 2 l-6 6" stroke="#fff" stroke-width="2"/></svg></i></div></div>
+      <div class="ptabs"><i class="on">常规</i><i>共享</i><i>自定义</i></div>
+      <div class="ppage">
+        <div class="prow"><div class="picon"><svg viewBox="0 0 40 40"><path d="M5 12 a2 2 0 0 1 2-2 h10 l3 3 h13 a2 2 0 0 1 2 2 v17 a2 2 0 0 1-2 2 H7 a2 2 0 0 1-2-2z" fill="#ffd764" stroke="#c89b2a"/><text x="20" y="29" font-size="13" font-weight="bold" font-style="italic" font-family="Georgia" fill="#3f8cf3" text-anchor="middle">e</text></svg></div><div class="pv" style="font-size:13px">Browser</div></div>
+        <div class="prow"><div class="pl">类型：</div><div class="pv">文件夹</div></div>
+        <div class="prow"><div class="pl">位置：</div><div class="pv">C:\Program Files</div></div>
+        <div class="prow"><div class="pl">大小：</div><div class="pv"><span class="szBig" id="szFolder">328 MB</span> (344,064,512 字节)</div></div>
+        <div class="prow"><div class="pl">包含：</div><div class="pv">412 个文件，26 个文件夹</div></div>
+        <div class="prow"><div class="pl">创建时间：</div><div class="pv">2006年7月12日，15:42:08</div></div>
+        <fieldset class="grp"><legend>属性</legend><div class="pchk"><span><em>✓</em>只读</span><span><em></em>隐藏</span><span><em></em>存档</span></div></fieldset>
+      </div>
+      <div class="pbtns"><b class="pri">确定</b><b>取消</b><b class="dis">应用(A)</b></div>
+    </div>
+
+    <!-- 错误对话框 -->
+    <div class="errdlg" id="err1" style="left:720px;top:290px">
+      <div class="xt">快捷方式存在问题<div class="xbtns"><i class="xc"><svg viewBox="0 0 10 10"><path d="M2 2 l6 6 M8 2 l-6 6" stroke="#fff" stroke-width="2"/></svg></i></div></div>
+      <div class="ebody">
+        <div class="eico"><svg viewBox="0 0 38 38"><circle cx="19" cy="19" r="17" fill="#f8d878" stroke="#b8860b"/><path d="M19 10 v12" stroke="#6a4a00" stroke-width="3.4" stroke-linecap="round"/><circle cx="19" cy="28" r="2.2" fill="#6a4a00"/></svg></div>
+        <div class="etxt">快捷方式“浏览器.lnk”指向的项目<b>“Browser.exe”</b>已经更改或移动，因此该快捷方式无法正常工作。<br><br>你希望删除该快捷方式吗？</div>
+      </div>
+      <div class="ebtns"><b>删除该快捷方式</b><b>取消</b></div>
+    </div>
+
+    <!-- 维修收据 -->
+    <div id="receipt">
+      <h3>电脑维修单</h3>
+      <div class="rrow"><span>故障描述</span><span>系统无法启动</span></div>
+      <div class="rrow"><span>处理方案</span><span>重装系统</span></div>
+      <div class="rrow"><span>合计金额</span><b>¥ 50.00</b></div>
+      <div class="rno">NO.20060712 · 谢谢惠顾</div>
+      <div class="stamp" id="stamp">已 付 讫<br>血 亏</div>
+    </div>
+
+    <!-- 连线层 -->
+    <svg id="wires" width="1920" height="1080"><path id="wire1" pathLength="1000"/><path id="wire2" pathLength="1000"/></svg>
+
+    <!-- XP 任务栏 -->
+    <div id="taskbar">
+      <div id="startBtn"><svg viewBox="0 0 19 19"><path d="M1 4 q4 -2 8 0 v7 q-4 -2 -8 0z" fill="#f7642c"/><path d="M10 4 q4 -2 8 0 v7 q-4 -2 -8 0z" fill="#7db700"/><path d="M1 12 q4 -2 8 0 v6 q-4 -2 -8 0z" fill="#0d8ae8"/><path d="M10 12 q4 -2 8 0 v6 q-4 -2 -8 0z" fill="#fdb900"/></svg>开始</div>
+      <div id="tbmid"><div class="tbb" id="tbbPC"><svg viewBox="0 0 15 15"><rect x="1" y="1" width="13" height="9" rx="1" fill="#3f7edb"/><rect x="5" y="11" width="5" height="2" fill="#8a97a8"/></svg>我的电脑</div><div class="tbb" id="tbbPF"><svg viewBox="0 0 15 15"><path d="M1 4 a1 1 0 0 1 1-1 h4 l2 2 h6 a1 1 0 0 1 1 1 v7 H1z" fill="#ffd764"/></svg>C:\Program Files</div></div>
+      <div id="trayXP"><svg viewBox="0 0 14 14" width="13" height="13"><path d="M2 12 L7 2 L12 12z" fill="#ffd34e" stroke="#8a6d00"/></svg><span id="xpClock">下午 3:42</span></div>
+    </div>
+  </div>
+
+  <!-- 大小对比条（#stage 直属，镜头运动不影响） -->
+  <div id="vs">
+    <div class="vrow"><div class="vlab">快捷方式 浏览器.lnk</div><div class="vbarwrap"><div class="vbar" id="vbLnk" style="background:linear-gradient(90deg,#7db3ec,#2f6fd0)"></div></div><div class="vnum" style="color:#2f6fd0">1.20 KB</div></div>
+    <div class="vrow"><div class="vlab">程序本体 Browser 文件夹</div><div class="vbarwrap"><div class="vbar" id="vbFolder" style="background:linear-gradient(90deg,#f08a80,#c1440e)"></div></div><div class="vnum" style="color:#c1440e">328 MB</div></div>
+  </div>
+
+  <!-- 花字（#stage 直属，镜头运动不影响） -->
+  <div class="hzw" id="hzw"></div>
+
+  <!-- 安安（stage 直属，镜头运动不影响） -->
+  <div class="fish" id="fishA"><img src="Shark-GIF/029_眼睛瞪大旁边数字67惊讶倒计时.gif" alt=""></div>
+  <div class="fish" id="fishB"><img src="Shark-GIF/082_眼睛瞪大头上汗珠尴尬紧张心虚.gif" alt=""></div>
+
+
+  <div class="corner" id="chap">02 / 章 0 · 一条不能碰的线</div>
+  <div class="corner" id="src">界面为演示还原 · 童年回忆</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 02 · 快捷方式只有几KB，程序本体几百MB · 43s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=43000;                       /* 镜头 2 = 0:20–1:03，43s */
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+const after=(ms,f)=>on(performance.now()-t0+ms,f);
+/* 补间：fly 抛物线飞行；cnt 数字滚动 */
+function fly(el,x1,y1,x2,y2,dur,arc,ease,done){tws.push({t:performance.now()-t0,d:dur,e:ease||eio,done,f:p=>{el.style.left=(x1+(x2-x1)*p)+'px';el.style.top=(y1+(y2-y1)*p-Math.sin(p*Math.PI)*(arc||0))+'px'}})}
+function cnt(el,from,to,dur){tws.push({t:performance.now()-t0,d:dur,e:eo,f:p=>{el.textContent=Math.round(from+(to-from)*p).toLocaleString('en-US')}})}
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;   /* 对准 (fx,fy) 推近到 s 倍，自动收边 */
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+
+/* ────────────────────────────────────────────────
+   镜头 02 叙事 cue · 童年故事：快捷方式 vs 程序本体（0:20–1:03）
+   ──────────────────────────────────────────────── */
+function gp(el){let x=0,y=0,n=el;while(n&&n.id!=='cam'){x+=n.offsetLeft;y+=n.offsetTop;n=n.offsetParent}return{x:x+el.offsetWidth/2,y:y+el.offsetHeight/2}}
+let binFilled=false;
+function binFull(){if(binFilled)return;binFilled=true;$('#diBin .binE').style.display='none';$('#diBin .binF').style.display='block'}
+const GHOSTS={};
+function cleanGhost(fid){const g=GHOSTS[fid];if(g){g.remove();delete GHOSTS[fid]}binFull()}
+function delFolder(fid,objCnt){const el=$('#'+fid);const r=gp(el);el.style.visibility='hidden';
+  const g=document.createElement('div');g.className='flyGhost';g.innerHTML=el.querySelector('.fic').innerHTML;
+  g.style.left=(r.x-20)+'px';g.style.top=(r.y-20)+'px';cam.appendChild(g);__sfx.whoosh(.5,.4);GHOSTS[fid]=g;
+  fly(g,r.x-20,r.y-20,56,839,950,240,eio,()=>{cleanGhost(fid);__sfx.pop(.5)})}
+function schedDel(fid,t,objCnt){
+  on(t,()=>delFolder(fid,objCnt));
+  on(t+1000,()=>{cleanGhost(fid);$('#pfCnt').textContent=objCnt+' 个对象'})}   /* 解析期双注册：无头快进也能落到删除后状态 */
+function setHzw(html,top){const h=$('#hzw');h.innerHTML=html;h.style.top=(top||64)+'px';h.classList.add('show');__sfx.pop(.5)}
+function hzwOff(){$('#hzw').classList.remove('show')}
+function drawWire(id,x1,y1,x2,y2){const p=$('#'+id);p.setAttribute('d',`M ${x1} ${y1} C ${x1+260} ${y1-40}, ${x2-320} ${y2+60}, ${x2} ${y2}`);p.style.opacity='';p.classList.add('draw');
+  after(1350,()=>p.classList.add('flow'))}
+function hideWire(id){const p=$('#'+id);p.classList.remove('draw','flow');p.style.opacity='0'}
+
+/* 开场：XP 桌面，图标级联（解析期注册） */
+document.querySelectorAll('.dicon').forEach((d,i)=>on(250+i*110,()=>{d.classList.add('show');__sfx.type(.25)}));
+on(400,()=>$('#yr').classList.add('show'));
+on(900,()=>{$('#wPC').classList.add('show');$('#tbbPC').classList.add('show');__sfx.pop(.55)});   // (0:20) 小时候就干过一次
+on(950,()=>$('#barD').style.width='40%');
+on(2200,()=>{$('#barC').style.width='94%';$('#barC').classList.add('red');                      // (0:22) C盘满了
+  $('#capC').textContent='可用空间：2.1 GB　共 74.5 GB';camFocus(700,330,1.28,1.3);__sfx.ding(.7)});
+on(3600,()=>setHzw('C盘又满了…<b>删点东西腾空间</b>',66));                                        // (0:24) 想自己删点东西
+on(5200,()=>{hzwOff();$('#yr').classList.remove('show');camTo(0,0,1,1.2);
+  $('#wPC').classList.add('bye');$('#tbbPC').classList.remove('show')});                        // (0:26) 但分不清快捷方式
+on(6500,()=>{$('#diIE').classList.add('hi');camFocus(76,309,2.2,1.1);__sfx.pop(.5)});           // (0:29) 桌面上有个浏览器图标
+on(7900,()=>setHzw('快捷方式 和 程序，<b>我分不清</b>',66));
+on(9300,()=>{hzwOff();$('#diIE').classList.remove('hi');camTo(0,0,1,1.3);
+  $('#wPF').classList.add('show');$('#tbbPF').classList.add('show');__sfx.pop(.55)});           // (0:31) C盘里看到同名文件夹
+document.querySelectorAll('#pfGrid .fitem').forEach((f,i)=>on(9750+i*85,()=>{f.classList.add('in');__sfx.type(.28)}));
+on(11600,()=>{const a=gp($('#diIE')),b=gp($('#fBrowser'));drawWire('wire1',a.x+30,a.y,b.x-20,b.y); // (0:34) 我以为这两个是重复的
+  setHzw('同名？<b>那肯定是重复的</b>嘛',66)});
+on(14000,()=>{hzwOff();hideWire('wire1');$('#fBrowser').classList.add('sel')});                 // (0:36) 就把文件夹删掉了
+schedDel('fBrowser',14600,7);
+on(15700,()=>{$('#fishA').classList.add('show');__sfx.pop(.55)});           // 大肥鱼震惊：删的是程序本体
+on(18800,()=>$('#fishA').classList.remove('show'));
+schedDel('fGame',16400,6);                             // (0:38) 并且以此类推
+schedDel('fMusic',17150,5);
+schedDel('fChat',17900,4);
+schedDel('fPaint',18650,3);
+document.querySelectorAll('.dicon.prog').forEach((d,i)=>on(19300+i*200,()=>{d.classList.add('broken');__sfx.pop(.4)})); // (0:41) 所有软件都打不开了
+on(20800,()=>setHzw('然后…<b>所有软件都打不开了</b>',66));
+on(22000,()=>{$('#err1').classList.add('show');__sfx.thud(.5);__sfx.ding(.5)});
+on(24000,()=>{hzwOff();$('#err1').classList.remove('show');camFocus(960,455,1.14,1.0)});        // (0:43) 花50块钱重装系统
+on(24600,()=>{$('#receipt').classList.add('drop');__sfx.whoosh(.8,.6)});
+on(25600,()=>{$('#stamp').classList.add('on');__sfx.thud(1)});
+on(27200,()=>{$('#receipt').classList.remove('drop');camTo(0,0,1,1.1)});                        // (0:46) 后来我才搞明白
+on(27800,()=>{$('#diIE').classList.remove('broken');$('#diIE').classList.add('hi');
+  $('#rmenu').classList.add('show');__sfx.pop(.45)});
+on(28600,()=>{$('#rmenu').classList.remove('show');$('#diIE').classList.remove('hi');
+  $('#pLnk').classList.add('show');__sfx.pop(.55)});                                            // (0:50) 它本身只有几KB
+on(29800,()=>{setHzw('快捷方式本身，<b>只有 1.2 KB</b>',66);camFocus(1275,300,1.35,1.0)});
+on(31600,()=>{hzwOff();$('#tabLnk1').classList.remove('on');$('#tabLnk2').classList.add('on');  // (0:51) 里面就记录了一个地址
+  $('#pgLnk1').style.display='none';$('#pgLnk2').style.display='block';__sfx.swipe(.7)});
+on(32300,()=>{$('#txtTarget').classList.add('hot');__sfx.ding(.6)});
+on(33600,()=>{$('#pFolder').classList.add('show');__sfx.pop(.55)});                             // (0:56) 顺着地址去启动程序
+on(34400,()=>{const a=gp($('#txtTarget')),b=gp($('#pFolder'));drawWire('wire2',a.x-60,a.y,b.x+40,b.y-60)});
+on(35200,()=>camTo(0,0,1,1.4));
+on(36200,()=>{$('#vs').classList.add('show');                                                   // (0:59) 我删掉的才是程序本身
+  $('#vbFolder').style.width='100%';$('#vbLnk').style.width='1.2%';__sfx.whoosh(1,.5)});
+on(37900,()=>setHzw('我删掉的，<b>才是程序本身</b>',72));
+on(39300,()=>{$('#fishB').classList.add('show');__sfx.pop(.55)});           // 大肥鱼心虚冒汗：学费50块
+on(41400,()=>$('#fishB').classList.remove('show'));
+on(41200,()=>camFocus(960,430,1.07,1.6));                                                       // 收尾微推，定格
+on(42400,()=>__sfx.ding(.5));
+</script>
+</body>
+</html>

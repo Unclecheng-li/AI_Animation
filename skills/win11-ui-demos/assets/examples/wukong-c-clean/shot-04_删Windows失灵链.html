@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+  ◆ 镜头 04 · 删 Windows 四步快剪 + 界面失灵链 ◆
+  全程在虚拟机外壳内（三页统一外壳）
+============================================================= -->
+<script>
+/* ===== [不动] 播放器引导：劫持 performance.now/rAF 成虚拟时钟 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+
+<script>
+/* ===== [不动] SFX 引擎 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 04 · 删Windows失灵链 · 32s</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#111;overflow:hidden;font-family:"Segoe UI","Microsoft YaHei",sans-serif}
+body.paused *{animation-play-state:paused!important}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:#070b14}
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:translate(-38px,-29px) scale(1.05);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ────────────────────────────────────────────────
+   虚拟机外壳（三页统一·勿改）
+   ──────────────────────────────────────────────── */
+#vmwrap{position:absolute;inset:0;opacity:0;transition:opacity .7s ease}
+#vmwrap.on{opacity:1}
+#odesk{position:absolute;inset:0;background:#16366e url("material/w11.jfif") center/cover no-repeat}
+#odim{position:absolute;inset:0;background:rgba(3,7,16,.58)}
+.oicon{position:absolute;left:34px;width:92px;text-align:center;opacity:.5}
+.oicon .dic{width:46px;height:46px;margin:0 auto 6px;display:flex;align-items:center;justify-content:center}
+.oicon span{display:inline-block;font-size:12.5px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.7);padding:1px 4px}
+#otaskbar{position:absolute;left:0;right:0;bottom:0;height:48px;background:rgba(238,244,252,.55);backdrop-filter:blur(14px);display:flex;align-items:center;opacity:.55}
+#otaskbar .tb-apps{position:absolute;left:50%;transform:translateX(-50%);display:flex;gap:6px;align-items:center}
+#otaskbar .tb{width:40px;height:40px;border-radius:6px;display:flex;align-items:center;justify-content:center}
+#vmwin{position:absolute;left:210px;top:82px;width:1500px;height:916px;background:#1b1f26;border:1px solid rgba(255,255,255,.1);border-radius:12px;box-shadow:0 40px 120px rgba(0,0,0,.65),0 4px 18px rgba(0,0,0,.5);overflow:hidden}
+.vmtitle{height:40px;display:flex;align-items:center;gap:10px;padding:0 12px;background:#232830;color:#dfe5ee;font-size:13px}
+.vmbtns{margin-left:auto;display:flex}
+.vmbtns i{width:42px;height:28px;display:flex;align-items:center;justify-content:center;color:#9aa4b2}
+.vmbtns i svg{width:11px;height:11px}
+.vmstatus{height:32px;display:flex;align-items:center;gap:8px;padding:0 14px;background:#171b21;color:#9fe6a0;font-size:12px;border-top:1px solid rgba(255,255,255,.05)}
+.vmstatus .dot{width:8px;height:8px;border-radius:50%;background:#3fd35f;box-shadow:0 0 8px #3fd35f}
+.vmstatus .dot.warn{background:#ffb900;box-shadow:0 0 8px #ffb900}
+.vmstatus .vact{margin-left:auto;display:flex;gap:8px}
+.vmstatus .vbtn{font-size:12px;color:#c8d2e0;background:#262d38;border:1px solid rgba(255,255,255,.09);border-radius:5px;padding:3px 12px}
+#vstat2.warn{color:#ffd27a}
+.vmscreen{position:relative;width:1500px;height:844px;background:#000;overflow:hidden}
+.vguest{position:absolute;left:0;top:0;width:1920px;height:1080px;transform:scale(.78125);transform-origin:0 0;overflow:hidden}
+/* 客机桌面（青调，区别于外层） */
+.gwall{position:absolute;inset:0;background:#0e3a5f url("material/w11.jfif") center/cover no-repeat;filter:hue-rotate(-28deg) brightness(.88)}
+.gicon{position:absolute;left:34px;width:92px;text-align:center}
+.gicon .dic{width:46px;height:46px;margin:0 auto 6px;display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 2px 3px rgba(0,0,0,.4))}
+.gicon span{display:inline-block;font-size:12.5px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.7);padding:1px 4px;border-radius:3px;line-height:1.25}
+#gtaskbar{position:absolute;left:0;right:0;bottom:0;height:48px;background:rgba(238,244,252,.85);backdrop-filter:blur(18px);z-index:36;display:flex;align-items:center;box-shadow:0 -1px 0 rgba(0,0,0,.08)}
+#gtaskbar .tb-apps{position:absolute;left:50%;transform:translateX(-50%);display:flex;gap:6px;align-items:center}
+#gtaskbar .tb{width:40px;height:40px;border-radius:6px;display:flex;align-items:center;justify-content:center;position:relative}
+#gtray{position:absolute;right:10px;display:flex;align-items:center;gap:9px;font-size:12px;color:#1b1b1b}
+#gtray .t-time{text-align:right;line-height:1.15}
+/* 客机光标 */
+#gcur{position:absolute;left:1700px;top:900px;z-index:60;width:26px;pointer-events:none;filter:drop-shadow(0 2px 2px rgba(0,0,0,.35));opacity:0;transition:opacity .4s}
+#gcur.show{opacity:1}
+#gcur.click{animation:curClick .28s ease}
+@keyframes curClick{45%{transform:scale(.82)}}
+#gbusy{position:absolute;left:1112px;top:1004px;width:24px;height:24px;border-radius:50%;border:3px solid rgba(255,255,255,.35);border-top-color:#fff;z-index:61;opacity:0;animation:gspin .9s linear infinite;pointer-events:none}
+#gbusy.on{opacity:1}
+@keyframes gspin{to{transform:rotate(360deg)}}
+
+/* ────────────────────────────────────────────────
+   本页 · 客机内窗口 / 菜单 / 对话框 / 命令行
+   ──────────────────────────────────────────────── */
+.gwin{position:absolute;background:#f3f6fb;border:1px solid rgba(0,0,0,.16);border-radius:10px;box-shadow:0 22px 60px rgba(0,0,0,.4);overflow:hidden;opacity:0;transform:translateY(18px) scale(.98);transition:all .5s cubic-bezier(.16,1,.3,1);z-index:20}
+.gwin.show{opacity:1;transform:none}
+.gwin.gone{opacity:0;transform:scale(.985);pointer-events:none}
+.wtitle{height:44px;display:flex;align-items:center;background:#f3f6fb;padding:0 10px;gap:8px}
+.wtitle .wtab{font-size:12.5px;color:#1b1b1b;background:rgba(255,255,255,.7);border-radius:6px 6px 0 0;padding:5px 12px;border:1px solid rgba(0,0,0,.06);border-bottom:none}
+.wbtns{margin-left:auto;display:flex}
+.wbtns i{width:44px;height:32px;display:flex;align-items:center;justify-content:center;color:#444}
+.wbtns i svg{width:11px;height:11px}
+.waddr{height:46px;display:flex;align-items:center;gap:8px;padding:0 12px;background:#f3f6fb;border-bottom:1px solid rgba(0,0,0,.07)}
+.addrbar{flex:1;height:32px;border:1px solid rgba(0,0,0,.12);border-radius:5px;background:#fff;display:flex;align-items:center;padding:0 10px;font-size:12.5px;color:#222;gap:6px}
+.addrbar .crumb{color:#666}
+.wbody{position:relative;height:calc(100% - 44px - 46px - 26px);background:#fff}
+.wstatus{height:26px;display:flex;align-items:center;padding:0 14px;font-size:12px;color:#555;background:#f3f6fb;border-top:1px solid rgba(0,0,0,.06)}
+.fgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:10px}
+.fitem{position:relative;text-align:center;padding:12px 4px 9px;border-radius:6px;border:1px solid transparent}
+.fitem.sel{background:#e8f2fc;border-color:#cfe5fa}
+.fitem.poof{animation:poof .5s cubic-bezier(.3,1.3,.5,1) forwards}
+@keyframes poof{40%{transform:scale(1.12) rotate(-4deg)}100%{transform:scale(0) rotate(8deg);opacity:0}}
+.fic{width:66px;height:52px;margin:0 auto 7px}
+.fname{font-size:12.5px;color:#1b1b1b;line-height:1.3}
+/* 右键菜单 */
+.gmenu{position:absolute;background:rgba(250,250,252,.97);border:1px solid rgba(0,0,0,.1);border-radius:8px;box-shadow:0 12px 34px rgba(0,0,0,.3);padding:5px;z-index:55;opacity:0;transform:scale(.94);transform-origin:top left;transition:all .18s ease}
+.gmenu.show{opacity:1;transform:scale(1)}
+.gmenu .mi{display:flex;align-items:center;gap:10px;font-size:13px;color:#1b1b1b;padding:7px 14px;border-radius:5px;white-space:nowrap}
+.gmenu .mi.hot{background:#e3eefb}
+.gmenu .sep{height:1px;background:rgba(0,0,0,.08);margin:4px 8px}
+/* 系统对话框 */
+.dlg{position:absolute;background:#fff;border:1px solid rgba(0,0,0,.16);border-radius:9px;box-shadow:0 22px 64px rgba(0,0,0,.42);z-index:52;opacity:0;transform:scale(.86);transition:all .4s cubic-bezier(.2,1.3,.4,1)}
+.dlg.in{opacity:1;transform:scale(1)}
+.dlg .dt{height:38px;display:flex;align-items:center;padding:0 12px;font-size:12.5px;color:#1b1b1b;background:#f7f7f7;border-bottom:1px solid rgba(0,0,0,.07);border-radius:9px 9px 0 0}
+.dlg .dt i{margin-left:auto;font-style:normal;color:#666;font-size:14px}
+.dlg .dbody{padding:20px 22px;display:flex;gap:16px;align-items:flex-start}
+.dlg .dbody .txt{font-size:13px;color:#1b1b1b;line-height:1.6}
+.dlg .dbody .txt b{font-size:13.5px}
+.dlg .dft{padding:0 22px 18px;display:flex;justify-content:flex-end;gap:8px}
+.dlg .btn{font-size:12.5px;padding:6px 22px;border-radius:5px;border:1px solid #9b9b9b;background:#fbfbfb;color:#1b1b1b}
+.dlg .btn.pri{background:#0067c0;border-color:#0067c0;color:#fff}
+/* 命令提示符 */
+#gCmd,#gCmd2{position:absolute;left:280px;top:110px;width:1360px;height:780px;background:#0c0c0c;border:1px solid #3a3a3a;border-radius:8px;box-shadow:0 24px 60px rgba(0,0,0,.55);z-index:30;opacity:0;transform:scale(.97);transition:all .4s ease;overflow:hidden;display:flex;flex-direction:column}
+#gCmd.in,#gCmd2.in{opacity:1;transform:scale(1)}
+.ct{height:34px;flex:none;display:flex;align-items:center;gap:9px;background:#1f1f1f;color:#ddd;font-size:12.5px;padding:0 12px}
+.ct i{margin-left:auto;font-style:normal;color:#888}
+.cb{flex:1;padding:12px 14px;font-family:Consolas,"Cascadia Mono",monospace;font-size:15px;line-height:1.55;color:#e8e8e8;white-space:pre-wrap}
+.cline{opacity:0;transition:opacity .12s}
+.cline.in{opacity:1}
+.cline.deny{color:#ff9d9d}
+.caret{display:inline-block;width:9px;height:17px;background:#e8e8e8;vertical-align:-3px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+/* 高级安全设置 */
+#gSec{position:absolute;left:640px;top:300px;width:640px;background:#fff;border:1px solid rgba(0,0,0,.16);border-radius:9px;box-shadow:0 22px 64px rgba(0,0,0,.42);z-index:52;opacity:0;transform:scale(.92);transition:all .4s cubic-bezier(.2,1.3,.4,1)}
+#gSec.show{opacity:1;transform:scale(1)}
+#gSec.gone{opacity:0;transform:scale(.96)}
+#gSec .sect{height:38px;display:flex;align-items:center;padding:0 14px;font-size:12.5px;background:#f7f7f7;border-bottom:1px solid rgba(0,0,0,.07);border-radius:9px 9px 0 0}
+#gSec .secb{padding:18px 22px;font-size:13px;color:#1b1b1b}
+.secrow{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid #eee}
+.secrow .k{width:90px;color:#666;font-size:12.5px}
+.secrow .v b{color:#0067c0}
+.secbtn{margin-left:auto;font-size:12px;padding:5px 16px;border:1px solid #9b9b9b;border-radius:5px;background:#fbfbfb}
+.perm{margin-top:12px;border:1px solid #e0e0e0;border-radius:6px;overflow:hidden}
+.prow{display:flex;font-size:12px;color:#333;padding:8px 12px;border-bottom:1px solid #f0f0f0}
+.prow:last-child{border-bottom:none}
+.prow .p1{width:170px;font-weight:600}
+.prow .p2{width:110px;color:#666}
+/* 开始菜单 / 电源菜单 */
+#gStart{position:absolute;left:672px;top:330px;width:576px;height:640px;background:rgba(243,244,248,.96);backdrop-filter:blur(20px);border:1px solid rgba(0,0,0,.12);border-radius:12px;box-shadow:0 24px 70px rgba(0,0,0,.45);z-index:54;opacity:0;transform:translateY(20px) scale(.97);transition:all .3s cubic-bezier(.16,1,.3,1);display:flex;flex-direction:column;padding:26px 34px 0}
+#gStart.show{opacity:1;transform:none}
+.ssrch{height:36px;border-radius:18px;background:#fff;border:1px solid rgba(0,0,0,.1);display:flex;align-items:center;padding:0 16px;font-size:12.5px;color:#888;gap:8px}
+.sttl{margin:22px 4px 12px;font-size:13px;font-weight:600;color:#333}
+.sgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.sapp{text-align:center;padding:14px 4px 10px;border-radius:8px}
+.sapp.hot{background:#e3eefb}
+.sapp .aic{width:42px;height:42px;margin:0 auto 7px;display:flex;align-items:center;justify-content:center}
+.sapp span{font-size:12px;color:#1b1b1b}
+.sft{margin-top:auto;height:64px;border-top:1px solid rgba(0,0,0,.07);display:flex;align-items:center;padding:0 8px}
+.suser{display:flex;align-items:center;gap:9px;font-size:13px;color:#1b1b1b}
+.spwr{margin-left:auto;width:40px;height:40px;border-radius:6px;display:flex;align-items:center;justify-content:center}
+#gPower{position:absolute;left:1100px;top:756px;width:180px;background:rgba(250,250,252,.97);border:1px solid rgba(0,0,0,.1);border-radius:8px;box-shadow:0 12px 34px rgba(0,0,0,.3);padding:5px;z-index:56;opacity:0;transform:scale(.94);transform-origin:bottom right;transition:all .18s ease}
+#gPower.show{opacity:1;transform:scale(1)}
+#gPower .pi{font-size:13px;color:#1b1b1b;padding:9px 14px;border-radius:5px}
+#gPower .pi.hot{background:#e3eefb}
+/* Ctrl+Alt+Delete 键提示 */
+#gKeys{position:absolute;right:52px;bottom:74px;z-index:57;display:flex;align-items:center;gap:8px;font-family:Consolas,monospace;font-size:14px;color:#cfe0f4;opacity:0;transition:opacity .4s}
+#gKeys.show{opacity:1}
+#gKeys .key{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.4);border-bottom-width:3px;border-radius:6px;padding:5px 12px;color:#fff;transition:background .15s}
+#gKeys .key.press{background:#2f80d8;border-color:#9cc8f5}
+#gKeys .noresp{margin-left:10px;font-size:13px;color:#ff9d9d;opacity:0;transition:opacity .5s}
+#gKeys .noresp.on{opacity:1}
+
+/* 大肥鱼反应表情包 */
+.fish{position:absolute;right:60px;top:240px;width:290px;z-index:29;opacity:0;transform:translateY(26px) scale(.68);transition:all .5s cubic-bezier(.34,1.6,.64,1);pointer-events:none;filter:drop-shadow(0 10px 24px rgba(2,10,30,.4))}
+.fish.show{opacity:1;transform:translateY(0) scale(1)}
+.fish img{width:100%;display:block}
+
+/* ───── 底盘区（不动）───── */
+.corner{position:absolute;font-family:"Cascadia Mono","Consolas",monospace;font-size:15px;color:rgba(255,255,255,.92);letter-spacing:2px;z-index:37;text-shadow:0 1px 4px rgba(8,24,60,.8),0 0 3px rgba(8,24,60,.6);padding:3px 9px;border-radius:6px;background:rgba(8,20,46,.45)}
+#chap{left:52px;bottom:34px}
+#src{right:52px;bottom:34px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'Cascadia Mono','Consolas',monospace;pointer-events:none}
+#track{height:5px;background:rgba(0,0,0,.25)}
+#bar{height:100%;width:0;background:#d13438;box-shadow:0 0 10px rgba(209,52,56,.6)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(10,12,18,.92);color:#ccc;backdrop-filter:blur(4px)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #999;color:#ccc;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(255,255,255,.12)}
+#replay.done{animation:pulse 1.2s infinite;border-color:#ffd23f;color:#ffd23f}
+@keyframes pulse{50%{box-shadow:0 0 14px rgba(255,210,63,.8)}}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="cam">
+    <!-- ══════ 虚拟机外壳（三页统一）══════ -->
+    <div id="vmwrap">
+      <div id="odesk">
+        <div class="oicon" style="top:26px"><div class="dic"><svg width="42" height="42" viewBox="0 0 48 48"><rect x="3" y="7" width="42" height="30" rx="2.5" fill="#4aa3e8"/><rect x="5.5" y="9.5" width="37" height="25" rx="1.5" fill="#dff0fd"/><rect x="5.5" y="9.5" width="37" height="5.5" fill="#2f80d8"/><rect x="15" y="39" width="18" height="3.5" fill="#8a8a8a"/><rect x="11" y="42.5" width="26" height="3" rx="1.5" fill="#9b9b9b"/></svg></div><span>此电脑</span></div>
+        <div class="oicon" style="top:128px"><div class="dic"><svg width="40" height="40" viewBox="0 0 48 48"><path d="M13 14h22l-2.4 27.5a3 3 0 0 1-3 2.5H18.4a3 3 0 0 1-3-2.5L13 14Z" fill="#e8f0f8" stroke="#b9c6d4" stroke-width="1.6"/><path d="M10 14h28" stroke="#b9c6d4" stroke-width="2.6" stroke-linecap="round"/><path d="M19 14v-3.4A2.6 2.6 0 0 1 21.6 8h4.8A2.6 2.6 0 0 1 29 10.6V14" fill="none" stroke="#b9c6d4" stroke-width="2"/><path d="M20 21v14M28 21v14" stroke="#b9c6d4" stroke-width="2"/></svg></div><span>回收站</span></div>
+        <div id="otaskbar">
+          <div class="tb-apps">
+            <div class="tb"><svg width="22" height="22" viewBox="0 0 22 22"><rect x="1" y="1" width="9" height="9" fill="#00a2ed"/><rect x="12" y="1" width="9" height="9" fill="#00a2ed"/><rect x="1" y="12" width="9" height="9" fill="#00a2ed"/><rect x="12" y="12" width="9" height="9" fill="#00a2ed"/></svg></div>
+            <div class="tb"><svg width="20" height="20" viewBox="0 0 20 20"><circle cx="8.5" cy="8.5" r="6" fill="none" stroke="#444" stroke-width="2"/><path d="m13 13 4.5 4.5" stroke="#444" stroke-width="2" stroke-linecap="round"/></svg></div>
+            <div class="tb"><svg width="20" height="20" viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2.5h9A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5v-12Z" fill="#ffce73" stroke="#e0a83c"/></svg></div>
+          </div>
+        </div>
+      </div>
+      <div id="odim"></div>
+
+      <div id="vmwin">
+        <div class="vmtitle">
+          <svg width="18" height="18" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="14" rx="2" fill="none" stroke="#8fd0ff" stroke-width="1.6"/><rect x="5" y="7" width="14" height="8" rx="1" fill="#8fd0ff" opacity=".35"/><path d="M9 21h6" stroke="#8fd0ff" stroke-width="1.6" stroke-linecap="round"/></svg>
+          虚拟机 · 演示系统
+          <div class="vmbtns">
+            <i><svg viewBox="0 0 12 12"><path d="M1 6h10" stroke="currentColor" stroke-width="1.2"/></svg></i>
+            <i><svg viewBox="0 0 12 12"><rect x="1.5" y="1.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></i>
+            <i><svg viewBox="0 0 12 12"><path d="M1 1l10 10M11 1L1 11" stroke="currentColor" stroke-width="1.2"/></svg></i>
+          </div>
+        </div>
+        <div class="vmstatus">
+          <i class="dot" id="vdot"></i><span id="vstat1">运行中</span><span style="color:#5c6b7e">·</span><span id="vstat2">已就绪</span>
+          <div class="vact"><span class="vbtn">快照管理器</span><span class="vbtn">设置</span></div>
+        </div>
+        <div class="vmscreen">
+          <div class="vguest">
+            <div class="gwall"></div>
+            <div class="gicon" style="top:24px" id="icoPC"><div class="dic"><svg width="42" height="42" viewBox="0 0 48 48"><rect x="3" y="7" width="42" height="30" rx="2.5" fill="#4aa3e8"/><rect x="5.5" y="9.5" width="37" height="25" rx="1.5" fill="#dff0fd"/><rect x="5.5" y="9.5" width="37" height="5.5" fill="#2f80d8"/><rect x="15" y="39" width="18" height="3.5" fill="#8a8a8a"/><rect x="11" y="42.5" width="26" height="3" rx="1.5" fill="#9b9b9b"/></svg></div><span>此电脑</span></div>
+            <div class="gicon" style="top:128px"><div class="dic"><svg width="40" height="40" viewBox="0 0 48 48"><path d="M13 14h22l-2.4 27.5a3 3 0 0 1-3 2.5H18.4a3 3 0 0 1-3-2.5L13 14Z" fill="#e8f0f8" stroke="#b9c6d4" stroke-width="1.6"/><path d="M10 14h28" stroke="#b9c6d4" stroke-width="2.6" stroke-linecap="round"/><path d="M19 14v-3.4A2.6 2.6 0 0 1 21.6 8h4.8A2.6 2.6 0 0 1 29 10.6V14" fill="none" stroke="#b9c6d4" stroke-width="2"/><path d="M20 21v14M28 21v14" stroke="#b9c6d4" stroke-width="2"/></svg></div><span>回收站</span></div>
+
+            <!-- 资源管理器：C:\ 根目录 -->
+            <div class="gwin" id="gExp" style="left:340px;top:150px;width:1240px;height:680px">
+              <div class="wtitle">
+                <svg width="18" height="18" viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2.5h9A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5v-12Z" fill="#ffce73" stroke="#e0a83c"/></svg>
+                <span class="wtab">本地磁盘 (C:)</span>
+                <div class="wbtns">
+                  <i><svg viewBox="0 0 12 12"><path d="M1 6h10" stroke="currentColor" stroke-width="1.2"/></svg></i>
+                  <i><svg viewBox="0 0 12 12"><rect x="1.5" y="1.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></i>
+                  <i><svg viewBox="0 0 12 12"><path d="M1 1l10 10M11 1L1 11" stroke="currentColor" stroke-width="1.2"/></svg></i>
+                </div>
+              </div>
+              <div class="waddr"><div class="addrbar"><svg width="13" height="13" viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2.5h9A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5v-12Z" fill="#ffce73"/></svg>此电脑 <span class="crumb">›</span> 本地磁盘 (C:)</div></div>
+              <div class="wbody">
+                <div class="fgrid">
+                  <div class="fitem"><div class="fic"><svg width="66" height="52" viewBox="0 0 66 52"><path d="M3 10a3 3 0 0 1 3-3h17l5 6h32a3 3 0 0 1 3 3v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V10Z" fill="#ffd88a"/><path d="M3 16h60v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V16Z" fill="#ffce73"/><path d="M3 16h60v4H3z" fill="#f5b955"/></svg></div><div class="fname">PerfLogs</div></div>
+                  <div class="fitem"><div class="fic"><svg width="66" height="52" viewBox="0 0 66 52"><path d="M3 10a3 3 0 0 1 3-3h17l5 6h32a3 3 0 0 1 3 3v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V10Z" fill="#ffd88a"/><path d="M3 16h60v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V16Z" fill="#ffce73"/><path d="M3 16h60v4H3z" fill="#f5b955"/></svg></div><div class="fname">Program Files</div></div>
+                  <div class="fitem"><div class="fic"><svg width="66" height="52" viewBox="0 0 66 52"><path d="M3 10a3 3 0 0 1 3-3h17l5 6h32a3 3 0 0 1 3 3v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V10Z" fill="#ffd88a"/><path d="M3 16h60v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V16Z" fill="#ffce73"/><path d="M3 16h60v4H3z" fill="#f5b955"/></svg></div><div class="fname">Program Files (x86)</div></div>
+                  <div class="fitem"><div class="fic"><svg width="66" height="52" viewBox="0 0 66 52"><path d="M3 10a3 3 0 0 1 3-3h17l5 6h32a3 3 0 0 1 3 3v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V10Z" fill="#ffd88a"/><path d="M3 16h60v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V16Z" fill="#ffce73"/><path d="M3 16h60v4H3z" fill="#f5b955"/></svg></div><div class="fname">ProgramData</div></div>
+                  <div class="fitem"><div class="fic"><svg width="66" height="52" viewBox="0 0 66 52"><path d="M3 10a3 3 0 0 1 3-3h17l5 6h32a3 3 0 0 1 3 3v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V10Z" fill="#ffd88a"/><path d="M3 16h60v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V16Z" fill="#ffce73"/><path d="M3 16h60v4H3z" fill="#f5b955"/></svg></div><div class="fname">Users</div></div>
+                  <div class="fitem" id="fWin"><div class="fic"><svg width="66" height="52" viewBox="0 0 66 52"><path d="M3 10a3 3 0 0 1 3-3h17l5 6h32a3 3 0 0 1 3 3v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V10Z" fill="#ffd88a"/><path d="M3 16h60v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V16Z" fill="#ffce73"/><path d="M3 16h60v4H3z" fill="#f5b955"/><rect x="22" y="24" width="22" height="14" rx="1.5" fill="#4aa3e8"/><path d="M24 24v14M33 24v14M22 31h22" stroke="#dff0fd" stroke-width="1.6"/></svg></div><div class="fname">Windows</div></div>
+                </div>
+              </div>
+              <div class="wstatus"><span id="statL">6 个项目</span></div>
+            </div>
+
+            <!-- 右键菜单 -->
+            <div class="gmenu" id="gMenu" style="left:820px;top:470px">
+              <div class="mi">打开</div>
+              <div class="mi">固定到快速访问</div>
+              <div class="sep"></div>
+              <div class="mi">属性</div>
+              <div class="mi" id="miDel"><svg width="13" height="13" viewBox="0 0 48 48"><path d="M13 14h22l-2.4 27.5a3 3 0 0 1-3 2.5H18.4a3 3 0 0 1-3-2.5L13 14Z" fill="none" stroke="#555" stroke-width="3"/><path d="M10 14h28" stroke="#555" stroke-width="3.6" stroke-linecap="round"/></svg>删除</div>
+            </div>
+
+            <!-- 权限不足 ×2 -->
+            <div class="dlg" id="gDlg1" style="left:710px;top:340px;width:520px">
+              <div class="dt">文件夹访问被拒绝<i>✕</i></div>
+              <div class="dbody">
+                <svg width="40" height="40" viewBox="0 0 66 52" style="flex:none"><path d="M3 10a3 3 0 0 1 3-3h17l5 6h32a3 3 0 0 1 3 3v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V10Z" fill="#ffce73"/><circle cx="46" cy="36" r="14" fill="#d13438"/><path d="M40 30l12 12M52 30 40 42" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>
+                <div class="txt"><b>你需要权限来执行此操作。</b><br>你需要来自管理员帐户的权限才能对此文件夹进行更改。</div>
+              </div>
+              <div class="dft"><span class="btn">跳过</span><span class="btn">取消</span><span class="btn pri" id="btnGo">继续</span></div>
+            </div>
+            <div class="dlg" id="gDlg2" style="left:730px;top:360px;width:520px">
+              <div class="dt">文件夹访问被拒绝<i>✕</i></div>
+              <div class="dbody">
+                <svg width="40" height="40" viewBox="0 0 66 52" style="flex:none"><path d="M3 10a3 3 0 0 1 3-3h17l5 6h32a3 3 0 0 1 3 3v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V10Z" fill="#ffce73"/><path d="M40 28h12v14H40z" fill="#8a8a8a"/><path d="M42 28v-4a4 4 0 0 1 8 0v4" fill="none" stroke="#8a8a8a" stroke-width="2.6"/></svg>
+                <div class="txt"><b>你需要来自 TrustedInstaller 的权限</b><br>才能对此文件夹进行更改。</div>
+              </div>
+              <div class="dft"><span class="btn" id="btnNo">取消</span><span class="btn pri">重试</span></div>
+            </div>
+
+            <!-- 命令提示符 ①：拒绝访问刷屏 -->
+            <div id="gCmd">
+              <div class="ct"><svg width="14" height="14" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="18" rx="2" fill="#0c0c0c" stroke="#666"/><path d="M6 8l4 4-4 4M12 16h6" stroke="#e8e8e8" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>命令提示符<i>✕</i></div>
+              <div class="cb"><div>Microsoft Windows [版本 10.0.22631.4460]</div><div>(c) Microsoft Corporation。保留所有权利。</div><div>&nbsp;</div><div>C:\Users\你的用户名&gt;<span id="cmdType"></span><span class="caret"></span></div><div class="cline deny">C:\██████\███████ - 拒绝访问。</div><div class="cline deny">C:\██████\████ - 拒绝访问。</div><div class="cline deny">C:\██████\██████████ - 拒绝访问。</div><div class="cline deny">C:\██████\███ - 拒绝访问。</div><div class="cline deny">C:\██████\██████ - 拒绝访问。</div><div class="cline deny">C:\██████\█████ - 拒绝访问。</div><div class="cline deny">C:\██████\████████ - 拒绝访问。</div><div class="cline deny">C:\██████\██ - 拒绝访问。</div></div>
+            </div>
+            <!-- 命令提示符 ②：删空 -->
+            <div id="gCmd2">
+              <div class="ct"><svg width="14" height="14" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="18" rx="2" fill="#0c0c0c" stroke="#666"/><path d="M6 8l4 4-4 4M12 16h6" stroke="#e8e8e8" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>命令提示符<i>✕</i></div>
+              <div class="cb"><div>C:\Users\你的用户名&gt;rd /s /q C:\██████</div><div class="cline">正在删除 C:\██████\███████ ...</div><div class="cline">正在删除 C:\██████\████ ...</div><div class="cline">正在删除 C:\██████\██████████ ...</div><div class="cline">正在删除 C:\██████\███ ...</div><div class="cline">正在删除 C:\██████\██████ ...</div><div class="cline">正在删除 C:\██████\█████ ...</div><div class="cline">正在删除 C:\██████\████████ ...</div><div class="cline">正在删除 C:\██████\██ ...</div><div>&nbsp;</div><div>C:\Users\你的用户名&gt;<span class="caret"></span></div></div>
+            </div>
+
+            <!-- 高级安全设置（改所有者） -->
+            <div id="gSec">
+              <div class="sect">Windows 的高级安全设置</div>
+              <div class="secb">
+                <div class="secrow"><span class="k">所有者</span><span class="v">所有者：<b id="ownerTxt">SYSTEM</b></span><span class="secbtn" id="btnOwner">更改(C)</span></div>
+                <div class="perm">
+                  <div class="prow"><span class="p1">SYSTEM</span><span class="p2">完全控制</span><span>C:\██████</span></div>
+                  <div class="prow"><span class="p1">Administrators</span><span class="p2">完全控制</span><span>C:\██████</span></div>
+                  <div class="prow"><span class="p1">你的用户名</span><span class="p2">读取</span><span>C:\██████</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 此电脑 · 空白 -->
+            <div class="gwin" id="gPC" style="left:400px;top:170px;width:1120px;height:640px">
+              <div class="wtitle">
+                <svg width="18" height="18" viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2.5h9A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5v-12Z" fill="#ffce73" stroke="#e0a83c"/></svg>
+                <span class="wtab">此电脑</span>
+                <div class="wbtns">
+                  <i><svg viewBox="0 0 12 12"><path d="M1 6h10" stroke="currentColor" stroke-width="1.2"/></svg></i>
+                  <i><svg viewBox="0 0 12 12"><rect x="1.5" y="1.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></i>
+                  <i><svg viewBox="0 0 12 12"><path d="M1 1l10 10M11 1L1 11" stroke="currentColor" stroke-width="1.2"/></svg></i>
+                </div>
+              </div>
+              <div class="waddr"><div class="addrbar"><svg width="13" height="13" viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2.5h9A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5v-12Z" fill="#ffce73"/></svg>此电脑</div></div>
+              <div class="wbody"></div>
+              <div class="wstatus"><span>0 个项目</span></div>
+            </div>
+
+            <!-- 开始菜单 -->
+            <div id="gStart">
+              <div class="ssrch"><svg width="13" height="13" viewBox="0 0 14 14"><circle cx="6" cy="6" r="4.4" fill="none" stroke="#999" stroke-width="1.5"/><path d="m9.4 9.4 3 3" stroke="#999" stroke-width="1.5" stroke-linecap="round"/></svg>输入以搜索</div>
+              <div class="sttl">已固定</div>
+              <div class="sgrid">
+                <div class="sapp" id="appSet"><div class="aic"><svg width="38" height="38" viewBox="0 0 24 24"><path d="M10.3 2h3.4l.5 2.6 2.2 1.2 2.5-.9 1.7 3-2 1.7v2.3l2 1.7-1.7 3-2.5-.9-2.2 1.2-.5 2.6h-3.4l-.5-2.6-2.2-1.2-2.5.9-1.7-3 2-1.7V9.6l-2-1.7 1.7-3 2.5.9 2.2-1.2.5-2.6Z" fill="#5b5fc7"/><circle cx="12" cy="12" r="3.2" fill="#fff"/></svg></div><span>设置</span></div>
+                <div class="sapp"><div class="aic"><svg width="38" height="38" viewBox="0 0 48 48"><circle cx="24" cy="24" r="20" fill="#e8f3ff" stroke="#8fc0ee" stroke-width="1.5"/><path d="M24 4c6 6 6 34 0 40M24 4c-6 6-6 34 0 40M5.5 19h37M5.5 29h37" fill="none" stroke="#4aa3e8" stroke-width="2"/></svg></div><span>浏览器</span></div>
+                <div class="sapp"><div class="aic"><svg width="38" height="38" viewBox="0 0 48 48"><rect x="3" y="7" width="42" height="30" rx="2.5" fill="#4aa3e8"/><rect x="5.5" y="9.5" width="37" height="25" rx="1.5" fill="#dff0fd"/><rect x="15" y="39" width="18" height="3.5" fill="#8a8a8a"/></svg></div><span>此电脑</span></div>
+                <div class="sapp"><div class="aic"><svg width="38" height="38" viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2.5h9A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5v-12Z" fill="#ffce73" stroke="#e0a83c"/></svg></div><span>文件资源管理器</span></div>
+                <div class="sapp"><div class="aic"><svg width="38" height="38" viewBox="0 0 48 48"><rect x="5" y="6" width="38" height="30" rx="4" fill="#e8f0f8" stroke="#b9c6d4" stroke-width="1.5"/><circle cx="17" cy="17" r="4" fill="#ffb900"/><path d="M8 32l10-9 7 6 8-7 7 6v4H8Z" fill="#7ec36a"/></svg></div><span>照片</span></div>
+                <div class="sapp"><div class="aic"><svg width="38" height="38" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="18" rx="3" fill="#1f1f1f"/><path d="M6 8l4 4-4 4M12 16h6" stroke="#e8e8e8" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg></div><span>终端</span></div>
+              </div>
+              <div class="sft">
+                <div class="suser"><svg width="30" height="30" viewBox="0 0 30 30"><circle cx="15" cy="15" r="14" fill="#7fb3e8"/><circle cx="15" cy="12" r="5" fill="#fff"/><path d="M5.5 26a10 10 0 0 1 19 0" fill="#fff"/></svg>你的用户名</div>
+                <div class="spwr" id="btnPower"><svg width="18" height="18" viewBox="0 0 18 18"><path d="M9 1.5v7" stroke="#333" stroke-width="2" stroke-linecap="round"/><path d="M4.5 4.8a7 7 0 1 0 9 0" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round"/></svg></div>
+              </div>
+            </div>
+            <div id="gPower"><div class="pi">睡眠</div><div class="pi" id="piOff">关机</div><div class="pi">重启</div></div>
+
+            <!-- 任务栏右键菜单 -->
+            <div class="gmenu" id="gTbMenu" style="left:1000px;top:890px">
+              <div class="mi" id="tiTm">任务管理器</div>
+              <div class="mi">任务栏设置</div>
+            </div>
+
+            <!-- 设置打不开 · 错误框 -->
+            <div class="dlg" id="gErr1" style="left:760px;top:380px;width:480px">
+              <div class="dt">系统错误<i>✕</i></div>
+              <div class="dbody">
+                <svg width="40" height="40" viewBox="0 0 40 40" style="flex:none"><circle cx="20" cy="20" r="18" fill="#d13438"/><path d="M13 13l14 14M27 13 13 27" stroke="#fff" stroke-width="3.4" stroke-linecap="round"/></svg>
+                <div class="txt"><b>无法打开“设置”。</b><br>系统找不到指定的文件。</div>
+              </div>
+              <div class="dft"><span class="btn" id="btnOk1">确定</span></div>
+            </div>
+
+            <!-- Ctrl+Alt+Delete 键位提示 -->
+            <div id="gKeys"><span class="key" id="kC">Ctrl</span>+<span class="key" id="kA">Alt</span>+<span class="key" id="kD">Delete</span><span class="noresp" id="noResp">· 无响应</span></div>
+
+            <!-- 客机任务栏 -->
+            <div id="gtaskbar">
+              <div class="tb-apps">
+                <div class="tb" id="tbStart"><svg width="22" height="22" viewBox="0 0 22 22"><rect x="1" y="1" width="9" height="9" fill="#00a2ed"/><rect x="12" y="1" width="9" height="9" fill="#00a2ed"/><rect x="1" y="12" width="9" height="9" fill="#00a2ed"/><rect x="12" y="12" width="9" height="9" fill="#00a2ed"/></svg></div>
+                <div class="tb"><svg width="20" height="20" viewBox="0 0 20 20"><circle cx="8.5" cy="8.5" r="6" fill="none" stroke="#444" stroke-width="2"/><path d="m13 13 4.5 4.5" stroke="#444" stroke-width="2" stroke-linecap="round"/></svg></div>
+                <div class="tb"><svg width="20" height="20" viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2.5h9A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5v-12Z" fill="#ffce73" stroke="#e0a83c"/></svg></div>
+                <div class="tb"><svg width="20" height="20" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="15" rx="2" fill="#5aa2e6"/><rect x="5.5" y="5.5" width="13" height="10" fill="#dff0fd"/></svg></div>
+              </div>
+              <div id="gtray">
+                <svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 6.5a9 9 0 0 1 12 0" fill="none" stroke="#333" stroke-width="1.5" stroke-linecap="round"/><path d="M4.5 9.4a5.5 5.5 0 0 1 7 0" fill="none" stroke="#333" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="12" r="1.4" fill="#333"/></svg>
+                <div class="t-time">12:30<br>2026/9/22</div>
+              </div>
+            </div>
+
+            <div id="gbusy"></div>
+            <div id="gcur"><svg width="26" height="26" viewBox="0 0 26 26"><path d="M6 2 21 14.5 13.8 15.5 17.5 23 14.5 24.5 10.8 17 6 20.5V2Z" fill="#fff" stroke="#111" stroke-width="1.4"/></svg></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 安安（#stage 直属） -->
+<div class="fish" id="fishA"><img src="Shark-GIF/041_趴键盘愤怒符号抓狂打字.gif" alt=""></div>
+
+
+  <div class="corner" id="chap">章 0 · 开场 — 一条不能碰的线</div>
+  <div class="corner" id="src">界面为演示还原</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 04 · 删Windows失灵链 · 32s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=32000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+const after=(ms,f)=>on(performance.now()-t0+ms,f);
+function fly(el,x1,y1,x2,y2,dur,arc,ease,done){tws.push({t:performance.now()-t0,d:dur,e:ease||eio,done,f:p=>{el.style.left=(x1+(x2-x1)*p)+'px';el.style.top=(y1+(y2-y1)*p-Math.sin(p*Math.PI)*(arc||0))+'px'}})}
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+
+/* ────────────────────────────────────────────────
+   镜头 04 cue · 1:26–1:58「四步快剪 → 失灵链」
+   ──────────────────────────────────────────────── */
+const cur=$('#gcur');
+function curTo(x,y,dur,arc){const l=parseFloat(cur.style.left)||1700,t=parseFloat(cur.style.top)||900;fly(cur,l,t,x,y,dur,arc||26)}
+function clickFx(){cur.classList.remove('click');void cur.offsetWidth;cur.classList.add('click')}
+
+/* ── 前段 · 四步快剪（0–15.2s）── */
+on(100,()=>$('#vmwrap').classList.add('on'));
+on(300,()=>camTo(0,0,1,1.4));                                        // 开场拉镜
+on(600,()=>{$('#gExp').classList.add('show');__sfx.pop(.5)});         // (1:26) C盘根目录
+on(1400,()=>{cur.classList.add('show');curTo(807,398,800)});          // 摸向 Windows 文件夹
+on(2400,()=>{clickFx();$('#fWin').classList.add('sel');$('#gMenu').classList.add('show');__sfx.pop(.5)}); // 右键
+on(3200,()=>{curTo(880,589,400);$('#miDel').classList.add('hot')});
+on(3600,()=>{clickFx();__sfx.type(.5);$('#gMenu').classList.remove('show')}); // 点删除
+on(4100,()=>{$('#gDlg1').classList.add('in');__sfx.thud(.8)});        // (1:30) 权限不足①
+on(5000,()=>curTo(1173,473,500));
+on(5400,()=>{clickFx();__sfx.type(.5);$('#gDlg1').classList.remove('in');$('#gDlg2').classList.add('in');__sfx.thud(.8)}); // 权限不足②
+on(6400,()=>curTo(1193,473,400));
+on(6800,()=>{clickFx();$('#gDlg2').classList.remove('in');__sfx.swipe(.4)});
+on(7400,()=>{$('#gCmd').classList.add('in');__sfx.pop(.6)});          // (1:32) 命令行上
+{const s='rd /s /q C:\\██████';[...s].forEach((ch,i)=>on(7800+i*55,()=>{$('#cmdType').textContent+=ch;__sfx.type(.16)}));}
+on(8760,()=>__sfx.type(.6));                                          // 回车
+document.querySelectorAll('#gCmd .cline').forEach((l,i)=>on(8900+i*130,()=>{l.classList.add('in');__sfx.type(.22)})); // 拒绝访问刷屏
+on(10100,()=>__sfx.pop(.4));                                          // 拒绝访问刷屏
+on(10400,()=>{$('#gCmd').classList.remove('in');__sfx.swipe(.5)});
+on(10800,()=>{$('#gSec').classList.add('show');__sfx.pop(.6)});       // (1:32–1:36) 改所有者
+on(11600,()=>curTo(1217,374,500));
+on(12000,()=>{clickFx();__sfx.type(.5)});
+on(12300,()=>{$('#ownerTxt').textContent='管理员';__sfx.ding(.5)});
+on(12600,()=>{$('#gSec').classList.add('gone');__sfx.swipe(.4)});
+on(13000,()=>{$('#gCmd2').classList.add('in');__sfx.pop(.5)});        // 再删一次
+document.querySelectorAll('#gCmd2 .cline').forEach((l,i)=>on(13300+i*110,()=>{l.classList.add('in');__sfx.type(.18)})); // 正在删除…
+on(14400,()=>{$('#gCmd2').classList.remove('in');__sfx.swipe(.5)});
+on(14800,()=>{                                                        // (1:38) Windows 文件夹删空
+  $('#fWin').classList.add('poof');$('#statL').textContent='5 个项目';__sfx.pop(.8);__sfx.swipe(.5);
+});
+on(15200,()=>$('#gExp').classList.add('gone'));
+
+/* ── 后段 · 失灵链（15.6–32s）── */
+on(15600,()=>curTo(700,540,800));                                     // (1:40) 桌面还在，鼠标也能动
+on(16400,()=>curTo(1250,640,800));
+on(17200,()=>curTo(80,48,900));                                       // 光标摸到此电脑上停住
+on(18800,()=>{clickFx()});                                            // (1:47) 双击此电脑
+on(19200,()=>clickFx());
+on(19800,()=>{$('#gPC').classList.add('show');__sfx.pop(.6);camFocus(960,576,1.07,1.1)}); // 此电脑空白
+on(20400,()=>{$('#vdot').classList.add('warn');const v=$('#vstat2');v.textContent='部分功能无响应';v.classList.add('warn')}); // (1:45) 过了一会就不行了
+on(20800,()=>{curTo(891,1056,600);clickFx();$('#gStart').classList.add('show');__sfx.pop(.6)}); // (1:49) 打开开始菜单
+on(21600,()=>{curTo(788,488,500);$('#appSet').classList.add('hot')});
+on(22000,()=>{clickFx();__sfx.type(.5)});
+on(22400,()=>{                                                        // 设置打不开
+  $('#gStart').classList.remove('show');$('#appSet').classList.remove('hot');
+  $('#gErr1').classList.add('in');__sfx.thud(.8);
+});
+on(23200,()=>curTo(1183,513,400));
+on(23600,()=>{clickFx();$('#gErr1').classList.remove('in');camFocus(960,600,1.03,1.0);__sfx.swipe(.4)});
+on(24200,()=>{curTo(891,1056,600);clickFx();$('#gStart').classList.add('show');__sfx.pop(.5)}); // (1:50) 关机菜单
+on(24800,()=>{curTo(1180,932,400);clickFx();$('#gPower').classList.add('show');__sfx.pop(.5)});
+on(25200,()=>{curTo(1190,820,350);$('#piOff').classList.add('hot')});
+on(25600,()=>{                                                        // 点关机 —— 毫无反应
+clickFx();__sfx.type(.5);
+$('#gPower').classList.remove('show');$('#gStart').classList.remove('show');$('#piOff').classList.remove('hot');
+$('#fishA').classList.add('show');__sfx.pop(.5);                       // 大肥鱼抓狂：关不了机
+});
+on(29000,()=>$('#fishA').classList.remove('show'));
+on(27200,()=>{curTo(1100,1056,500);clickFx();$('#gTbMenu').classList.add('show');__sfx.pop(.5)}); // 任务管理器
+on(27800,()=>{curTo(1055,910,300);$('#tiTm').classList.add('hot')});
+on(28100,()=>{clickFx();__sfx.type(.5);$('#gTbMenu').classList.remove('show');$('#tiTm').classList.remove('hot');$('#gbusy').classList.add('on')});
+on(29000,()=>{                                                        // (1:55) Ctrl+Alt+Delete
+  $('#gbusy').classList.remove('on');
+  $('#gKeys').classList.add('show');$('#kC').classList.add('press');__sfx.type(.5);
+});
+on(29150,()=>{$('#kA').classList.add('press');__sfx.type(.5)});
+on(29300,()=>{$('#kD').classList.add('press');__sfx.type(.5)});
+/* —— 画面静止约 1.9s，演「没反应」—— */
+on(31200,()=>$('#noResp').classList.add('on'));
+on(31400,()=>{camFocus(960,576,1.1,1.6)}); // 收尾缓推
+</script>
+</body>
+</html>

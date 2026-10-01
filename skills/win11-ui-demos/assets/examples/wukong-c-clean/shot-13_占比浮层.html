@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<script>
+/* ===== [不动] 播放器引导：劫持 performance.now/rAF 成虚拟时钟 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+
+<script>
+/* ===== [不动] SFX 引擎 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 13 · 占比浮层：软件区 vs 系统区</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#111;overflow:hidden;font-family:"Segoe UI","Microsoft YaHei","Noto Sans SC",sans-serif}
+body.paused *{animation-play-state:paused!important}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;
+  background:#16366e}
+#wpl{position:absolute;inset:0;background:url("material/w11.jfif") center/cover no-repeat}
+#cam{position:absolute;inset:0;transform-origin:0 0;z-index:10}
+
+/* ─── Win11 仿真套件（与镜头01/08同系） ─── */
+.dicon{position:absolute;left:34px;width:92px;text-align:center;opacity:0;transform:translateY(-8px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+.dicon.show{opacity:1;transform:translateY(0)}
+.dicon .dic{width:46px;height:46px;margin:0 auto 6px;display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 2px 3px rgba(0,0,0,.4))}
+.dicon span{display:inline-block;font-size:12.5px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.7);padding:1px 4px;border-radius:3px;line-height:1.25}
+#taskbar{position:absolute;left:0;right:0;bottom:0;height:48px;background:rgba(238,244,252,.82);backdrop-filter:blur(18px);z-index:36;display:flex;align-items:center;box-shadow:0 -1px 0 rgba(0,0,0,.08)}
+#taskbar .tb-apps{position:absolute;left:50%;transform:translateX(-50%);display:flex;gap:6px;align-items:center}
+#taskbar .tb{width:40px;height:40px;border-radius:6px;display:flex;align-items:center;justify-content:center;position:relative}
+#taskbar .tb.active::after{content:'';position:absolute;bottom:3px;left:50%;transform:translateX(-50%);width:14px;height:3px;border-radius:2px;background:#0067c0}
+#tray{position:absolute;right:10px;display:flex;align-items:center;gap:9px;font-size:12px;color:#1b1b1b}
+#tray .t-time{text-align:right;line-height:1.15}
+.win{position:absolute;background:#f3f6fb;border:1px solid rgba(0,0,0,.14);border-radius:10px;box-shadow:0 24px 70px rgba(2,16,46,.45),0 2px 8px rgba(2,16,46,.2);overflow:hidden;opacity:0;transform:translateY(26px) scale(.97);transition:all .7s cubic-bezier(.16,1,.3,1)}
+.win.show{opacity:1;transform:translateY(0) scale(1)}
+.wtitle{height:44px;display:flex;align-items:center;background:#f3f6fb;padding:0 10px;gap:8px}
+.wtitle .wic{width:20px;height:20px}
+.wtitle .wtab{font-size:12.5px;color:#1b1b1b;background:rgba(255,255,255,.7);border-radius:6px 6px 0 0;padding:5px 12px;border:1px solid rgba(0,0,0,.06);border-bottom:none}
+.wbtns{margin-left:auto;display:flex}
+.wbtns i{width:44px;height:32px;display:flex;align-items:center;justify-content:center;color:#444}
+.wbtns i svg{width:11px;height:11px}
+.waddr{height:46px;display:flex;align-items:center;gap:8px;padding:0 12px;background:#f3f6fb;border-bottom:1px solid rgba(0,0,0,.07)}
+.waddr .navs{display:flex;gap:2px;color:#555}
+.waddr .navs i{width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:5px}
+.addrbar{flex:1;height:32px;border:1px solid rgba(0,0,0,.12);border-radius:5px;background:#fff;display:flex;align-items:center;padding:0 10px;font-size:12.5px;color:#222;gap:6px}
+.addrbar .crumb{color:#666}
+.searchbox{width:220px;height:32px;border:1px solid rgba(0,0,0,.12);border-radius:5px;background:#fff;display:flex;align-items:center;padding:0 10px;font-size:12.5px;color:#777;gap:7px}
+.wbody{display:flex;height:calc(100% - 44px - 46px - 26px)}
+.wnav{width:216px;padding:10px 8px;font-size:12.5px;color:#222;border-right:1px solid rgba(0,0,0,.05)}
+.wnav .ni{display:flex;align-items:center;gap:9px;padding:6px 10px;border-radius:5px;color:#333}
+.wnav .ni.on{background:rgba(0,103,192,.1)}
+.wnav .ni b{font-weight:400}
+.wmain{flex:1;position:relative;background:#fff;overflow:hidden}
+.wstatus{height:26px;display:flex;align-items:center;padding:0 14px;font-size:12px;color:#555;background:#f3f6fb;border-top:1px solid rgba(0,0,0,.06);gap:18px}
+
+/* ─── 色块画布（沿用镜头08母版） ─── */
+.maptools{height:44px;display:flex;align-items:center;gap:10px;padding:0 18px;border-bottom:1px solid rgba(0,0,0,.06);font-size:12.5px;color:#333}
+.maptools .vchip{display:inline-flex;align-items:center;gap:6px;background:#eef3fa;border:1px solid #d5e2f2;border-radius:5px;padding:3px 10px;font-size:12px;color:#1b4f8a}
+.maptools .hint{margin-left:auto;font-size:12px;color:#8a8a8a}
+#mapWrap{position:absolute;left:18px;right:18px;top:56px;bottom:52px}
+#map{position:absolute;inset:0;transition:opacity .5s ease,filter .5s ease}
+.blk{position:absolute;border-radius:5px;box-shadow:inset 0 0 0 2px #fff;opacity:0;transform:scale(.9);transition:transform .55s cubic-bezier(.2,1.2,.4,1),opacity .45s ease,filter .5s ease,box-shadow .4s ease;overflow:hidden}
+.blk.in{opacity:1;transform:scale(1)}
+.blk .bl{position:absolute;left:10px;top:8px;right:8px;color:#fff;text-shadow:0 1px 4px rgba(0,20,50,.45)}
+.blk .bl .bn{font-weight:700;line-height:1.2}
+.blk .bl .bs{font-family:"Cascadia Mono",Consolas,monospace;opacity:.92;margin-top:2px}
+.blk.big .bn{font-size:30px}.blk.big .bs{font-size:21px}
+.blk.mid .bn{font-size:16px}.blk.mid .bs{font-size:13px}
+.blk.sml .bn{font-size:11.5px;font-weight:600}.blk.sml .bs{font-size:10.5px}
+/* 软件区高亮 / 其余压暗 */
+#map.soft .blk{opacity:.38;filter:saturate(.5) brightness(.97)}
+#map.soft .blk.keep{opacity:1;filter:none;box-shadow:inset 0 0 0 2px #fff,0 0 0 3px rgba(0,103,192,.5),0 12px 34px rgba(4,20,60,.35);z-index:3}
+.blk .tag{position:absolute;left:10px;bottom:8px;background:rgba(255,255,255,.95);color:#0d47a1;font-size:12.5px;font-weight:800;padding:3px 10px;border-radius:5px;opacity:0;transform:translateY(6px);transition:all .4s cubic-bezier(.34,1.6,.64,1);box-shadow:0 4px 12px rgba(4,20,60,.3);white-space:nowrap}
+.blk .tag.in{opacity:1;transform:translateY(0)}
+.blk .tag.warn{color:#b3261e}
+/* Windows 吓人 spotlight */
+@keyframes scaryPulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.5) saturate(1.5)}}
+.blk.scary{animation:scaryPulse .7s ease 2;box-shadow:inset 0 0 0 2px #fff,0 0 0 4px rgba(179,38,30,.65),0 14px 40px rgba(120,10,10,.4)!important;z-index:4}
+
+/* ─── Users 展开浮层（一层一层点进去） ─── */
+#zoomLayer{position:absolute;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .5s ease;pointer-events:none}
+#zoomLayer.in{opacity:1}
+#zoomCard{width:1150px;background:rgba(255,255,255,.98);border-radius:16px;box-shadow:0 30px 80px rgba(4,20,60,.45);padding:26px 34px 24px;transform:scale(.94);transition:transform .5s cubic-bezier(.16,1,.3,1)}
+#zoomLayer.in #zoomCard{transform:scale(1)}
+#zoomCard .ztitle{display:flex;align-items:baseline;gap:14px}
+#zoomCard .ztitle .zt1{font-size:23px;font-weight:800;color:#10325e}
+#zoomCard .ztitle .zt2{font-size:14px;color:#6a7a92;font-family:"Cascadia Mono",Consolas,monospace}
+#zoomCard .ztitle .zt3{margin-left:auto;font-size:13.5px;color:#8a8a8a}
+#tiles{display:flex;gap:18px;margin-top:20px;position:relative}
+.tile{flex:1;background:#f4f7fc;border:1px solid #dbe5f2;border-radius:12px;padding:16px 12px 13px;text-align:center;opacity:0;transform:translateY(14px) scale(.9);transition:all .45s cubic-bezier(.34,1.5,.64,1);position:relative}
+.tile.in{opacity:1;transform:translateY(0) scale(1)}
+.tile .tic{width:44px;height:44px;margin:0 auto 9px;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:17px;box-shadow:0 6px 14px rgba(4,20,60,.22)}
+.tile .tn{font-size:14.5px;font-weight:700;color:#1b2a44}
+.tile .ts{font-size:12.5px;color:#5a6a84;margin-top:3px;font-family:"Cascadia Mono",Consolas,monospace}
+.tile.flash{animation:tileFlash .55s ease}
+@keyframes tileFlash{0%{transform:scale(1)}35%{transform:scale(.88);filter:brightness(1.25)}100%{transform:scale(1)}}
+#tiles .bracket{position:absolute;left:-14px;right:-14px;top:-12px;bottom:-12px;border:2.5px dashed #1b5fb4;border-radius:16px;opacity:0;transform:scale(1.02);transition:all .45s ease;pointer-events:none}
+#tiles .bracket.in{opacity:1;transform:scale(1)}
+#sumBadge{position:absolute;right:8px;top:-34px;background:#1b5fb4;color:#fff;border-radius:12px;padding:10px 20px;box-shadow:0 14px 36px rgba(10,50,120,.45);opacity:0;transform:translateY(10px) scale(.7) rotate(3deg);transition:all .5s cubic-bezier(.34,1.6,.64,1);z-index:3;text-align:center}
+#sumBadge.in{opacity:1;transform:translateY(0) scale(1) rotate(3deg)}
+#sumBadge .sb1{font-size:15px;font-weight:700;opacity:.85}
+#sumBadge .sb2{font-size:30px;font-weight:900;line-height:1.1}
+#zoomCard .zcap{margin-top:18px;text-align:center;font-size:15px;color:#6a7a92}
+
+/* ─── 容量条（时间一长就满了） ─── */
+#capStrip{position:absolute;left:0;right:0;top:-64px;height:52px;background:rgba(255,255,255,.96);border:1px solid rgba(0,40,90,.12);border-radius:12px;box-shadow:0 12px 34px rgba(4,20,60,.25);display:flex;align-items:center;gap:14px;padding:0 18px;z-index:7;transition:top .6s cubic-bezier(.16,1,.3,1)}
+#capStrip.in{top:-58px}
+#capStrip .clab{font-size:13.5px;font-weight:800;color:#10325e;white-space:nowrap}
+#capStrip .ctrack{flex:1;height:16px;background:#e6ebf3;border-radius:99px;overflow:hidden;box-shadow:inset 0 1px 3px rgba(0,0,0,.12)}
+#capStrip .cfill{height:100%;width:0;background:linear-gradient(90deg,#3b8bd4,#5fb0f0);border-radius:99px;transition:width 1.1s cubic-bezier(.4,0,.2,1),background .5s ease}
+#capStrip.full .cfill{background:linear-gradient(90deg,#e81123,#ff5c6c);animation:capPulse .8s ease 3}
+@keyframes capPulse{50%{filter:brightness(1.35)}}
+#capStrip .cnum{font-size:13px;color:#5a6a84;font-family:"Cascadia Mono",Consolas,monospace;white-space:nowrap}
+#capStrip .cwarn{font-size:13.5px;font-weight:900;color:#e81123;display:none;white-space:nowrap}
+#capStrip.full .cwarn{display:block}
+#capStrip.full .cnum{display:none}
+
+/* ─── 占比条浮层（数据浮层主角） ─── */
+#vsPanel{position:absolute;left:50%;bottom:-340px;transform:translateX(-50%);width:1280px;background:rgba(255,255,255,.985);border-radius:16px;box-shadow:0 26px 70px rgba(4,20,60,.5);padding:20px 34px 22px;z-index:8;transition:bottom .7s cubic-bezier(.16,1,.3,1)}
+#vsPanel.in{bottom:-6px}
+#vsPanel .vhead{display:flex;align-items:baseline;gap:12px;margin-bottom:14px}
+#vsPanel .vhead .vh1{font-size:19px;font-weight:900;color:#10325e}
+#vsPanel .vhead .vh2{font-size:13px;color:#8a8a8a;font-family:"Cascadia Mono",Consolas,monospace;margin-left:auto}
+.vbar{display:flex;align-items:center;gap:16px;margin-top:12px}
+.vbar .vlab{width:150px;font-size:15.5px;font-weight:800;color:#1b2a44;text-align:right;line-height:1.3}
+.vbar .vlab small{display:block;font-size:11.5px;font-weight:600;color:#7a8aa2}
+.vbar .vtrack{flex:1;height:44px;background:#eef1f7;border-radius:9px;position:relative;overflow:hidden}
+.vbar .vfill{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:9px;transition:width 1.5s cubic-bezier(.3,0,.15,1)}
+.vbar .vfill.soft{background:linear-gradient(90deg,#2f74c4,#5fb0f0)}
+.vbar .vfill.sys{background:linear-gradient(90deg,#7a63cc,#a08fe6)}
+.vbar .vnum{width:150px;font-family:"Cascadia Mono",Consolas,monospace;font-size:29px;font-weight:800;line-height:1}
+.vbar .vnum small{display:block;font-size:12px;font-weight:700;color:#7a8aa2;margin-top:2px;font-family:"Microsoft YaHei",sans-serif}
+.vbar .vnum.soft{color:#1b5fb4}
+.vbar .vnum.sys{color:#6b54c0}
+#vsNote{text-align:center;margin-top:14px;font-size:14px;color:#5a6a84;opacity:0;transition:opacity .6s ease}
+#vsNote.in{opacity:1}
+#vsNote b{color:#10325e}
+
+/* 粒子流 */
+.pt{position:absolute;width:12px;height:12px;border-radius:3px;z-index:5;box-shadow:0 2px 6px rgba(4,20,60,.35)}
+.pt.file{border-radius:50%;background:#fff!important;box-shadow:inset 0 0 0 2.5px #e8722a,0 2px 6px rgba(4,20,60,.3)}
+.plus1{position:absolute;font-size:15px;font-weight:900;color:#0d47a1;z-index:6;animation:plusUp .65s ease forwards;pointer-events:none;font-family:"Cascadia Mono",Consolas,monospace}
+@keyframes plusUp{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-26px)}}
+
+/* 大肥鱼反应表情包（#stage 直属） */
+.fish{position:absolute;left:560px;top:320px;width:290px;z-index:29;opacity:0;transform:translateY(26px) scale(.68);transition:all .5s cubic-bezier(.34,1.6,.64,1);pointer-events:none;filter:drop-shadow(0 10px 24px rgba(2,10,30,.4))}
+.fish.show{opacity:1;transform:translateY(0) scale(1)}
+.fish img{width:100%;display:block}
+
+/* ───── 底盘区（不动）───── */
+.corner{position:absolute;font-family:"Cascadia Mono","Consolas",monospace;font-size:15px;color:rgba(255,255,255,.92);letter-spacing:2px;z-index:37;text-shadow:0 1px 4px rgba(8,24,60,.8),0 0 3px rgba(8,24,60,.6);padding:3px 9px;border-radius:6px;background:rgba(8,20,46,.45)}
+#chap{left:52px;bottom:58px}
+#src{right:52px;bottom:58px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'Cascadia Mono','Consolas',monospace;pointer-events:none}
+#track{height:5px;background:rgba(0,0,0,.25)}
+#bar{height:100%;width:0;background:#3b8bd4;box-shadow:0 0 10px rgba(59,139,212,.6)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(10,12,18,.92);color:#ccc;backdrop-filter:blur(4px)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #999;color:#ccc;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(255,255,255,.12)}
+#replay.done{animation:pulse 1.2s infinite;border-color:#ffd23f;color:#ffd23f}
+@keyframes pulse{50%{box-shadow:0 0 14px rgba(255,210,63,.8)}}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="cam">
+    <div id="wpl"></div>
+    <!-- 桌面图标 -->
+    <div class="dicon" style="top:26px"><div class="dic"><svg width="42" height="42" viewBox="0 0 48 48"><rect x="3" y="7" width="42" height="30" rx="2.5" fill="#4aa3e8"/><rect x="5.5" y="9.5" width="37" height="25" rx="1.5" fill="#dff0fd"/><rect x="5.5" y="9.5" width="37" height="5.5" fill="#2f80d8"/><rect x="15" y="39" width="18" height="3.5" fill="#8a8a8a"/><rect x="11" y="42.5" width="26" height="3" rx="1.5" fill="#9b9b9b"/></svg></div><span>此电脑</span></div>
+    <div class="dicon" style="top:128px"><div class="dic"><svg width="40" height="40" viewBox="0 0 48 48"><path d="M13 14h22l-2.4 27.5a3 3 0 0 1-3 2.5H18.4a3 3 0 0 1-3-2.5L13 14Z" fill="#e8f0f8" stroke="#b9c6d4" stroke-width="1.6"/><path d="M10 14h28" stroke="#b9c6d4" stroke-width="2.6" stroke-linecap="round"/><path d="M19 14v-3.4A2.6 2.6 0 0 1 21.6 8h4.8A2.6 2.6 0 0 1 29 10.6V14" fill="none" stroke="#b9c6d4" stroke-width="2"/><path d="M20 21v14M28 21v14" stroke="#b9c6d4" stroke-width="2"/></svg></div><span>回收站</span></div>
+
+    <!-- 资源管理器窗口：色块画布（镜头08母版） -->
+    <div class="win" id="expWin" style="left:180px;top:84px;width:1560px;height:906px">
+      <div class="wtitle">
+        <svg class="wic" viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2.5h9A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5v-12Z" fill="#ffce73" stroke="#e0a83c"/></svg>
+        <span class="wtab">本地磁盘 (C:)</span>
+        <div class="wbtns">
+          <i><svg viewBox="0 0 12 12"><path d="M1 6h10" stroke="currentColor" stroke-width="1.2"/></svg></i>
+          <i><svg viewBox="0 0 12 12"><rect x="1.5" y="1.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></i>
+          <i><svg viewBox="0 0 12 12"><path d="M1 1l10 10M11 1L1 11" stroke="currentColor" stroke-width="1.2"/></svg></i>
+        </div>
+      </div>
+      <div class="waddr">
+        <div class="navs">
+          <i><svg width="13" height="13" viewBox="0 0 14 14"><path d="M9 2.5 4.5 7 9 11.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i>
+          <i><svg width="13" height="13" viewBox="0 0 14 14"><path d="M5 2.5 9.5 7 5 11.5" fill="none" stroke="#b0b0b0" stroke-width="1.6" stroke-linecap="round"/></svg></i>
+          <i><svg width="13" height="13" viewBox="0 0 14 14"><path d="M2.5 9 7 4.5 11.5 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></i>
+          <i><svg width="13" height="13" viewBox="0 0 14 14"><path d="M2 7a5 5 0 1 0 1.6-3.7M2.5 1.5v3h3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></i>
+        </div>
+        <div class="addrbar"><svg width="13" height="13" viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2.5h9A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5v-12Z" fill="#ffce73"/></svg><span>此电脑 <span class="crumb">›</span> 本地磁盘 (C:) <span class="crumb">›</span> 占用色块图</span></div>
+        <div class="searchbox"><svg width="13" height="13" viewBox="0 0 14 14"><circle cx="6" cy="6" r="4.4" fill="none" stroke="#777" stroke-width="1.5"/><path d="m9.4 9.4 3 3" stroke="#777" stroke-width="1.5" stroke-linecap="round"/></svg>搜索</div>
+      </div>
+      <div class="wbody">
+        <div class="wnav">
+          <div class="ni"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M12 3l9 8h-3v9h-4v-6H10v6H6v-9H3l9-8Z" fill="#5aa2e6"/></svg><b>主页</b></div>
+          <div class="ni"><svg width="16" height="16" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="13" rx="1.5" fill="#4aa3e8"/><rect x="6" y="5" width="12" height="9" fill="#dff0fd"/><rect x="9" y="18" width="6" height="2" fill="#8a8a8a"/></svg><b>图库</b></div>
+          <div class="ni on"><svg width="16" height="16" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="1.5" fill="#4aa3e8"/><rect x="5" y="6" width="14" height="10" fill="#dff0fd"/><rect x="4" y="6" width="14" height="2.4" fill="#2f80d8"/></svg><b>此电脑</b></div>
+          <div class="ni"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M12 3l2.7 5.6 6.1.8-4.5 4.2 1.1 6L12 16.7 6.6 19.6l1.1-6L3.2 9.4l6.1-.8L12 3Z" fill="#f5c04e"/></svg><b>收藏夹</b></div>
+          <div class="ni"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4" stroke="#7ec36a" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M4 15v4a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 20 19v-4" stroke="#7ec36a" stroke-width="2" fill="none" stroke-linecap="round"/></svg><b>下载</b></div>
+          <div class="ni"><svg width="16" height="16" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="1.5" fill="#e8e8e8"/><rect x="7" y="7" width="10" height="1.8" fill="#9ab"/><rect x="7" y="11" width="10" height="1.8" fill="#9ab"/><rect x="7" y="15" width="6" height="1.8" fill="#9ab"/></svg><b>文档</b></div>
+        </div>
+        <div class="wmain">
+          <div class="maptools">
+            <span class="vchip"><svg width="13" height="13" viewBox="0 0 14 14"><rect x="1" y="1" width="5.4" height="12" rx="1" fill="#3b8bd4"/><rect x="7.6" y="1" width="5.4" height="7" rx="1" fill="#8f7bd8"/><rect x="7.6" y="9" width="5.4" height="4" rx="1" fill="#f2a541"/></svg>查看：色块图</span>
+            <span style="color:#777">面积 = 占用大小</span>
+            <span class="hint">本地磁盘 (C:) · 已用 266.82 GB / 305.52 GB</span>
+          </div>
+          <div id="mapWrap">
+            <div id="map"></div>
+            <div id="capStrip">
+              <span class="clab">本地磁盘 (C:)</span>
+              <div class="ctrack"><div class="cfill" id="capFill"></div></div>
+              <span class="cnum">已用 266.82 GB / 305.52 GB</span>
+              <span class="cwarn">⚠ 可用空间不足</span>
+            </div>
+            <!-- Users 展开浮层 -->
+            <div id="zoomLayer"><div id="zoomCard">
+              <div class="ztitle"><span class="zt1">Users → AppData</span><span class="zt2">一层一层点进去…</span><span class="zt3">软件们的小仓库</span></div>
+              <div id="tiles">
+                <div class="tile"><div class="tic" style="background:#3b7dd8">Py</div><div class="tn">pip 缓存</div><div class="ts">6.08 G</div></div>
+                <div class="tile"><div class="tic" style="background:#76b900">NV</div><div class="tn">NVIDIA + CUDA</div><div class="ts">8.6 G</div></div>
+                <div class="tile"><div class="tic" style="background:#d83b01">Of</div><div class="tn">Office</div><div class="ts">5.98 G</div></div>
+                <div class="tile"><div class="tic" style="background:#0d9e8e">ol</div><div class="tn">ollama 模型</div><div class="ts">2.92 G</div></div>
+                <div class="tile"><div class="tic" style="background:#7a5cff">VR</div><div class="tn">VRChat 缓存</div><div class="ts">2.32 G</div></div>
+                <div class="tile"><div class="tic" style="background:#07c160">Q</div><div class="tn">腾讯系</div><div class="ts">也好几 G</div></div>
+                <div class="bracket" id="bracket"></div>
+                <div id="sumBadge"><div class="sb1">单个都不大，加起来</div><div class="sb2">十几个 G</div></div>
+              </div>
+              <div class="zcap">缓存、接收的文件…都存在这里</div>
+            </div></div>
+            <!-- 占比条浮层 -->
+            <div id="vsPanel">
+              <div class="vhead"><span class="vh1">谁在占满 C 盘？</span><span style="font-size:13px;color:#7a8aa2">按用途分堆</span><span class="vh2">已用 266.82 GB / 305.52 GB</span></div>
+              <div class="vbar">
+                <div class="vlab">你平时在用的<br>软件<small>Users + 程序目录</small></div>
+                <div class="vtrack"><div class="vfill soft" id="barSoft"></div></div>
+                <div class="vnum soft"><span id="numSoft">0</span> G<small>软件区</small></div>
+              </div>
+              <div class="vbar">
+                <div class="vlab">看着吓人的<br>系统文件夹<small>Windows + 休眠/日志</small></div>
+                <div class="vtrack"><div class="vfill sys" id="barSys"></div></div>
+                <div class="vnum sys"><span id="numSys">0</span> G<small>系统区</small></div>
+              </div>
+              <div id="vsNote">占满 C 盘的是<b>你在用的软件</b>——系统文件夹反而没占多少</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="wstatus"><span id="statL">9 个色块 · 已用 266.82 GB / 305.52 GB</span><span id="statR"></span></div>
+    </div>
+  
+  <div id="taskbar">
+      <div class="tb-apps">
+        <div class="tb"><svg width="22" height="22" viewBox="0 0 22 22"><rect x="1" y="1" width="9" height="9" fill="#00a2ed"/><rect x="12" y="1" width="9" height="9" fill="#00a2ed"/><rect x="1" y="12" width="9" height="9" fill="#00a2ed"/><rect x="12" y="12" width="9" height="9" fill="#00a2ed"/></svg></div>
+        <div class="tb"><svg width="20" height="20" viewBox="0 0 20 20"><circle cx="8.5" cy="8.5" r="6" fill="none" stroke="#444" stroke-width="2"/><path d="m13 13 4.5 4.5" stroke="#444" stroke-width="2" stroke-linecap="round"/></svg></div>
+        <div class="tb active"><svg width="20" height="20" viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2.5h9A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5v-12Z" fill="#ffce73" stroke="#e0a83c"/></svg></div>
+        <div class="tb"><svg width="20" height="20" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="15" rx="2" fill="#5aa2e8"/><rect x="5.5" y="5.5" width="13" height="10" fill="#dff0fd"/></svg></div>
+      </div>
+      <div id="tray">
+        <svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 6.5a9 9 0 0 1 12 0" fill="none" stroke="#333" stroke-width="1.5" stroke-linecap="round"/><path d="M4.5 9.4a5.5 5.5 0 0 1 7 0" fill="none" stroke="#333" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="12" r="1.4" fill="#333"/></svg>
+        <div class="t-time">15:01<br>2026/9/22</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 大肥鱼：#stage 直属 -->
+  <div class="fish" id="fishA"><img src="Shark-GIF/053_眼睛瞪大微笑惊讶好奇期待.gif" alt=""></div>
+
+
+  <!-- 任务栏 -->
+
+
+  <div class="corner" id="chap">章 1 · 到底是谁占满了 C 盘</div>
+  <div class="corner" id="src">界面为演示还原 · 数据为本机实测</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 13 · 占比浮层：软件区 vs 系统区 · 20s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=20000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+const after=(ms,f)=>on(performance.now()-t0+ms,f);
+function fly(el,x1,y1,x2,y2,dur,arc,ease,done){tws.push({t:performance.now()-t0,d:dur,e:ease||eio,done,f:p=>{el.style.left=(x1+(x2-x1)*p)+'px';el.style.top=(y1+(y2-y1)*p-Math.sin(p*Math.PI)*(arc||0))+'px'}})}
+function cnt(el,from,to,dur,dec){tws.push({t:performance.now()-t0,d:dur,e:eo,f:p=>{const v=from+(to-from)*p;el.textContent=dec?v.toFixed(dec):Math.round(v).toLocaleString('en-US')}})}
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+const cam=$('#cam');
+function gp(el){let x=0,y=0;while(el&&el!==cam){x+=el.offsetLeft;y+=el.offsetTop;el=el.offsetParent}return{x,y}}
+
+/* ────────────────────────────────────────────────
+   本镜头 cue · 5:12–5:32「软件区 vs 系统区」
+   ──────────────────────────────────────────────── */
+const DATA=[
+  {n:'Users',s:159,g:'linear-gradient(160deg,#4b9fe8,#2f74c4)'},
+  {n:'Windows',s:32,g:'linear-gradient(160deg,#a08fe6,#7a63cc)'},
+  {n:'Program Files',s:27,g:'linear-gradient(160deg,#f7b65c,#e08f2b)'},
+  {n:'Program Files (x86)',s:14,g:'linear-gradient(160deg,#f8cf72,#e5a93a)'},
+  {n:'其他',s:12,g:'linear-gradient(160deg,#c9c3b8,#a39d92)'},
+  {n:'ProgramData',s:9.4,g:'linear-gradient(160deg,#85d189,#57a85c)'},
+  {n:'hiberfil.sys',s:6.9,g:'linear-gradient(160deg,#abb9cb,#8295ac)'},
+  {n:'$Recycle.Bin',s:5.3,g:'linear-gradient(160deg,#93d4cd,#63ada6)'},
+  {n:'PerfLogs',s:1.2,g:'linear-gradient(160deg,#d6a2a2,#b47575)'}
+];
+const SOFT=['Users','Program Files','Program Files (x86)'];   /* 软件区：159+27+14=200 */
+const MW=$('#mapWrap').clientWidth,MH=$('#mapWrap').clientHeight;
+function squarify(data,x,y,w,h){
+  const total=data.reduce((s,d)=>s+d.s,0),k=w*h/total;
+  let items=data.map(d=>({d,v:d.s*k})).sort((a,b)=>b.v-a.v);
+  const out=[];let cx=x,cy=y,cw=w,ch=h;
+  function worst(row,len){let s=0,mx=0,mn=Infinity;for(const r of row){s+=r.v;mx=Math.max(mx,r.v);mn=Math.min(mn,r.v)}return Math.max(len*len*mx/(s*s),s*s/(len*len*mn))}
+  function layout(row){
+    const s=row.reduce((a,r)=>a+r.v,0);
+    if(cw>=ch){const rw=s/ch;let ry=cy;for(const r of row){const rh=r.v/rw;out.push({x:cx,y:ry,w:rw,h:rh,d:r.d});ry+=rh}cx+=rw;cw-=rw}
+    else{const rh=s/cw;let rx=cx;for(const r of row){const rw=r.v/rh;out.push({x:rx,y:cy,w:rw,h:rh,d:r.d});rx+=rw}cy+=rh;ch-=rh}
+  }
+  let row=[];
+  while(items.length){
+    const len=Math.min(cw,ch);
+    if(row.length&&worst(row.concat(items[0]),len)>worst(row,len)){layout(row);row=[]}
+    else row.push(items.shift());
+  }
+  if(row.length)layout(row);
+  return out;
+}
+const rects=squarify(DATA,0,0,MW,MH);
+const B={};
+rects.forEach((r,i)=>{
+  const b=document.createElement('div');b.className='blk';
+  b.style.left=r.x+'px';b.style.top=r.y+'px';b.style.width=r.w+'px';b.style.height=r.h+'px';b.style.background=r.d.g;
+  const area=r.w*r.h,ratio=area/(MW*MH);
+  b.classList.add(ratio>.18?'big':ratio>.035?'mid':'sml');
+  b.innerHTML='<div class="bl"><div class="bn">'+r.d.n+'</div><div class="bs">'+r.d.s+' G</div></div>';
+  $('#map').appendChild(b);
+  B[r.d.n]={el:b,r:r,cx:r.x+r.w/2,cy:r.y+r.h/2};
+});
+
+/* 无头快进时滚数直接落终值 */
+function cntSnap(el,to,T,dur,dec){
+  if(performance.now()-t0-T>dur){el.textContent=dec?to.toFixed(dec):to}
+  else{cnt(el,0,to,dur,dec);on(T+dur+30,()=>{el.textContent=dec?to.toFixed(dec):to})}
+}
+/* 粒子流：软件目录 → Users */
+let ptOn=false;
+function spawnPt(fileGlyph){
+  if(!ptOn)return;
+  const srcs=[B['Program Files'],B['Program Files (x86)']];
+  const s=srcs[Math.floor(Math.random()*srcs.length)],u=B['Users'];
+  const p=document.createElement('div');p.className='pt'+(fileGlyph?' file':'');
+  if(!fileGlyph)p.style.background=['#f7b65c','#4b9fe8','#f8cf72','#e8722a'][Math.floor(Math.random()*4)];
+  const x1=s.r.x+20+Math.random()*(s.r.w-40),y1=s.r.y+20+Math.random()*(s.r.h-40);
+  const x2=u.r.x+40+Math.random()*(u.r.w*0.5),y2=u.r.y+40+Math.random()*(u.r.h*0.5);
+  p.style.left=x1+'px';p.style.top=y1+'px';
+  $('#mapWrap').appendChild(p);
+  fly(p,x1,y1,x2,y2,1000+Math.random()*300,60+Math.random()*40,eio,()=>{
+    p.remove();
+    const pl=document.createElement('div');pl.className='plus1';pl.textContent='+1';
+    pl.style.left=(x2-6)+'px';pl.style.top=(y2-10)+'px';
+    $('#mapWrap').appendChild(pl);setTimeout(()=>pl.remove(),680);
+  });
+  after(240+Math.random()*120,()=>spawnPt(fileGlyph&&Math.random()<.75));
+}
+
+on(200,()=>$('#expWin').classList.add('show'));
+document.querySelectorAll('.dicon').forEach((d,i)=>on(260+i*100,()=>d.classList.add('show')));
+DATA.forEach((d,i)=>on(380+i*70,()=>B[d.n].el.classList.add('in')));   // 回到色块图（快速入场）
+on(1000,()=>{$('#statL').textContent='回到色块图 · 这次钻进 Users 里面看';__sfx.type(.5)});
+
+/* (5:12) 这些东西不一层一层点进去 → 展开 Users */
+on(1200,()=>{$('#zoomLayer').classList.add('in');__sfx.pop(.5)});
+document.querySelectorAll('#tiles .tile').forEach((t,i)=>on(1350+i*180,()=>{t.classList.add('in');__sfx.type(.4)}));
+/* (5:14) 单个看都不大 → 逐个闪一下 */
+on(2600,()=>{document.querySelectorAll('#tiles .tile').forEach((t,i)=>after(i*260,()=>{t.classList.add('flash');__sfx.type(.3)}))});
+/* (5:15) 加起来也有十几个G */
+on(3900,()=>{$('#bracket').classList.add('in');__sfx.pop(.5)});
+on(4400,()=>{$('#sumBadge').classList.add('in');__sfx.ding(.9);__sfx.thud(.5);
+  $('#statL').textContent='单个都不大 · 加起来也有十几个 G'});
+/* (5:17) 看得出来 → 收浮层，软件区高亮 */
+on(5300,()=>{$('#zoomLayer').classList.remove('in');__sfx.swipe(.6)});
+on(5900,()=>{
+  $('#map').classList.add('soft');
+  SOFT.forEach(n=>{B[n].el.classList.add('keep');
+    const tag=document.createElement('div');tag.className='tag';tag.textContent='你在用的软件';
+    B[n].el.appendChild(tag)});
+  __sfx.pop(.55);
+});
+SOFT.forEach((n,i)=>on(6020+i*130,()=>{B[n].el.querySelector('.tag').classList.add('in');__sfx.type(.3)}));
+/* (5:18) 占满C盘的基本都是你在用的软件 → 占比条浮层 + 软件区条 */
+on(6600,()=>{$('#vsPanel').classList.add('in');__sfx.whoosh(.7,.5)});
+on(7200,()=>{const w=(200/266.82*100).toFixed(1);$('#barSoft').style.width=w+'%';
+  cntSnap($('#numSoft'),200,7200,1300);__sfx.ding(.6)});
+/* (5:20) 运行的时候不断往AppData里存缓存 → 粒子流 */
+on(8200,()=>{ptOn=true;spawnPt(false);after(400,()=>spawnPt(false))});
+/* (5:25) 存一些你接收的文件 → 文件型粒子混入 */
+on(13200,()=>{spawnPt(true);after(600,()=>spawnPt(true))});
+/* (5:27) 时间一长 → 容量条 */
+on(15000,()=>{$('#capStrip').classList.add('in');$('#capFill').style.width='87.3%';__sfx.pop(.45)});
+/* (5:28) 这个C盘就满了 */
+on(16200,()=>{ptOn=false;const c=$('#capStrip');c.classList.add('full');$('#capFill').style.width='99%';
+  __sfx.thud(.9);$('#statL').textContent='时间一长 · C 盘就满了'});
+/* (5:29) 系统文件夹反而又没占多少 → Windows 吓人 spotlight 后压短条 */
+on(17100,()=>{
+  document.querySelectorAll('#map .tag').forEach(t=>t.remove());
+  $('#map').classList.remove('soft');
+  document.querySelectorAll('.blk').forEach(x=>x.classList.remove('keep'));
+  B['Windows'].el.classList.add('scary');__sfx.pop(.55);
+  const tag=document.createElement('div');tag.className='tag warn in';tag.textContent='看着吓人？';
+  B['Windows'].el.appendChild(tag);
+});
+on(17900,()=>{const w=(40.1/266.82*100).toFixed(1);$('#barSys').style.width=w+'%';
+  cntSnap($('#numSys'),40.1,17900,1300,1);__sfx.ding(.7)});
+on(18300,()=>{$('#fishA').classList.add('show');__sfx.pop(.55)});           // 大肥鱼惊讶：系统文件夹反而没占多少
+on(19200,()=>{$('#vsNote').classList.add('in');__sfx.ding(.5)});
+</script>
+</body>
+</html>

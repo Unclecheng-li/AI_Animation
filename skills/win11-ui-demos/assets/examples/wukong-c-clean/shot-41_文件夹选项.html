@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<script>
+/* ===== [不动] 播放器引导：劫持 performance.now/rAF 成虚拟时钟 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 41 · 文件夹选项 · 15s</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#111;overflow:hidden;font-family:"Segoe UI","Microsoft YaHei","Noto Sans SC",sans-serif}
+body.paused *{animation-play-state:paused!important}
+/* ===== 舞台：Windows 11 桌面（Bloom 壁纸）===== */
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;
+  background:#16366e}
+#wpl{position:absolute;inset:0;background:url("material/w11.jfif") center/cover no-repeat}
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:translate(0,0) scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ───── WIN11 仿真套件 ───── */
+#taskbar{position:absolute;left:0;right:0;bottom:0;height:48px;background:rgba(238,244,252,.82);backdrop-filter:blur(18px);z-index:36;display:flex;align-items:center;box-shadow:0 -1px 0 rgba(0,0,0,.08)}
+#taskbar .tb-apps{position:absolute;left:50%;transform:translateX(-50%);display:flex;gap:6px;align-items:center}
+#taskbar .tb{width:40px;height:40px;border-radius:6px;display:flex;align-items:center;justify-content:center;position:relative}
+#taskbar .tb.active::after{content:'';position:absolute;bottom:3px;left:50%;transform:translateX(-50%);width:14px;height:3px;border-radius:2px;background:#0067c0}
+#tray{position:absolute;right:10px;display:flex;align-items:center;gap:9px;font-size:12px;color:#1b1b1b}
+#tray .t-time{text-align:right;line-height:1.15}
+#cur{position:absolute;left:1500px;top:880px;z-index:38;width:26px;pointer-events:none;filter:drop-shadow(0 2px 2px rgba(0,0,0,.35));opacity:0;transition:opacity .4s,left .16s linear,top .16s linear}
+#cur.show{opacity:1}
+#cur.click{animation:curClick .28s ease}
+@keyframes curClick{45%{transform:scale(.82)}}
+/* 资源管理器窗口 */
+.exw{position:absolute;left:150px;top:96px;width:1620px;height:830px;background:#f3f6fb;border:1px solid rgba(0,0,0,.14);border-radius:10px;box-shadow:0 24px 70px rgba(2,16,46,.45),0 2px 8px rgba(2,16,46,.2);overflow:hidden;opacity:0;transform:translateY(30px) scale(.97);transition:all .7s cubic-bezier(.16,1,.3,1);z-index:20}
+.exw.show{opacity:1;transform:translateY(0) scale(1)}
+.wtitle{height:40px;display:flex;align-items:center;background:#f3f6fb;padding:0 10px;gap:8px}
+.wtitle .wtab{font-size:12.5px;color:#1b1b1b}
+.wbtns{margin-left:auto;display:flex}
+.wbtns i{width:44px;height:30px;display:flex;align-items:center;justify-content:center;color:#444;font-style:normal}
+.ecmd{height:44px;display:flex;align-items:center;gap:8px;padding:0 12px;background:#f3f6fb;border-bottom:1px solid rgba(0,0,0,.06)}
+.tbtn{font-size:12.5px;color:#1b1b1b;background:#fff;border:1px solid rgba(0,0,0,.14);border-radius:5px;padding:5px 12px;display:flex;align-items:center;gap:6px}
+.tbtn.ghost{background:transparent;border-color:transparent;color:#333}
+.eaddr{height:44px;display:flex;align-items:center;gap:10px;padding:0 12px;background:#f3f6fb;border-bottom:1px solid rgba(0,0,0,.07)}
+.crumb{flex:1;height:30px;border:1px solid rgba(0,0,0,.14);border-radius:5px;display:flex;align-items:center;padding:0 12px;font-size:12.5px;color:#1b1b1b;gap:8px;background:#fff}
+.crumb svg{flex:none}
+.esrch{width:250px;height:30px;border:1px solid rgba(0,0,0,.12);border-radius:5px;background:#fff;display:flex;align-items:center;padding:0 10px;font-size:12px;color:#777;gap:7px;flex:none}
+.elist{position:absolute;left:0;right:0;top:128px;bottom:26px;background:#fff;overflow:hidden}
+.ehrow{position:absolute;left:0;right:0;top:0;height:34px;display:flex;align-items:center;border-bottom:1px solid rgba(0,0,0,.09);font-size:12px;color:#444;background:#fff;z-index:2}
+.col{padding:0 10px;box-sizing:border-box}
+.c-n2{flex:1;display:flex;align-items:center;gap:9px;min-width:0}
+.c-d2{width:230px;flex:none}
+.c-t2{width:170px;flex:none}
+.c-s2{width:160px;flex:none;text-align:right;padding-right:28px}
+#rowsWrap{position:absolute;left:0;right:0;top:34px}
+.erow{height:38px;display:flex;align-items:center;font-size:12.5px;color:#1b1b1b;border-bottom:1px solid rgba(0,0,0,.045);opacity:0;transform:translateX(-14px);transition:opacity .35s,transform .35s,background .3s,box-shadow .3s}
+.erow.in{opacity:1;transform:translateX(0)}
+.erow.spot{background:#fff7dc}
+.erow.ring{box-shadow:inset 0 0 0 2px #c42b1c;background:#fdeceb}
+.erow .sz b{color:#c42b1c;font-size:14px}
+.wstatus{position:absolute;left:0;right:0;bottom:0;height:26px;display:flex;align-items:center;padding:0 14px;font-size:12px;color:#555;background:#f3f6fb;border-top:1px solid rgba(0,0,0,.06);gap:22px}
+/* 文件夹选项对话框 */
+.prop{position:absolute;left:640px;top:170px;width:620px;background:#fff;border:1px solid rgba(0,0,0,.18);border-radius:8px;box-shadow:0 24px 70px rgba(2,16,46,.5),0 2px 8px rgba(2,16,46,.22);overflow:hidden;opacity:0;transform:scale(.92) translateY(16px);transition:all .5s cubic-bezier(.2,1.2,.4,1);z-index:24}
+.prop.in{opacity:1;transform:scale(1) translateY(0)}
+.prop.out{opacity:0;transform:scale(.95) translateY(40px)}
+.pt{height:31px;display:flex;align-items:center;gap:7px;padding:0 0 0 11px;font-size:12px;color:#1b1b1b}
+.pt .px{margin-left:auto;width:42px;height:31px;display:flex;align-items:center;justify-content:center;color:#444}
+.ptabs{display:flex;gap:2px;padding:0 8px;border-bottom:1px solid rgba(0,0,0,.09);font-size:12.5px}
+.ptabs span{padding:6px 13px 7px;position:relative;color:#555}
+.ptabs span.on{color:#0067c0}
+.ptabs span.on::after{content:'';position:absolute;left:10px;right:10px;bottom:0;height:2.5px;border-radius:2px;background:#0067c0}
+.pb{padding:14px 20px 12px;position:relative}
+.plab{font-size:12px;color:#1b1b1b;margin-bottom:6px}
+.pf{display:flex;justify-content:flex-end;gap:8px;padding:10px 14px;background:#f7f7f7;border-top:1px solid rgba(0,0,0,.07)}
+.btn{font-size:12.5px;padding:5px 0;border-radius:4px;border:1px solid #8f8f8f;background:#fbfbfb;color:#1b1b1b;min-width:84px;text-align:center}
+.btn.pri{background:#0067c0;border-color:#0067c0;color:#fff}
+.btn.dis{color:#9a9a9a;border-color:#c8c8c8}
+.btn.s{min-width:118px}
+.obox{border:1px solid rgba(0,0,0,.22);background:#fff;padding:4px;height:312px;position:relative}
+.obox::after{content:'';position:absolute;right:0;top:0;bottom:0;width:9px;background:#f1f1f1;border-left:1px solid rgba(0,0,0,.08)}
+.orow{display:flex;align-items:center;gap:8px;font-size:12.5px;color:#1b1b1b;height:29px;padding:0 8px;border-radius:4px;white-space:nowrap}
+.orow.ind{padding-left:40px}
+.orow.grp{font-weight:600}
+.orow.lit{background:#e8f2fc;box-shadow:0 0 0 1.5px #9cc8ef}
+.orb{width:14px;height:14px;border:1px solid #777;border-radius:50%;background:#fff;flex:none;position:relative}
+.orb.on{border-color:#0067c0}
+.orb.on::after{content:'';position:absolute;left:3px;top:3px;width:6px;height:6px;border-radius:50%;background:#0067c0}
+.ckx{width:15px;height:15px;border:1px solid #777;border-radius:2px;background:#fff;flex:none;position:relative}
+.ckx.on{background:#0067c0;border-color:#0067c0}
+.ckx.on::after{content:'';position:absolute;left:4px;top:1px;width:4px;height:8px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+/* 警告对话框 */
+.dlg{position:absolute;background:#fff;border:1px solid rgba(0,0,0,.16);border-radius:9px;box-shadow:0 22px 64px rgba(2,16,46,.42);z-index:32;opacity:0;transform:scale(.86);transition:all .4s cubic-bezier(.2,1.3,.4,1)}
+.dlg.in{opacity:1;transform:scale(1)}
+.dlg .dt{height:38px;display:flex;align-items:center;padding:0 12px;font-size:12.5px;color:#1b1b1b;background:#f7f7f7;border-bottom:1px solid rgba(0,0,0,.07);border-radius:9px 9px 0 0}
+.dlg .dt i{margin-left:auto;font-style:normal;color:#666;font-size:14px}
+.dlg .dbody{padding:18px 20px;display:flex;gap:14px;align-items:flex-start}
+.dlg .dbody .txt{font-size:12.5px;color:#1b1b1b;line-height:1.7}
+.dlg .dft{padding:0 20px 16px;display:flex;justify-content:flex-end;gap:8px}
+/* 浮动 chip / 花字 */
+.fchip{position:absolute;font-size:15px;font-weight:800;border-radius:99px;padding:8px 18px;z-index:27;opacity:0;transform:scale(.6);transition:all .4s cubic-bezier(.34,1.6,.64,1);box-shadow:0 8px 22px rgba(2,16,46,.3);white-space:nowrap}
+.fchip.pop{opacity:1;transform:scale(1)}
+.fchip.r{background:#c42b1c;color:#fff}
+.fchip.b{background:#0f6cbd;color:#fff}
+.fchip.g{background:#8f5600;color:#fff}
+.fchip.big{font-size:20px;padding:11px 24px}
+.fchip.mono{font-family:"Cascadia Mono",Consolas,monospace;letter-spacing:.5px}
+#brand{position:absolute;right:26px;top:18px;height:34px;z-index:37;opacity:0;transition:opacity .8s;filter:drop-shadow(0 2px 6px rgba(0,0,0,.35))}
+#brand.show{opacity:.55}
+/* ───── 底盘区（不动）───── */
+.corner{position:absolute;font-family:"Cascadia Mono","Consolas",monospace;font-size:15px;color:rgba(255,255,255,.92);letter-spacing:2px;z-index:37;text-shadow:0 1px 4px rgba(8,24,60,.8),0 0 3px rgba(8,24,60,.6);padding:3px 9px;border-radius:6px;background:rgba(8,20,46,.45)}
+#chap{left:52px;bottom:58px}
+#src{right:52px;bottom:58px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'Cascadia Mono','Consolas',monospace;pointer-events:none}
+#track{height:5px;background:rgba(0,0,0,.25)}
+#bar{height:100%;width:0;background:#d13438;box-shadow:0 0 10px rgba(209,52,56,.6)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(10,12,18,.92);color:#ccc;backdrop-filter:blur(4px)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #999;color:#ccc;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(255,255,255,.12)}
+#replay.done{animation:pulse 1.2s infinite;border-color:#ffd23f;color:#ffd23f}
+@keyframes pulse{50%{box-shadow:0 0 14px rgba(255,210,63,.8)}}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="cam">
+    <div id="wpl"></div>
+    <!-- 资源管理器：本地磁盘 (C:) -->
+    <div class="exw" id="exWin">
+      <div class="wtitle">
+        <svg width="18" height="18" viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2.5h9A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5v-12Z" fill="#ffce73" stroke="#e0a83c"/></svg>
+        <span class="wtab">本地磁盘 (C:)</span>
+        <div class="wbtns"><i><svg width="11" height="11" viewBox="0 0 12 12"><path d="M1 6h10" stroke="currentColor" stroke-width="1.2"/></svg></i><i><svg width="11" height="11" viewBox="0 0 12 12"><rect x="1.5" y="1.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></i><i><svg width="11" height="11" viewBox="0 0 12 12"><path d="M1 1l10 10M11 1L1 11" stroke="currentColor" stroke-width="1.2"/></svg></i></div>
+      </div>
+      <div class="ecmd">
+        <span class="tbtn">＋ 新建 <svg width="9" height="9" viewBox="0 0 10 10"><path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="#555" stroke-width="1.5"/></svg></span>
+        <span class="tbtn ghost">排序 <svg width="9" height="9" viewBox="0 0 10 10"><path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="#555" stroke-width="1.5"/></svg></span>
+        <span class="tbtn ghost">查看 <svg width="9" height="9" viewBox="0 0 10 10"><path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="#555" stroke-width="1.5"/></svg></span>
+        <span class="tbtn ghost">···</span>
+      </div>
+      <div class="eaddr">
+        <span class="crumb">
+          <svg width="13" height="13" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="1.5" fill="#5aa2e6"/><rect x="5" y="6" width="14" height="9" fill="#dff0fd"/><path d="M10 20h4M12 17v3" stroke="#8a8a8a" stroke-width="1.6"/></svg>
+          此电脑 <svg width="9" height="9" viewBox="0 0 10 10"><path d="M3.5 2 6.5 5 3.5 8" fill="none" stroke="#888" stroke-width="1.5"/></svg>
+          本地磁盘 (C:)
+        </span>
+        <span class="esrch"><svg width="12" height="12" viewBox="0 0 14 14"><circle cx="6" cy="6" r="4.4" fill="none" stroke="#777" stroke-width="1.5"/><path d="m9.4 9.4 3 3" stroke="#777" stroke-width="1.5" stroke-linecap="round"/></svg>搜索 本地磁盘 (C:)</span>
+      </div>
+      <div class="elist">
+        <div class="ehrow">
+          <div class="col c-n2">名称 <svg width="8" height="8" viewBox="0 0 10 10"><path d="M5 8 2 3h6L5 8Z" fill="#888"/></svg></div>
+          <div class="col c-d2">修改日期</div>
+          <div class="col c-t2">类型</div>
+          <div class="col c-s2">大小</div>
+        </div>
+        <div id="rowsWrap">
+          <div class="erow"><div class="col c-n2"><svg width="20" height="16" viewBox="0 0 66 52"><path d="M3 10a3 3 0 0 1 3-3h17l5 6h32a3 3 0 0 1 3 3v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V10Z" fill="#ffd88a"/><path d="M3 16h60v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V16Z" fill="#ffce73"/></svg>PerfLogs</div><div class="col c-d2">2024/5/17 8:31</div><div class="col c-t2">文件夹</div><div class="col c-s2 sz"></div></div>
+          <div class="erow"><div class="col c-n2"><svg width="20" height="16" viewBox="0 0 66 52"><path d="M3 10a3 3 0 0 1 3-3h17l5 6h32a3 3 0 0 1 3 3v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V10Z" fill="#ffd88a"/><path d="M3 16h60v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V16Z" fill="#ffce73"/></svg>Program Files</div><div class="col c-d2">2026/8/30 21:15</div><div class="col c-t2">文件夹</div><div class="col c-s2 sz"></div></div>
+          <div class="erow"><div class="col c-n2"><svg width="20" height="16" viewBox="0 0 66 52"><path d="M3 10a3 3 0 0 1 3-3h17l5 6h32a3 3 0 0 1 3 3v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V10Z" fill="#ffd88a"/><path d="M3 16h60v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V16Z" fill="#ffce73"/></svg>Program Files (x86)</div><div class="col c-d2">2026/8/30 21:15</div><div class="col c-t2">文件夹</div><div class="col c-s2 sz"></div></div>
+          <div class="erow"><div class="col c-n2"><svg width="20" height="16" viewBox="0 0 66 52"><path d="M3 10a3 3 0 0 1 3-3h17l5 6h32a3 3 0 0 1 3 3v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V10Z" fill="#ffd88a"/><path d="M3 16h60v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V16Z" fill="#ffce73"/></svg>Windows</div><div class="col c-d2">2026/7/14 3:02</div><div class="col c-t2">文件夹</div><div class="col c-s2 sz"></div></div>
+          <div class="erow"><div class="col c-n2"><svg width="20" height="16" viewBox="0 0 66 52"><path d="M3 10a3 3 0 0 1 3-3h17l5 6h32a3 3 0 0 1 3 3v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V10Z" fill="#ffd88a"/><path d="M3 16h60v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V16Z" fill="#ffce73"/></svg>用户</div><div class="col c-d2">2024/5/17 8:31</div><div class="col c-t2">文件夹</div><div class="col c-s2 sz"></div></div>
+          <div class="erow" id="rowHib"><div class="col c-n2"><svg width="16" height="18" viewBox="0 0 24 28"><path d="M4 1h11l5 5v21H4V1Z" fill="#f4f4f4" stroke="#9a9a9a"/><path d="M15 1l5 5h-5V1Z" fill="#d4d4d4"/></svg>hiberfil.sys</div><div class="col c-d2">2026/9/22 12:30</div><div class="col c-t2">SYS 文件</div><div class="col c-s2 sz"><b>6.41 GB</b></div></div>
+          <div class="erow" id="rowPg"><div class="col c-n2"><svg width="16" height="18" viewBox="0 0 24 28"><path d="M4 1h11l5 5v21H4V1Z" fill="#f4f4f4" stroke="#9a9a9a"/><path d="M15 1l5 5h-5V1Z" fill="#d4d4d4"/></svg>pagefile.sys</div><div class="col c-d2">2026/9/22 12:30</div><div class="col c-t2">SYS 文件</div><div class="col c-s2 sz"><b>9.30 GB</b></div></div>
+        </div>
+      </div>
+      <div class="wstatus"><span id="statN">5 个项目</span><span>可用空间 182.4 GB，共 475.6 GB</span></div>
+    </div>
+
+    <!-- 文件夹选项对话框（查看页签） -->
+    <div class="prop" id="foDlg">
+      <div class="pt">
+        <svg width="15" height="15" viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2.5h9A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5v-12Z" fill="#ffce73" stroke="#e0a83c"/></svg>
+        <span>文件夹选项</span>
+        <span class="px"><svg width="11" height="11" viewBox="0 0 12 12"><path d="M1 1l10 10M11 1L1 11" stroke="currentColor" stroke-width="1.2"/></svg></span>
+      </div>
+      <div class="ptabs"><span>常规</span><span class="on">查看</span><span>搜索</span></div>
+      <div class="pb">
+        <div class="plab">文件夹视图</div>
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <span class="btn dis s">应用到文件夹(L)</span>
+          <span class="btn dis s">重置文件夹(R)</span>
+        </div>
+        <div class="plab">高级设置:</div>
+        <div class="obox">
+          <div class="orow"><span class="ckx"></span>始终显示图标，从不显示缩略图</div>
+          <div class="orow"><span class="ckx on"></span>在文件夹提示中显示文件大小信息</div>
+          <div class="orow"><span class="ckx on"></span>在单独的进程中打开文件夹窗口</div>
+          <div class="orow"><span class="ckx"></span>在标题栏中显示完整路径</div>
+          <div class="orow grp">隐藏文件和文件夹</div>
+          <div class="orow ind" id="rowRadioOff"><span class="orb on" id="radioOff"></span>不显示隐藏的文件、文件夹或驱动器</div>
+          <div class="orow ind" id="rowRadio"><span class="orb" id="radioOn"></span>显示隐藏的文件、文件夹和驱动器</div>
+          <div class="orow" id="rowProt"><span class="ckx on" id="ckProt"></span>隐藏受保护的操作系统文件(推荐)</div>
+          <div class="orow"><span class="ckx on"></span>隐藏已知文件类型的扩展名</div>
+          <div class="orow"><span class="ckx"></span>使用复选框以选择项</div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:8px"><span class="btn dis s">还原为默认值(D)</span></div>
+      </div>
+      <div class="pf"><span class="btn pri" id="btnOk">确定</span><span class="btn">取消</span><span class="btn dis">应用(A)</span></div>
+    </div>
+
+    <!-- 经典警告框 -->
+    <div class="dlg" id="warn" style="left:660px;top:330px;width:560px">
+      <div class="dt">警告<i>✕</i></div>
+      <div class="dbody">
+        <svg width="36" height="36" viewBox="0 0 40 40" style="flex:none"><path d="M20 3 37 34H3L20 3Z" fill="#ffb900"/><rect x="18.2" y="13" width="3.6" height="11" fill="#3a3000"/><circle cx="20" cy="28.5" r="2.2" fill="#3a3000"/></svg>
+        <div class="txt">您已选择显示受保护的操作系统文件（标记为隐藏和系统文件）。<br>这些文件是启动和运行 Windows 所必需的。删除或编辑它们会使您的计算机无法运行。<br><b>是否确实要显示这些文件？</b></div>
+      </div>
+      <div class="dft"><span class="btn pri" id="btnYes">是(Y)</span><span class="btn">否(N)</span></div>
+    </div>
+
+    <!-- chips -->
+    <div class="fchip r big" id="chip2" style="left:1160px;top:545px">两个大文件 现身！</div>
+    <div class="fchip b mono" id="chipName" style="left:1160px;top:612px">hiberfil.sys</div>
+    <div class="fchip g" id="chipWhat" style="left:1160px;top:662px">= 休眠文件</div>
+
+    <!-- 光标 -->
+    <div id="cur"><svg width="26" height="26" viewBox="0 0 26 26"><path d="M6 2 21 14.5 13.8 15.5 17.5 23 14.5 24.5 10.8 17 6 20.5V2Z" fill="#fff" stroke="#111" stroke-width="1.4"/></svg></div>
+
+    <img id="brand" src="wukong/icon.png" alt="">
+  
+  <div id="taskbar">
+      <div class="tb-apps">
+        <div class="tb"><svg width="22" height="22" viewBox="0 0 22 22"><rect x="1" y="1" width="9" height="9" fill="#00a2ed"/><rect x="12" y="1" width="9" height="9" fill="#00a2ed"/><rect x="1" y="12" width="9" height="9" fill="#00a2ed"/><rect x="12" y="12" width="9" height="9" fill="#00a2ed"/></svg></div>
+        <div class="tb"><svg width="20" height="20" viewBox="0 0 20 20"><circle cx="8.5" cy="8.5" r="6" fill="none" stroke="#444" stroke-width="2"/><path d="m13 13 4.5 4.5" stroke="#444" stroke-width="2" stroke-linecap="round"/></svg></div>
+        <div class="tb active"><svg width="20" height="16" viewBox="0 0 66 52"><path d="M3 10a3 3 0 0 1 3-3h17l5 6h32a3 3 0 0 1 3 3v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V10Z" fill="#ffd88a"/><path d="M3 16h60v30a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V16Z" fill="#ffce73"/></svg></div>
+        <div class="tb"><svg width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#e8f3ff" stroke="#8fc0ee"/><path d="M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18M3.6 9.5h16.8M3.6 14.5h16.8" fill="none" stroke="#4aa3e8" stroke-width="1.4"/></svg></div>
+      </div>
+      <div id="tray">
+        <svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 6.5a9 9 0 0 1 12 0" fill="none" stroke="#333" stroke-width="1.5" stroke-linecap="round"/><path d="M4.5 9.4a5.5 5.5 0 0 1 7 0" fill="none" stroke="#333" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="12" r="1.4" fill="#333"/></svg>
+        <svg width="17" height="16" viewBox="0 0 17 16"><rect x="1" y="5" width="12" height="7" rx="1.5" fill="none" stroke="#333" stroke-width="1.3"/><rect x="3" y="7" width="6" height="3" fill="#333"/><rect x="13.8" y="7" width="2" height="3" rx="1" fill="#333"/></svg>
+        <div class="t-time">12:30<br>2026/9/22</div>
+      </div>
+    </div>
+  </div>
+
+
+
+
+  <div class="corner" id="chap">番外 · 进阶提示：两个大文件</div>
+  <div class="corner" id="src">界面为演示还原 · Windows 11 版式</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 41 · 文件夹选项 · 15s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=15000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+
+/* ────────────────────────────────────────────────
+   本镜头 cue · 16:24–16:39「两个显示开关 · hiberfil.sys 现身」
+   ──────────────────────────────────────────────── */
+const folderRows=[...document.querySelectorAll('#rowsWrap .erow')].slice(0,5);
+/* 光标：阶梯路径（QA 冻结安全） */
+function curPath(t,pts,step){
+  pts.forEach((p,i)=>on(t+i*step,()=>{const c=$('#cur');c.style.left=p[0]+'px';c.style.top=p[1]+'px'}));
+}
+function curClick(t){on(t,()=>{const c=$('#cur');c.classList.remove('click');void c.offsetWidth;c.classList.add('click');__sfx.type(.4)});on(t+320,()=>$('#cur').classList.remove('click'))}
+
+on(300,()=>camTo(0,0,1,1.6));
+on(400,()=>{$('#exWin').classList.add('show');__sfx.pop(.45)});          // C:\ 资源管理器
+on(600,()=>$('#brand').classList.add('show'));                           // 品牌角标全程在
+folderRows.forEach((r,i)=>on(750+i*90,()=>{r.classList.add('in');if(i<3)__sfx.type(.22)}));
+on(1500,()=>{$('#foDlg').classList.add('in');__sfx.pop(.5)});           // 文件夹选项弹出（查看页签）
+
+/* (16:31) 把隐藏文件和受保护的系统文件显示出来 */
+on(7000,()=>$('#cur').classList.add('show'));
+curPath(7100,[[1380,820],[1150,690],[920,585],[780,540],[726,529]],150);
+curClick(7900);
+on(7950,()=>{$('#radioOn').classList.add('on');$('#radioOff').classList.remove('on');$('#rowRadio').classList.add('lit');__sfx.ding(.5)}); // 点亮「显示隐藏的文件」
+curPath(8400,[[726,538],[714,548],[702,554],[697,555]],140);
+curClick(8900);
+on(8950,()=>{$('#ckProt').classList.remove('on');$('#rowProt').classList.add('lit');__sfx.pop(.5)}); // 取消勾选「隐藏受保护…」
+on(9150,()=>{$('#warn').classList.add('in');__sfx.thud(.8)});         // 经典黄色警告框
+curPath(9500,[[780,560],[900,530],[1000,508],[1059,500]],140);
+curClick(10000);
+on(10050,()=>{$('#warn').classList.remove('in');__sfx.swipe(.5)});    // 是 → 警告关闭
+curPath(10250,[[1059,512],[1045,590],[1024,660],[1007,705]],130);
+curClick(10700);
+on(10750,()=>{$('#foDlg').classList.add('out');__sfx.pop(.5)});       // 确定 → 回资源管理器
+
+/* (16:34) 会在C盘里面看到两个大文件 */
+on(11100,()=>{camFocus(960,620,1.12,1.0);$('#cur').classList.remove('show')});
+on(11400,()=>{$('#rowHib').classList.add('in','spot');__sfx.pop(.6)}); // hiberfil.sys 现身
+on(11800,()=>{$('#rowPg').classList.add('in','spot');__sfx.pop(.6)});  // pagefile.sys 现身
+on(12100,()=>{$('#statN').textContent='7 个项目';$('#chip2').classList.add('pop');__sfx.ding(.6)});
+
+/* (16:36) 一个叫做hiberfil.sys */
+on(12700,()=>{$('#rowHib').classList.add('ring');$('#chipName').classList.add('pop');__sfx.thud(.6)});
+/* (16:38) 是休眠文件 */
+on(13500,()=>{$('#chipWhat').classList.add('pop');__sfx.ding(.55)});
+on(14400,()=>camTo(0,0,1,0.8));    // 定格
+</script>
+</body>
+</html>
