@@ -21,7 +21,7 @@ description: 制作"瑞士国际主义风格（Swiss Style）+ 图表驱动"的�
 ## Token 纪律（硬性）
 
 - **禁止通读** `assets/template.html` 与 `assets/examples/` 下任何成片页。模板 `cp` 复制后 `grep -n "改这里\|DUR="` 拿行号，只读标记区；成片页卡壳时 grep 定位后窗口读 ≤80 行。
-- 知识优先取 `references/` 三份浓缩文档。
+- 知识优先取 `references/` 四份浓缩文档（swiss-system 设计正本 / chart-skill-bridge 三技能融合选型 / chart-vocabulary 内建图表词汇 / production-spec 生产纪律）。
 
 ## 工作流
 
@@ -32,6 +32,8 @@ cp -r "assets/examples/vulnclaw-tutorial/Shark-GIF" <输出目录>/    # 大肥�
 ```
 
 **第 1 步 · 逐页实现**：`cp assets/template.html <输出目录>/shot-x-x_名称.html` → grep 定位 → 只改【改这里】区：eyebrow+大标题+主图表（从 chart-vocabulary 选型）+ cue 表。底盘/瑞士 tokens/组件库不动。
+
+**图表技能桥接**（主视觉选型时优先查 `references/chart-skill-bridge.md`）：内置 diagram-design（14 型概念示意图，MIT）与 archify（5 型工程图，MIT）于 `assets/chart-skills/`，lieflat-charts（63 型数据图表法典，NC 许可需自行安装）——按"有数字→lieflat / 讲关系→diagram-design / 讲系统→archify / 轻量示意→内建"匹配选择，外部图并入时按桥接文档做 Swiss 换肤（tokens 覆盖/去交互/cue 驱动）。读型文档按需单读，勿通读 gallery。
 
 **第 2 步 · 质检**：底盘自带 QA 钩子——URL 加 `#auto,t=毫秒` 起播后冻结在该时刻，直接无头截图（无需改文件）：
 
