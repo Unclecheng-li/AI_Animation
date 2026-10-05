@@ -1,0 +1,428 @@
+<!doctype html>
+<!--
+  KALLAWAY · tier1 · stat · SPARKLINE
+  A glowing trend sparkline (SVG path draws across the canvas from left to right);
+  a glowing dot tracks the tip and the end value counts up as the line arrives.
+  Aurora bloom, minimal dark canvas, bold end-value.
+  Slots: kicker (~28 chars uppercase), stat (big end value), label (~70 chars, <em> on one phrase), source (~40 chars uppercase).
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+/* ============================================================================
+   KALLAWAY — style tokens
+   Single source of palette / type / motion / texture for every card in this
+   style. Cards reference these vars and never hardcode colors, fonts, easings,
+   glows, or textures. Tweak here, all cards update.
+   See DESIGN.md for the why.
+   Aesthetic: premium dark motion-graphics — near-black cool canvas, a blue
+   "aurora" glow blooming from below, glassmorphism cards, edge-lit neon
+   elements, gradient glow text, focus-stack blur, smooth After-Effects easing.
+   Palette is the AIS brand (blue is the hero glow). The opposite of Vox in
+   every axis: smooth not choppy, dark not paper, glow not ink.
+   ============================================================================ */
+
+/* Type. The HyperFrames compiler embeds supported fonts by name at render time;
+   this @import is what makes standalone / browser preview show the right faces. */
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500;1,600&family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Space+Mono:wght@400;700&display=swap");
+
+:root {
+  /* --- palette (mirror style.json + DESIGN.md). AIS brand, dark. ----------- */
+  --canvas:       #0A0E14;   /* main near-black cool background */
+  --canvas-deep:  #07121C;   /* deeper navy — vignette / depth wells */
+  --ink:          #2A251F;   /* dark text for the rare light/cream surface */
+  --paper:        #F0EEE9;   /* warm white surface (light glass / chips) */
+  --white:        #FFFFFF;
+
+  --text:         #F0EEE9;   /* primary text on dark */
+  --text-dim:     rgba(240, 238, 233, 0.62);  /* secondary copy */
+  --text-faint:   rgba(240, 238, 233, 0.34);  /* metadata, fine print */
+
+  --accent:       #37BDF8;   /* AIS blue — THE hero glow (where refs used purple) */
+  --accent-2:     #F5D82A;   /* yellow — secondary pop / highlight numerals */
+  --alert:        #FF3B30;   /* red — alarm, negative delta, "lie" */
+  --warm:         #FF8A5C;   /* orange — warm secondary accent */
+
+  /* rgb triplets for building rgba() glows in cards without re-typing hex */
+  --accent-rgb:   55, 189, 248;
+  --accent2-rgb:  245, 216, 42;
+  --alert-rgb:    255, 59, 48;
+  --warm-rgb:     255, 138, 92;
+
+  /* semantic aliases the blueprint contract expects */
+  --bg:     var(--canvas);
+  --fg:     var(--text);
+  --muted:  var(--text-dim);
+
+  /* --- typography ---------------------------------------------------------- */
+  /* Plus Jakarta Sans = the voice (headlines, big numbers, glow text): geometric,
+     premium, rounds to match the glass radii, heavy at 800. Inter = body / labels /
+     captions, recedes. Space Mono = data chips, timestamps, %s — the "interface"
+     voice. No serif anywhere (that's Vox). */
+  --font-display: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  --font-body:    "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono:    "Space Mono", ui-monospace, "SF Mono", monospace;
+  /* contract aliases */
+  --font-label:   var(--font-body);
+  --font-hand:    var(--font-body);
+
+  --wt-reg:    400;
+  --wt-med:    500;
+  --wt-semi:   600;
+  --wt-bold:   700;
+  --wt-black:  800;
+
+  /* video sizes for 1920x1080 (big — readable in 2s) */
+  --size-mega:     300px;   /* hero stat number */
+  --size-display:  140px;   /* takeover headline */
+  --size-title:    84px;    /* section title */
+  --size-headline: 54px;    /* card headline */
+  --size-body:     32px;    /* supporting copy */
+  --size-label:    24px;    /* kicker / metadata */
+  --size-tiny:     19px;    /* credits, fine print, timestamps */
+
+  --track-tight: -0.02em;   /* display tracking */
+  --track-snug:  -0.01em;
+  --track-wide:  0.18em;    /* uppercase label tracking */
+
+  /* --- glow — the signature. Soft, layered, never a hard ring. ------------- */
+  --glow-accent-sm: 0 0 10px rgba(var(--accent-rgb), 0.55);
+  --glow-accent:    0 0 22px rgba(var(--accent-rgb), 0.55), 0 0 56px rgba(var(--accent-rgb), 0.30);
+  --glow-accent-lg: 0 0 40px rgba(var(--accent-rgb), 0.60), 0 0 120px rgba(var(--accent-rgb), 0.32);
+  --glow-white:     0 0 16px rgba(255, 255, 255, 0.50), 0 0 46px rgba(255, 255, 255, 0.26);
+  --glow-white-lg:  0 0 30px rgba(255, 255, 255, 0.55), 0 0 90px rgba(255, 255, 255, 0.30);
+  /* text glow (set as text-shadow): white core that lifts off the dark canvas */
+  --textglow:       0 0 18px rgba(255, 255, 255, 0.45), 0 0 40px rgba(var(--accent-rgb), 0.30);
+  --textglow-accent:0 0 18px rgba(var(--accent-rgb), 0.65), 0 0 48px rgba(var(--accent-rgb), 0.35);
+
+  /* --- glass — frosted surfaces. Two tints: light (bright) + dark (recede). - */
+  --glass-bg:      rgba(255, 255, 255, 0.055);
+  --glass-bg-dark: rgba(16, 22, 34, 0.55);
+  --glass-border:  rgba(255, 255, 255, 0.14);
+  --glass-hi:      rgba(255, 255, 255, 0.22);  /* top inner-highlight edge */
+  --glass-blur:    blur(22px) saturate(135%);
+  --glass-shadow:  0 24px 70px rgba(0, 0, 0, 0.50);
+
+  /* --- shape --------------------------------------------------------------- */
+  --radius:     28px;       /* glass cards, pills — generously rounded */
+  --radius-sm:  16px;       /* chips, small tiles */
+  --radius-lg:  40px;       /* phone frames, large surfaces */
+  --pad:        80px;       /* canvas safe-area inset */
+  --stroke:     1.5px;      /* hairline neon edge weight */
+
+  /* --- motion — smooth, premium, breathing. The anti-Vox. ------------------ */
+  /* Long expo/quint glides; spring overshoot for cards; blur-in for focus pull.
+     NEVER steps()/choppy — that is Vox's signature, not ours. */
+  --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);   /* expo-out — the default glide */
+  --ease-inout:  cubic-bezier(0.65, 0, 0.35, 1);   /* symmetric, for drifts */
+  --ease-soft:   cubic-bezier(0.33, 1, 0.68, 1);   /* gentle settle */
+  /* GSAP string eases (used in card timelines) */
+  --gsap-glide:  power4.out;
+  --gsap-expo:   expo.out;
+  --gsap-spring: back.out(1.4);
+  --dur-in:   0.8s;    /* entrances breathe */
+  --dur-out:  0.5s;
+
+  /* --- textures (deterministic) ------------------------------------------- */
+  /* Aurora bloom — blue light rising from the bottom-center. The hero ambience.
+     Compose these as background layers under content; animate opacity/scale. */
+  --bloom-bottom: radial-gradient(120% 85% at 50% 118%,
+                    rgba(var(--accent-rgb), 0.45) 0%,
+                    rgba(var(--accent-rgb), 0.16) 32%,
+                    transparent 62%);
+  --bloom-corner: radial-gradient(90% 90% at 88% 12%,
+                    rgba(var(--accent-rgb), 0.30) 0%,
+                    transparent 55%);
+
+  /* Vignette — pulls the eye to center, deepens the canvas edges. */
+  --vignette: radial-gradient(125% 125% at 50% 45%, transparent 52%, rgba(0,0,0,0.55) 100%);
+
+  /* Faint dot grid (the refs' subtle technical texture). Low contrast. */
+  --dot:      radial-gradient(circle at center, rgba(255,255,255,0.06) 1px, transparent 1.4px);
+  --dot-size: 46px 46px;
+
+  /* Fine film grain over everything — keeps the dark from banding. */
+  --tex-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+</style>
+    <style>
+      html, body { margin: 0; }
+
+      #t1-stat-spark {
+        position: absolute; inset: 0; width: 1920px; height: 1080px;
+        background: var(--canvas); color: var(--text);
+        font-family: var(--font-display); overflow: hidden;
+      }
+
+      #t1-stat-spark .bloom {
+        position: absolute; inset: 0; background: var(--bloom-bottom); z-index: 1;
+      }
+      #t1-stat-spark .grid {
+        position: absolute; inset: 0; z-index: 1;
+        background-image: var(--dot); background-size: var(--dot-size);
+        opacity: 0.45;
+        -webkit-mask-image: radial-gradient(120% 100% at 50% 60%, #000 35%, transparent 80%);
+                mask-image: radial-gradient(120% 100% at 50% 60%, #000 35%, transparent 80%);
+      }
+
+      /* Left column: kicker + big number + label */
+      #t1-stat-spark .left-col {
+        position: absolute; left: 140px; top: 50%;
+        transform: translateY(-50%);
+        z-index: 4; display: flex; flex-direction: column; gap: 32px;
+        max-width: 640px;
+      }
+
+      #t1-stat-spark .kicker {
+        font-family: var(--font-mono);
+        font-size: var(--size-label);
+        font-weight: var(--wt-bold);
+        letter-spacing: var(--track-wide);
+        text-transform: uppercase;
+        color: var(--accent);
+        text-shadow: var(--textglow-accent);
+      }
+
+      #t1-stat-spark .stat {
+        font-family: var(--font-display);
+        font-weight: var(--wt-black);
+        font-size: var(--size-mega);
+        line-height: 0.9;
+        letter-spacing: var(--track-tight);
+        background: linear-gradient(155deg, #ffffff 10%, rgba(var(--accent-rgb), 0.80) 85%);
+        -webkit-background-clip: text; background-clip: text;
+        -webkit-text-fill-color: transparent; text-fill-color: transparent;
+        filter: drop-shadow(0 0 28px rgba(var(--accent-rgb), 0.55));
+      }
+
+      #t1-stat-spark .label {
+        font-family: var(--font-body);
+        font-size: var(--size-body);
+        font-weight: var(--wt-med);
+        color: var(--text-dim);
+        line-height: 1.45;
+      }
+      #t1-stat-spark .label em {
+        font-style: normal; color: var(--text); text-shadow: var(--textglow);
+      }
+
+      /* Sparkline SVG — right two-thirds of canvas */
+      #t1-stat-spark .spark-wrap {
+        position: absolute; right: 60px; top: 50%;
+        transform: translateY(-50%);
+        width: 1060px; height: 480px;
+        z-index: 3;
+      }
+
+      #t1-stat-spark .spark-svg {
+        width: 100%; height: 100%;
+        overflow: visible;
+      }
+
+      /* Tip glow dot */
+      #t1-stat-spark .tip-glow {
+        position: absolute;
+        width: 60px; height: 60px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(var(--accent-rgb), 0.55) 0%, transparent 70%);
+        box-shadow: 0 0 60px 14px rgba(var(--accent-rgb), 0.35);
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+      }
+
+      #t1-stat-spark .source {
+        position: absolute; left: var(--pad); bottom: 44px;
+        font-family: var(--font-mono); font-size: var(--size-tiny);
+        font-weight: var(--wt-reg); letter-spacing: 0.12em;
+        text-transform: uppercase; color: var(--text-faint); z-index: 5;
+      }
+
+      #t1-stat-spark .vignette {
+        position: absolute; inset: 0; pointer-events: none; z-index: 6;
+        background: var(--vignette);
+      }
+      #t1-stat-spark .grain {
+        position: absolute; inset: -40px; background: var(--tex-grain);
+        background-size: 200px 200px; mix-blend-mode: overlay; opacity: 0.10;
+        pointer-events: none; z-index: 7;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="t1-stat-spark" data-composition-id="t1-stat-spark" data-start="0" data-width="1920" data-height="1080" class="clip" data-duration="5">
+      <div class="bloom"></div>
+      <div class="grid"></div>
+
+      <div class="left-col">
+        <div class="kicker" data-slot="kicker">MONTHLY ENROLLMENTS · 2024–2026</div>
+        <div class="stat" id="t1-stat-spark-num" data-slot="stat">47,200</div>
+        <div class="label" data-slot="label">learners enrolled per month — <em>up 6× since launch</em> and accelerating into Q3</div>
+      </div>
+
+      <div class="spark-wrap" id="t1-stat-spark-wrap">
+        <!-- Tip glow that follows the drawing endpoint -->
+        <div class="tip-glow" id="t1-stat-spark-tipglow"></div>
+
+        <svg class="spark-svg" id="t1-stat-spark-svg"
+             viewBox="0 0 1060 480" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="sparkGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#37BDF8" stop-opacity="0.5"/>
+              <stop offset="70%" stop-color="#37BDF8" stop-opacity="1"/>
+              <stop offset="100%" stop-color="#ffffff" stop-opacity="0.95"/>
+            </linearGradient>
+            <linearGradient id="sparkFill" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="rgba(55,189,248,0.22)"/>
+              <stop offset="100%" stop-color="rgba(55,189,248,0)"/>
+            </linearGradient>
+            <filter id="sparkGlow" x="-10%" y="-20%" width="120%" height="140%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur"/>
+              <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+            </filter>
+          </defs>
+
+          <!-- Fill area under sparkline -->
+          <path id="t1-stat-spark-fill"
+            d="M 0 430 C 80 420, 120 410, 200 400
+               C 280 390, 320 380, 400 360
+               C 480 340, 520 310, 600 270
+               C 680 225, 720 195, 800 155
+               C 880 112, 920 90, 1000 52
+               L 1000 480 L 0 480 Z"
+            fill="url(#sparkFill)" opacity="0.7"
+          />
+
+          <!-- Sparkline path — hardcoded trend curve, exponential-ish growth -->
+          <path id="t1-stat-spark-line"
+            d="M 0 430 C 80 420, 120 410, 200 400
+               C 280 390, 320 380, 400 360
+               C 480 340, 520 310, 600 270
+               C 680 225, 720 195, 800 155
+               C 880 112, 920 90, 1000 52"
+            stroke="url(#sparkGrad)" stroke-width="4.5"
+            stroke-linecap="round" fill="none"
+            filter="url(#sparkGlow)"
+          />
+
+          <!-- Y-axis baseline -->
+          <line x1="0" y1="446" x2="1060" y2="446"
+            stroke="rgba(255,255,255,0.07)" stroke-width="1.5"/>
+
+          <!-- Glowing tip dot at line end -->
+          <circle id="t1-stat-spark-tipdot" cx="1000" cy="52" r="11"
+            fill="#ffffff"
+            style="filter: drop-shadow(0 0 10px rgba(55,189,248,0.9)) drop-shadow(0 0 28px rgba(55,189,248,0.5));"/>
+        </svg>
+      </div>
+
+      <div class="source" data-slot="source">SOURCE · AIS PLATFORM ANALYTICS 2026</div>
+
+      <div class="vignette"></div>
+      <div class="grain"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      const lineEl    = document.getElementById("t1-stat-spark-line");
+      const fillEl    = document.getElementById("t1-stat-spark-fill");
+      const tipDotEl  = document.getElementById("t1-stat-spark-tipdot");
+      const tipGlowEl = document.getElementById("t1-stat-spark-tipglow");
+      const numEl     = document.getElementById("t1-stat-spark-num");
+
+      /* Compute the total length of the sparkline path */
+      const totalLen = lineEl.getTotalLength ? lineEl.getTotalLength() : 1200;
+      lineEl.style.strokeDasharray  = totalLen;
+      lineEl.style.strokeDashoffset = totalLen; /* start invisible */
+
+      /* Fill area — clip to follow the line draw */
+      const fillLen = fillEl.getTotalLength ? fillEl.getTotalLength() : 3000;
+      /* We reveal fill by opacity fade after line draws, not a dashoffset approach */
+      fillEl.style.opacity = "0";
+
+      const TARGET_VAL = 47200;
+      /* Sparkline waypoints (x,y in SVG coords) — used to drive tip dot position */
+      /* Approximate point along the path for t in [0,1] */
+      function sparkPoint(t) {
+        /* Cubic bezier segments approximation hardcoded to match path */
+        /* t maps to a position along the getTotalLength */
+        if (!lineEl.getTotalLength) return { x: 1000 * t, y: 430 - 378 * t * t };
+        const pos = lineEl.getPointAtLength(t * totalLen);
+        return { x: pos.x, y: pos.y };
+      }
+
+      /* ambient grain flicker */
+      tl.fromTo("#t1-stat-spark .grain",
+        { backgroundPosition: "0px 0px" },
+        { backgroundPosition: "110px 80px", duration: 0.6, ease: "none", repeat: 11, yoyo: true }, 0);
+
+      /* bloom + grid */
+      tl.from("#t1-stat-spark .bloom",
+          { autoAlpha: 0, scale: 0.88, transformOrigin: "50% 120%", duration: 1.4, ease: "expo.out" }, 0)
+        .from("#t1-stat-spark .grid",
+          { autoAlpha: 0, duration: 1.1, ease: "power2.out" }, 0.2)
+
+        /* left col: kicker */
+        .from("#t1-stat-spark .kicker",
+          { autoAlpha: 0, x: -28, filter: "blur(8px)", duration: 0.75, ease: "power3.out" }, 0.5)
+
+        /* sparkline draws in + tip travels + count-up */
+        .to({ val: 0 }, {
+          val: 1,
+          duration: 2.0, ease: "power2.inOut",
+          onUpdate: function() {
+            const t = this.targets()[0].val;
+            /* draw line */
+            lineEl.style.strokeDashoffset = totalLen * (1 - t);
+            /* tip dot follows line */
+            const pt = sparkPoint(t);
+            tipDotEl.setAttribute("cx", pt.x);
+            tipDotEl.setAttribute("cy", pt.y);
+            /* tip glow follows (positioned in px relative to spark-wrap) */
+            /* spark-wrap is 1060x480, SVG is same — scale ratio = wrap/viewBox */
+            const wrapW = 1060, wrapH = 480;
+            tipGlowEl.style.left = (pt.x / 1060 * wrapW) + "px";
+            tipGlowEl.style.top  = (pt.y / 480  * wrapH) + "px";
+          }
+        }, 0.8)
+
+        /* stat (big number) counts up */
+        .from("#t1-stat-spark .stat",
+          { autoAlpha: 0, scale: 0.85, duration: 0.7, ease: "back.out(1.4)" }, 0.80)
+        .to({ val: 0 }, {
+          val: TARGET_VAL,
+          duration: 1.8, ease: "power2.out",
+          onUpdate: function() {
+            const v = this.targets()[0].val;
+            numEl.textContent = Math.round(v / 100) * 100 >= 1000
+              ? (Math.round(v / 100) * 100).toLocaleString("en-US")
+              : Math.round(v);
+          }
+        }, 1.0)
+
+        /* fill area fades in after line draws */
+        .to("#t1-stat-spark-fill", { opacity: 0.7, duration: 0.8, ease: "power2.out" }, 2.4)
+
+        /* label */
+        .from("#t1-stat-spark .label",
+          { autoAlpha: 0, y: 18, filter: "blur(8px)", duration: 0.85, ease: "power3.out" }, 2.0)
+
+        /* source */
+        .from("#t1-stat-spark .source",
+          { autoAlpha: 0, duration: 0.7, ease: "power2.out" }, 2.35)
+
+        /* breathing glow on tip */
+        .to("#t1-stat-spark-tipglow",
+          { opacity: 0.4, scale: 1.5, transformOrigin: "50% 50%",
+            duration: 1.4, ease: "sine.inOut", repeat: 2, yoyo: true }, 3.0)
+
+        .set({}, {}, 7);
+
+      window.__timelines["t1-stat-spark"] = tl;
+    </script>
+  </body>
+</html>

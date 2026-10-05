@@ -1,0 +1,455 @@
+<!doctype html>
+<!--
+  KALLAWAY · tier1 · stat · CURVE
+  An exponential growth curve (SVG path draws from left to right, rising sharply).
+  The glowing end value counts up as the line arrives at the right edge.
+  Big number sits top-right at the apex. Different from sparkline: full-width canvas,
+  the curve dominates, with subtle axis labels for scale context.
+  Slots: kicker (~28 chars uppercase), stat (big value at curve end), label (~70 chars, <em> on one phrase), source (~40 chars uppercase).
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+/* ============================================================================
+   KALLAWAY — style tokens
+   Single source of palette / type / motion / texture for every card in this
+   style. Cards reference these vars and never hardcode colors, fonts, easings,
+   glows, or textures. Tweak here, all cards update.
+   See DESIGN.md for the why.
+   Aesthetic: premium dark motion-graphics — near-black cool canvas, a blue
+   "aurora" glow blooming from below, glassmorphism cards, edge-lit neon
+   elements, gradient glow text, focus-stack blur, smooth After-Effects easing.
+   Palette is the AIS brand (blue is the hero glow). The opposite of Vox in
+   every axis: smooth not choppy, dark not paper, glow not ink.
+   ============================================================================ */
+
+/* Type. The HyperFrames compiler embeds supported fonts by name at render time;
+   this @import is what makes standalone / browser preview show the right faces. */
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500;1,600&family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Space+Mono:wght@400;700&display=swap");
+
+:root {
+  /* --- palette (mirror style.json + DESIGN.md). AIS brand, dark. ----------- */
+  --canvas:       #0A0E14;   /* main near-black cool background */
+  --canvas-deep:  #07121C;   /* deeper navy — vignette / depth wells */
+  --ink:          #2A251F;   /* dark text for the rare light/cream surface */
+  --paper:        #F0EEE9;   /* warm white surface (light glass / chips) */
+  --white:        #FFFFFF;
+
+  --text:         #F0EEE9;   /* primary text on dark */
+  --text-dim:     rgba(240, 238, 233, 0.62);  /* secondary copy */
+  --text-faint:   rgba(240, 238, 233, 0.34);  /* metadata, fine print */
+
+  --accent:       #37BDF8;   /* AIS blue — THE hero glow (where refs used purple) */
+  --accent-2:     #F5D82A;   /* yellow — secondary pop / highlight numerals */
+  --alert:        #FF3B30;   /* red — alarm, negative delta, "lie" */
+  --warm:         #FF8A5C;   /* orange — warm secondary accent */
+
+  /* rgb triplets for building rgba() glows in cards without re-typing hex */
+  --accent-rgb:   55, 189, 248;
+  --accent2-rgb:  245, 216, 42;
+  --alert-rgb:    255, 59, 48;
+  --warm-rgb:     255, 138, 92;
+
+  /* semantic aliases the blueprint contract expects */
+  --bg:     var(--canvas);
+  --fg:     var(--text);
+  --muted:  var(--text-dim);
+
+  /* --- typography ---------------------------------------------------------- */
+  /* Plus Jakarta Sans = the voice (headlines, big numbers, glow text): geometric,
+     premium, rounds to match the glass radii, heavy at 800. Inter = body / labels /
+     captions, recedes. Space Mono = data chips, timestamps, %s — the "interface"
+     voice. No serif anywhere (that's Vox). */
+  --font-display: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  --font-body:    "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono:    "Space Mono", ui-monospace, "SF Mono", monospace;
+  /* contract aliases */
+  --font-label:   var(--font-body);
+  --font-hand:    var(--font-body);
+
+  --wt-reg:    400;
+  --wt-med:    500;
+  --wt-semi:   600;
+  --wt-bold:   700;
+  --wt-black:  800;
+
+  /* video sizes for 1920x1080 (big — readable in 2s) */
+  --size-mega:     300px;   /* hero stat number */
+  --size-display:  140px;   /* takeover headline */
+  --size-title:    84px;    /* section title */
+  --size-headline: 54px;    /* card headline */
+  --size-body:     32px;    /* supporting copy */
+  --size-label:    24px;    /* kicker / metadata */
+  --size-tiny:     19px;    /* credits, fine print, timestamps */
+
+  --track-tight: -0.02em;   /* display tracking */
+  --track-snug:  -0.01em;
+  --track-wide:  0.18em;    /* uppercase label tracking */
+
+  /* --- glow — the signature. Soft, layered, never a hard ring. ------------- */
+  --glow-accent-sm: 0 0 10px rgba(var(--accent-rgb), 0.55);
+  --glow-accent:    0 0 22px rgba(var(--accent-rgb), 0.55), 0 0 56px rgba(var(--accent-rgb), 0.30);
+  --glow-accent-lg: 0 0 40px rgba(var(--accent-rgb), 0.60), 0 0 120px rgba(var(--accent-rgb), 0.32);
+  --glow-white:     0 0 16px rgba(255, 255, 255, 0.50), 0 0 46px rgba(255, 255, 255, 0.26);
+  --glow-white-lg:  0 0 30px rgba(255, 255, 255, 0.55), 0 0 90px rgba(255, 255, 255, 0.30);
+  /* text glow (set as text-shadow): white core that lifts off the dark canvas */
+  --textglow:       0 0 18px rgba(255, 255, 255, 0.45), 0 0 40px rgba(var(--accent-rgb), 0.30);
+  --textglow-accent:0 0 18px rgba(var(--accent-rgb), 0.65), 0 0 48px rgba(var(--accent-rgb), 0.35);
+
+  /* --- glass — frosted surfaces. Two tints: light (bright) + dark (recede). - */
+  --glass-bg:      rgba(255, 255, 255, 0.055);
+  --glass-bg-dark: rgba(16, 22, 34, 0.55);
+  --glass-border:  rgba(255, 255, 255, 0.14);
+  --glass-hi:      rgba(255, 255, 255, 0.22);  /* top inner-highlight edge */
+  --glass-blur:    blur(22px) saturate(135%);
+  --glass-shadow:  0 24px 70px rgba(0, 0, 0, 0.50);
+
+  /* --- shape --------------------------------------------------------------- */
+  --radius:     28px;       /* glass cards, pills — generously rounded */
+  --radius-sm:  16px;       /* chips, small tiles */
+  --radius-lg:  40px;       /* phone frames, large surfaces */
+  --pad:        80px;       /* canvas safe-area inset */
+  --stroke:     1.5px;      /* hairline neon edge weight */
+
+  /* --- motion — smooth, premium, breathing. The anti-Vox. ------------------ */
+  /* Long expo/quint glides; spring overshoot for cards; blur-in for focus pull.
+     NEVER steps()/choppy — that is Vox's signature, not ours. */
+  --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);   /* expo-out — the default glide */
+  --ease-inout:  cubic-bezier(0.65, 0, 0.35, 1);   /* symmetric, for drifts */
+  --ease-soft:   cubic-bezier(0.33, 1, 0.68, 1);   /* gentle settle */
+  /* GSAP string eases (used in card timelines) */
+  --gsap-glide:  power4.out;
+  --gsap-expo:   expo.out;
+  --gsap-spring: back.out(1.4);
+  --dur-in:   0.8s;    /* entrances breathe */
+  --dur-out:  0.5s;
+
+  /* --- textures (deterministic) ------------------------------------------- */
+  /* Aurora bloom — blue light rising from the bottom-center. The hero ambience.
+     Compose these as background layers under content; animate opacity/scale. */
+  --bloom-bottom: radial-gradient(120% 85% at 50% 118%,
+                    rgba(var(--accent-rgb), 0.45) 0%,
+                    rgba(var(--accent-rgb), 0.16) 32%,
+                    transparent 62%);
+  --bloom-corner: radial-gradient(90% 90% at 88% 12%,
+                    rgba(var(--accent-rgb), 0.30) 0%,
+                    transparent 55%);
+
+  /* Vignette — pulls the eye to center, deepens the canvas edges. */
+  --vignette: radial-gradient(125% 125% at 50% 45%, transparent 52%, rgba(0,0,0,0.55) 100%);
+
+  /* Faint dot grid (the refs' subtle technical texture). Low contrast. */
+  --dot:      radial-gradient(circle at center, rgba(255,255,255,0.06) 1px, transparent 1.4px);
+  --dot-size: 46px 46px;
+
+  /* Fine film grain over everything — keeps the dark from banding. */
+  --tex-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+</style>
+    <style>
+      html, body { margin: 0; }
+
+      #t1-stat-curve {
+        position: absolute; inset: 0; width: 1920px; height: 1080px;
+        background: var(--canvas); color: var(--text);
+        font-family: var(--font-display); overflow: hidden;
+      }
+
+      #t1-stat-curve .bloom {
+        position: absolute; inset: 0;
+        background: radial-gradient(130% 90% at 85% 110%,
+          rgba(var(--accent-rgb), 0.45) 0%,
+          rgba(var(--accent-rgb), 0.16) 32%,
+          transparent 62%);
+        z-index: 1;
+      }
+      #t1-stat-curve .grid {
+        position: absolute; inset: 0; z-index: 1;
+        background-image: var(--dot); background-size: var(--dot-size);
+        opacity: 0.4;
+        -webkit-mask-image: radial-gradient(120% 100% at 50% 60%, #000 35%, transparent 80%);
+                mask-image: radial-gradient(120% 100% at 50% 60%, #000 35%, transparent 80%);
+      }
+
+      /* Kicker + top label — upper left */
+      #t1-stat-curve .top-text {
+        position: absolute; left: 140px; top: 140px; z-index: 4;
+        display: flex; flex-direction: column; gap: 20px;
+        max-width: 700px;
+      }
+      #t1-stat-curve .kicker {
+        font-family: var(--font-mono);
+        font-size: var(--size-label);
+        font-weight: var(--wt-bold);
+        letter-spacing: var(--track-wide);
+        text-transform: uppercase;
+        color: var(--accent);
+        text-shadow: var(--textglow-accent);
+      }
+      #t1-stat-curve .label {
+        font-family: var(--font-body);
+        font-size: var(--size-body);
+        font-weight: var(--wt-med);
+        color: var(--text-dim);
+        line-height: 1.45;
+        max-width: 640px;
+      }
+      #t1-stat-curve .label em {
+        font-style: normal; color: var(--text); text-shadow: var(--textglow);
+      }
+
+      /* Big stat — upper right, anchored near curve apex */
+      #t1-stat-curve .apex-block {
+        position: absolute; right: 140px; top: 120px;
+        z-index: 5; text-align: right;
+        display: flex; flex-direction: column; gap: 4px; align-items: flex-end;
+      }
+      #t1-stat-curve .stat {
+        font-family: var(--font-display);
+        font-weight: var(--wt-black);
+        font-size: 220px;
+        line-height: 0.88;
+        letter-spacing: var(--track-tight);
+        background: linear-gradient(155deg, #ffffff 10%, rgba(var(--accent-rgb), 0.80) 88%);
+        -webkit-background-clip: text; background-clip: text;
+        -webkit-text-fill-color: transparent; text-fill-color: transparent;
+        filter: drop-shadow(0 0 36px rgba(var(--accent-rgb), 0.60));
+      }
+      #t1-stat-curve .stat-unit {
+        font-family: var(--font-mono);
+        font-size: 30px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--accent);
+        text-shadow: var(--textglow-accent);
+      }
+
+      /* SVG curve — full canvas */
+      #t1-stat-curve .curve-svg {
+        position: absolute; inset: 0;
+        width: 1920px; height: 1080px;
+        z-index: 3; overflow: visible;
+      }
+
+      /* Tip glow that tracks the curve endpoint */
+      #t1-stat-curve .tip-glow {
+        position: absolute;
+        width: 80px; height: 80px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(var(--accent-rgb), 0.65) 0%, transparent 70%);
+        box-shadow: 0 0 80px 20px rgba(var(--accent-rgb), 0.40);
+        transform: translate(-50%, -50%);
+        pointer-events: none; z-index: 4;
+      }
+
+      #t1-stat-curve .source {
+        position: absolute; left: var(--pad); bottom: 44px;
+        font-family: var(--font-mono); font-size: var(--size-tiny);
+        font-weight: var(--wt-reg); letter-spacing: 0.12em;
+        text-transform: uppercase; color: var(--text-faint); z-index: 5;
+      }
+
+      #t1-stat-curve .vignette {
+        position: absolute; inset: 0; pointer-events: none; z-index: 6;
+        background: var(--vignette);
+      }
+      #t1-stat-curve .grain {
+        position: absolute; inset: -40px; background: var(--tex-grain);
+        background-size: 200px 200px; mix-blend-mode: overlay; opacity: 0.10;
+        pointer-events: none; z-index: 7;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="t1-stat-curve" data-composition-id="t1-stat-curve"
+         data-start="0" data-width="1920" data-height="1080" class="clip" data-duration="5">
+
+      <div class="bloom"></div>
+      <div class="grid"></div>
+
+      <!-- SVG curve layer -->
+      <svg class="curve-svg" id="t1-stat-curve-svg"
+           viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="curveGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#37BDF8" stop-opacity="0.3"/>
+            <stop offset="55%" stop-color="#37BDF8" stop-opacity="0.9"/>
+            <stop offset="100%" stop-color="#ffffff" stop-opacity="1"/>
+          </linearGradient>
+          <linearGradient id="curveFillGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="rgba(55,189,248,0.25)"/>
+            <stop offset="100%" stop-color="rgba(55,189,248,0)"/>
+          </linearGradient>
+          <filter id="curveGlow" x="-5%" y="-20%" width="110%" height="140%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="7" result="blur"/>
+            <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+          </filter>
+        </defs>
+
+        <!-- Axis baseline -->
+        <line x1="120" y1="940" x2="1820" y2="940"
+          stroke="rgba(255,255,255,0.07)" stroke-width="1.5"/>
+        <!-- Y-axis -->
+        <line x1="120" y1="200" x2="120" y2="940"
+          stroke="rgba(255,255,255,0.07)" stroke-width="1.5"/>
+
+        <!-- Axis tick labels -->
+        <text x="100" y="945" fill="rgba(255,255,255,0.22)"
+          font-family="Space Mono, monospace" font-size="20" text-anchor="end">0</text>
+        <text x="100" y="650" fill="rgba(255,255,255,0.22)"
+          font-family="Space Mono, monospace" font-size="20" text-anchor="end">50K</text>
+        <text x="100" y="355" fill="rgba(255,255,255,0.22)"
+          font-family="Space Mono, monospace" font-size="20" text-anchor="end">100K</text>
+
+        <!-- X-axis labels -->
+        <text x="120"  y="978" fill="rgba(255,255,255,0.22)"
+          font-family="Space Mono, monospace" font-size="20" text-anchor="middle">2022</text>
+        <text x="585"  y="978" fill="rgba(255,255,255,0.22)"
+          font-family="Space Mono, monospace" font-size="20" text-anchor="middle">2023</text>
+        <text x="1115" y="978" fill="rgba(255,255,255,0.22)"
+          font-family="Space Mono, monospace" font-size="20" text-anchor="middle">2024</text>
+        <text x="1640" y="978" fill="rgba(255,255,255,0.22)"
+          font-family="Space Mono, monospace" font-size="20" text-anchor="middle">2025</text>
+        <text x="1820" y="978" fill="rgba(255,255,255,0.22)"
+          font-family="Space Mono, monospace" font-size="20" text-anchor="middle">2026</text>
+
+        <!-- Fill under curve -->
+        <path id="t1-stat-curve-fill"
+          d="M 120 932 C 250 928, 400 920, 585 905
+             C 770 890, 880 858, 1115 796
+             C 1350 720, 1480 620, 1640 445
+             C 1720 350, 1770 285, 1820 175
+             L 1820 940 L 120 940 Z"
+          fill="url(#curveFillGrad)" opacity="0"
+        />
+
+        <!-- Exponential growth curve -->
+        <path id="t1-stat-curve-line"
+          d="M 120 932 C 250 928, 400 920, 585 905
+             C 770 890, 880 858, 1115 796
+             C 1350 720, 1480 620, 1640 445
+             C 1720 350, 1770 285, 1820 175"
+          stroke="url(#curveGrad)" stroke-width="5"
+          stroke-linecap="round" fill="none"
+          filter="url(#curveGlow)"
+        />
+
+        <!-- Glowing tip dot at apex -->
+        <circle id="t1-stat-curve-tipdot" cx="1820" cy="175" r="14"
+          fill="#ffffff"
+          style="filter: drop-shadow(0 0 14px rgba(55,189,248,0.9)) drop-shadow(0 0 36px rgba(55,189,248,0.6));"/>
+      </svg>
+
+      <!-- Tip glow (CSS div, follows apex) -->
+      <div class="tip-glow" id="t1-stat-curve-tipglow"
+           style="left: 1820px; top: 175px;"></div>
+
+      <div class="top-text">
+        <div class="kicker" data-slot="kicker">TOTAL LEARNERS REACHED · CUMULATIVE</div>
+        <div class="label" data-slot="label">the platform crossed <em>125,000 learners</em> in 2026 — driven almost entirely by word-of-mouth growth</div>
+      </div>
+
+      <div class="apex-block">
+        <div class="stat" id="t1-stat-curve-num" data-slot="stat">125K</div>
+        <div class="stat-unit">LEARNERS</div>
+      </div>
+
+      <div class="source" data-slot="source">SOURCE · AIS GROWTH METRICS 2026</div>
+
+      <div class="vignette"></div>
+      <div class="grain"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      const lineEl    = document.getElementById("t1-stat-curve-line");
+      const fillEl    = document.getElementById("t1-stat-curve-fill");
+      const tipDotEl  = document.getElementById("t1-stat-curve-tipdot");
+      const tipGlowEl = document.getElementById("t1-stat-curve-tipglow");
+      const numEl     = document.getElementById("t1-stat-curve-num");
+
+      const totalLen  = lineEl.getTotalLength ? lineEl.getTotalLength() : 1800;
+      lineEl.style.strokeDasharray  = totalLen;
+      lineEl.style.strokeDashoffset = totalLen;
+
+      const TARGET_VAL = 125000;
+
+      /* ambient grain flicker */
+      tl.fromTo("#t1-stat-curve .grain",
+        { backgroundPosition: "0px 0px" },
+        { backgroundPosition: "110px 80px", duration: 0.6, ease: "none", repeat: 11, yoyo: true }, 0);
+
+      /* bloom + grid */
+      tl.from("#t1-stat-curve .bloom",
+          { autoAlpha: 0, scale: 0.88, transformOrigin: "85% 110%", duration: 1.4, ease: "expo.out" }, 0)
+        .from("#t1-stat-curve .grid",
+          { autoAlpha: 0, duration: 1.1, ease: "power2.out" }, 0.2)
+
+        /* kicker + label */
+        .from("#t1-stat-curve .kicker",
+          { autoAlpha: 0, x: -28, filter: "blur(8px)", duration: 0.75, ease: "power3.out" }, 0.5)
+        .from("#t1-stat-curve .label",
+          { autoAlpha: 0, y: 16, filter: "blur(8px)", duration: 0.75, ease: "power3.out" }, 0.7)
+
+        /* SVG axes fade in */
+        .from("#t1-stat-curve-svg",
+          { autoAlpha: 0, duration: 0.6, ease: "power2.out" }, 0.6)
+
+        /* curve draws + tip travels + count-up */
+        .to({ val: 0 }, {
+          val: 1,
+          duration: 2.2, ease: "power2.inOut",
+          onUpdate: function() {
+            const t = this.targets()[0].val;
+            lineEl.style.strokeDashoffset = totalLen * (1 - t);
+            /* tip follows curve */
+            if (lineEl.getPointAtLength) {
+              const pt = lineEl.getPointAtLength(t * totalLen);
+              tipDotEl.setAttribute("cx", pt.x);
+              tipDotEl.setAttribute("cy", pt.y);
+              /* tipglow in canvas px (SVG viewBox = 1920x1080 = canvas) */
+              tipGlowEl.style.left = pt.x + "px";
+              tipGlowEl.style.top  = pt.y + "px";
+            }
+          }
+        }, 0.85)
+
+        /* stat block count-up */
+        .from("#t1-stat-curve .apex-block",
+          { autoAlpha: 0, scale: 0.85, duration: 0.7, ease: "back.out(1.4)" }, 0.95)
+        .to({ val: 0 }, {
+          val: TARGET_VAL,
+          duration: 2.0, ease: "power2.out",
+          onUpdate: function() {
+            const v = this.targets()[0].val;
+            if (v >= 1000) {
+              numEl.textContent = Math.round(v / 1000) + "K";
+            } else {
+              numEl.textContent = Math.round(v);
+            }
+          }
+        }, 1.1)
+
+        /* fill area fades in */
+        .to("#t1-stat-curve-fill", { opacity: 0.8, duration: 0.9, ease: "power2.out" }, 2.6)
+
+        /* source */
+        .from("#t1-stat-curve .source",
+          { autoAlpha: 0, duration: 0.7, ease: "power2.out" }, 2.8)
+
+        /* breathing glow at apex */
+        .to("#t1-stat-curve-tipglow",
+          { opacity: 0.4, scale: 1.6, transformOrigin: "50% 50%",
+            duration: 1.5, ease: "sine.inOut", repeat: 2, yoyo: true }, 3.2)
+
+        .set({}, {}, 7);
+
+      window.__timelines["t1-stat-curve"] = tl;
+    </script>
+  </body>
+</html>

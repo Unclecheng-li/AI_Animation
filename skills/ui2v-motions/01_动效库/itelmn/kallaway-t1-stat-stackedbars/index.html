@@ -1,0 +1,441 @@
+<!doctype html>
+<!--
+  KALLAWAY · tier1 · stat · STACKEDBARS
+  Three horizontal compare bars that fill (scaleX) to their values, each
+  glowing, with a label + value per bar. Staggered entrance.
+  Knobs: data-fill (0..1) on each .bar-fill element.
+  Slots: kicker (~28 chars uppercase), b1_l / b2_l / b3_l (bar labels ~24 chars),
+         source (~40 chars).
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+/* ============================================================================
+   KALLAWAY — style tokens
+   Single source of palette / type / motion / texture for every card in this
+   style. Cards reference these vars and never hardcode colors, fonts, easings,
+   glows, or textures. Tweak here, all cards update.
+   See DESIGN.md for the why.
+   Aesthetic: premium dark motion-graphics — near-black cool canvas, a blue
+   "aurora" glow blooming from below, glassmorphism cards, edge-lit neon
+   elements, gradient glow text, focus-stack blur, smooth After-Effects easing.
+   Palette is the AIS brand (blue is the hero glow). The opposite of Vox in
+   every axis: smooth not choppy, dark not paper, glow not ink.
+   ============================================================================ */
+
+/* Type. The HyperFrames compiler embeds supported fonts by name at render time;
+   this @import is what makes standalone / browser preview show the right faces. */
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500;1,600&family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Space+Mono:wght@400;700&display=swap");
+
+:root {
+  /* --- palette (mirror style.json + DESIGN.md). AIS brand, dark. ----------- */
+  --canvas:       #0A0E14;   /* main near-black cool background */
+  --canvas-deep:  #07121C;   /* deeper navy — vignette / depth wells */
+  --ink:          #2A251F;   /* dark text for the rare light/cream surface */
+  --paper:        #F0EEE9;   /* warm white surface (light glass / chips) */
+  --white:        #FFFFFF;
+
+  --text:         #F0EEE9;   /* primary text on dark */
+  --text-dim:     rgba(240, 238, 233, 0.62);  /* secondary copy */
+  --text-faint:   rgba(240, 238, 233, 0.34);  /* metadata, fine print */
+
+  --accent:       #37BDF8;   /* AIS blue — THE hero glow (where refs used purple) */
+  --accent-2:     #F5D82A;   /* yellow — secondary pop / highlight numerals */
+  --alert:        #FF3B30;   /* red — alarm, negative delta, "lie" */
+  --warm:         #FF8A5C;   /* orange — warm secondary accent */
+
+  /* rgb triplets for building rgba() glows in cards without re-typing hex */
+  --accent-rgb:   55, 189, 248;
+  --accent2-rgb:  245, 216, 42;
+  --alert-rgb:    255, 59, 48;
+  --warm-rgb:     255, 138, 92;
+
+  /* semantic aliases the blueprint contract expects */
+  --bg:     var(--canvas);
+  --fg:     var(--text);
+  --muted:  var(--text-dim);
+
+  /* --- typography ---------------------------------------------------------- */
+  /* Plus Jakarta Sans = the voice (headlines, big numbers, glow text): geometric,
+     premium, rounds to match the glass radii, heavy at 800. Inter = body / labels /
+     captions, recedes. Space Mono = data chips, timestamps, %s — the "interface"
+     voice. No serif anywhere (that's Vox). */
+  --font-display: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  --font-body:    "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono:    "Space Mono", ui-monospace, "SF Mono", monospace;
+  /* contract aliases */
+  --font-label:   var(--font-body);
+  --font-hand:    var(--font-body);
+
+  --wt-reg:    400;
+  --wt-med:    500;
+  --wt-semi:   600;
+  --wt-bold:   700;
+  --wt-black:  800;
+
+  /* video sizes for 1920x1080 (big — readable in 2s) */
+  --size-mega:     300px;   /* hero stat number */
+  --size-display:  140px;   /* takeover headline */
+  --size-title:    84px;    /* section title */
+  --size-headline: 54px;    /* card headline */
+  --size-body:     32px;    /* supporting copy */
+  --size-label:    24px;    /* kicker / metadata */
+  --size-tiny:     19px;    /* credits, fine print, timestamps */
+
+  --track-tight: -0.02em;   /* display tracking */
+  --track-snug:  -0.01em;
+  --track-wide:  0.18em;    /* uppercase label tracking */
+
+  /* --- glow — the signature. Soft, layered, never a hard ring. ------------- */
+  --glow-accent-sm: 0 0 10px rgba(var(--accent-rgb), 0.55);
+  --glow-accent:    0 0 22px rgba(var(--accent-rgb), 0.55), 0 0 56px rgba(var(--accent-rgb), 0.30);
+  --glow-accent-lg: 0 0 40px rgba(var(--accent-rgb), 0.60), 0 0 120px rgba(var(--accent-rgb), 0.32);
+  --glow-white:     0 0 16px rgba(255, 255, 255, 0.50), 0 0 46px rgba(255, 255, 255, 0.26);
+  --glow-white-lg:  0 0 30px rgba(255, 255, 255, 0.55), 0 0 90px rgba(255, 255, 255, 0.30);
+  /* text glow (set as text-shadow): white core that lifts off the dark canvas */
+  --textglow:       0 0 18px rgba(255, 255, 255, 0.45), 0 0 40px rgba(var(--accent-rgb), 0.30);
+  --textglow-accent:0 0 18px rgba(var(--accent-rgb), 0.65), 0 0 48px rgba(var(--accent-rgb), 0.35);
+
+  /* --- glass — frosted surfaces. Two tints: light (bright) + dark (recede). - */
+  --glass-bg:      rgba(255, 255, 255, 0.055);
+  --glass-bg-dark: rgba(16, 22, 34, 0.55);
+  --glass-border:  rgba(255, 255, 255, 0.14);
+  --glass-hi:      rgba(255, 255, 255, 0.22);  /* top inner-highlight edge */
+  --glass-blur:    blur(22px) saturate(135%);
+  --glass-shadow:  0 24px 70px rgba(0, 0, 0, 0.50);
+
+  /* --- shape --------------------------------------------------------------- */
+  --radius:     28px;       /* glass cards, pills — generously rounded */
+  --radius-sm:  16px;       /* chips, small tiles */
+  --radius-lg:  40px;       /* phone frames, large surfaces */
+  --pad:        80px;       /* canvas safe-area inset */
+  --stroke:     1.5px;      /* hairline neon edge weight */
+
+  /* --- motion — smooth, premium, breathing. The anti-Vox. ------------------ */
+  /* Long expo/quint glides; spring overshoot for cards; blur-in for focus pull.
+     NEVER steps()/choppy — that is Vox's signature, not ours. */
+  --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);   /* expo-out — the default glide */
+  --ease-inout:  cubic-bezier(0.65, 0, 0.35, 1);   /* symmetric, for drifts */
+  --ease-soft:   cubic-bezier(0.33, 1, 0.68, 1);   /* gentle settle */
+  /* GSAP string eases (used in card timelines) */
+  --gsap-glide:  power4.out;
+  --gsap-expo:   expo.out;
+  --gsap-spring: back.out(1.4);
+  --dur-in:   0.8s;    /* entrances breathe */
+  --dur-out:  0.5s;
+
+  /* --- textures (deterministic) ------------------------------------------- */
+  /* Aurora bloom — blue light rising from the bottom-center. The hero ambience.
+     Compose these as background layers under content; animate opacity/scale. */
+  --bloom-bottom: radial-gradient(120% 85% at 50% 118%,
+                    rgba(var(--accent-rgb), 0.45) 0%,
+                    rgba(var(--accent-rgb), 0.16) 32%,
+                    transparent 62%);
+  --bloom-corner: radial-gradient(90% 90% at 88% 12%,
+                    rgba(var(--accent-rgb), 0.30) 0%,
+                    transparent 55%);
+
+  /* Vignette — pulls the eye to center, deepens the canvas edges. */
+  --vignette: radial-gradient(125% 125% at 50% 45%, transparent 52%, rgba(0,0,0,0.55) 100%);
+
+  /* Faint dot grid (the refs' subtle technical texture). Low contrast. */
+  --dot:      radial-gradient(circle at center, rgba(255,255,255,0.06) 1px, transparent 1.4px);
+  --dot-size: 46px 46px;
+
+  /* Fine film grain over everything — keeps the dark from banding. */
+  --tex-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+</style>
+    <style>
+      html, body { margin: 0; }
+
+      #t1-st-sbars {
+        position: absolute; inset: 0; width: 1920px; height: 1080px;
+        background: var(--canvas); color: var(--text);
+        font-family: var(--font-display); overflow: hidden;
+      }
+
+      #t1-st-sbars .bloom {
+        position: absolute; inset: 0; background: var(--bloom-bottom); z-index: 1;
+      }
+      #t1-st-sbars .grid {
+        position: absolute; inset: 0; z-index: 1;
+        background-image: var(--dot); background-size: var(--dot-size);
+        opacity: 0.5;
+        -webkit-mask-image: radial-gradient(120% 100% at 50% 60%, #000 35%, transparent 80%);
+                mask-image: radial-gradient(120% 100% at 50% 60%, #000 35%, transparent 80%);
+      }
+
+      /* Content block — centered */
+      #t1-st-sbars .content {
+        position: absolute; left: 0; right: 0; top: 0; bottom: 0;
+        display: flex; flex-direction: column; align-items: center;
+        justify-content: center; z-index: 4; gap: 0;
+      }
+
+      /* Kicker */
+      #t1-st-sbars .kicker {
+        font-family: var(--font-mono);
+        font-size: var(--size-label);
+        font-weight: var(--wt-bold);
+        letter-spacing: var(--track-wide);
+        text-transform: uppercase;
+        color: var(--accent);
+        text-shadow: var(--textglow-accent);
+        margin-bottom: 72px;
+      }
+
+      /* Bar chart panel */
+      #t1-st-sbars .chart {
+        width: 1240px;
+        display: flex;
+        flex-direction: column;
+        gap: 52px;
+      }
+
+      /* One bar row */
+      #t1-st-sbars .bar-row {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+      /* Row header: label + value side-by-side */
+      #t1-st-sbars .bar-header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+      }
+      #t1-st-sbars .bar-label {
+        font-family: var(--font-body);
+        font-size: 30px;
+        font-weight: var(--wt-semi);
+        color: var(--text);
+        letter-spacing: 0.01em;
+      }
+      #t1-st-sbars .bar-value {
+        font-family: var(--font-mono);
+        font-size: 28px;
+        font-weight: var(--wt-bold);
+        letter-spacing: 0.06em;
+        color: var(--accent);
+      }
+      /* Override accent color on accent bar (bar 1 is the highlighted one) */
+      #t1-st-sbars .bar-row.accent .bar-value {
+        color: var(--accent-2);
+      }
+
+      /* Track background */
+      #t1-st-sbars .bar-track {
+        position: relative;
+        width: 100%;
+        height: 28px;
+        border-radius: 14px;
+        background: rgba(255,255,255,0.06);
+        overflow: visible;
+      }
+
+      /* Fill — scaleX animated from left */
+      #t1-st-sbars .bar-fill {
+        position: absolute;
+        top: 0; left: 0;
+        height: 100%;
+        border-radius: 14px;
+        transform-origin: left center;
+        transform: scaleX(0);
+      }
+
+      /* Default bar: accent blue glow */
+      #t1-st-sbars .bar-row:nth-child(1) .bar-fill {
+        background: linear-gradient(90deg, rgba(var(--accent-rgb),0.5) 0%, var(--accent) 100%);
+        box-shadow: 0 0 18px rgba(var(--accent-rgb), 0.55), 0 0 48px rgba(var(--accent-rgb), 0.28);
+      }
+      /* Second bar: slightly dimmer blue */
+      #t1-st-sbars .bar-row:nth-child(2) .bar-fill {
+        background: linear-gradient(90deg, rgba(var(--accent-rgb),0.35) 0%, rgba(var(--accent-rgb),0.80) 100%);
+        box-shadow: 0 0 14px rgba(var(--accent-rgb), 0.40), 0 0 36px rgba(var(--accent-rgb), 0.20);
+      }
+      /* Third bar: even dimmer / warm tint */
+      #t1-st-sbars .bar-row:nth-child(3) .bar-fill {
+        background: linear-gradient(90deg, rgba(var(--accent-rgb),0.25) 0%, rgba(var(--accent-rgb),0.60) 100%);
+        box-shadow: 0 0 10px rgba(var(--accent-rgb), 0.30), 0 0 26px rgba(var(--accent-rgb), 0.15);
+      }
+
+      /* Glowing leading edge cap on each bar */
+      #t1-st-sbars .bar-cap {
+        position: absolute;
+        top: 50%; right: 0;
+        width: 14px; height: 14px;
+        border-radius: 50%;
+        transform: translateY(-50%);
+        background: #ffffff;
+        box-shadow: 0 0 10px rgba(var(--accent-rgb), 0.9), 0 0 28px rgba(var(--accent-rgb), 0.55);
+      }
+
+      /* Source */
+      #t1-st-sbars .source {
+        position: absolute; left: var(--pad); bottom: 44px;
+        font-family: var(--font-mono); font-size: var(--size-tiny);
+        font-weight: var(--wt-reg); letter-spacing: 0.12em;
+        text-transform: uppercase; color: var(--text-faint); z-index: 5;
+      }
+
+      #t1-st-sbars .vignette {
+        position: absolute; inset: 0; pointer-events: none; z-index: 6;
+        background: var(--vignette);
+      }
+      #t1-st-sbars .grain {
+        position: absolute; inset: -40px; background: var(--tex-grain);
+        background-size: 200px 200px; mix-blend-mode: overlay; opacity: 0.10;
+        pointer-events: none; z-index: 7;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="t1-st-sbars" data-composition-id="t1-st-sbars" data-start="0"
+         data-width="1920" data-height="1080" class="clip" data-duration="5">
+      <div class="bloom"></div>
+      <div class="grid"></div>
+
+      <div class="content">
+        <div class="kicker" data-slot="kicker">PLATFORM ENGAGEMENT BY TIER</div>
+
+        <div class="chart">
+          <!-- Bar 1 -->
+          <div class="bar-row">
+            <div class="bar-header">
+              <span class="bar-label" data-slot="b1_l">Premium Members</span>
+              <span class="bar-value" id="t1-st-sbars-v1">0%</span>
+            </div>
+            <div class="bar-track">
+              <div class="bar-fill" id="t1-st-sbars-f1" data-fill="0.88"></div>
+              <div class="bar-cap" id="t1-st-sbars-c1"></div>
+            </div>
+          </div>
+
+          <!-- Bar 2 -->
+          <div class="bar-row">
+            <div class="bar-header">
+              <span class="bar-label" data-slot="b2_l">Standard Members</span>
+              <span class="bar-value" id="t1-st-sbars-v2">0%</span>
+            </div>
+            <div class="bar-track">
+              <div class="bar-fill" id="t1-st-sbars-f2" data-fill="0.61"></div>
+              <div class="bar-cap" id="t1-st-sbars-c2"></div>
+            </div>
+          </div>
+
+          <!-- Bar 3 -->
+          <div class="bar-row">
+            <div class="bar-header">
+              <span class="bar-label" data-slot="b3_l">Free Tier</span>
+              <span class="bar-value" id="t1-st-sbars-v3">0%</span>
+            </div>
+            <div class="bar-track">
+              <div class="bar-fill" id="t1-st-sbars-f3" data-fill="0.34"></div>
+              <div class="bar-cap" id="t1-st-sbars-c3"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="source" data-slot="source">SOURCE · PLATFORM ANALYTICS 2026</div>
+
+      <div class="vignette"></div>
+      <div class="grain"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      /* Read fill knobs and resolve value text */
+      const bars = [
+        { fill: document.getElementById("t1-st-sbars-f1"),
+          cap:  document.getElementById("t1-st-sbars-c1"),
+          val:  document.getElementById("t1-st-sbars-v1") },
+        { fill: document.getElementById("t1-st-sbars-f2"),
+          cap:  document.getElementById("t1-st-sbars-c2"),
+          val:  document.getElementById("t1-st-sbars-v2") },
+        { fill: document.getElementById("t1-st-sbars-f3"),
+          cap:  document.getElementById("t1-st-sbars-c3"),
+          val:  document.getElementById("t1-st-sbars-v3") },
+      ];
+
+      const fills = bars.map(b => parseFloat(b.fill.getAttribute("data-fill")) || 0.5);
+
+      /* Set track widths to 100% so scaleX works correctly */
+      bars.forEach((b, i) => {
+        b.fill.style.width = "100%";
+      });
+
+      /* Grain flicker */
+      tl.fromTo("#t1-st-sbars .grain",
+        { backgroundPosition: "0px 0px" },
+        { backgroundPosition: "120px 90px", duration: 0.6, ease: "none", repeat: 11, yoyo: true }, 0);
+
+      /* Bloom + grid */
+      tl.from("#t1-st-sbars .bloom",
+        { autoAlpha: 0, scale: 0.88, transformOrigin: "50% 120%", duration: 1.4, ease: "expo.out" }, 0)
+        .from("#t1-st-sbars .grid",
+          { autoAlpha: 0, duration: 1.1, ease: "power2.out" }, 0.2)
+
+        /* Kicker */
+        .from("#t1-st-sbars .kicker",
+          { autoAlpha: 0, y: 18, filter: "blur(8px)", duration: 0.75, ease: "power3.out" }, 0.45)
+
+        /* Bar rows fade in staggered */
+        .from("#t1-st-sbars .bar-row",
+          { autoAlpha: 0, x: -30, duration: 0.7, ease: "power3.out", stagger: 0.14 }, 0.70)
+
+        /* Bar track lines extend */
+        .from("#t1-st-sbars .bar-track",
+          { scaleX: 0, transformOrigin: "left center", duration: 0.5, ease: "power2.out", stagger: 0.14 }, 0.85);
+
+      /* Fill each bar + count-up its value — staggered */
+      fills.forEach(function(f, i) {
+        const startPos = 1.0 + i * 0.16;
+        const b = bars[i];
+
+        /* Bar scaleX fill */
+        tl.to(b.fill, {
+          scaleX: f,
+          transformOrigin: "left center",
+          duration: 1.4, ease: "power2.out"
+        }, startPos);
+
+        /* Count-up for this bar's value label */
+        tl.to({ val: 0 }, {
+          val: f * 100,
+          duration: 1.4, ease: "power2.out",
+          onUpdate: function() {
+            b.val.textContent = Math.round(this.targets()[0].val) + "%";
+          }
+        }, startPos);
+
+        /* Cap tracks the bar edge — move it from x=0 to x= fill*trackWidth
+           We animate the cap's left from 0 to (f*100)% simultaneously */
+        tl.fromTo(b.cap,
+          { left: "0%" },
+          { left: (f * 100) + "%", duration: 1.4, ease: "power2.out" },
+          startPos);
+      });
+
+      tl
+        /* Source */
+        .from("#t1-st-sbars .source",
+          { autoAlpha: 0, duration: 0.7, ease: "power2.out" }, 2.30)
+
+        /* Breathing glow on bar fills — finite */
+        .to("#t1-st-sbars .bar-fill",
+          { opacity: 0.75, duration: 1.4, ease: "sine.inOut", repeat: 2, yoyo: true, stagger: 0.10 }, 2.80)
+
+        .set({}, {}, 7);
+
+      window.__timelines["t1-st-sbars"] = tl;
+    </script>
+  </body>
+</html>
