@@ -34,14 +34,14 @@ ui2v.com（UI-to-video 动效社区）背后 `illli-studio/motions` 仓库的**�
 
 <table>
 <tr>
-<td align="center" width="33%"><a href="01_动效库/itelmn/agent-immune-codex-workflow/index.html"><img width="2560" height="1440" alt="workflow" src="assets-preview/shot-workflow.png" /></a></td>
-<td align="center" width="33%"><a href="01_动效库/itelmn/cartoon00/index.html"><img width="2560" height="1440" alt="cartoon" src="assets-preview/shot-cartoon.png" /></a></td>
-<td align="center" width="33%"><a href="01_动效库/itelmn/03-postgres/index.html"><img width="2560" height="1440" alt="postgres" src="assets-preview/shot-pg.png" /></a></td>
+<td align="center" width="33%"><a href="01_动效库/itelmn/agent-immune-codex-workflow/index.html"><img width="2560" height="1440" alt="workflow" src="assets-preview/main.png" /></a></td>
+<td align="center" width="33%"><a href="01_动效库/itelmn/hero-badge-earn/index.html"><img width="2560" height="1440" alt="badge" src="assets-preview/shot-badge.png" /></a></td>
+<td align="center" width="33%"><a href="01_动效库/itelmn/agent-immune-screenflow/index.html"><img width="2560" height="1440" alt="screenflow" src="assets-preview/shot-screenflow.png" /></a></td>
 </tr>
 <tr>
-<td align="center" width="33%"><a href="01_动效库/itelmn/06-tres-caminos/index.html"><img width="2560" height="1440" alt="paths" src="assets-preview/shot-paths.png" /></a></td>
-<td align="center" width="33%"><a href="01_动效库/itelmn/02-archivero/index.html"><img width="2560" height="1440" alt="archivero" src="assets-preview/shot-arch.png" /></a></td>
-<td align="center" width="33%"><a href="01_动效库/itelmn/04b-frontera/index.html"><img width="2560" height="1440" alt="frontera" src="assets-preview/shot-border.png" /></a></td>
+<td align="center" width="33%"><a href="01_动效库/itelmn/claw-game-release/index.html"><img width="2560" height="1440" alt="release" src="assets-preview/shot-release.png" /></a></td>
+<td align="center" width="33%"><a href="01_动效库/itelmn/hero-deploy-pipeline/index.html"><img width="2560" height="1440" alt="pipeline" src="assets-preview/shot-pipeline.png" /></a></td>
+<td align="center" width="33%"><a href="01_动效库/itelmn/hero-barcode-scan/index.html"><img width="2560" height="1440" alt="barcode" src="assets-preview/shot-barcode.png" /></a></td>
 </tr>
 </table>
 

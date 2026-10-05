@@ -581,20 +581,20 @@ Links: [README](./skills/swiss-shot-demos/README.md) · [SKILL.md](./skills/swis
 
 <table>
 <tr>
-<td align="center" width="16.6%"><a href="./skills/ui2v-motions/01_动效库/itelmn/cartoon00/index.html"><img width="2560" height="1440" alt="cartoon00" src="./skills/ui2v-motions/assets-preview/shot-cartoon.png" /></a></td>
-<td align="center" width="16.6%"><a href="./skills/ui2v-motions/01_动效库/itelmn/agent-immune-codex-workflow/index.html"><img width="2560" height="1440" alt="workflow" src="./skills/ui2v-motions/assets-preview/shot-workflow.png" /></a></td>
-<td align="center" width="16.6%"><a href="./skills/ui2v-motions/01_动效库/itelmn/03-postgres/index.html"><img width="2560" height="1440" alt="postgres" src="./skills/ui2v-motions/assets-preview/shot-pg.png" /></a></td>
-<td align="center" width="16.6%"><a href="./skills/ui2v-motions/01_动效库/itelmn/06-tres-caminos/index.html"><img width="2560" height="1440" alt="tres caminos" src="./skills/ui2v-motions/assets-preview/shot-paths.png" /></a></td>
-<td align="center" width="16.6%"><a href="./skills/ui2v-motions/01_动效库/itelmn/02-archivero/index.html"><img width="2560" height="1440" alt="archivero" src="./skills/ui2v-motions/assets-preview/shot-arch.png" /></a></td>
-<td align="center" width="16.6%"><a href="./skills/ui2v-motions/01_动效库/itelmn/04b-frontera/index.html"><img width="2560" height="1440" alt="frontera" src="./skills/ui2v-motions/assets-preview/shot-border.png" /></a></td>
+<td align="center" width="16.6%"><a href="./skills/ui2v-motions/01_动效库/itelmn/hero-badge-earn/index.html"><img width="2560" height="1440" alt="badge earn" src="./skills/ui2v-motions/assets-preview/shot-badge.png" /></a></td>
+<td align="center" width="16.6%"><a href="./skills/ui2v-motions/01_动效库/itelmn/agent-immune-codex-workflow/index.html"><img width="2560" height="1440" alt="workflow" src="./skills/ui2v-motions/assets-preview/main.png" /></a></td>
+<td align="center" width="16.6%"><a href="./skills/ui2v-motions/01_动效库/itelmn/agent-immune-screenflow/index.html"><img width="2560" height="1440" alt="screenflow" src="./skills/ui2v-motions/assets-preview/shot-screenflow.png" /></a></td>
+<td align="center" width="16.6%"><a href="./skills/ui2v-motions/01_动效库/itelmn/claw-game-release/index.html"><img width="2560" height="1440" alt="game release" src="./skills/ui2v-motions/assets-preview/shot-release.png" /></a></td>
+<td align="center" width="16.6%"><a href="./skills/ui2v-motions/01_动效库/itelmn/hero-deploy-pipeline/index.html"><img width="2560" height="1440" alt="deploy pipeline" src="./skills/ui2v-motions/assets-preview/shot-pipeline.png" /></a></td>
+<td align="center" width="16.6%"><a href="./skills/ui2v-motions/01_动效库/itelmn/hero-chat-bubbles/index.html"><img width="2560" height="1440" alt="chat bubbles" src="./skills/ui2v-motions/assets-preview/shot-chat.png" /></a></td>
 </tr>
 <tr>
-<td align="center"><sub><code>cartoon00</code><br />插画编排</sub></td>
+<td align="center"><sub><code>hero-badge-earn</code><br />徽章赢得动画</sub></td>
 <td align="center"><sub><code>codex-workflow</code><br />工作流编排</sub></td>
-<td align="center"><sub><code>03-postgres</code><br />数据图解</sub></td>
-<td align="center"><sub><code>tres-caminos</code><br />三路分支</sub></td>
-<td align="center"><sub><code>archivero</code><br />档案列表</sub></td>
-<td align="center"><sub><code>frontera</code><br />边界示意</sub></td>
+<td align="center"><sub><code>agent-screenflow</code><br />屏幕流演示</sub></td>
+<td align="center"><sub><code>claw-game-release</code><br />发布封面动画</sub></td>
+<td align="center"><sub><code>hero-deploy-pipeline</code><br />部署管线流动</sub></td>
+<td align="center"><sub><code>hero-chat-bubbles</code><br />聊天气泡编排</sub></td>
 </tr>
 </table>
 
