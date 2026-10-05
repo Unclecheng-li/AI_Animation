@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1080, height=1920" />
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<style>
+/* @brand:start */
+:root {
+  --ground: #0C0D0F; --ground-lift: #14161A;
+  --ink: #EDEAE4; --ink-mid: #9AA0A6; --ink-dim: #8B9198; --ink-ghost: #3A3E42;
+  --rule: #23272A; --rule-bright: #3D4348; --hair: 1.5px;
+  --authoritative: #C9A227; --stale: #E0533D; --lost: #6A6F74;
+  --boundary: #4E8C7D; --pressure: #B4623A; --counterfactual: #7A8086;
+  --font-value: "IBM Plex Mono", ui-monospace, monospace;
+  --font-label: "IBM Plex Sans Condensed", "IBM Plex Sans", system-ui, sans-serif;
+  --t-hero: 200px; --t-value: 64px; --t-body: 36px; --t-label: 26px; --track-label: 0.18em;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { overflow: hidden; background: var(--ground); color: var(--ink); font-family: var(--font-label); }
+.label { font-family: var(--font-label); font-size: var(--t-label); letter-spacing: var(--track-label);
+         text-transform: uppercase; color: var(--ink-dim); font-weight: 500; }
+/* @brand:end */
+
+html, body { width: 1080px; height: 1920px; }
+#stage { position: absolute; inset: 0; }
+
+/* ---------------------------------------------------------------------------
+   NO CONTENT STAGE. No header, no footer, no card, no title, no frame.
+   The whole 1080x1920 is the system.
+
+     y   40 ..  430   what users send.  Constant. It never changes.
+     y  470 .. 1330   the circuit. Requests travel it; density is the story.
+     y 1340 .. 1540   what got served.  Constant. It never changes either.
+
+   Both ends of this system are steady. Only the middle grows, and the middle is
+   the only part the system builds for itself. Geometry is a circuit because the
+   causality is a circuit: drawn left-to-right, the arrows would have to lie about
+   where the load comes from.
+--------------------------------------------------------------------------- */
+svg { position: absolute; inset: 0; }
+.dot     { fill: var(--ink-mid); }
+.dot.hot { fill: var(--pressure); }
+#ring    { fill: none; stroke: var(--rule-bright); stroke-width: 1.5; }
+#exitArc { fill: none; stroke: var(--boundary); stroke-width: 8; stroke-linecap: butt; }
+
+.cap { position: absolute; }
+.cap b { display: block; font-family: var(--font-label); font-size: 26px; letter-spacing: var(--track-label);
+         text-transform: uppercase; color: var(--ink-mid); font-weight: 600; }
+.cap s { display: block; text-decoration: none; font-family: var(--font-value); font-size: 30px;
+         color: var(--ink-dim); margin-top: 6px; }
+
+/* the count at the centre of the loop — one slot, four occupants */
+#core     { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; }
+#coreLbl  { position: absolute; left: 300px; top: 700px; width: 480px; text-align: center; }
+.inflight { position: absolute; left: 300px; top: 792px; width: 480px; text-align: center;
+            font-family: var(--font-value); font-weight: 600; font-size: 168px; line-height: 1;
+            letter-spacing: -.03em; color: var(--ink); }
+.inflight.over { color: var(--pressure); }
+
+/* retries entering at the retry arc */
+.burst   { position: absolute; font-family: var(--font-value); font-weight: 600; font-size: 56px;
+           color: var(--pressure); white-space: nowrap; }
+#ceiling { position: absolute; left: 300px; top: 1036px; width: 480px; text-align: center;
+           font-family: var(--font-value); font-size: 28px; color: var(--lost); }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="main" data-start="0" data-duration="15"
+     data-width="1080" data-height="1920">
+  <div id="stage" class="clip" data-start="0" data-duration="15" data-track-index="0">
+
+    <svg viewBox="0 0 1080 1920" width="1080" height="1920">
+      <!-- the circuit -->
+      <circle id="ring" cx="540" cy="900" r="430" />
+      <g id="inbound"></g>
+      <g id="orbit"></g>
+      <g id="served"></g>
+      <!-- capacity is one fixed place, so it gets an arc — drawn LAST so a saturated
+           loop can never hide the one thing that is not changing -->
+      <path id="exitArc" d="M 415 1302 A 430 430 0 0 0 665 1302" />
+    </svg>
+
+    <div class="cap" id="capIn"  style="left: 92px; top: 150px;"><b>users send</b><s>120 / round</s></div>
+    <div class="cap" id="capOut" style="left: 92px; top: 1398px;"><b>served</b><s>100 / round</s></div>
+
+    <div id="core">
+      <div id="coreLbl" class="label">in flight</div>
+      <div class="inflight"      id="if120">120</div>
+      <div class="inflight over" id="ev-r1_load">180</div>
+      <div class="inflight over" id="ev-r2_load">360</div>
+      <div class="inflight over" id="ev-r3_load">900</div>
+      <div id="ceiling">trouble above 150</div>
+    </div>
+
+    <div id="capLbl" class="label" style="position:absolute; left: 692px; top: 1286px; color: var(--boundary);">capacity</div>
+    <div id="retLbl" class="label" style="position:absolute; left: 690px; top: 424px;">retries added</div>
+    <div class="burst" id="ev-r1_retry" style="left: 690px; top: 470px;">+60</div>
+    <div class="burst" id="ev-r2_retry" style="left: 690px; top: 470px;">+240</div>
+    <div class="burst" id="ev-r3_retry" style="left: 690px; top: 470px;">+780</div>
+
+  </div>
+</div>
+
+<script>
+/* Built here, synchronously, before the timeline exists. Deterministic: no
+   Math.random, no Date.now, no rAF.
+
+   One mark = 2 requests, fixed. So 60 / 90 / 180 / 450 marks on the loop are exactly
+   120 / 180 / 360 / 900 in flight. The visual carries the RATIO and the numeral
+   carries the QUANTITY; neither invents anything.
+
+   Marks are placed by GOLDEN ANGLE rather than in sequence, so that any prefix of
+   them is already evenly spread around the loop. That matters: at 60 marks the loop
+   must look sparse-but-uniform, and at 450 it must look solid — not like a sequence
+   filling in from one side, which would imply retries come from one place. */
+const NS = 'http://www.w3.org/2000/svg';
+const CX = 540, CY = 900, R = 430;
+const MARKS = 450, GOLDEN = 137.50776405003785;
+
+const orbit = document.getElementById('orbit');
+const dots = [];
+for (let i = 0; i < MARKS; i++) {
+  const a = (i * GOLDEN) * Math.PI / 180;
+  const c = document.createElementNS(NS, 'circle');
+  c.setAttribute('cx', (CX + R * Math.cos(a)).toFixed(2));
+  c.setAttribute('cy', (CY + R * Math.sin(a)).toFixed(2));
+  c.setAttribute('r', 3.6);
+  c.setAttribute('class', i < 60 ? 'dot' : 'dot hot');
+  orbit.appendChild(c);
+  dots.push(c);
+}
+
+/* the two steady streams. Both are treadmills: they move forever and never change
+   density, which is the whole point of putting them at either end. */
+function stream(g, n, cols, x0, y0, pitchX, pitchY) {
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const c = document.createElementNS(NS, 'circle');
+    c.setAttribute('cx', x0 + (i % cols) * pitchX);
+    c.setAttribute('cy', y0 + Math.floor(i / cols) * pitchY);
+    c.setAttribute('r', 3.6);
+    c.setAttribute('class', 'dot');
+    g.appendChild(c);
+    out.push(c);
+  }
+  return out;
+}
+stream(document.getElementById('inbound'), 60, 3, 496, 40,  44, 22);
+stream(document.getElementById('served'),  50, 3, 496, 1348, 44, 22);
+
+window.__timelines = window.__timelines || {};
+const tl = gsap.timeline({ paused: true });
+const R_ = 'power3.out';
+
+gsap.set(['#ev-r1_load', '#ev-r2_load', '#ev-r3_load',
+          '#ev-r1_retry', '#ev-r2_retry', '#ev-r3_retry'], { opacity: 0 });
+gsap.set(dots.slice(60), { opacity: 0 });
+gsap.set(['#capIn', '#capOut', '#coreLbl', '#if120', '#ceiling', '#exitArc', '#capLbl', '#retLbl'], { opacity: 0 });
+
+/* ---- the system is running before anything goes wrong --------------------
+   Both streams flow and the loop turns from t=0. Nothing here is decoration:
+   a circuit that is not moving is a diagram of a circuit. */
+tl.to('#orbit', { rotation: 360, svgOrigin: '540 900', duration: 5, ease: 'none', repeat: 2 }, 0);
+tl.to('#inbound', { y: 22, duration: .34, ease: 'none', repeat: 43 }, 0);
+tl.to('#served',  { y: 22, duration: .34, ease: 'none', repeat: 43 }, 0);
+
+tl.to(['#capIn', '#capOut'], { opacity: 1, duration: .4, ease: R_ }, 0.20)
+  .to('#exitArc',  { opacity: 1, duration: .4, ease: R_ }, 0.40)
+  .to(['#coreLbl', '#if120'], { opacity: 1, duration: .45, ease: R_ }, 0.60)
+  .to('#capLbl', { opacity: 1, duration: .4, ease: R_ }, 0.70)
+  .to('#ceiling', { opacity: 1, duration: .4, ease: R_ }, 0.90)
+  .to('#retLbl', { opacity: 1, duration: .3, ease: R_ }, 1.22);
+
+/* ---- round 1: 20 fail, 60 retries join the loop -------------------------
+   New marks do not fade in on the spot; they arrive spread around the circuit,
+   because retries come from everywhere at once, not from one door. */
+tl.to('#ev-r1_retry', { opacity: 1, duration: .3, ease: R_ }, 1.28)
+  .to(dots.slice(60, 90), { opacity: 1, duration: .18, stagger: .012, ease: 'none' }, 1.34)
+  .to('#if120', { opacity: 0, duration: .3 }, 2.44)
+  .to('#ev-r1_load', { opacity: 1, duration: .35, ease: R_ }, 2.56)
+  .to('#ev-r1_retry', { opacity: 0, duration: .4 }, 3.30);
+
+/* ---- round 2: the same capacity, four times the failures ---------------- */
+tl.to('#ev-r2_retry', { opacity: 1, duration: .3, ease: R_ }, 6.40)
+  .to(dots.slice(90, 180), { opacity: 1, duration: .18, stagger: .008, ease: 'none' }, 6.46)
+  .to('#ev-r1_load', { opacity: 0, duration: .3 }, 7.56)
+  .to('#ev-r2_load', { opacity: 1, duration: .35, ease: R_ }, 7.68)
+  .to('#ev-r2_retry', { opacity: 0, duration: .4 }, 8.50);
+
+/* ---- round 3: the loop closes over ------------------------------------- */
+tl.to('#ev-r3_retry', { opacity: 1, duration: .3, ease: R_ }, 11.71)
+  .to(dots.slice(180), { opacity: 1, duration: .18, stagger: .0042, ease: 'none' }, 11.77)
+  .to('#ev-r2_load', { opacity: 0, duration: .3 }, 13.42)
+  .to('#ev-r3_load', { opacity: 1, duration: .35, ease: R_ }, 13.54)
+  .to('#ev-r3_retry', { opacity: 0, duration: .4 }, 14.10)
+  /* the ring itself goes to pressure once the loop is saturated */
+  .to('#ring', { stroke: '#B4623A', duration: .6, ease: 'none' }, 13.60);
+
+window.__timelines['main'] = tl;
+</script>
+</body>
+</html>

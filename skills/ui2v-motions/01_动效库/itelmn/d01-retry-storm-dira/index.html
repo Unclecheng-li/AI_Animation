@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1080, height=1920" />
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<style>
+/* @brand:start */
+:root {
+  --ground: #0C0D0F; --ground-lift: #14161A;
+  --ink: #EDEAE4; --ink-mid: #9AA0A6; --ink-dim: #8B9198; --ink-ghost: #3A3E42;
+  --rule: #23272A; --rule-bright: #3D4348; --hair: 1.5px;
+  --authoritative: #C9A227; --stale: #E0533D; --lost: #6A6F74;
+  --boundary: #4E8C7D; --pressure: #B4623A; --counterfactual: #7A8086;
+  --font-value: "IBM Plex Mono", ui-monospace, monospace;
+  --font-label: "IBM Plex Sans Condensed", "IBM Plex Sans", system-ui, sans-serif;
+  --t-hero: 200px; --t-value: 64px; --t-body: 36px; --t-label: 26px; --track-label: 0.18em;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { overflow: hidden; background: var(--ground); color: var(--ink); font-family: var(--font-label); }
+.label { font-family: var(--font-label); font-size: var(--t-label); letter-spacing: var(--track-label);
+         text-transform: uppercase; color: var(--ink-dim); font-weight: 500; }
+/* @brand:end */
+
+html, body { width: 1080px; height: 1920px; }
+#stage { position: absolute; inset: 0; }
+
+/* ---------------------------------------------------------------------------
+   NO CONTENT STAGE. The frame is a flow.
+
+     x 240 .. 840   the main channel. Matter falls down it.
+     y      940     THE THROAT — a fixed aperture, exactly capacity wide.
+     x  60 .. 200   the return channel. What did not fit goes back UP, tripled.
+
+   The throat never changes width. That is the whole point of drawing capacity as
+   an aperture instead of a number: a constant you can see is a constant you can
+   watch traffic fail to fit through.
+--------------------------------------------------------------------------- */
+svg { position: absolute; inset: 0; }
+.dot  { fill: var(--ink-mid); }
+.hot  { fill: var(--pressure); }
+.jaw  { fill: var(--ground-lift); stroke: var(--rule-bright); stroke-width: 1.5; }
+#lip  { stroke: var(--boundary); stroke-width: 8; }
+
+.cap { position: absolute; }
+.cap b { display: block; font-family: var(--font-label); font-size: 26px; letter-spacing: var(--track-label);
+         text-transform: uppercase; color: var(--ink-mid); font-weight: 600; }
+.cap s { display: block; text-decoration: none; font-family: var(--font-value); font-size: 30px;
+         color: var(--ink-dim); margin-top: 6px; }
+
+.inflight { position: absolute; left: 600px; top: 470px; width: 420px;
+            font-family: var(--font-value); font-weight: 600; font-size: 140px; line-height: 1;
+            letter-spacing: -.03em; color: var(--ink); text-align: right; }
+.inflight.over { color: var(--pressure); }
+#coreLbl { position: absolute; left: 600px; top: 394px; width: 420px; text-align: right; }
+
+.burst { position: absolute; left: 62px; font-family: var(--font-value); font-weight: 600;
+         font-size: 50px; color: var(--pressure); white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="main" data-start="0" data-duration="15"
+     data-width="1080" data-height="1920">
+  <div id="stage" class="clip" data-start="0" data-duration="15" data-track-index="0">
+
+    <svg viewBox="0 0 1080 1920" width="1080" height="1920">
+      <g id="pending"></g>
+      <g id="served"></g>
+      <g id="ret"></g>
+      <!-- the aperture, drawn over the flow so a saturated channel can never hide it -->
+      <rect class="jaw" x="-2"  y="930" width="244" height="26" />
+      <rect class="jaw" x="838" y="930" width="244" height="26" />
+      <line id="lip" x1="242" y1="943" x2="838" y2="943" />
+    </svg>
+
+    <div class="cap" id="capIn"  style="left: 62px; top: 92px;"><b>users send</b><s>120 / round</s></div>
+    <div class="cap" id="capMid" style="left: 62px; top: 852px;"><b>capacity</b><s>100 / round</s></div>
+    <div class="cap" id="capOut" style="left: 62px; top: 1420px;"><b>served</b><s>100 / round</s></div>
+
+    <div id="coreLbl" class="label">in flight</div>
+    <div class="inflight"      id="if120">120</div>
+    <div class="inflight over" id="ev-r1_load">180</div>
+    <div class="inflight over" id="ev-r2_load">360</div>
+    <div class="inflight over" id="ev-r3_load">900</div>
+
+    <div class="burst" id="ev-r1_retry" style="top: 1180px;">+60</div>
+    <div class="burst" id="ev-r2_retry" style="top: 1180px;">+240</div>
+    <div class="burst" id="ev-r3_retry" style="top: 1180px;">+780</div>
+    <div id="retLbl" class="label" style="position:absolute; left:62px; top:1136px; color:var(--pressure);">back up, ×3</div>
+
+  </div>
+</div>
+
+<script>
+/* Deterministic: a Halton sequence, not Math.random. Same layout every run, and
+   every frame is a pure function of t.
+
+   One mark = 2 requests, fixed, so 60 / 90 / 180 / 450 marks are exactly
+   120 / 180 / 360 / 900 in flight. */
+const NS = 'http://www.w3.org/2000/svg';
+const halton = (i, b) => { let f = 1, r = 0; while (i > 0) { f /= b; r += f * (i % b); i = Math.floor(i / b); } return r; };
+
+function scatter(g, n, x0, y0, w, h, cls, r) {
+  const out = [];
+  for (let i = 1; i <= n; i++) {
+    const c = document.createElementNS(NS, 'circle');
+    c.setAttribute('cx', (x0 + halton(i, 2) * w).toFixed(2));
+    c.setAttribute('cy', (y0 + halton(i, 3) * h).toFixed(2));
+    c.setAttribute('r', r);
+    c.setAttribute('class', cls);
+    g.appendChild(c);
+    out.push(c);
+  }
+  return out;
+}
+/* the channel above the throat: this is the population that grows */
+const pend = scatter(document.getElementById('pending'), 450, 250, 70, 580, 840, 'dot', 4);
+for (let i = 60; i < 450; i++) pend[i].setAttribute('class', 'hot');
+/* below the throat: exactly capacity, every round, forever */
+scatter(document.getElementById('served'), 50, 250, 985, 580, 500, 'dot', 4);
+/* the return channel: what could not fit, going back up */
+const ret = scatter(document.getElementById('ret'), 200, 76, 200, 120, 900, 'hot', 4);
+
+window.__timelines = window.__timelines || {};
+const tl = gsap.timeline({ paused: true });
+const R_ = 'power3.out';
+
+gsap.set(['#ev-r1_load', '#ev-r2_load', '#ev-r3_load',
+          '#ev-r1_retry', '#ev-r2_retry', '#ev-r3_retry'], { opacity: 0 });
+gsap.set(pend.slice(60), { opacity: 0 });
+gsap.set(ret, { opacity: 0 });
+gsap.set(['#capIn', '#capMid', '#capOut', '#coreLbl', '#if120', '#retLbl'], { opacity: 0 });
+
+/* flow. The channel falls, the return channel rises — the direction IS the feedback. */
+tl.to('#pending', { y: 28, duration: .42, ease: 'none', repeat: 35 }, 0)
+  .to('#served',  { y: 28, duration: .42, ease: 'none', repeat: 35 }, 0)
+  .to('#ret',     { y: -28, duration: .52, ease: 'none', repeat: 28 }, 0);
+
+tl.to(['#capIn', '#capMid', '#capOut'], { opacity: 1, duration: .4, ease: R_ }, 0.20)
+  .to(['#coreLbl', '#if120'], { opacity: 1, duration: .45, ease: R_ }, 0.55);
+
+function round(t, from, to, retN, loadSel, retSel, retCount) {
+  tl.to(retSel, { opacity: 1, duration: .3, ease: R_ }, t)
+    .to(ret.slice(0, retCount), { opacity: 1, duration: .2, stagger: .006, ease: 'none' }, t + .04)
+    .to(pend.slice(from, to), { opacity: 1, duration: .2, stagger: .01, ease: 'none' }, t + .10);
+}
+round(1.28, 60, 90, 60, null, '#ev-r1_retry', 30);
+tl.to('#if120', { opacity: 0, duration: .3 }, 2.44)
+  .to('#ev-r1_load', { opacity: 1, duration: .35, ease: R_ }, 2.56)
+  .to('#retLbl', { opacity: 1, duration: .3, ease: R_ }, 1.40)
+  .to('#ev-r1_retry', { opacity: 0, duration: .4 }, 3.40);
+
+round(6.40, 90, 180, 240, null, '#ev-r2_retry', 90);
+tl.to('#ev-r1_load', { opacity: 0, duration: .3 }, 7.56)
+  .to('#ev-r2_load', { opacity: 1, duration: .35, ease: R_ }, 7.68)
+  .to('#ev-r2_retry', { opacity: 0, duration: .4 }, 8.60);
+
+round(11.71, 180, 450, 780, null, '#ev-r3_retry', 200);
+tl.to('#ev-r2_load', { opacity: 0, duration: .3 }, 13.42)
+  .to('#ev-r3_load', { opacity: 1, duration: .35, ease: R_ }, 13.54)
+  .to('#ev-r3_retry', { opacity: 0, duration: .4 }, 14.20);
+
+window.__timelines['main'] = tl;
+</script>
+</body>
+</html>

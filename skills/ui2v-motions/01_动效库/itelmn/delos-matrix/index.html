@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html data-composition-id="delos-matrix" data-width="720" data-height="1280">
+<head>
+  <meta charset="utf-8">
+  <title>HyperFrames — Delos Matrix</title>
+  <link rel="stylesheet" href="shared/styles.css">
+  <style>
+    .dm-w { width: min(650px, 88vw); display: flex; flex-direction: column; gap: 20px;
+      will-change: transform, opacity; position: relative; }
+    .dm-hud { background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px; padding: 24px; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      position: relative; overflow: hidden; }
+    .dm-scan { position: absolute; left: 0; right: 0; height: 2px; top: 0; opacity: 0.3; }
+    .dm-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .dm-title { font-size: 18px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+    .dm-host-id { font-size: 13px; font-weight: 600; letter-spacing: 0.1em; color: var(--hf-muted);
+      font-family: 'Geist Mono', 'SF Mono', monospace; }
+    .dm-metrics { display: flex; flex-direction: column; gap: 14px; }
+    .dm-metric { display: flex; flex-direction: column; gap: 6px; }
+    .dm-metric-header { display: flex; justify-content: space-between; font-size: 13px; }
+    .dm-metric-name { color: var(--hf-muted); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+    .dm-metric-value { font-weight: 700; font-family: 'Geist Mono', monospace; }
+    .dm-metric-track { height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; }
+    .dm-metric-fill { height: 100%; border-radius: 2px; transform-origin: left; will-change: transform; }
+    .dm-brain { display: flex; justify-content: center; margin-top: 8px; }
+    .dm-brain-svg { width: 120px; height: 120px; }
+  </style>
+</head>
+<body>
+  <div class="hf-center dm-w" id="dmW" data-composition-id="delos-matrix" data-start="0" data-duration="3.5" data-track-index="0">
+    <div class="dm-hud">
+      <div class="dm-scan" id="dmScan"></div>
+      <div class="dm-header">
+        <div class="dm-title hf-text-heading" id="dmTitle"></div>
+        <div class="dm-host-id" id="dmHostId"></div>
+      </div>
+      <div class="dm-metrics" id="dmMetrics"></div>
+      <div class="dm-brain">
+        <svg class="dm-brain-svg" id="dmBrain" viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="50" fill="none" stroke-width="1" opacity="0.2"/>
+          <circle cx="60" cy="60" r="35" fill="none" stroke-width="1" opacity="0.15"/>
+          <g id="dmNodes"></g>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script>
+    const v = window.__hyperframes?.getVariables?.() ?? {};
+    const accentColor = v.accentColor ?? '#9f75ff';
+    const yPos = v.yPos ?? 50;
+    const title = v.title ?? 'HOST ATTRIBUTE MATRIX';
+    const hostId = v.hostId ?? 'HC-0001';
+    const metrics = v.metrics ?? [
+      { name: 'Cognition', value: 98 },
+      { name: 'Emotion', value: 87 },
+      { name: 'Fidelity', value: 95 }
+    ];
+
+    document.getElementById('dmW').style.top = yPos + '%';
+    document.getElementById('dmTitle').textContent = title;
+    document.getElementById('dmHostId').textContent = hostId;
+    document.getElementById('dmScan').style.background = `linear-gradient(90deg, transparent, ${accentColor}, transparent)`;
+
+    const metricsContainer = document.getElementById('dmMetrics');
+    metrics.forEach((m) => {
+      const row = document.createElement('div');
+      row.className = 'dm-metric';
+      row.innerHTML = `
+        <div class="dm-metric-header">
+          <span class="dm-metric-name">${m.name}</span>
+          <span class="dm-metric-value" style="color:${accentColor}">${m.value}%</span>
+        </div>
+        <div class="dm-metric-track">
+          <div class="dm-metric-fill" data-target="${m.value}" style="background:${accentColor};width:0%"></div>
+        </div>`;
+      metricsContainer.appendChild(row);
+    });
+
+    // Brain nodes
+    const brainNodes = document.getElementById('dmNodes');
+    const nodePositions = [
+      [60, 30], [40, 45], [80, 45], [30, 65], [60, 60], [90, 65],
+      [45, 85], [75, 85], [60, 100]
+    ];
+    nodePositions.forEach(([cx, cy], i) => {
+      const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      c.setAttribute('cx', cx); c.setAttribute('cy', cy); c.setAttribute('r', 3);
+      c.setAttribute('fill', accentColor); c.setAttribute('opacity', '0.6');
+      c.classList.add('dm-brain-node');
+      brainNodes.appendChild(c);
+      if (i > 0 && i < 4) {
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', nodePositions[i - 1][0]); line.setAttribute('y1', nodePositions[i - 1][1]);
+        line.setAttribute('x2', cx); line.setAttribute('y2', cy);
+        line.setAttribute('stroke', accentColor); line.setAttribute('stroke-width', '0.5');
+        line.setAttribute('opacity', '0.3');
+        brainNodes.appendChild(line);
+      }
+    });
+
+    const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+    tl.fromTo('#dmW', { opacity: 0, scale: 0.92 }, { opacity: 1, scale: 1, duration: 0.4, ease: 'back.out(1.2)' }, 0);
+    tl.fromTo('.dm-metric-fill', { scaleX: 0 }, {
+      scaleX: 1, duration: 0.6, ease: 'power2.out', stagger: 0.1,
+      onStart: function() {
+        document.querySelectorAll('.dm-metric-fill').forEach((el) => {
+          el.style.width = el.dataset.target + '%';
+        });
+      }
+    }, 0.2);
+    tl.fromTo('.dm-brain-node', { opacity: 0, scale: 0 }, { opacity: 0.6, scale: 1, duration: 0.2, stagger: 0.03 }, 0.3);
+
+    gsap.to('#dmScan', { top: '100%', duration: 2, repeat: -1, ease: 'none' });
+
+    const dur = parseFloat(v.timingDuration ?? 3.5);
+    tl.to('#dmW', { opacity: 0, scale: 0.92, duration: 0.3, ease: 'power2.in' }, Math.max(dur - 0.5, 0.6));
+  </script>
+</body>
+</html>
+

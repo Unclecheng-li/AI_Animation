@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1080, height=1920" />
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<style>
+/* @brand:start */
+:root {
+  --ground: #0C0D0F; --ground-lift: #14161A;
+  --ink: #EDEAE4; --ink-mid: #9AA0A6; --ink-dim: #8B9198; --ink-ghost: #3A3E42;
+  --rule: #23272A; --rule-bright: #3D4348; --hair: 1.5px;
+  --authoritative: #C9A227; --stale: #E0533D; --lost: #6A6F74;
+  --boundary: #4E8C7D; --pressure: #B4623A; --counterfactual: #7A8086;
+  --font-value: "IBM Plex Mono", ui-monospace, monospace;
+  --font-label: "IBM Plex Sans Condensed", "IBM Plex Sans", system-ui, sans-serif;
+  --t-hero: 200px; --t-value: 64px; --t-body: 36px; --t-label: 26px; --track-label: 0.18em;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { overflow: hidden; background: var(--ground); color: var(--ink); font-family: var(--font-label); }
+.label { font-family: var(--font-label); font-size: var(--t-label); letter-spacing: var(--track-label);
+         text-transform: uppercase; color: var(--ink-dim); font-weight: 500; }
+/* @brand:end */
+
+html, body { width: 1080px; height: 1920px; }
+#stage { position: absolute; inset: 0; }
+
+/* ---------------------------------------------------------------------------
+   B — THE EXPRESSION IS THE OBJECT
+
+   No content stage. The two expressions are stacked and aligned on the substring
+   they share, so the frame is organised around the COLUMN of characters that match
+   rather than around a left margin. What sticks out past that column is the whole
+   problem, and it sticks out physically.
+--------------------------------------------------------------------------- */
+.expr   { position: absolute; font-family: var(--font-value); font-weight: 500;
+          font-size: 88px; line-height: 1; letter-spacing: 0; white-space: pre; }
+#e1     { left: 410px; top: 640px; color: var(--ink); }
+#w1     { left: 93px;  top: 860px; color: var(--stale); }
+#e2     { left: 410px; top: 860px; color: var(--ink); }
+#w2     { left: 674px; top: 860px; color: var(--stale); }
+
+/* the shared column — the only part of the two expressions that agrees */
+#axis   { position: absolute; left: 410px; top: 600px; width: 264px; height: 400px; }
+#axis i { position: absolute; top: 0; width: var(--hair); height: 400px; background: var(--rule-bright); }
+#axis .l{ left: 0; } #axis .r { right: 0; }
+
+.tie    { position: absolute; width: var(--hair); background: var(--boundary); transform-origin: top center; }
+.miss   { position: absolute; width: var(--hair); background: var(--stale); transform-origin: bottom center; }
+.missEnd{ position: absolute; font-family: var(--font-label); font-size: 24px; letter-spacing: var(--track-label);
+          text-transform: uppercase; color: var(--stale); white-space: nowrap; }
+
+#lblIdx  { position: absolute; left: 93px; top: 556px; }
+#lblPred { position: absolute; left: 93px; top: 1002px; }
+#matchTag{ position: absolute; left: 706px; top: 700px; color: var(--boundary); }
+
+#ev-probe  { position: absolute; left: 93px; top: 1080px; width: 900px; height: 4px; }
+#ev-reject { position: absolute; left: 93px; top: 1178px; }
+#ev-reject b { font-family: var(--font-label); font-size: 30px; letter-spacing: var(--track-label);
+               text-transform: uppercase; color: var(--stale); font-weight: 600; }
+#ev-reject s { display: block; text-decoration: none; margin-top: 12px; font-family: var(--font-label);
+               font-size: 26px; letter-spacing: var(--track-label); text-transform: uppercase; color: var(--ink-dim); }
+#ev-seqscan { position: absolute; left: 93px; top: 1330px; display: flex; align-items: flex-end; gap: 24px; }
+#ev-seqscan .n { font-family: var(--font-value); font-weight: 600; font-size: 92px; line-height: 1;
+                 letter-spacing: -.02em; color: var(--pressure); }
+#ev-seqscan .k { padding-bottom: 14px; }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="main" data-start="0" data-duration="14"
+     data-width="1080" data-height="1920">
+  <div id="stage" class="clip" data-start="0" data-duration="14" data-track-index="0">
+
+    <div id="axis"><i class="l"></i><i class="r"></i></div>
+
+    <div id="lblIdx"  class="label">index được xây trên biểu thức</div>
+    <div class="expr" id="e1">email</div>
+
+    <div class="expr" id="w1">lower(</div>
+    <div class="expr" id="e2">email</div>
+    <div class="expr" id="w2">)</div>
+    <div id="lblPred" class="label">predicate hỏi biểu thức</div>
+
+    <div id="matchTag" class="label">phần này khớp</div>
+
+    <!-- probe: the comparison itself, drawn as a rule under both expressions -->
+    <div id="ev-probe"></div>
+
+    <div id="ev-reject"><b>hai biểu thức không phải một</b>
+      <s>index phục vụ một biểu thức, không phải một cột</s></div>
+    <div id="ev-seqscan"><span class="n">2.000.000</span><span class="k label">dòng phải đọc</span></div>
+
+  </div>
+</div>
+
+<script>
+/* Character geometry is computed, not eyeballed: IBM Plex Mono advances 0.6em, so at
+   88px every glyph is 52.8px wide. The two expressions are positioned so the shared
+   substring `email` occupies the SAME column in both, which is what makes the
+   leftover wrapper visible as leftover rather than as decoration. */
+const CH = 88 * 0.6;              // 52.8
+const EMAIL_X = 410, EMAIL_W = 5 * CH;          // 264
+const L1 = 640, L2 = 860, GLYPH_H = 88;
+
+window.__timelines = window.__timelines || {};
+const tl = gsap.timeline({ paused: true });
+const R = 'power3.out', T = 'power2.inOut';
+
+/* connectors: teal where the two expressions agree, vermilion where the predicate
+   has something the index has no counterpart for */
+function tie(x, cls, label) {
+  const d = document.createElement('div');
+  d.className = cls;
+  d.style.left = x + 'px';
+  d.style.top = (L1 + GLYPH_H + 18) + 'px';
+  d.style.height = (L2 - L1 - GLYPH_H - 36) + 'px';
+  document.getElementById('stage').appendChild(d);
+  if (label) {
+    const t = document.createElement('div');
+    t.className = 'missEnd';
+    t.style.left = '93px';
+    t.style.top = '772px';
+    t.textContent = label;
+    t.dataset.miss = '1';
+    document.getElementById('stage').appendChild(t);
+    return [d, t];
+  }
+  return [d];
+}
+const ties = [tie(EMAIL_X + 6, 'tie')[0], tie(EMAIL_X + EMAIL_W - 6, 'tie')[0]];
+const [missL, missLTxt] = tie(EMAIL_X - 3 * CH, 'miss', 'không có gì để khớp');
+const [missR] = tie(EMAIL_X + EMAIL_W + CH / 2, 'miss');
+
+gsap.set(['#w1', '#w2', '#matchTag', '#ev-probe', '#ev-reject', '#ev-seqscan', '#lblPred'], { opacity: 0 });
+gsap.set('#axis', { opacity: 0 });
+gsap.set(ties, { scaleY: 0 });
+gsap.set([missL, missR], { scaleY: 0 });
+gsap.set(missLTxt, { opacity: 0 });
+gsap.set('#e2', { opacity: 0 });
+
+/* ---- 0.2–1.1  what the index is built on ------------------------------- */
+tl.fromTo('#lblIdx', { opacity: 0 }, { opacity: 1, duration: .45, ease: R }, 0.20)
+  .fromTo('#e1', { opacity: 0 }, { opacity: 1, duration: .5, ease: R }, 0.46);
+
+/* ---- 1.3–2.2  the predicate, still identical at this point -------------
+   Shown BEFORE the wrapper so the viewer sees a state where the two agree. The
+   mismatch then arrives as something that happens, not as a fact they are handed. */
+tl.to('#lblPred', { opacity: 1, duration: .4, ease: R }, 1.30)
+  .to('#e2', { opacity: 1, duration: .45, ease: R }, 1.52)
+  .to('#axis', { opacity: 1, duration: .5, ease: R }, 1.90);
+
+/* ---- 2.55  THE WRAPPER CLOSES AROUND THE COLUMN ------------------------
+   lower( and ) do not fade in. They arrive from outside and clamp onto the
+   expression, which is what a function call does to a column. */
+tl.to('#ev-probe', { opacity: 1, duration: .3 }, 2.55)
+  .fromTo('#w1', { opacity: 0, x: -120 }, { opacity: 1, x: 0, duration: .55, ease: 'power3.out' }, 2.55)
+  .fromTo('#w2', { opacity: 0, x: 120 }, { opacity: 1, x: 0, duration: .55, ease: 'power3.out' }, 2.55);
+
+/* ---- 3.3–5.6  compare, column by column -------------------------------- */
+tl.to(ties, { scaleY: 1, duration: .5, stagger: .18, ease: T }, 3.30)
+  .to('#matchTag', { opacity: 1, duration: .35, ease: R }, 4.10)
+  .to([missL, missR], { scaleY: 1, duration: .5, stagger: .2, ease: T }, 4.70)
+  .to(missLTxt, { opacity: 1, duration: .35, ease: R }, 5.40);
+
+/* ---- 6.3–7.6  the unmatched connectors keep reaching, and find nothing above.
+   The only motion in this stretch, and it is the search failing rather than a
+   flourish to keep the frame busy. */
+tl.to([missL, missR], { scaleY: 2.1, transformOrigin: 'bottom center', duration: 1.3, ease: 'power1.inOut' }, 6.30);
+
+/* ---- 8.91  no index answers this expression ---------------------------- */
+tl.fromTo('#ev-reject', { opacity: 0 }, { opacity: 1, duration: .45, ease: R }, 8.91);
+
+/* ---- 11.88  the price -------------------------------------------------- */
+tl.fromTo('#ev-seqscan', { opacity: 0 }, { opacity: 1, duration: .5, ease: R }, 11.88);
+
+window.__timelines['main'] = tl;
+</script>
+</body>
+</html>

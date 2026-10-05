@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="assets/gsap.min.js"></script>
+    <style>
+      @font-face { font-family: "Cascadia Mono"; src: local("Cascadia Mono"); }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: #0b1118; }
+      body { color: #f0f4f9; font-family: "Cascadia Mono", monospace; }
+      #root { position: relative; width: 100%; height: 100%; overflow: hidden; background-color: #0b1118; }
+      .scene { position: absolute; inset: 0; width: 100%; height: 100%; overflow: hidden; background-color: #0b1118; }
+      #scene-1 { z-index: 3; }
+      #scene-2 { z-index: 2; opacity: 0; }
+      #scene-3 { z-index: 4; opacity: 0; }
+      .atmosphere { position: absolute; inset: 0; overflow: hidden; }
+      .routing-grid {
+        position: absolute; inset: -80px; opacity: .18;
+        background-image:
+          linear-gradient(rgba(143,162,183,.18) 2px, rgba(143,162,183,0) 2px),
+          linear-gradient(90deg, rgba(143,162,183,.18) 2px, rgba(143,162,183,0) 2px);
+        background-size: 92px 92px;
+      }
+      .wash { position: absolute; width: 980px; height: 980px; border-radius: 50%; filter: blur(80px); opacity: .18; }
+      .wash-green { left: -310px; top: -360px; background: #29d392; }
+      .wash-blue { right: -360px; bottom: -430px; background: #48a5ff; opacity: .13; }
+      .wash-amber { right: -250px; top: -420px; background: #ffca5c; opacity: .15; }
+      .ghost { position: absolute; color: #8fa2b7; opacity: .08; font-size: 190px; font-weight: 700; letter-spacing: -.08em; white-space: nowrap; }
+      .top-rail { position: absolute; top: 54px; left: 92px; right: 92px; display: flex; align-items: center; gap: 24px; }
+      .rail-rule { height: 3px; flex: 1; background: #29d392; transform-origin: left center; }
+      .eyebrow { color: #29d392; font-size: 25px; font-weight: 700; letter-spacing: .09em; }
+      .sequence { color: #8fa2b7; font-size: 23px; letter-spacing: .06em; font-variant-numeric: tabular-nums; }
+      .corner { position: absolute; width: 44px; height: 44px; border-color: #8fa2b7; opacity: .62; }
+      .corner.tl { left: 55px; top: 55px; border-left: 3px solid; border-top: 3px solid; }
+      .corner.br { right: 55px; bottom: 55px; border-right: 3px solid; border-bottom: 3px solid; }
+      .hook-content { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; padding: 148px 128px 110px; gap: 18px; }
+      .hook-title { margin: 0; max-width: 1500px; font-family: "Archivo Black", sans-serif; font-size: 154px; line-height: .92; letter-spacing: -.045em; font-weight: 400; }
+      .hook-title .green { color: #29d392; }
+      .hook-sub { margin: 10px 0 0; max-width: 1260px; color: #8fa2b7; font-size: 33px; line-height: 1.35; }
+      .agent-route { display: flex; flex-wrap: wrap; gap: 15px; max-width: 1420px; margin-top: 25px; }
+      .agent-pill { border: 2px solid #29d392; border-radius: 8px; padding: 12px 20px; color: #f0f4f9; background: #121720; font-size: 24px; font-weight: 700; }
+      .proof-content { position: absolute; inset: 0; padding: 98px 86px 72px; display: flex; flex-direction: column; gap: 20px; }
+      .proof-head { display: flex; align-items: center; justify-content: space-between; height: 70px; }
+      .proof-kicker { font-size: 27px; color: #48a5ff; font-weight: 700; letter-spacing: .08em; }
+      .pane-count { font-size: 29px; color: #0b1118; background: #ffca5c; border-radius: 8px; padding: 13px 22px; font-weight: 700; }
+      .terminal-shell { position: relative; flex: 1; min-height: 0; border: 3px solid #29d392; border-radius: 18px; overflow: hidden; background: #121720; box-shadow: 0 35px 70px rgba(0,0,0,.5); }
+      .terminal-shell video { position: absolute; inset: -54px -96px; width: calc(100% + 192px); height: calc(100% + 108px); object-fit: cover; }
+      .scan-rule { position: absolute; left: 0; right: 0; top: 8%; height: 4px; background: #29d392; box-shadow: 0 0 26px rgba(41,211,146,.8); z-index: 3; }
+      .proof-label { position: absolute; z-index: 5; border: 2px solid #8fa2b7; background: #0b1118; color: #f0f4f9; border-radius: 8px; padding: 12px 17px; font-size: 21px; font-weight: 700; letter-spacing: .04em; }
+      .proof-label::after { content: ""; position: absolute; height: 3px; background: #29d392; top: 50%; }
+      .label-ptys { left: 48px; top: 145px; }
+      .label-ptys::after { width: 130px; left: 100%; }
+      .label-broadcast { right: 48px; top: 360px; }
+      .label-broadcast::after { width: 120px; right: 100%; }
+      .label-worktrees { left: 70px; bottom: 70px; border-color: #48a5ff; }
+      .label-worktrees::after { width: 160px; left: 100%; background: #48a5ff; }
+      .cta-content { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 34px; padding: 120px; text-align: center; }
+      .cta-title { margin: 0; font-family: "Archivo Black", sans-serif; font-size: 144px; line-height: .92; letter-spacing: -.045em; font-weight: 400; }
+      .command-plate { position: relative; width: min(1430px, 100%); padding: 42px 70px; border: 3px solid #29d392; border-radius: 18px; background: #121720; box-shadow: 0 28px 70px rgba(0,0,0,.5); }
+      .command { color: #f0f4f9; font-size: 47px; font-weight: 700; letter-spacing: -.035em; white-space: nowrap; }
+      .prompt { color: #29d392; margin-right: 18px; }
+      .cta-meta { display: flex; gap: 42px; color: #8fa2b7; font-size: 23px; letter-spacing: .05em; }
+      .repo-url { color: #ffca5c; font-size: 30px; font-weight: 700; }
+      .completion-rule { width: 700px; height: 5px; background: #29d392; transform-origin: center; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="13" data-width="1920" data-height="1080">
+      <section id="scene-1" class="scene">
+        <div class="atmosphere">
+          <div id="grid-1" class="clip routing-grid" data-start="0" data-duration="3.6" data-track-index="1" data-layout-ignore></div>
+          <div id="wash-1" class="clip wash wash-green" data-start="0" data-duration="3.6" data-track-index="2" data-layout-ignore></div>
+          <div id="ghost-1" class="clip ghost" data-start="0" data-duration="3.6" data-track-index="3" style="right:-90px;bottom:40px" data-layout-ignore>02 x 03</div>
+        </div>
+        <div id="corner-1a" class="clip corner tl" data-start="0" data-duration="3.6" data-track-index="4" data-layout-ignore></div>
+        <div id="corner-1b" class="clip corner br" data-start="0" data-duration="3.6" data-track-index="5" data-layout-ignore></div>
+        <div class="top-rail">
+          <span id="dispatch-1" class="clip eyebrow" data-start="0" data-duration="3.6" data-track-index="6">GRIDBASH / AGENT DISPATCH</span>
+          <span id="rule-1" class="clip rail-rule" data-start="0" data-duration="3.6" data-track-index="7" data-layout-ignore></span>
+          <span id="seq-1" class="clip sequence" data-start="0" data-duration="3.6" data-track-index="8">DISPATCH 01</span>
+        </div>
+        <div class="hook-content">
+          <h1 id="hook-title" class="clip hook-title" data-start="0" data-duration="3.6" data-track-index="9">SIX AGENTS.<br><span class="green">ONE TERMINAL.</span></h1>
+          <p id="hook-sub" class="clip hook-sub" data-start="0" data-duration="3.6" data-track-index="10">Run every CLI coding agent side by side—then route each prompt exactly where it belongs.</p>
+          <div class="agent-route">
+            <span id="agent-1" class="clip agent-pill" data-start="0" data-duration="3.6" data-track-index="11">CODEX</span>
+            <span id="agent-2" class="clip agent-pill" data-start="0" data-duration="3.6" data-track-index="12">CLAUDE</span>
+            <span id="agent-3" class="clip agent-pill" data-start="0" data-duration="3.6" data-track-index="13">GEMINI</span>
+            <span id="agent-4" class="clip agent-pill" data-start="0" data-duration="3.6" data-track-index="14">AIDER</span>
+            <span id="agent-5" class="clip agent-pill" data-start="0" data-duration="3.6" data-track-index="15">OPENCODE</span>
+            <span id="agent-6" class="clip agent-pill" data-start="0" data-duration="3.6" data-track-index="16">COPILOT</span>
+          </div>
+        </div>
+      </section>
+
+      <section id="scene-2" class="scene">
+        <div class="atmosphere">
+          <div id="grid-2" class="clip routing-grid" data-start="3" data-duration="8.5" data-track-index="17" data-layout-ignore></div>
+          <div id="wash-2" class="clip wash wash-blue" data-start="3" data-duration="8.5" data-track-index="18" data-layout-ignore></div>
+        </div>
+        <div class="proof-content">
+          <div class="proof-head">
+            <span id="proof-kicker" class="clip proof-kicker" data-start="3" data-duration="8.5" data-track-index="19">LIVE GRID / REAL PTY SESSIONS</span>
+            <span id="pane-count" class="clip pane-count" data-start="3" data-duration="8.5" data-track-index="20">6 LIVE PANES</span>
+          </div>
+          <div id="terminal-wrap" class="terminal-shell">
+            <video id="product-video" class="clip" data-start="3" data-duration="8.5" data-track-index="21" data-media-start="4.8" src="assets/gridbash-openvid-demo.mp4" muted playsinline></video>
+            <div id="scan-rule" class="clip scan-rule" data-start="3" data-duration="8.5" data-track-index="22" data-layout-ignore></div>
+            <div id="label-ptys" class="clip proof-label label-ptys" data-start="3" data-duration="8.5" data-track-index="23">REAL PTYS</div>
+            <div id="label-broadcast" class="clip proof-label label-broadcast" data-start="3" data-duration="8.5" data-track-index="24">SELECTED BROADCAST</div>
+            <div id="label-worktrees" class="clip proof-label label-worktrees" data-start="3" data-duration="8.5" data-track-index="25">ISOLATED WORKTREES</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="scene-3" class="scene">
+        <div class="atmosphere">
+          <div id="grid-3" class="clip routing-grid" data-start="11.05" data-duration="1.95" data-track-index="26" data-layout-ignore></div>
+          <div id="wash-3" class="clip wash wash-amber" data-start="11.05" data-duration="1.95" data-track-index="27" data-layout-ignore></div>
+          <div id="ghost-3" class="clip ghost" data-start="11.05" data-duration="1.95" data-track-index="28" style="left:-60px;bottom:20px" data-layout-ignore>READY</div>
+        </div>
+        <div id="corner-3a" class="clip corner tl" data-start="11.05" data-duration="1.95" data-track-index="29" data-layout-ignore></div>
+        <div id="corner-3b" class="clip corner br" data-start="11.05" data-duration="1.95" data-track-index="30" data-layout-ignore></div>
+        <div class="top-rail">
+          <span id="dispatch-3" class="clip eyebrow" data-start="11.05" data-duration="1.95" data-track-index="31">GRIDBASH / OPEN SOURCE</span>
+          <span id="rule-3" class="clip rail-rule" data-start="11.05" data-duration="1.95" data-track-index="32" data-layout-ignore></span>
+          <span id="seq-3" class="clip sequence" data-start="11.05" data-duration="1.95" data-track-index="33">READY 01</span>
+        </div>
+        <div class="cta-content">
+          <h2 id="cta-title" class="clip cta-title" data-start="11.05" data-duration="1.95" data-track-index="34">RUN THE GRID.</h2>
+          <div id="command-plate" class="clip command-plate" data-start="11.05" data-duration="1.95" data-track-index="35">
+            <div id="install-command" class="command"><span class="prompt">$</span>npm install -g gridbash</div>
+          </div>
+          <div id="cta-meta" class="clip cta-meta" data-start="11.05" data-duration="1.95" data-track-index="36"><span>OPEN SOURCE / MIT</span><span>WINDOWS X64</span><span>RUST TUI</span></div>
+          <div id="repo-url" class="clip repo-url" data-start="11.05" data-duration="1.95" data-track-index="37">github.com/jasonsuhari/gridbash</div>
+          <div id="completion-rule" class="clip completion-rule" data-start="11.05" data-duration="1.95" data-track-index="38" data-layout-ignore></div>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      tl.fromTo("#grid-1", { x: -30, opacity: 0 }, { x: 20, opacity: 0.18, duration: 3.1, ease: "none" }, 0.15);
+      tl.fromTo("#wash-1", { scale: 0.82, opacity: 0 }, { scale: 1.03, opacity: 0.18, duration: 1.3, ease: "sine.out" }, 0.2);
+      tl.fromTo("#ghost-1", { x: 100, opacity: 0 }, { x: 0, opacity: 0.08, duration: 1.1, ease: "power1.out" }, 0.25);
+      tl.fromTo("#dispatch-1", { x: -80, opacity: 0 }, { x: 0, opacity: 1, duration: 0.5, ease: "expo.out" }, 0.18);
+      tl.fromTo("#rule-1", { scaleX: 0 }, { scaleX: 1, duration: 0.72, ease: "circ.out" }, 0.32);
+      tl.fromTo("#seq-1", { opacity: 0, x: 45 }, { opacity: 1, x: 0, duration: 0.62, ease: "power3.out" }, 0.48);
+      tl.fromTo("#hook-title", { x: -150, opacity: 0 }, { x: 0, opacity: 1, duration: 0.68, ease: "expo.out" }, 0.38);
+      tl.fromTo("#hook-sub", { y: 55, opacity: 0 }, { y: 0, opacity: 1, duration: 0.56, ease: "back.out(1.15)" }, 0.74);
+      tl.fromTo("#agent-1, #agent-3, #agent-5", { x: -45, opacity: 0 }, { x: 0, opacity: 1, duration: 0.38, stagger: 0.11, ease: "power4.out" }, 1.02);
+      tl.fromTo("#agent-2, #agent-4, #agent-6", { x: 45, opacity: 0 }, { x: 0, opacity: 1, duration: 0.42, stagger: 0.1, ease: "circ.out" }, 1.1);
+      tl.fromTo("#corner-1a", { scale: 0.4, opacity: 0 }, { scale: 1, opacity: 0.62, duration: 0.34, ease: "back.out(1.5)" }, 0.3);
+      tl.fromTo("#corner-1b", { scale: 1.7, opacity: 0 }, { scale: 1, opacity: 0.62, duration: 0.48, ease: "power2.out" }, 0.5);
+
+      tl.set("#scene-2", { opacity: 1, x: 1920 }, 3.05);
+      tl.to("#scene-1", { x: -470, filter: "blur(8px)", duration: 0.45, ease: "power3.in" }, 3.05);
+      tl.to("#scene-2", { x: 0, duration: 0.45, ease: "power3.out" }, 3.05);
+      tl.set("#scene-1", { visibility: "hidden" }, 3.5);
+
+      tl.fromTo("#grid-2", { x: 40, opacity: 0 }, { x: -12, opacity: 0.18, duration: 2.2, ease: "none" }, 3.1);
+      tl.fromTo("#wash-2", { scale: 0.78, opacity: 0 }, { scale: 1.04, opacity: 0.13, duration: 1.4, ease: "sine.out" }, 3.18);
+      tl.fromTo("#proof-kicker", { x: -90, opacity: 0 }, { x: 0, opacity: 1, duration: 0.52, ease: "expo.out" }, 3.35);
+      tl.fromTo("#pane-count", { scale: 0.7, rotation: 3, opacity: 0 }, { scale: 1, rotation: 0, opacity: 1, duration: 0.47, ease: "back.out(1.6)" }, 3.52);
+      tl.fromTo("#terminal-wrap", { x: 520, scale: 0.9, opacity: 0 }, { x: 0, scale: 1, opacity: 1, duration: 0.72, ease: "power4.out" }, 3.28);
+      tl.fromTo("#product-video", { scale: 1, opacity: 0 }, { scale: 1.025, opacity: 1, duration: 7.7, ease: "none" }, 3.34);
+      tl.fromTo("#label-ptys", { x: -100, opacity: 0 }, { x: 0, opacity: 1, duration: 0.45, ease: "expo.out" }, 4.12);
+      tl.fromTo("#label-broadcast", { x: 100, opacity: 0 }, { x: 0, opacity: 1, duration: 0.54, ease: "circ.out" }, 5.35);
+      tl.fromTo("#label-worktrees", { y: 65, opacity: 0 }, { y: 0, opacity: 1, duration: 0.62, ease: "power3.out" }, 6.55);
+      tl.fromTo("#scan-rule", { y: -80, opacity: 0 }, { y: 650, opacity: 0.82, duration: 2.2, ease: "power1.inOut" }, 7.05);
+
+      tl.set("#scene-3", { opacity: 0, scale: 0.78, filter: "blur(18px)" }, 11.05);
+      tl.set("#pane-count", { opacity: 0 }, 11.05);
+      tl.to("#scene-2", { scale: 1.18, filter: "blur(18px)", duration: 0.55, ease: "expo.in" }, 11.05);
+      tl.to("#scene-3", { scale: 1, filter: "blur(0px)", opacity: 1, duration: 0.55, ease: "expo.out" }, 11.05);
+      tl.set("#scene-2", { visibility: "hidden" }, 11.6);
+
+      tl.fromTo("#grid-3", { x: -30, opacity: 0 }, { x: 12, opacity: 0.18, duration: 1.45, ease: "none" }, 11.08);
+      tl.fromTo("#wash-3", { scale: 0.82, opacity: 0 }, { scale: 1.04, opacity: 0.15, duration: 0.9, ease: "sine.out" }, 11.12);
+      tl.fromTo("#ghost-3", { x: -70, opacity: 0 }, { x: 0, opacity: 0.08, duration: 0.72, ease: "power1.out" }, 11.16);
+      tl.fromTo("#dispatch-3", { x: -90, opacity: 0 }, { x: 0, opacity: 1, duration: 0.36, ease: "expo.out" }, 11.12);
+      tl.fromTo("#rule-3", { scaleX: 0 }, { scaleX: 1, duration: 0.46, ease: "circ.out" }, 11.18);
+      tl.fromTo("#seq-3", { opacity: 0, x: 50 }, { opacity: 1, x: 0, duration: 0.3, ease: "power4.out" }, 11.28);
+      tl.fromTo("#cta-title", { y: -95, opacity: 0 }, { y: 0, opacity: 1, duration: 0.44, ease: "expo.out" }, 11.16);
+      tl.fromTo("#command-plate", { scale: 0.92, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.46, ease: "circ.out" }, 11.36);
+      tl.fromTo("#install-command", { x: -40, opacity: 0 }, { x: 0, opacity: 1, duration: 0.34, ease: "power3.out" }, 11.58);
+      tl.fromTo("#cta-meta", { y: 48, opacity: 0 }, { y: 0, opacity: 1, duration: 0.34, ease: "back.out(1.2)" }, 11.78);
+      tl.fromTo("#repo-url", { y: 36, opacity: 0 }, { y: 0, opacity: 1, duration: 0.35, ease: "power2.out" }, 11.96);
+      tl.fromTo("#completion-rule", { scaleX: 0 }, { scaleX: 1, duration: 0.42, ease: "expo.out" }, 12.16);
+      tl.fromTo("#corner-3a", { scale: 0.4, opacity: 0 }, { scale: 1, opacity: 0.62, duration: 0.28, ease: "back.out(1.5)" }, 11.22);
+      tl.fromTo("#corner-3b", { scale: 1.6, opacity: 0 }, { scale: 1, opacity: 0.62, duration: 0.34, ease: "power2.out" }, 11.34);
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

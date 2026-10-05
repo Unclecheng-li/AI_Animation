@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <title>El Método — Árkos / Rodrigo Torres</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+
+    <style>
+      /* ───────────── Fuentes (empaquetadas localmente para render determinista) ───────────── */
+      @font-face { font-family:"Inter"; font-style:normal; font-weight:500; font-display:block; src:url("assets/fonts/inter-500.woff2") format("woff2"); }
+      @font-face { font-family:"Inter"; font-style:normal; font-weight:600; font-display:block; src:url("assets/fonts/inter-600.woff2") format("woff2"); }
+      @font-face { font-family:"Inter"; font-style:normal; font-weight:700; font-display:block; src:url("assets/fonts/inter-700.woff2") format("woff2"); }
+      @font-face { font-family:"Inter"; font-style:normal; font-weight:800; font-display:block; src:url("assets/fonts/inter-800.woff2") format("woff2"); }
+      @font-face { font-family:"Inter"; font-style:normal; font-weight:900; font-display:block; src:url("assets/fonts/inter-900.woff2") format("woff2"); }
+      @font-face { font-family:"JetBrains Mono"; font-style:normal; font-weight:400; font-display:block; src:url("assets/fonts/jbm-400.woff2") format("woff2"); }
+      @font-face { font-family:"JetBrains Mono"; font-style:normal; font-weight:500; font-display:block; src:url("assets/fonts/jbm-500.woff2") format("woff2"); }
+      @font-face { font-family:"JetBrains Mono"; font-style:normal; font-weight:700; font-display:block; src:url("assets/fonts/jbm-700.woff2") format("woff2"); }
+
+      /* ───────────── Tokens de marca (Árkos) ───────────── */
+      :root {
+        --bg:        #0A0A0A;
+        --ink:       #F2F0EA;
+        --ink-dim:   #8A8782;
+        --ink-faint: #4A4742;
+        --accent:    #F2A93B;
+        --rule:      rgba(242,240,234,0.12);
+        --panel:     #0E0E0D;
+      }
+
+      * { margin:0; padding:0; box-sizing:border-box; }
+      html, body { width:1080px; height:1920px; overflow:hidden; background:var(--bg); }
+      body {
+        font-family:"Inter", system-ui, sans-serif;
+        color:var(--ink);
+        -webkit-font-smoothing:antialiased;
+        text-rendering:geometricPrecision;
+      }
+      .mono { font-family:"JetBrains Mono", ui-monospace, monospace; }
+
+      #root { position:relative; width:1080px; height:1920px; overflow:hidden; background:var(--bg); }
+
+      /* Fondo compartido continuo (no es clip): negro cálido + viñeta sutil */
+      #bg {
+        position:absolute; inset:0;
+        background:
+          radial-gradient(120% 80% at 50% 18%, rgba(242,169,59,0.05), rgba(242,169,59,0) 46%),
+          radial-gradient(140% 100% at 50% 100%, rgba(0,0,0,0.55), rgba(0,0,0,0) 60%),
+          var(--bg);
+      }
+
+      /* Cada beat: clip a pantalla completa con un wrapper interno que anima entrada/salida */
+      .clip  { position:absolute; inset:0; }
+      .inner { position:absolute; inset:0; }
+
+      /* Columna editorial con márgenes seguros (~10% sup/inf libres para la UI de TikTok) */
+      .col {
+        position:absolute; left:96px; right:96px; top:210px; bottom:210px;
+        display:flex; flex-direction:column;
+      }
+      .col.center  { justify-content:center; }
+      .col.between { justify-content:space-between; }
+
+      /* Tags monoespaciados estilo archivo/terminal */
+      .eyebrow {
+        font-family:"JetBrains Mono", monospace; font-weight:500;
+        font-size:30px; letter-spacing:0.06em; color:var(--ink-dim);
+      }
+      .rule-line { height:1px; background:var(--rule); width:100%; }
+
+      /* Tipografía de titulares */
+      h1 { font-weight:800; letter-spacing:-0.025em; line-height:1.02; color:var(--ink); }
+      .sub {
+        font-weight:500; color:var(--ink-dim);
+        font-size:38px; line-height:1.34; max-width:860px; letter-spacing:-0.01em;
+      }
+      .accent { color:var(--accent); }
+      .countnum { display:inline-block; color:var(--accent); font-weight:900; }
+      .emph     { display:inline-block; }
+
+      .detail {
+        font-family:"JetBrains Mono", monospace; font-weight:400;
+        font-size:30px; color:var(--ink-dim); letter-spacing:0.01em;
+      }
+      .detail .num { color:var(--ink); }
+
+      /* ───────────── "Ventana" (chrome + cuerpo) ───────────── */
+      .win {
+        width:100%; max-width:888px; border:1px solid var(--rule); border-radius:20px;
+        background:var(--panel); overflow:hidden;
+        box-shadow:0 40px 90px -50px rgba(0,0,0,0.9);
+      }
+      .chrome {
+        display:flex; align-items:center; gap:18px;
+        height:66px; padding:0 26px; border-bottom:1px solid var(--rule);
+      }
+      .dots { display:flex; gap:11px; }
+      .dot  { width:12px; height:12px; border-radius:50%; background:var(--ink-faint); }
+      .path {
+        font-family:"JetBrains Mono", monospace; font-weight:500; font-size:27px;
+        color:var(--ink-dim); white-space:nowrap; display:flex; align-items:center;
+      }
+      .caret { display:inline-block; width:13px; height:30px; margin-left:4px; background:var(--accent); transform:translateY(3px); }
+      .win-body { padding:34px 30px; }
+      .codeline {
+        font-family:"JetBrains Mono", monospace; font-weight:400; font-size:27px;
+        color:var(--ink-dim); line-height:1.7; white-space:nowrap;
+      }
+      .codeline .ok { color:var(--ink); }
+
+      /* Barra de progreso (scaleX) */
+      .track { position:relative; height:7px; border-radius:4px; background:rgba(242,240,234,0.08); margin-top:24px; overflow:hidden; }
+      .fill  { position:absolute; inset:0; transform-origin:left center; background:var(--ink-dim); border-radius:4px; }
+
+      /* Barras tipo dashboard (scaleY) */
+      .bars { display:flex; align-items:flex-end; gap:14px; height:150px; }
+      .bar  { flex:1; height:100%; transform-origin:bottom center; background:linear-gradient(180deg, rgba(242,240,234,0.55), rgba(242,240,234,0.16)); border-radius:5px 5px 0 0; }
+      .baseline { height:1px; background:var(--rule); margin-top:10px; }
+
+      /* KDS — tickets de cocina */
+      .ticket {
+        display:flex; align-items:center; justify-content:space-between;
+        padding:16px 20px; border:1px solid var(--rule); border-radius:12px; margin-bottom:14px;
+        font-family:"JetBrains Mono", monospace; font-size:26px; color:var(--ink-dim);
+      }
+      .ticket:last-child { margin-bottom:0; }
+      .ticket .id { color:var(--ink); }
+      .live { display:flex; align-items:center; gap:11px; color:var(--ink-dim); font-size:24px; }
+      .live-dot { width:13px; height:13px; border-radius:50%; background:var(--accent); }
+
+      .checkwrap { display:inline-flex; vertical-align:middle; transform:translateY(4px); margin-left:6px; }
+
+      /* ───────────── Beat 4.5 / 5 — mosaico + método ───────────── */
+      .center-wrap { position:absolute; left:96px; right:96px; top:210px; bottom:210px; display:grid; place-items:center; }
+      .mosaic { display:flex; flex-direction:column; gap:24px; width:760px; }
+      .mini-win { border:1px solid var(--rule); border-radius:16px; background:var(--panel); overflow:hidden; }
+      .mini-chrome { display:flex; align-items:center; gap:14px; height:54px; padding:0 22px; border-bottom:1px solid var(--rule); }
+      .mini-path { font-family:"JetBrains Mono", monospace; font-weight:500; font-size:24px; color:var(--ink-dim); }
+      .mini-tag  { font-family:"JetBrains Mono", monospace; font-weight:500; font-size:22px; color:var(--ink-dim); margin-left:auto; }
+      .mini-body { padding:18px 22px; font-family:"JetBrains Mono", monospace; font-size:22px; color:var(--ink-dim); line-height:1.5; }
+      .metodo { width:100%; max-width:888px; }
+    </style>
+  </head>
+
+  <body>
+    <div id="root" data-composition-id="el-metodo" data-start="0" data-width="1080" data-height="1920" data-fps="30" data-duration="31">
+
+      <!-- Fondo continuo (no es clip) -->
+      <div id="bg"></div>
+
+      <!-- ════════════ BEAT 1 · HOOK (0–4.8) ════════════ -->
+      <section id="b1" class="clip" data-start="0" data-duration="4.5" data-track-index="1">
+        <div id="b1-inner" class="inner">
+          <div class="col center">
+            <div id="b1-eyebrow" class="eyebrow">// jornada_real.log</div>
+            <div id="b1-small" class="sub" style="margin-top:34px; font-size:36px;">soy una sola persona —</div>
+            <h1 id="b1-head" style="margin-top:26px; font-size:96px;">
+              En esta laptop hay <span id="b1-num" class="countnum" style="font-size:128px;">0</span> trabajando ahora mismo.
+            </h1>
+          </div>
+        </div>
+      </section>
+
+      <!-- ════════════ BEAT 2 · VENTANA 01 (4.5–9.8) ════════════ -->
+      <section id="b2" class="clip" data-start="4.5" data-duration="5.0" data-track-index="2">
+        <div id="b2-inner" class="inner">
+          <div class="col center">
+            <div id="b2-eyebrow" class="eyebrow">[VENTANA_01]</div>
+            <div class="win" id="b2-win" style="margin-top:30px;">
+              <div class="chrome">
+                <div class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+                <div class="path"><span id="b2-path"></span><span id="b2-caret" class="caret"></span></div>
+              </div>
+              <div class="win-body">
+                <div class="codeline">&gt; rebuild --portfolio</div>
+                <div class="codeline">&nbsp;&nbsp;server-render · schema.org</div>
+                <div class="track"><div id="b2-fill" class="fill"></div></div>
+              </div>
+            </div>
+            <h1 id="b2-title" style="margin-top:48px; font-size:74px;">Reconstruyendo mi propia web.</h1>
+            <div id="b2-sub" class="sub" style="margin-top:26px;">Un agente rehace el portafolio de árkos.com mientras yo decido la estrategia.</div>
+            <div id="b2-detail" class="detail" style="margin-top:30px;">&gt; /portfolio · server-render · schema</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ════════════ BEAT 3 · VENTANA 02 (9.5–14.8) ════════════ -->
+      <section id="b3" class="clip" data-start="9.5" data-duration="5.0" data-track-index="1">
+        <div id="b3-inner" class="inner">
+          <div class="col center">
+            <div id="b3-eyebrow" class="eyebrow">[VENTANA_02] · precio-vivo · pipeline</div>
+            <div class="win" id="b3-win" style="margin-top:30px;">
+              <div class="chrome">
+                <div class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+                <div class="path"><span id="b3-path"></span><span id="b3-caret" class="caret"></span></div>
+              </div>
+              <div class="win-body">
+                <div class="bars" id="b3-bars">
+                  <span class="bar"></span><span class="bar"></span><span class="bar"></span>
+                  <span class="bar"></span><span class="bar"></span><span class="bar"></span>
+                  <span class="bar"></span><span class="bar"></span><span class="bar"></span>
+                  <span class="bar"></span><span class="bar"></span><span class="bar"></span>
+                </div>
+                <div class="baseline"></div>
+              </div>
+            </div>
+            <h1 id="b3-title" style="margin-top:48px; font-size:80px;">Precio Vivo.</h1>
+            <div id="b3-sub" class="sub" style="margin-top:26px;">Convierto los PDFs diarios del MIDAGRI en un dashboard de precios mayoristas. Data pública que nadie había liberado.</div>
+            <div id="b3-detail" class="detail" style="margin-top:30px;">
+              &gt; 72 productos · <span id="b3-tests" class="num">0</span> tests<span id="b3-check" class="checkwrap">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M4 12.5l5 5L20 6.5" stroke="#F2A93B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ════════════ BEAT 4 · VENTANA 03 (14.5–19.3) ════════════ -->
+      <section id="b4" class="clip" data-start="14.5" data-duration="4.5" data-track-index="2">
+        <div id="b4-inner" class="inner">
+          <div class="col center">
+            <div id="b4-eyebrow" class="eyebrow">[VENTANA_03] · resthub · kds</div>
+            <div class="win" id="b4-win" style="margin-top:30px;">
+              <div class="chrome">
+                <div class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+                <div class="path"><span id="b4-path"></span><span id="b4-caret" class="caret"></span></div>
+              </div>
+              <div class="win-body">
+                <div class="ticket"><span class="id">#0421 · mesa 7</span><span class="live"><span class="live-dot" id="b4-livedot"></span> en vivo</span></div>
+                <div class="ticket"><span class="id">#0422 · llevar</span><span>en cocina</span></div>
+                <div class="ticket"><span class="id">#0423 · mesa 2</span><span>listo</span></div>
+              </div>
+            </div>
+            <h1 id="b4-title" style="margin-top:48px; font-size:74px;">Un sistema en producción.</h1>
+            <div id="b4-sub" class="sub" style="margin-top:26px;">Depurando la pantalla de cocina de un ERP de restaurante. En vivo, con pedidos reales.</div>
+            <div id="b4-detail" class="detail" style="margin-top:30px;">&gt; POS · cocina · tiempo real</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ════════════ BEAT 4.5 + 5 · PAYOFF → MÉTODO (19.0–26.3) ════════════ -->
+      <section id="b5" class="clip" data-start="19.0" data-duration="7.0" data-track-index="1">
+        <div id="b5-inner" class="inner" data-layout-allow-overlap="true">
+          <!-- Las 3 ventanas, en mosaico -->
+          <div class="center-wrap" style="z-index:1">
+            <div id="mosaic" class="mosaic">
+              <div class="mini-win">
+                <div class="mini-chrome"><div class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div><span class="mini-path">árkos.com</span><span class="mini-tag">VENTANA_01</span></div>
+                <div class="mini-body">&gt; server-render · schema</div>
+              </div>
+              <div class="mini-win">
+                <div class="mini-chrome"><div class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div><span class="mini-path">precio-vivo</span><span class="mini-tag">VENTANA_02</span></div>
+                <div class="mini-body">&gt; 72 productos · 73 tests</div>
+              </div>
+              <div class="mini-win">
+                <div class="mini-chrome"><div class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div><span class="mini-path">resthub · kds</span><span class="mini-tag">VENTANA_03</span></div>
+                <div class="mini-body">&gt; POS · cocina · tiempo real</div>
+              </div>
+            </div>
+          </div>
+          <!-- El método -->
+          <div class="center-wrap" style="z-index:2">
+            <div id="metodo" class="metodo">
+              <div id="b5-eyebrow" class="eyebrow">// el_método</div>
+              <h1 id="b5-head" style="margin-top:30px; font-size:92px;">No escribo cada línea. <span id="b5-dirijo" class="accent emph">Dirijo.</span></h1>
+              <div id="b5-sub" class="sub" style="margin-top:30px;">Decido qué se construye, cómo, y reviso cada paso. Es dirigir un equipo — solo que el equipo son agentes.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ════════════ BEAT 6 · CTA (26.0–31.0) ════════════ -->
+      <section id="b6" class="clip" data-start="26.0" data-duration="5.0" data-track-index="2">
+        <div id="b6-inner" class="inner">
+          <div class="col center">
+            <div id="b6-eyebrow" class="eyebrow">// quién_soy</div>
+            <h1 id="b6-head" style="margin-top:30px; font-size:84px;">Rodrigo. Construyo software para <span class="accent">pymes en LATAM</span>.</h1>
+            <div id="b6-sub" class="sub" style="margin-top:30px;">Solo, con este método. Si construyes —o quieres construir— así, sígueme.</div>
+            <div id="b6-lockup" style="margin-top:64px; display:flex; align-items:center; gap:30px;">
+              <img class="arkos-logo" src="assets/arkos-logo-mono.svg" alt="Árkos" style="height:66px; width:auto; display:block;" />
+              <span style="width:1px; height:50px; background:var(--rule);"></span>
+              <span class="mono accent" style="font-weight:700; font-size:42px;">@arkos_devs</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true, defaults: { ease: "power3.out" } });
+
+      const $ = (id) => document.getElementById(id);
+
+      /* Tipeo determinista: textContent se computa desde el tiempo del timeline (seek-safe) */
+      function typeIn(el, text, start, dur) {
+        if (!el) return;
+        el.textContent = "";
+        const p = { i: 0 };
+        tl.to(p, {
+          i: text.length, duration: dur, ease: "none", snap: { i: 1 },
+          onUpdate() { el.textContent = text.slice(0, p.i | 0); }
+        }, start);
+      }
+      /* Parpadeo de cursor con repeticiones finitas (determinista) */
+      function blink(el, start, span) {
+        if (!el) return;
+        const cyc = 0.5;
+        const reps = Math.max(0, Math.floor(span / cyc) - 1);
+        tl.fromTo(el, { opacity: 1 }, { opacity: 0, duration: cyc, ease: "steps(1)", repeat: reps, yoyo: true }, start);
+      }
+
+      /* Entrada/salida de cada beat (crossfade vía wrapper interno, no sobre el .clip) */
+      function beatIn(id, t)  { tl.fromTo("#" + id, { opacity: 0 }, { opacity: 1, duration: 0.5, overwrite: "auto" }, t); }
+      function beatOut(id, end) {
+        tl.to("#" + id, { opacity: 0, duration: 0.35, ease: "power2.in", overwrite: "auto" }, end - 0.35);
+        tl.set("#" + id, { opacity: 0 }, end); // hard kill en la frontera del clip (seek-safe)
+      }
+
+      /* ───────── BEAT 1 · HOOK ───────── */
+      beatIn("b1-inner", 0.0);
+      tl.from("#b1-eyebrow", { opacity: 0, y: 14, duration: 0.4 }, 0.05);
+      tl.from("#b1-small",   { opacity: 0, y: 14, duration: 0.4 }, 0.2);
+      tl.from("#b1-head",    { opacity: 0, y: 22, duration: 0.5 }, 0.3);
+      tl.from("#b1-num",     { scale: 0.4, duration: 0.55, ease: "back.out(2.2)" }, 0.55);
+      tl.to("#b1-num", { innerText: 3, snap: { innerText: 1 }, duration: 0.7, ease: "power1.out" }, 0.55);
+      beatOut("b1-inner", 4.5);
+
+      /* ───────── BEAT 2 · VENTANA 01 ───────── */
+      beatIn("b2-inner", 4.5);
+      tl.from("#b2-eyebrow", { opacity: 0, y: 12, duration: 0.4 }, 4.55);
+      tl.fromTo("#b2-win", { opacity: 0, y: 60, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.6, ease: "back.out(1.4)" }, 4.7);
+      typeIn($("b2-path"), "claude-code · árkos.com", 5.2, 0.9);
+      blink($("b2-caret"), 5.2, 3.4);
+      tl.fromTo("#b2-fill", { scaleX: 0 }, { scaleX: 1, duration: 2.2, ease: "power1.inOut" }, 5.4);
+      tl.from("#b2-title",  { opacity: 0, y: 22, duration: 0.5 }, 5.5);
+      tl.from("#b2-sub",    { opacity: 0, y: 18, duration: 0.5 }, 5.75);
+      tl.from("#b2-detail", { opacity: 0, y: 14, duration: 0.45 }, 6.0);
+      beatOut("b2-inner", 9.5);
+
+      /* ───────── BEAT 3 · VENTANA 02 (Precio Vivo) ───────── */
+      beatIn("b3-inner", 9.5);
+      tl.from("#b3-eyebrow", { opacity: 0, y: 12, duration: 0.4 }, 9.55);
+      tl.fromTo("#b3-win", { opacity: 0, y: 60, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.6, ease: "back.out(1.4)" }, 9.7);
+      typeIn($("b3-path"), "precio-vivo · pipeline", 10.2, 0.85);
+      blink($("b3-caret"), 10.2, 3.4);
+      const heights = [0.35,0.55,0.42,0.68,0.5,0.78,0.62,0.88,0.7,0.95,0.8,0.6];
+      gsap.utils.toArray("#b3-bars .bar").forEach((bar, k) => {
+        gsap.set(bar, { scaleY: 0.04 });
+        tl.fromTo(bar, { scaleY: 0.04 }, { scaleY: heights[k], duration: 0.5, ease: "power2.out" }, 10.3 + k * 0.05);
+      });
+      tl.from("#b3-title", { opacity: 0, y: 22, duration: 0.5 }, 10.5);
+      tl.from("#b3-sub",   { opacity: 0, y: 18, duration: 0.5 }, 10.75);
+      tl.from("#b3-detail",{ opacity: 0, y: 14, duration: 0.45 }, 11.0);
+      tl.to("#b3-tests", { innerText: 73, snap: { innerText: 1 }, duration: 1.1, ease: "power1.out" }, 11.2);
+      tl.set("#b3-check", { opacity: 0 }, 0);
+      tl.fromTo("#b3-check", { opacity: 0, scale: 0.2 }, { opacity: 1, scale: 1, duration: 0.5, ease: "back.out(2.4)" }, 12.45);
+      beatOut("b3-inner", 14.5);
+
+      /* ───────── BEAT 4 · VENTANA 03 (RestHUB / KDS) ───────── */
+      beatIn("b4-inner", 14.5);
+      tl.from("#b4-eyebrow", { opacity: 0, y: 12, duration: 0.4 }, 14.55);
+      tl.fromTo("#b4-win", { opacity: 0, y: 60, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.6, ease: "back.out(1.4)" }, 14.7);
+      typeIn($("b4-path"), "resthub · kds", 15.2, 0.7);
+      blink($("b4-caret"), 15.2, 3.0);
+      tl.fromTo("#b4-livedot", { opacity: 0.25, scale: 0.7 }, { opacity: 1, scale: 1, duration: 0.6, yoyo: true, repeat: 4, ease: "sine.inOut" }, 15.6);
+      tl.from("#b4-title", { opacity: 0, y: 22, duration: 0.5 }, 15.5);
+      tl.from("#b4-sub",   { opacity: 0, y: 18, duration: 0.5 }, 15.75);
+      tl.from("#b4-detail",{ opacity: 0, y: 14, duration: 0.45 }, 16.0);
+      beatOut("b4-inner", 19.0);
+
+      /* ───────── BEAT 4.5 + 5 · PAYOFF → MÉTODO ───────── */
+      tl.fromTo("#b5-inner", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 19.0);
+      // payoff: las 3 ventanas se ensamblan
+      tl.fromTo("#mosaic .mini-win",
+        { opacity: 0, y: 44, scale: 0.92 },
+        { opacity: 1, y: 0, scale: 1, duration: 0.55, stagger: 0.13, ease: "back.out(1.3)" }, 19.05);
+      // vibración sutil "todo en paralelo"
+      tl.to("#mosaic .mini-win", { y: -5, duration: 0.45, yoyo: true, repeat: 2, ease: "sine.inOut", stagger: { each: 0.06, from: "center" } }, 19.7);
+      // método (texto) oculto al inicio
+      tl.set("#metodo", { opacity: 0 }, 0);
+      // las ventanas se encogen y se ordenan detrás del texto
+      tl.to("#mosaic", { scale: 0.5, y: -300, opacity: 0.2, duration: 0.75, ease: "power3.inOut" }, 21.0);
+      tl.fromTo("#metodo", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 21.25);
+      tl.from("#b5-eyebrow", { opacity: 0, y: 14, duration: 0.4 }, 21.3);
+      tl.from("#b5-head",   { opacity: 0, y: 22, duration: 0.5 }, 21.5);
+      tl.from("#b5-dirijo", { scale: 0.78, opacity: 0, duration: 0.55, ease: "back.out(1.8)" }, 21.85);
+      tl.from("#b5-sub",    { opacity: 0, y: 18, duration: 0.5 }, 22.1);
+      beatOut("b5-inner", 26.0);
+
+      /* ───────── BEAT 6 · CTA ───────── */
+      beatIn("b6-inner", 26.0);
+      tl.from("#b6-eyebrow", { opacity: 0, y: 12, duration: 0.4 }, 26.1);
+      tl.from("#b6-head",    { opacity: 0, y: 24, duration: 0.55 }, 26.3);
+      tl.from("#b6-sub",     { opacity: 0, y: 18, duration: 0.5 }, 26.7);
+      tl.from("#b6-lockup",  { opacity: 0, y: 18, duration: 0.6, ease: "back.out(1.3)" }, 27.1);
+      // hold ~3s hasta el final (31.0)
+
+      window.__timelines["el-metodo"] = tl;
+    </script>
+  </body>
+</html>

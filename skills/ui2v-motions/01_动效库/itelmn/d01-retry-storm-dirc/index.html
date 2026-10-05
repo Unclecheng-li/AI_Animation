@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1080, height=1920" />
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<style>
+/* @brand:start */
+:root {
+  --ground: #0C0D0F; --ground-lift: #14161A;
+  --ink: #EDEAE4; --ink-mid: #9AA0A6; --ink-dim: #8B9198; --ink-ghost: #3A3E42;
+  --rule: #23272A; --rule-bright: #3D4348; --hair: 1.5px;
+  --authoritative: #C9A227; --stale: #E0533D; --lost: #6A6F74;
+  --boundary: #4E8C7D; --pressure: #B4623A; --counterfactual: #7A8086;
+  --font-value: "IBM Plex Mono", ui-monospace, monospace;
+  --font-label: "IBM Plex Sans Condensed", "IBM Plex Sans", system-ui, sans-serif;
+  --t-hero: 200px; --t-value: 64px; --t-body: 36px; --t-label: 26px; --track-label: 0.18em;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { overflow: hidden; background: var(--ground); color: var(--ink); font-family: var(--font-label); }
+.label { font-family: var(--font-label); font-size: var(--t-label); letter-spacing: var(--track-label);
+         text-transform: uppercase; color: var(--ink-dim); font-weight: 500; }
+/* @brand:end */
+
+html, body { width: 1080px; height: 1920px; }
+#stage { position: absolute; inset: 0; }
+
+/* ---------------------------------------------------------------------------
+   NO CONTENT STAGE. Two populations occupying ONE column, in exact proportion.
+
+     x  60 .. 740   the column. One mark = one request. 20 across, 30px apart.
+     y      1540    the floor. Everything stacks up from here.
+     y      1390    capacity: 100 marks up from the floor. A line, not a label.
+
+   The user band is six rows and stays six rows for the entire shot. Everything
+   above it is the system's own retries. The proportion on screen IS the
+   proportion in the model — 780 above 120 — because both are drawn from the
+   same unit at the same scale. Nothing is exaggerated to make a point.
+--------------------------------------------------------------------------- */
+svg { position: absolute; inset: 0; }
+.u { fill: var(--ink-mid); }
+.r { fill: var(--pressure); }
+#capLine { stroke: var(--boundary); stroke-width: 5; }
+.d { fill: var(--boundary); }
+
+.rd   { position: absolute; left: 790px; width: 270px; }
+.rd b { display: block; font-family: var(--font-label); font-size: 26px; letter-spacing: var(--track-label);
+        text-transform: uppercase; color: var(--ink-dim); font-weight: 600; }
+.n    { font-family: var(--font-value); font-weight: 600; line-height: 1; letter-spacing: -.03em;
+        display: block; margin-top: 10px; }
+#inflightSlot .n { font-size: 108px; color: var(--ink); }
+#inflightSlot .n.over { color: var(--pressure); }
+#retSlot .n { font-size: 76px; color: var(--pressure); }
+#userRead .n { font-size: 76px; color: var(--ink-mid); }
+#capRead  .n { font-size: 56px; color: var(--boundary); }
+
+/* stacked occupants of one slot */
+#inflightSlot, #retSlot { position: absolute; left: 790px; width: 270px; }
+.slotv { position: absolute; left: 0; top: 36px; width: 270px; }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="main" data-start="0" data-duration="15"
+     data-width="1080" data-height="1920">
+  <div id="stage" class="clip" data-start="0" data-duration="15" data-track-index="0">
+
+    <svg viewBox="0 0 1080 1920" width="1080" height="1920">
+      <g id="users"></g>
+      <g id="retries"></g>
+      <!-- capacity: drawn last, so a saturated column can never bury it -->
+      <line id="capLine" x1="20" y1="1390" x2="762" y2="1390" />
+      <g id="drain"></g>
+    </svg>
+
+    <div class="rd" id="inflightSlot" style="top: 244px;">
+      <b>in flight</b>
+      <span class="slotv"><span class="n"      id="if120">120</span></span>
+      <span class="slotv"><span class="n over" id="ev-r1_load">180</span></span>
+      <span class="slotv"><span class="n over" id="ev-r2_load">360</span></span>
+      <span class="slotv"><span class="n over" id="ev-r3_load">900</span></span>
+    </div>
+
+    <div class="rd" id="retSlot" style="top: 640px;">
+      <b>retries</b>
+      <span class="slotv"><span class="n" id="ev-r1_retry">+60</span></span>
+      <span class="slotv"><span class="n" id="ev-r2_retry">+240</span></span>
+      <span class="slotv"><span class="n" id="ev-r3_retry">+780</span></span>
+    </div>
+
+    <div class="rd" id="capRead"  style="top: 1300px;"><b>capacity</b><span class="n">100</span></div>
+    <div class="rd" id="userBand" style="top: 1440px;"><b>users sent</b></div>
+    <div class="rd" id="userRead" style="top: 1482px;"><span class="n" style="margin-top:36px">120</span></div>
+
+  </div>
+</div>
+
+<script>
+/* One mark = one request. No ratio to explain, nothing scaled for effect.
+   20 columns, 30px rows, stacking up from a floor at y=1540:
+     users    120 = 6 rows   (never changes, for the whole shot)
+     retries  780 = 39 rows  (revealed 3 / 12 / 39 rows as the loop turns)
+   Capacity is 100 marks up from the floor, so it cuts THROUGH the user band —
+   which is true and worth seeing: even the real traffic is already over the line. */
+const NS = 'http://www.w3.org/2000/svg';
+const COLS = 20, PX = 34, PY = 30, X0 = 60 + 17, FLOOR = 1540 - 15;
+
+function stack(g, n, cls, rowOffset) {
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const row = Math.floor(i / COLS) + rowOffset, col = i % COLS;
+    const c = document.createElementNS(NS, 'circle');
+    c.setAttribute('cx', X0 + col * PX);
+    c.setAttribute('cy', FLOOR - row * PY);
+    c.setAttribute('r', 5);
+    c.setAttribute('class', cls);
+    g.appendChild(c);
+    out.push(c);
+  }
+  return out;
+}
+stack(document.getElementById('users'), 120, 'u', 0);          // rows 0-5, permanent
+
+/* the drain: served requests leaving along the capacity line, forever, at a rate
+   that never changes. A treadmill of 26 marks at 30px pitch. */
+const drain = document.getElementById('drain');
+for (let i = 0; i < 28; i++) {
+  const c = document.createElementNS(NS, 'circle');
+  c.setAttribute('cx', -30 + i * 30); c.setAttribute('cy', 1390);
+  c.setAttribute('r', 4); c.setAttribute('class', 'd');
+  drain.appendChild(c);
+}
+const ret = stack(document.getElementById('retries'), 780, 'r', 6); // rows 6-44
+
+window.__timelines = window.__timelines || {};
+const tl = gsap.timeline({ paused: true });
+const R_ = 'power3.out';
+
+gsap.set(['#ev-r1_load', '#ev-r2_load', '#ev-r3_load',
+          '#ev-r1_retry', '#ev-r2_retry', '#ev-r3_retry'], { opacity: 0 });
+gsap.set(ret, { opacity: 0 });
+gsap.set(['#inflightSlot b', '#retSlot b', '#capRead', '#userBand', '#userRead', '#if120', '#capLine', '#drain'],
+         { opacity: 0 });
+
+tl.to('#drain', { x: 30, duration: .5, ease: 'none', repeat: 29 }, 0)
+  .to(['#userBand', '#userRead'], { opacity: 1, duration: .45, ease: R_ }, 0.20)
+  .to(['#capLine', '#drain'], { opacity: 1, duration: .45, ease: R_ }, 0.42)
+  .to('#capRead', { opacity: 1, duration: .4, ease: R_ }, 0.56)
+  .to(['#inflightSlot b', '#if120'], { opacity: 1, duration: .45, ease: R_ }, 0.72)
+  .to('#retSlot b', { opacity: 1, duration: .4, ease: R_ }, 1.20);
+
+/* Retries fill in from the bottom up, one row at a time. The stagger is per MARK,
+   so a round that adds 27 rows visibly takes longer to land than one that adds 3 —
+   the duration of the fill is itself the quantity. */
+tl.to('#ev-r1_retry', { opacity: 1, duration: .3, ease: R_ }, 1.28)
+  .to(ret.slice(0, 60), { opacity: 1, duration: .16, stagger: .0075, ease: 'none' }, 1.34)
+  .to('#if120', { opacity: 0, duration: .3 }, 2.44)
+  .to('#ev-r1_load', { opacity: 1, duration: .35, ease: R_ }, 2.56);
+
+tl.to('#ev-r1_retry', { opacity: 0, duration: .3 }, 6.30)
+  .to('#ev-r2_retry', { opacity: 1, duration: .3, ease: R_ }, 6.40)
+  .to(ret.slice(60, 240), { opacity: 1, duration: .16, stagger: .0042, ease: 'none' }, 6.46)
+  .to('#ev-r1_load', { opacity: 0, duration: .3 }, 7.56)
+  .to('#ev-r2_load', { opacity: 1, duration: .35, ease: R_ }, 7.68);
+
+tl.to('#ev-r2_retry', { opacity: 0, duration: .3 }, 11.60)
+  .to('#ev-r3_retry', { opacity: 1, duration: .3, ease: R_ }, 11.71)
+  .to(ret.slice(240), { opacity: 1, duration: .16, stagger: .0026, ease: 'none' }, 11.77)
+  .to('#ev-r2_load', { opacity: 0, duration: .3 }, 13.42)
+  .to('#ev-r3_load', { opacity: 1, duration: .35, ease: R_ }, 13.54);
+
+window.__timelines['main'] = tl;
+</script>
+</body>
+</html>

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en" data-composition-variables='[
+  {"id":"title","type":"string","label":"Main Title","default":"Wind Turbines 101"},
+  {"id":"subtitle","type":"string","label":"Subtitle","default":"Explore each numbered square to learn more."},
+  {"id":"items","type":"string","label":"Grid Items (JSON array)","default":"[{\"label\":\"1\",\"heading\":\"Blade Design\",\"body\":\"Modern turbine blades use advanced aerofoil profiles inspired by aircraft wings. The curved shape creates lift as wind passes over, converting kinetic energy into rotational force.\"},{\"label\":\"2\",\"heading\":\"Nacelle & Generator\",\"body\":\"The nacelle houses the generator, gearbox, and control systems at the top of the tower. Direct-drive turbines eliminate the gearbox for improved reliability.\"},{\"label\":\"3\",\"heading\":\"Tower & Foundation\",\"body\":\"Tubular steel towers provide structural support, typically 80-120 metres tall. Foundations are engineered for soil conditions: gravity bases, monopiles, or jacket structures.\"},{\"label\":\"4\",\"heading\":\"Control Systems\",\"body\":\"Smart controllers adjust blade pitch and yaw to maximise energy capture while protecting the turbine in high winds. SCADA systems enable remote monitoring and real-time optimisation.\"}]"},
+  {"id":"gridColor","type":"color","label":"Grid Square Color","default":"#e9c46a"},
+  {"id":"bgColor","type":"color","label":"Background Color","default":"#264653"},
+  {"id":"basePlateImage","type":"string","label":"Base Plate Image","default":""},
+  {"id":"durationPerItem","type":"number","label":"Seconds per Item","default":4,"min":2,"max":10,"step":0.5}
+]'>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=block">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --grid-color: #e9c46a;
+      --bg-color: #264653;
+      --muted-color: #8aaa9a;
+      --text-color: #dbe8df;
+      --base-plate: none;
+    }
+    body {
+      width: 1920px; height: 1080px;
+      background-color: var(--bg-color);
+      background-image:
+        linear-gradient(rgba(255,255,255,0.028) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.028) 1px, transparent 1px),
+        var(--base-plate);
+      background-size: 40px 40px, 40px 40px, 1920px 1080px;
+      background-position: 0 0, 0 0, 0 0;
+      background-repeat: repeat, repeat, no-repeat;
+      font-family: 'Inter', Arial, Helvetica, sans-serif;
+      overflow: hidden; position: relative;
+    }
+    [data-composition-id] { position: absolute; inset: 0; width: 1920px; height: 1080px; overflow: hidden; }
+    [data-composition-id] > * { z-index: 1; }
+    #el-fade { position: absolute; inset: 0; background: #000; opacity: 0; z-index: 99; pointer-events: none; }
+    .container { width: 100%; height: 100%; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+    .cell { position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px solid rgba(233,196,106,0.16); }
+    .cell::after { content: ""; position: absolute; inset: 28px; border: 1px solid rgba(233,196,106,0.08); pointer-events: none; }
+    .cell-bg { position: absolute; inset: 0; background: var(--grid-color); opacity: 0; transition: none; }
+    .ripple-field { position: absolute; inset: 0; z-index: 3; pointer-events: none; overflow: hidden; }
+    .ripple-ring { position: absolute; left: 50%; top: 50%; width: 160px; height: 160px; margin-left: -80px; margin-top: -80px; border: 2px solid rgba(233,196,106,0.72); border-radius: 999px; opacity: 0; transform: scale(0.2); }
+    .cell-number { width: 100px; height: 100px; background: var(--grid-color); color: var(--bg-color); font-size: 40px; font-weight: 800; border-radius: 16px; display: flex; align-items: center; justify-content: center; position: absolute; z-index: 5; box-shadow: 0 16px 34px rgba(0,0,0,0.22); }
+    .cell-content { position: absolute; inset: 0; padding: 80px; display: flex; flex-direction: column; justify-content: center; opacity: 0; z-index: 4; }
+    .cell-heading { font-size: 34px; font-weight: 700; color: var(--grid-color); margin-bottom: 20px; }
+    .cell-body { font-size: 20px; line-height: 1.6; color: var(--text-color); opacity: 0.9; max-width: 720px; }
+    .overlay-title { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; z-index: 20; pointer-events: none; }
+    .overlay-title .main-title { font-size: 56px; font-weight: 800; color: var(--grid-color); text-shadow: 0 2px 14px rgba(0,0,0,0.24); margin-bottom: 16px; }
+    .overlay-title .sub-title { font-size: 22px; color: var(--muted-color); opacity: 0.95; text-shadow: 0 1px 8px rgba(0,0,0,0.2); }
+  </style>
+</head>
+<body>
+  <div data-composition-id="contrasting-grid" data-width="1920" data-height="1080" data-duration="16" data-start="0">
+    <div id="el-fade"></div>
+    <div class="container" id="grid"></div>
+    <div class="overlay-title" id="overlay">
+      <div class="main-title" id="overlayTitle"></div>
+      <div class="sub-title" id="overlaySubtitle"></div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      var vars = __hyperframes.getVariables();
+      var items = JSON.parse(vars.items || '[]');
+      var gridColor = vars.gridColor || '#e9c46a';
+      var bgColor = vars.bgColor || '#264653';
+      var basePlateImage = vars.basePlateImage || '';
+      var durPerItem = Number(vars.durationPerItem) || 4;
+      var root = document.documentElement;
+      root.style.setProperty('--grid-color', gridColor);
+      root.style.setProperty('--bg-color', bgColor);
+      root.style.setProperty('--base-plate', basePlateImage ? 'url("' + basePlateImage + '")' : 'none');
+      document.getElementById('overlayTitle').textContent = vars.title || 'Wind Turbines 101';
+      document.getElementById('overlaySubtitle').textContent = vars.subtitle || '';
+
+      var grid = document.getElementById('grid');
+      var cells = [], numbers = [], contents = [], bgs = [], rippleSets = [];
+
+      items.forEach(function(item, i) {
+        var cell = document.createElement('div'); cell.className = 'cell';
+        var bg = document.createElement('div'); bg.className = 'cell-bg';
+        var rippleField = document.createElement('div'); rippleField.className = 'ripple-field';
+        var ripples = [];
+        for (var r = 0; r < 3; r++) {
+          var ring = document.createElement('div');
+          ring.className = 'ripple-ring';
+          rippleField.appendChild(ring);
+          ripples.push(ring);
+        }
+        var num = document.createElement('div'); num.className = 'cell-number'; num.textContent = item.label || String(i + 1);
+        var content = document.createElement('div'); content.className = 'cell-content';
+        content.innerHTML = '<div class="cell-heading">' + item.heading + '</div><div class="cell-body">' + item.body + '</div>';
+        cell.appendChild(bg); cell.appendChild(rippleField); cell.appendChild(num); cell.appendChild(content);
+        grid.appendChild(cell);
+        cells.push(cell); numbers.push(num); contents.push(content); bgs.push(bg); rippleSets.push(ripples);
+      });
+
+      var TOTAL = 2 + items.length * durPerItem + 1;
+      var tl = gsap.timeline({ paused: true });
+
+      gsap.set(contents, { opacity: 0, y: 22 });
+
+      tl.from(cells, { opacity: 0, scale: 0.9, duration: 0.5, stagger: 0.1, ease: 'power2.out' }, 0);
+      tl.from('#overlay', { opacity: 0, scale: 1.1, duration: 0.8, ease: 'power2.out' }, 0.3);
+      tl.to('#overlay', { opacity: 0, duration: 0.5, ease: 'power2.in' }, 1.5);
+
+      items.forEach(function(_, i) {
+        var t = 2 + i * durPerItem;
+        var prev = i - 1;
+        if (i > 0) {
+          tl.to(contents[prev], { opacity: 0, duration: 0.25 }, t);
+          tl.to(bgs[prev], { opacity: 0, duration: 0.25 }, t);
+          tl.to(numbers[prev], { opacity: 1, scale: 1, duration: 0.25 }, t);
+        }
+        tl.to(numbers[i], { opacity: 0, scale: 0.5, duration: 0.3 }, t + (i > 0 ? 0.1 : 0));
+        tl.fromTo(rippleSets[i], { opacity: 0.42, scale: 0.2 }, { opacity: 0, scale: 5.4, duration: 1.2, stagger: 0.14, ease: 'power2.out' }, t + 0.05);
+        tl.to(bgs[i], { opacity: 0.11, duration: 0.45 }, t + 0.1);
+        tl.to(contents[i], { opacity: 1, y: 0, duration: 0.75, ease: 'power2.out' }, t + 0.22);
+      });
+
+      tl.fromTo('#el-fade', { opacity: 0 }, { opacity: 1, duration: 0.5, ease: 'power2.in' }, TOTAL - 0.5);
+      tl.set('#el-fade', { opacity: 1 }, TOTAL);
+      document.querySelector('[data-composition-id="contrasting-grid"]').setAttribute('data-duration', TOTAL);
+      window.__timelines = window.__timelines || {};
+      window.__timelines['contrasting-grid'] = tl;
+    </script>
+  </div>
+</body>
+</html>

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html data-composition-id="delos-system-diagnostics" data-width="720" data-height="1280">
+<head>
+  <meta charset="utf-8">
+  <title>HyperFrames — Delos System Diagnostics</title>
+  <link rel="stylesheet" href="shared/styles.css">
+  <style>
+    .dsd-w { width: min(600px, 85vw); display: flex; flex-direction: column; gap: 16px;
+      will-change: transform, opacity; }
+    .dsd-panel { background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px; padding: 24px; backdrop-filter: blur(16px); position: relative; overflow: hidden; }
+    .dsd-title { font-size: 14px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+      margin-bottom: 16px; }
+    .dsd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .dsd-svc { display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+      background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); }
+    .dsd-svc-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .dsd-svc-name { font-size: 14px; font-weight: 600; }
+    .dsd-svc-status { font-size: 11px; color: var(--hf-muted); font-weight: 600;
+      letter-spacing: 0.08em; text-transform: uppercase; margin-left: auto; }
+    .dsd-topo { margin-top: 16px; display: flex; justify-content: center; }
+    .dsd-topo-svg { width: 100%; height: 100px; }
+  </style>
+</head>
+<body>
+  <div class="hf-center dsd-w" id="dsdW" data-composition-id="delos-system-diagnostics" data-start="0" data-duration="3.5" data-track-index="0">
+    <div class="dsd-panel hf-scanlines">
+      <div class="dsd-title hf-text-heading" id="dsdTitle"></div>
+      <div class="dsd-grid" id="dsdGrid"></div>
+      <div class="dsd-topo">
+        <svg class="dsd-topo-svg" id="dsdTopo" viewBox="0 0 600 100"></svg>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script>
+    const v = window.__hyperframes?.getVariables?.() ?? {};
+    const accentColor = v.accentColor ?? '#9f75ff';
+    const yPos = v.yPos ?? 50;
+    const services = v.services ?? [
+      { name: 'Core', status: 'online' },
+      { name: 'Network', status: 'online' },
+      { name: 'Memory', status: 'warning' },
+      { name: 'GPU', status: 'online' }
+    ];
+
+    const statusColors = { online: '#4ade80', warning: '#fbbf24', offline: '#fb7185' };
+
+    const title = v.title ?? 'SYSTEM DIAGNOSTICS';
+    document.getElementById('dsdW').style.top = yPos + '%';
+    document.getElementById('dsdTitle').textContent = title;
+
+    const grid = document.getElementById('dsdGrid');
+    services.forEach((svc) => {
+      const el = document.createElement('div');
+      el.className = 'dsd-svc';
+      el.innerHTML = `
+        <div class="dsd-svc-dot" style="background:${statusColors[svc.status] ?? accentColor};
+          box-shadow: 0 0 8px ${statusColors[svc.status] ?? accentColor}55"></div>
+        <span class="dsd-svc-name">${svc.name}</span>
+        <span class="dsd-svc-status" style="color:${statusColors[svc.status] ?? accentColor}">${svc.status}</span>`;
+      grid.appendChild(el);
+    });
+
+    // Topology lines
+    const topo = document.getElementById('dsdTopo');
+    const cx = [80, 200, 300, 400, 520];
+    cx.forEach((x, i) => {
+      const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      c.setAttribute('cx', x); c.setAttribute('cy', '50'); c.setAttribute('r', '6');
+      c.setAttribute('fill', accentColor); c.setAttribute('opacity', '0.7');
+      topo.appendChild(c);
+      if (i > 0) {
+        const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        l.setAttribute('x1', cx[i - 1] + 6); l.setAttribute('y1', '50');
+        l.setAttribute('x2', x - 6); l.setAttribute('y2', '50');
+        l.setAttribute('stroke', accentColor); l.setAttribute('stroke-width', '1');
+        l.setAttribute('opacity', '0.3');
+        l.classList.add('dsd-line');
+        topo.appendChild(l);
+      }
+    });
+
+    const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+    tl.fromTo('#dsdW', { opacity: 0, scale: 0.92 }, { opacity: 1, scale: 1, duration: 0.4, ease: 'back.out(1.2)' }, 0);
+    tl.fromTo('.dsd-svc', { opacity: 0, x: -10 }, { opacity: 1, x: 0, duration: 0.2, stagger: 0.08 }, 0.15);
+    tl.fromTo('.dsd-line', { opacity: 0 }, { opacity: 0.3, duration: 0.2, stagger: 0.05 }, 0.3);
+
+    const dur = parseFloat(v.timingDuration ?? 3.5);
+    tl.to('#dsdW', { opacity: 0, scale: 0.92, duration: 0.3, ease: 'power2.in' }, Math.max(dur - 0.5, 0.6));
+  </script>
+</body>
+</html>
+

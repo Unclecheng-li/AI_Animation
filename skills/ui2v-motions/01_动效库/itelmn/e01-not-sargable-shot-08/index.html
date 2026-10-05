@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1080, height=1920" />
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<style>
+/* @brand:start */
+:root {
+  --ground: #0C0D0F; --ground-lift: #14161A;
+  --ink: #EDEAE4; --ink-mid: #9AA0A6; --ink-dim: #8B9198; --ink-ghost: #3A3E42;
+  --rule: #23272A; --rule-bright: #3D4348; --hair: 1.5px;
+  --authoritative: #C9A227; --stale: #E0533D; --lost: #6A6F74;
+  --boundary: #4E8C7D; --pressure: #B4623A; --counterfactual: #7A8086;
+  --font-value: "IBM Plex Mono", ui-monospace, monospace;
+  --font-label: "IBM Plex Sans Condensed", "IBM Plex Sans", system-ui, sans-serif;
+  --t-hero: 200px; --t-value: 64px; --t-body: 36px; --t-label: 26px; --track-label: 0.18em;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { overflow: hidden; background: var(--ground); color: var(--ink); font-family: var(--font-label); }
+.label { font-family: var(--font-label); font-size: var(--t-label); letter-spacing: var(--track-label);
+         text-transform: uppercase; color: var(--ink-dim); font-weight: 500; }
+/* @brand:end */
+
+html, body { width: 1080px; height: 1920px; }
+#stage { position: absolute; inset: 0; }
+
+/* ---------------------------------------------------------------------------
+   SHOT 08 — WHAT THE FIX COSTS, AND HOW NARROW IT IS
+
+   Direction C's produce-and-discard column is reused here, but the semantic
+   question has changed and so has what is discarded. On the READ path (dirC) the
+   computed value vanished because nothing stored it. On the WRITE path the
+   computation is transient and its RESULT IS KEPT — inside a named index.
+
+   That distinction is the whole point of the shot, and it is why the right-hand
+   column is labelled `index lower(email)` and not "precomputed values". A stored
+   generated column with no index would not fix anything; the object being
+   maintained has to stay visibly attached to the index.
+
+   Two rows of type, two columns, one hairline between them. No boxes, no arrows:
+   the relationship is carried by rows lining up, which is what an index entry per
+   table row actually is.
+--------------------------------------------------------------------------- */
+#lblWrite { position: absolute; left: 93px;  top: 236px; }
+#lblIdx   { position: absolute; left: 604px; top: 236px; color: var(--boundary); }
+#divider  { position: absolute; left: 560px; top: 300px; width: var(--hair); height: 560px;
+            background: var(--rule-bright); transform-origin: top center; }
+
+#tbl  { position: absolute; left: 93px;  top: 340px; width: 440px; height: 480px; }
+#idx  { position: absolute; left: 604px; top: 340px; width: 400px; height: 480px; }
+.rowv { position: absolute; left: 0; font-family: var(--font-value); font-size: 36px;
+        color: var(--ink-mid); white-space: nowrap; }
+#idx .rowv { color: var(--boundary); }
+
+/* the computation itself: happens, then is gone. Only its result is kept. */
+.calc { position: absolute; left: 452px; font-family: var(--font-value); font-size: 32px;
+        color: var(--pressure); white-space: nowrap; }
+
+/* the read side, stated so it cannot be misread as per-row evaluation at lookup */
+#lookupMark { position: absolute; left: 588px; top: 532px; width: 4px; height: 44px;
+              background: var(--boundary); }
+#lookup     { position: absolute; left: 616px; top: 600px; width: 462px;
+              font-family: var(--font-label); font-size: 25px; line-height: 1.28;
+              letter-spacing: var(--track-label); text-transform: uppercase;
+              color: var(--boundary); font-weight: 500; }
+#costLine { position: absolute; left: 93px; top: 900px; width: 900px; }
+#costLine b { font-family: var(--font-label); font-size: 30px; letter-spacing: var(--track-label);
+              text-transform: uppercase; color: var(--pressure); font-weight: 600; }
+#costLine s { display: block; text-decoration: none; margin-top: 12px; font-family: var(--font-label);
+              font-size: 25px; letter-spacing: var(--track-label); text-transform: uppercase; color: var(--ink-dim); }
+
+/* the second cost: this index answers exactly one expression */
+#narrow    { position: absolute; left: 93px; top: 1076px; width: 920px; height: 4px;
+             background: var(--rule); transform-origin: left center; }
+#nLbl      { position: absolute; left: 93px; top: 1116px; }
+.nexpr     { position: absolute; font-family: var(--font-value); font-weight: 500; font-size: 60px;
+             line-height: 1; white-space: pre; }
+#nIdx      { left: 93px;  top: 1176px; color: var(--boundary); }
+#nQry      { left: 93px;  top: 1280px; color: var(--stale); }
+#nIdxTag   { position: absolute; left: 560px; top: 1192px; color: var(--boundary); }
+#nQryTag   { position: absolute; left: 560px; top: 1296px; color: var(--stale); }
+#backToScan{ position: absolute; left: 93px; top: 1400px; }
+#backToScan b { font-family: var(--font-label); font-size: 28px; letter-spacing: var(--track-label);
+                text-transform: uppercase; color: var(--stale); font-weight: 600; }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="main" data-start="0" data-duration="11"
+     data-width="1080" data-height="1920">
+  <div id="stage" class="clip" data-start="0" data-duration="11" data-track-index="0">
+
+    <div id="lblWrite" class="label">mỗi dòng được ghi</div>
+    <div id="lblIdx"   class="label">index lower(email)</div>
+    <div id="divider"></div>
+
+    <div id="tbl"></div>
+    <div id="idx"></div>
+
+    <div id="lookupMark"></div>
+    <div id="lookup">tra cứu đọc giá trị đã lưu<br />không tính lại khi đọc</div>
+
+    <div id="costLine"><b>mỗi lần ghi phải tính lại biểu thức</b>
+      <s>chi phí chuyển từ đường đọc sang đường ghi &mdash; không mất đi</s></div>
+
+    <div id="narrow"></div>
+    <div id="nLbl" class="label">và index này chỉ trả lời đúng một biểu thức</div>
+    <div class="nexpr" id="nIdx">lower(email)</div>
+    <div class="nexpr" id="nQry">upper(email)</div>
+    <div id="nIdxTag" class="label">index có</div>
+    <div id="nQryTag" class="label">query hỏi</div>
+    <div id="backToScan"><b>&rarr; lại quét toàn bảng</b></div>
+
+  </div>
+</div>
+
+<script>
+/* Three writes is enough to establish "every write, again". Rows come from the same
+   verified facts as every other shot in this video. */
+const WRITES = ['Zoe@corp.com', 'Dan@corp.com', 'alice@corp.com'];
+const PITCH = 96;
+
+const tbl = document.getElementById('tbl');
+const idx = document.getElementById('idx');
+const rows = [], entries = [], calcs = [];
+WRITES.forEach((v, i) => {
+  const a = document.createElement('div');
+  a.className = 'rowv'; a.style.top = (i * PITCH) + 'px'; a.textContent = v;
+  tbl.appendChild(a); rows.push(a);
+
+  const b = document.createElement('div');
+  b.className = 'rowv'; b.style.top = (i * PITCH) + 'px'; b.textContent = v.toLowerCase();
+  idx.appendChild(b); entries.push(b);
+
+  const c = document.createElement('div');
+  c.className = 'calc'; c.style.top = (340 + i * PITCH + 8) + 'px'; c.textContent = 'lower()';
+  document.getElementById('stage').appendChild(c); calcs.push(c);
+});
+
+window.__timelines = window.__timelines || {};
+const tl = gsap.timeline({ paused: true });
+const R = 'power3.out', T = 'power2.inOut';
+
+gsap.set([...rows, ...entries, ...calcs], { opacity: 0 });
+gsap.set(['#lookup', '#lookupMark', '#costLine', '#nLbl', '#nIdx', '#nQry', '#nIdxTag', '#nQryTag', '#backToScan'], { opacity: 0 });
+gsap.set(['#divider', '#narrow'], { scaleX: 1, scaleY: 0 });
+gsap.set('#narrow', { scaleX: 0, scaleY: 1 });
+
+tl.fromTo('#lblWrite', { opacity: 0 }, { opacity: 1, duration: .4, ease: R }, 0.20)
+  .fromTo('#lblIdx', { opacity: 0 }, { opacity: 1, duration: .4, ease: R }, 0.34)
+  .to('#divider', { scaleY: 1, duration: .55, ease: R }, 0.30);
+
+/* ---- 0.7–4.3  three writes. The computation flashes; the ENTRY stays.
+   That asymmetry is the shot: what costs you is transient, what you get is kept —
+   and what you get lives inside a named index, not in some general store of
+   precomputed values. */
+WRITES.forEach((_, i) => {
+  const t = 0.70 + i * 1.2;
+  tl.fromTo(rows[i], { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: .35, ease: R }, t)
+    .fromTo(calcs[i], { opacity: 0, scale: .8 }, { opacity: 1, scale: 1, duration: .26, ease: R }, t + .30)
+    .to(calcs[i], { opacity: 0, duration: .30, ease: 'power2.in' }, t + .92)
+    .fromTo(entries[i], { opacity: 0, x: 24 }, { opacity: 1, x: 0, duration: .38, ease: R }, t + .58);
+});
+
+/* ---- 4.9  name the cost ------------------------------------------------ */
+tl.fromTo('#costLine', { opacity: 0 }, { opacity: 1, duration: .45, ease: R }, 4.60);
+
+/* ---- 5.55  what the lookup actually reads ----------------------------
+   Points at an entry that is already sitting in the index. The expression was
+   evaluated on the WRITE path, above; nothing on the read path recomputes it. */
+tl.to('#lookupMark', { opacity: 1, duration: .3, ease: R }, 5.55)
+  .to('#lookup', { opacity: 1, duration: .4, ease: R }, 5.66);
+
+/* ---- 6.6–8.4  THE SECOND COST: the index is one expression wide -------
+   Deliberately re-uses shot_06/07's two-expressions-stacked motif at a smaller
+   size, so the viewer recognises the test rather than learning a new one. */
+tl.to('#narrow', { scaleX: 1, duration: .6, ease: R }, 6.60)
+  .to('#nLbl', { opacity: 1, duration: .4, ease: R }, 6.80)
+  .to(['#nIdx', '#nIdxTag'], { opacity: 1, duration: .4, ease: R }, 7.10)
+  .to(['#nQry', '#nQryTag'], { opacity: 1, duration: .4, ease: R }, 7.70);
+
+/* ---- 8.6  and it fails the same test, for the same reason -------------- */
+tl.fromTo('#backToScan', { opacity: 0 }, { opacity: 1, duration: .45, ease: R }, 8.60);
+
+window.__timelines['main'] = tl;
+</script>
+</body>
+</html>

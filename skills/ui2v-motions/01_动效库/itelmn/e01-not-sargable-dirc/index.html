@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1080, height=1920" />
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<style>
+/* @brand:start */
+:root {
+  --ground: #0C0D0F; --ground-lift: #14161A;
+  --ink: #EDEAE4; --ink-mid: #9AA0A6; --ink-dim: #8B9198; --ink-ghost: #3A3E42;
+  --rule: #23272A; --rule-bright: #3D4348; --hair: 1.5px;
+  --authoritative: #C9A227; --stale: #E0533D; --lost: #6A6F74;
+  --boundary: #4E8C7D; --pressure: #B4623A; --counterfactual: #7A8086;
+  --font-value: "IBM Plex Mono", ui-monospace, monospace;
+  --font-label: "IBM Plex Sans Condensed", "IBM Plex Sans", system-ui, sans-serif;
+  --t-hero: 200px; --t-value: 64px; --t-body: 36px; --t-label: 26px; --track-label: 0.18em;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { overflow: hidden; background: var(--ground); color: var(--ink); font-family: var(--font-label); }
+.label { font-family: var(--font-label); font-size: var(--t-label); letter-spacing: var(--track-label);
+         text-transform: uppercase; color: var(--ink-dim); font-weight: 500; }
+/* @brand:end */
+
+html, body { width: 1080px; height: 1920px; }
+#stage { position: absolute; inset: 0; }
+
+/* ---------------------------------------------------------------------------
+   C — WORK ALREADY DONE vs WORK DONE AGAIN, EVERY ROW
+
+   No content stage. Two times occupy one space, separated by a single rule:
+
+     left  of x=690   values COMPUTED AT WRITE TIME and kept. Present from frame one,
+                      because they were paid for long before this query ran.
+     right of x=690   values COMPUTED AT READ TIME. They appear, get compared, and
+                      vanish — nothing keeps them, so the next row pays again.
+
+   Depth here is permanence, not blur: one layer persists, the other cannot.
+--------------------------------------------------------------------------- */
+#ev-probe { position: absolute; left: 140px; top: 356px; font-family: var(--font-value);
+            font-size: 36px; color: var(--ink); white-space: nowrap; }
+#ev-probe .fn { color: var(--pressure); }
+
+#lblStored { position: absolute; left: 140px; top: 486px; }
+#lblTemp   { position: absolute; left: 736px; top: 486px; color: var(--pressure); }
+#divider   { position: absolute; left: 690px; top: 540px; width: var(--hair); height: 716px;
+             background: var(--rule-bright); transform-origin: top center; }
+
+#writeSide { position: absolute; left: 140px; top: 560px; width: 500px; height: 672px; }
+.stored { position: absolute; left: 0; width: 500px; font-family: var(--font-value);
+          font-size: 38px; color: var(--ink-mid); white-space: nowrap; }
+
+#readSide { position: absolute; left: 736px; top: 560px; width: 320px; height: 672px; }
+.temp { position: absolute; left: 0; width: 320px; font-family: var(--font-value);
+        font-size: 30px; color: var(--pressure); white-space: nowrap; }
+
+#emptyMark { position: absolute; left: 736px; top: 1272px; color: var(--pressure); width: 320px; }
+
+#ev-reject { position: absolute; left: 140px; top: 1338px; }
+#ev-reject b { font-family: var(--font-label); font-size: 30px; letter-spacing: var(--track-label);
+               text-transform: uppercase; color: var(--stale); font-weight: 600; }
+#ev-seqscan { position: absolute; left: 140px; top: 1416px; display: flex; align-items: flex-end; gap: 22px; }
+#ev-seqscan .n { font-family: var(--font-value); font-weight: 600; font-size: 84px; line-height: 1;
+                 letter-spacing: -.02em; color: var(--pressure); }
+#ev-seqscan .k { padding-bottom: 12px; }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="main" data-start="0" data-duration="14"
+     data-width="1080" data-height="1920">
+  <div id="stage" class="clip" data-start="0" data-duration="14" data-track-index="0">
+
+    <div id="ev-probe">cần: <span class="fn">lower(email)</span> = 'carol@corp.com'</div>
+
+    <div id="lblStored" class="label">đã lưu &middot; tính lúc ghi</div>
+    <div id="lblTemp"   class="label">tính lúc đọc</div>
+    <div id="divider"></div>
+
+    <div id="writeSide"></div>
+    <div id="readSide"></div>
+
+    <div id="emptyMark" class="label">không giữ lại gì</div>
+
+    <div id="ev-reject"><b>không index nào lưu sẵn lower(email)</b></div>
+    <div id="ev-seqscan"><span class="n">2.000.000</span><span class="k label">lần tính, mỗi lần một dòng</span></div>
+
+  </div>
+</div>
+
+<script>
+/* Same seven rows as every other direction, from facts in semantics.yaml. */
+const ROWS = ['CAROL@corp.com', 'Carol@corp.com', 'Dan@corp.com', 'Eve@corp.com',
+              'alice@corp.com', 'bob@corp.com', 'carol@corp.com'];
+const PITCH = 96;
+
+const ws = document.getElementById('writeSide');
+const rs = document.getElementById('readSide');
+const stored = [], temps = [];
+ROWS.forEach((v, i) => {
+  const a = document.createElement('div');
+  a.className = 'stored'; a.style.top = (i * PITCH) + 'px'; a.textContent = v;
+  ws.appendChild(a); stored.push(a);
+
+  const b = document.createElement('div');
+  b.className = 'temp'; b.style.top = (i * PITCH + 6) + 'px'; b.textContent = v.toLowerCase();
+  rs.appendChild(b); temps.push(b);
+});
+
+window.__timelines = window.__timelines || {};
+const tl = gsap.timeline({ paused: true });
+const R = 'power3.out';
+
+gsap.set(temps, { opacity: 0 });
+gsap.set(['#ev-probe', '#lblTemp', '#emptyMark', '#ev-reject', '#ev-seqscan'], { opacity: 0 });
+gsap.set('#divider', { scaleY: 0 });
+
+/* ---- 0.2–1.2  what was already paid for -------------------------------
+   The stored column arrives all at once, not staggered. These values were not
+   computed just now — they have been sitting there since the rows were written,
+   and staggering them in would imply otherwise. */
+tl.fromTo('#lblStored', { opacity: 0 }, { opacity: 1, duration: .4, ease: R }, 0.20)
+  .fromTo(stored, { opacity: 0 }, { opacity: 1, duration: .55, ease: R }, 0.42);
+
+/* ---- 1.4–2.2  and the side where nothing is kept ----------------------- */
+tl.to('#divider', { scaleY: 1, duration: .6, ease: R }, 1.40)
+  .to('#lblTemp', { opacity: 1, duration: .4, ease: R }, 1.72);
+
+/* ---- 2.55  what the query needs ---------------------------------------- */
+tl.to('#ev-probe', { opacity: 1, duration: .4, ease: R }, 2.55);
+
+/* ---- 3.2–7.8  computed, compared, DISCARDED — once per row -------------
+   Each value on the right appears, is held long enough to be read, then goes. It
+   never crosses the divider, because nothing stores it. That is the whole
+   difference between the two sides, and it is the reason the next row costs the
+   same as this one. */
+const STEP = 0.64;
+temps.forEach((t, i) => {
+  const at = 3.20 + i * STEP;
+  tl.fromTo(t, { opacity: 0, x: -26 }, { opacity: 1, x: 0, duration: .22, ease: R }, at)
+    .to(t, { opacity: 0, duration: .30, ease: 'power2.in' }, at + .34);
+});
+
+/* ---- 8.0–8.8  the right-hand side is empty again ----------------------- */
+tl.to('#emptyMark', { opacity: 1, duration: .4, ease: R }, 8.05);
+
+/* ---- 8.91  nothing precomputed this ------------------------------------ */
+tl.fromTo('#ev-reject', { opacity: 0 }, { opacity: 1, duration: .45, ease: R }, 8.91);
+
+/* ---- 11.88  the price, in the unit that matters here: recomputations --- */
+tl.fromTo('#ev-seqscan', { opacity: 0 }, { opacity: 1, duration: .5, ease: R }, 11.88);
+
+window.__timelines['main'] = tl;
+</script>
+</body>
+</html>

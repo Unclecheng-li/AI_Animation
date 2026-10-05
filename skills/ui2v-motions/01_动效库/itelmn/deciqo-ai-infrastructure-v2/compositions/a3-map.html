@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+  <head><meta charset="UTF-8"></head>
+  <body>
+    <template>
+      <style>
+        #root { position: absolute; inset: 0; overflow: hidden; background: var(--bg); color: var(--bone); }
+        #a3-stage { position: absolute; inset: 0; perspective: 3200px; perspective-origin: 50% 40%; }
+        #a3-plane { position: absolute; left: 50%; top: 50%; width: 2600px; height: 1500px; margin: -750px 0 0 -1300px; transform-style: preserve-3d; }
+        #a3-floor { position: absolute; inset: -400px; background-image: linear-gradient(rgba(236,235,230,0.07) 2px, transparent 2px), linear-gradient(90deg, rgba(236,235,230,0.07) 2px, transparent 2px); background-size: 100px 100px; }
+        .bnd { position: absolute; border: 4px dashed var(--line2); border-radius: 10px; }
+        .bnd .t { position: absolute; left: 20px; top: -80px; font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 36px; letter-spacing: 0.1em; white-space: nowrap; }
+        .bx { position: absolute; transform-style: preserve-3d; }
+        .bx > div { position: absolute; box-sizing: border-box; backface-visibility: visible; }
+        .bx .top { inset: 0; padding: 22px 24px; display: flex; flex-direction: column; justify-content: space-between; }
+        .bx .top .n { font-family: "League Gothic", sans-serif; font-size: 66px; line-height: 0.9; text-transform: uppercase; white-space: nowrap; }
+        .bx .top .s { font-family: "JetBrains Mono", monospace; font-size: 21px; line-height: 1.25; white-space: nowrap; }
+        .k-code .top { background: #ecebe6; color: #0b0b0c; } .k-code .fr { background: #a9a8a3; } .k-code .sd { background: #cfcec9; }
+        .k-ai .top { background: #8b6cff; color: #0b0820; } .k-ai .fr { background: #5a3fd6; } .k-ai .sd { background: #7152f0; }
+        .k-seller .top { background: #ffb43d; color: #1d1200; } .k-seller .fr { background: #c9831a; } .k-seller .sd { background: #e39c2a; }
+        .k-dark .top { background: #1b1b20; color: var(--bone); border: 3px solid rgba(236,235,230,0.35); } .k-dark .fr { background: #0f0f12; } .k-dark .sd { background: #141418; }
+        .wire { fill: none; stroke: rgba(236,235,230,0.25); stroke-width: 8; stroke-linecap: round; stroke-linejoin: round; }
+        .wire.on { stroke: var(--ai2); }
+        .beam { position: absolute; width: 10px; background: linear-gradient(0deg, rgba(139,108,255,0.1), #b9a8ff); transform-origin: 50% 0; }
+        .pk { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 22px; background: #fff; box-shadow: 0 0 30px 12px rgba(185,168,255,0.9); }
+        #a3-ai { position: absolute; left: 0; top: 0; width: 2600px; height: 1500px; transform-style: preserve-3d; }
+        .a3-cap { position: absolute; left: 70px; top: 400px; width: 470px; }
+        .a3-cap .big { font-size: 96px; color: var(--bone); }
+        .a3-cap .sm { font-family: "JetBrains Mono", monospace; font-size: 24px; line-height: 1.4; color: var(--dim); margin-top: 22px; }
+        #a3-hud1 { left: 60px; top: 50px; } #a3-hud2 { right: 60px; top: 50px; }
+        #a3-flash { position: absolute; inset: 0; background: var(--ai); }
+      </style>
+      <div data-hf-id="hf-qzzc" id="root" data-composition-id="a3-map" data-width="1920" data-height="1080">
+        <div data-hf-id="hf-ycxr" id="a3-stage" data-layout-allow-overflow="" data-layout-allow-overlap=""><div data-hf-id="hf-5i6k" id="a3-plane"></div></div>
+        <div data-hf-id="hf-sex9" class="hud" id="a3-hud1">infrastructure · AI mode</div>
+        <div data-hf-id="hf-0yyp" class="hud" id="a3-hud2" style="color:var(--ai2)">● openai key: on</div>
+        <div data-hf-id="hf-urr6" id="a3-caps-wrap"></div>
+        <div data-hf-id="hf-t154" id="a3-flash"></div>
+      </div>
+      <script>
+        (function () {
+          const P = document.getElementById("a3-plane");
+          const box = (id, x, y, w, d, h, k, n, s) => `
+            <div class="bx k-${k}" id="a3-${id}" style="left:${x}px;top:${y}px;width:${w}px;height:${d}px">
+              <div class="fr" style="left:0;top:${d}px;width:${w}px;height:${h}px;transform-origin:50% 0;transform:rotateX(90deg)"></div>
+              <div class="sd" style="left:${w}px;top:0;width:${h}px;height:${d}px;transform-origin:0 50%;transform:rotateY(-90deg)"></div>
+              <div class="top" style="transform:translateZ(${h}px)"><div class="n">${n}</div><div class="s">${s}</div></div>
+            </div>`;
+          let h = `<div id="a3-floor"></div>`;
+          h += `<div class="bnd" id="a3-srv" style="left:100px;top:350px;width:2400px;height:1090px"><div class="t" style="color:var(--bone);top:auto;bottom:-80px">YOUR SERVER · FASTAPI + SQLITE</div></div>`;
+          // flat wires on the floor
+          h += `<svg style="position:absolute;left:0;top:0;overflow:visible;transform:translateZ(2px)" width="2600" height="1500">
+            <path class="wire" id="a3-w1" d="M440 840 H540 M800 840 H900 M1160 840 H1260"/>
+            <path class="wire" id="a3-w2" d="M1390 740 V500"/>
+            <path class="wire" id="a3-w3" d="M1420 380 V320"/>
+            <path class="wire" id="a3-w4" d="M1880 320 V600 H1750 V740"/>
+            <path class="wire" id="a3-w5" d="M1880 840 H1980 M2110 940 V1120 M1980 1220 H1880 M1620 1220 H1030 V940"/>
+          </svg>`;
+          h += box("ch", 180, 740, 260, 200, 60, "code", "Channels", "woo · lazada · shopee<br>tokopedia · paste");
+          h += box("pii", 540, 740, 260, 200, 60, "code", "Redact PII", "phones · e-mails<br>addresses");
+          h += box("db", 900, 740, 260, 200, 130, "dark", "SQLite", "workspace per<br>account");
+          h += box("tri", 1260, 740, 260, 200, 60, "code", "Triage", "IndoBERT + rules<br>on CPU");
+          h += box("led", 1260, 380, 260, 120, 18, "dark", "Ledger", "reserve → settle");
+          h += box("veto", 1620, 740, 260, 200, 60, "code", "Code veto", "verbatim · relevance");
+          h += box("gate", 1980, 740, 260, 200, 110, "code", "Fact gate", "units · polarity");
+          h += box("watch", 1620, 1120, 260, 200, 60, "dark", "Watch", "reopen · telegram");
+          h += box("sel", 1980, 1120, 260, 200, 60, "seller", "Seller", "fact · approve");
+          // OpenAI zone floats above the server floor
+          h += `<div id="a3-ai">
+            <div class="bnd" style="left:1180px;top:60px;width:1140px;height:320px;border-color:#8b6cff;background:rgba(139,108,255,0.08)"><div class="t" style="color:var(--ai2);left:890px;top:90px;font-size:32px;line-height:1.3;white-space:normal;width:240px">OPENAI RESPONSES API</div></div>
+            <svg style="position:absolute;left:0;top:0;overflow:visible;transform:translateZ(2px)" width="2600" height="1500"><path class="wire" id="a3-w6" d="M1580 220 H1720"/></svg>
+            ${box("disc", 1260, 120, 320, 200, 60, "ai", "Discovery", "gpt-5-mini · strict JSON")}
+            ${box("mem", 1720, 120, 320, 200, 60, "ai", "Membership", "labels ≤150 reviews")}
+          </div>`;
+          // beams (vertical, from floor to the AI zone)
+          h += `<div class="beam" id="a3-bu" style="left:1415px;top:320px;height:260px;transform:rotateX(-90deg)"></div>`;
+          h += `<div class="beam" id="a3-bd" style="left:1875px;top:320px;height:260px;transform:rotateX(-90deg)"></div>`;
+          h += `<div class="pk" id="a3-pk"></div>`;
+          P.innerHTML = h;
+
+          const tl = gsap.timeline({ paused: true });
+          const Z = 260;
+          gsap.set("#a3-plane", { rotationX: 0, rotationZ: 0, scale: 0.42, y: 0 });
+          gsap.set("#a3-ai", { z: 1400, opacity: 0 });
+          gsap.set(["#a3-bu", "#a3-bd"], { scaleY: 0 });
+          gsap.set("#a3-pk", { opacity: 0, x: 440, y: 840, z: 70 });
+          gsap.set(".wire", { strokeDasharray: 2400, strokeDashoffset: 2400 });
+          const boxes = ["ch", "pii", "db", "led", "tri", "veto", "gate", "watch", "sel"];
+          boxes.forEach((b) => gsap.set(`#a3-${b}`, { z: 900, opacity: 0 }));
+
+          tl.fromTo("#a3-flash", { opacity: 1 }, { opacity: 0, duration: 0.6, ease: "power2.out" }, 0);
+          // tilt from plan view to isometric
+          tl.to("#a3-plane", { rotationX: 56, rotationZ: -22, scale: 0.46, x: 280, y: 110, duration: 2.2, ease: "power3.inOut" }, 0.2);
+          boxes.forEach((b, i) => {
+            tl.to(`#a3-${b}`, { z: 0, opacity: 1, duration: 0.55, ease: "power4.in" }, 0.7 + i * 0.16);
+          });
+          tl.fromTo("#a3-srv", { opacity: 0 }, { opacity: 1, duration: 0.5 }, 2.3);
+          // OpenAI zone descends
+          tl.to("#a3-ai", { z: Z, opacity: 1, duration: 1.0, ease: "expo.out" }, 2.6);
+
+          const CAPS = [["Your server", 1.0, "ingest → redact → store → triage, all on your machine"], ["+ OpenAI, above it", 2.7, "only redacted reviews + listing text leave the server"], ["Call 1 · Discovery", 6.5, "proposes up to 8 findings, quotes copied verbatim"], ["Call 2 · Membership", 8.3, "labels every stored review against each finding"], ["Then code takes over", 10.5, "veto → metrics → fact gate → the seller → watch"]];
+          const cw = document.getElementById("a3-caps-wrap");
+          cw.innerHTML = CAPS.map((c, i) => `<div class="a3-cap" id="a3-c${i}"><div class="disp big" id="a3-ct${i}"></div><div class="sm" id="a3-cs${i}"></div></div>`).join("");
+          CAPS.forEach(([big, t, small], i) => {
+            V2.scramble(tl, `#a3-ct${i}`, big, t, 0.45);
+            V2.type(tl, `#a3-cs${i}`, small, t + 0.2, 0.8);
+            if (i > 0) tl.to(`#a3-c${i - 1}`, { opacity: 0, duration: 0.15 }, t - 0.05);
+          });
+          tl.to(`#a3-c${CAPS.length - 1}`, { opacity: 0, duration: 0.2 }, 13.1);
+          // packet journey
+          const pk = "#a3-pk";
+          const leg = (t, x, y, z, d, ease = "none") => tl.to(pk, { x, y, z, duration: d, ease }, t);
+          tl.to(pk, { opacity: 1, duration: 0.2 }, 4.0);
+          tl.to("#a3-w1", { strokeDashoffset: 0, duration: 1.2, ease: "none" }, 4.0);
+          leg(4.0, 1260, 840, 70, 1.2);
+          tl.to("#a3-w1", { stroke: "#b9a8ff", duration: 0.2 }, 4.0);
+          leg(5.2, 1390, 700, 70, 0.3);
+          tl.to("#a3-w2", { strokeDashoffset: 0, duration: 0.3 }, 5.2);
+          leg(5.5, 1390, 440, 40, 0.3);
+          tl.fromTo("#a3-led .top", { backgroundColor: "#1b1b20" }, { backgroundColor: "#3a2c8f", duration: 0.2, yoyo: true, repeat: 1 }, 5.7);
+          tl.to("#a3-w3", { strokeDashoffset: 0, duration: 0.35 }, 5.9);
+          leg(5.9, 1420, 320, 40, 0.35);
+          tl.to("#a3-bu", { scaleY: 1, duration: 0.4, ease: "power2.out" }, 6.2);
+          leg(6.25, 1420, 320, Z + 60, 0.45, "power2.in");
+          // push the camera in on the AI zone
+          tl.to("#a3-plane", { scale: 0.74, x: 60, y: 380, rotationZ: -16, duration: 1.4, ease: "power3.inOut" }, 5.9);
+          leg(6.7, 1420, 220, Z + 70, 0.3);
+          tl.fromTo("#a3-disc .top", { filter: "brightness(1)" }, { filter: "brightness(1.6)", duration: 0.25, yoyo: true, repeat: 3 }, 6.9);
+          tl.to("#a3-w6", { strokeDashoffset: 0, duration: 0.4 }, 7.9);
+          leg(7.9, 1880, 220, Z + 70, 0.5, "power2.inOut");
+          tl.fromTo("#a3-mem .top", { filter: "brightness(1)" }, { filter: "brightness(1.6)", duration: 0.25, yoyo: true, repeat: 3 }, 8.5);
+          leg(9.6, 1880, 320, Z + 60, 0.2);
+          tl.to("#a3-bd", { scaleY: 1, duration: 0.3 }, 9.6);
+          leg(9.8, 1880, 320, 40, 0.45, "power2.in");
+          tl.to("#a3-plane", { scale: 0.5, x: 250, y: 90, rotationZ: -26, duration: 1.4, ease: "power3.inOut" }, 9.6);
+          tl.fromTo("#a3-led .top", { backgroundColor: "#1b1b20" }, { backgroundColor: "#3a2c8f", duration: 0.2, yoyo: true, repeat: 1, immediateRender: false }, 10.0);
+          tl.to("#a3-w4", { strokeDashoffset: 0, duration: 0.6 }, 10.25);
+          leg(10.25, 1880, 600, 40, 0.25); leg(10.5, 1750, 600, 40, 0.15); leg(10.65, 1750, 800, 70, 0.2);
+          tl.to("#a3-w5", { strokeDashoffset: 0, duration: 1.8, ease: "none" }, 10.9);
+          leg(10.9, 2110, 840, 70, 0.3); leg(11.2, 2110, 1220, 70, 0.4); leg(11.6, 1750, 1220, 70, 0.35);
+          leg(11.95, 1030, 1220, 70, 0.5); leg(12.45, 1030, 840, 70, 0.3);
+          tl.to(pk, { opacity: 0, duration: 0.2 }, 12.75);
+          tl.to("#a3-plane", { rotationZ: -30, scale: 0.47, x: 280, y: 110, duration: 1.9, ease: "sine.inOut" }, 11.2);
+          // exit: dive into the triage box
+          tl.to("#a3-plane", { scale: 2.6, x: 380, y: 200, rotationX: 20, duration: 0.8, ease: "expo.in" }, 13.15);
+          tl.to("#a3-flash", { opacity: 1, backgroundColor: "#08080a", duration: 0.25 }, 13.65);
+          window.__timelines["a3-map"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>
