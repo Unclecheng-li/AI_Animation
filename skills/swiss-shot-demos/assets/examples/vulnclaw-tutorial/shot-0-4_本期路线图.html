@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+     镜头 0-4 · 本期路线图 · 1:10–1:37 · 27s   [可视化 v4 · 瑞士国际主义]
+     主视觉：扁平线路图（metro 三站 · 编号反白块）+ lieflat F2 发丝刻度
+     视觉：纸底 #F0EFEB × 墨 #1C1C1A × 灰阶阶梯 × 唯一强调橙 #F5572F（主角 = 站 03 拿 flag）
+     ============================================================ -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 0-4 · 本期路线图 · 27s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Inter','Noto Sans SC',sans-serif}
+body.paused *{animation-play-state:paused!important}
+:root{--paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;--accent:#F5572F}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#stage::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:1;opacity:.6;
+  background-image:linear-gradient(90deg,rgba(28,28,26,.05) 1px,transparent 1px);background-size:132px 100%}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ── 背景（保留元素，瑞士化：隐形/发丝环） ── */
+#bg{position:absolute;inset:0;z-index:0;opacity:0;transition:opacity 1.4s ease}
+#holoRing{position:absolute;left:50%;top:540px;width:1200px;height:1200px;margin:-600px 0 0 -600px;z-index:1;
+  border:1px dashed rgba(28,28,26,.12);border-radius:50%;opacity:0;transition:opacity 1.2s}
+#holoRing.in{opacity:1}
+
+/* ── 标题区 ── */
+#head{position:absolute;left:88px;top:60px;z-index:5;opacity:0;transform:translateY(30px);transition:all .9s cubic-bezier(.16,1,.3,1)}
+#head.in{opacity:1;transform:translateY(0)}
+#head.out{opacity:0;transform:translateY(-36px) scale(.96)}
+#kicker{display:flex;align-items:center;gap:12px;font:600 15px 'IBM Plex Mono';letter-spacing:.2em;color:var(--ink);text-transform:uppercase}
+#kicker .dot{width:9px;height:9px;border-radius:50%;background:var(--accent)}
+#title{margin-top:16px;font:900 88px/1 'Inter','Noto Sans SC';letter-spacing:-.03em;color:var(--ink)}
+#title .hl{color:var(--ink)}
+#titleEn{margin-top:12px;font:600 15px 'IBM Plex Mono';letter-spacing:.34em;color:var(--muted)}
+
+/* ── 主视觉：路线地图（metro 风格 · 1680×700） ── */
+#mapBoard{position:absolute;left:120px;top:240px;width:1680px;height:700px;z-index:5;opacity:0;transition:opacity .8s ease}
+#mapBoard.in{opacity:1}
+#mapBoard.out{opacity:0;transition:opacity .45s ease}
+#map{width:100%;height:100%;display:block}
+.bpanel{fill:var(--card);stroke:var(--ink);stroke-width:1.5}
+.bterrain{fill:none;stroke:rgba(28,28,26,.10);stroke-width:1.2}
+.bticks{stroke:rgba(28,28,26,.22);stroke-width:1.4}
+.roadGlow{fill:none;stroke:rgba(28,28,26,.12);stroke-width:16;stroke-linecap:round}
+.road{fill:none;stroke:var(--ink);stroke-width:5;stroke-linecap:round}
+/* 站点节点 */
+.stn{opacity:0;transform-box:fill-box;transform-origin:center;transform:scale(.55);
+  transition:opacity .6s cubic-bezier(.2,1.4,.4,1),transform .72s cubic-bezier(.2,1.5,.4,1)}
+.stn.in{opacity:1;transform:scale(1)}
+.stn .ring{fill:none;stroke:rgba(28,28,26,.14);stroke-width:1.2;stroke-dasharray:4 9}
+.stn .pulse{fill:none;stroke:rgba(28,28,26,.4);stroke-width:1.6;transform-box:fill-box;transform-origin:center;
+  animation:pulseRing 2.6s ease-out infinite}
+.stn .pulse.p2{animation-delay:1.3s;stroke:rgba(28,28,26,.2)}
+.stn .core{fill:var(--card);stroke:var(--ink);stroke-width:2.4}
+.stn .ic{opacity:0;transition:opacity .5s .22s}
+.stn.in .ic{opacity:1}
+.stn .ic path,.stn .ic rect,.stn .ic circle{stroke:var(--ink);stroke-width:2.6;fill:none;stroke-linecap:round;stroke-linejoin:round}
+@keyframes pulseRing{0%{transform:scale(.72);opacity:.8}100%{transform:scale(1.7);opacity:0}}
+/* 站 03 = 唯一主角（橙） */
+#st3 .ring{stroke:rgba(245,87,47,.22)}
+#st3 .pulse{stroke:rgba(245,87,47,.5)}
+#st3 .pulse.p2{stroke:rgba(245,87,47,.28)}
+#st3 .core{stroke:var(--accent);fill:#FFF3EE}
+#st3 .ic path,#st3 .ic circle{stroke:var(--accent)}
+/* 站点标注：编号 = 反白块（墨描边 + 纸色字） */
+.snum,.sname,.ssub{text-anchor:middle;opacity:0;transition:opacity .55s}
+.snum{font-family:'Inter';font-weight:800;font-size:40px;fill:var(--card);stroke:var(--ink);stroke-width:9;paint-order:stroke}
+.sname{font-family:'Noto Sans SC';font-weight:900;font-size:32px;fill:var(--muted);letter-spacing:.06em}
+.ssub{font-family:'Noto Sans SC';font-weight:400;font-size:18px;fill:var(--faint);letter-spacing:.04em}
+.snum.lit{opacity:1}
+.sname.lit,.ssub.lit{opacity:1}
+.sname.lit{fill:var(--ink)}
+#sn3.lit{stroke:var(--accent);fill:#fff}
+#sn3.lit,.sname.lit{opacity:1}
+#snm3.lit{fill:var(--accent)}
+/* 路径粒子（扁平墨点/橙点） */
+.fdot{fill:var(--ink)}
+.fdot.pk{fill:var(--accent)}
+.mkstart{fill:none;stroke:var(--ink);stroke-width:2.2}
+
+/* ── archify · Flowing Animation：三阶段连线虚线流动 ── */
+@keyframes flowDash{to{stroke-dashoffset:-48}}
+#flowLayer path{fill:none;stroke:var(--ink);stroke-width:2.4;stroke-linecap:round;stroke-dasharray:9 15;
+  opacity:0;transition:opacity .5s}
+#flowLayer path.a-default{animation:flowDash 1.2s linear infinite}
+#flowLayer path.a-emphasis{animation:flowDash .8s linear infinite;stroke:var(--accent)}
+#flowLayer path.on{opacity:.9}
+
+/* ── lieflat F2 · 发丝刻度：三站进度 ── */
+#pgtrack{opacity:0;transition:opacity .6s}
+#pgtrack.on{opacity:1}
+#pgtrack .base{stroke:rgba(28,28,26,.24);stroke-width:1}
+#pgtrack .tk{stroke:rgba(28,28,26,.26);stroke-width:.7}
+#pgtrack .tk.major{stroke:rgba(28,28,26,.5);stroke-width:1}
+#pgtrack .fdot2{fill:var(--card);stroke:var(--ink);stroke-width:1.4}
+#pgtrack .pglbl{font-family:'IBM Plex Mono';font-size:13px;font-weight:600;fill:var(--muted);letter-spacing:.14em}
+#pgtrack .pgunit{font-family:'IBM Plex Mono';font-size:10.5px;fill:var(--faint);letter-spacing:.1em}
+#pgFill{stroke:var(--accent);stroke-width:2}
+
+/* ── 底部条件条 ── */
+#notes{position:absolute;left:0;right:0;top:952px;z-index:5;display:flex;justify-content:center;gap:16px;
+  opacity:0;transition:opacity .5s}
+#notes.in{opacity:1}
+#notes.out{opacity:0}
+.note{padding:11px 26px;border:1px solid var(--grid);background:var(--card);border-radius:6px;
+  font:500 23px 'Noto Sans SC';color:var(--ink);letter-spacing:.04em;
+  opacity:0;transform:translateY(18px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+.note.in{opacity:1;transform:translateY(0)}
+.note .tick{font-family:'IBM Plex Mono';color:var(--muted);margin-right:9px}
+.note.acc{border-color:var(--accent);color:var(--accent)}
+.note.acc .tick{color:var(--accent)}
+
+/* ── 大肥鱼 ── */
+#fish1{position:absolute;left:1590px;top:664px;width:250px;text-align:center;z-index:7;
+  opacity:0;transform:translateY(26px) scale(.7);transition:all .45s cubic-bezier(.2,1.5,.4,1)}
+#fish1.in{opacity:1;transform:translateY(0) scale(1)}
+#fish1.out{opacity:0;transform:translateY(20px) scale(.85)}
+#fish1 .say{position:relative;display:inline-block;background:var(--card);border:1.5px solid var(--ink);
+  border-radius:12px;padding:9px 20px;font:700 22px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em;
+  margin-bottom:12px;opacity:0;transform:scale(.5);transition:all .3s cubic-bezier(.2,1.6,.4,1);white-space:nowrap}
+#fish1 .say::after{content:'';position:absolute;left:50%;bottom:-9px;width:14px;height:14px;
+  background:var(--card);border-right:1.5px solid var(--ink);border-bottom:1.5px solid var(--ink);
+  transform:translateX(-50%) rotate(45deg)}
+#fish1 .say b{color:var(--accent)}
+#fish1.bub .say{opacity:1;transform:scale(1)}
+#fish1 img{width:210px;display:block;margin:0 auto}
+
+/* ── Let's begin 收尾 ── */
+#beginWrap{position:absolute;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;
+  opacity:0;transform:scale(.74);transition:all .72s cubic-bezier(.2,1.5,.4,1);pointer-events:none}
+#beginWrap.in{opacity:1;transform:scale(1)}
+#beginInner{position:relative;display:flex;flex-direction:column;align-items:center;transform-origin:50% 50%}
+#beginGlow{position:absolute;left:50%;top:50%;width:1500px;height:820px;margin:-410px 0 0 -750px;pointer-events:none}
+#bRingA,#bRingB{position:absolute;left:50%;top:50%;border-radius:50%;pointer-events:none}
+#bRingA{width:820px;height:820px;margin:-410px 0 0 -410px;border:1.5px dashed rgba(28,28,26,.22);animation:spin 20s linear infinite}
+#bRingB{width:620px;height:620px;margin:-310px 0 0 -310px;border:1.5px solid rgba(245,87,47,.28);animation:spinR 15s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes spinR{to{transform:rotate(-360deg)}}
+#beginMark{position:relative;font:600 24px 'IBM Plex Mono';letter-spacing:.4em;color:var(--ink);padding-left:.4em}
+#beginRule{position:relative;width:320px;height:1px;margin:20px 0 26px;background:var(--ink);
+  transform:scaleX(0);transition:transform .9s ease .12s}
+#beginWrap.in #beginRule{transform:scaleX(1)}
+#beginBig{position:relative;font:900 168px/1 'Inter';letter-spacing:-.03em;color:var(--ink)}
+/* 收尾活气：下划线描线 + lieflat 发丝刻度走完（墨为主 · 末刻度一处橙） */
+#beginUnder{position:relative;width:560px;height:3px;margin-top:16px;background:var(--ink);border-radius:2px;
+  transform:scaleX(0);transform-origin:50% 50%}
+#beginScale{position:relative;display:flex;align-items:flex-end;gap:9px;height:20px;margin-top:22px}
+#beginScale i{display:block;width:1.5px;height:8px;background:var(--faint)}
+#beginScale i.major{height:15px;background:var(--muted)}
+#beginScale i.on{background:var(--ink)}
+#beginScale i.acc{background:var(--accent)}
+#beginSub{position:relative;margin-top:28px;font:700 28px 'Noto Sans SC';letter-spacing:.4em;color:var(--muted)}
+#beginTags{position:relative;margin-top:26px;display:flex;gap:14px}
+#beginTags span{padding:8px 22px;border:1px solid var(--grid);background:var(--card);border-radius:6px;
+  font:500 15px 'IBM Plex Mono';letter-spacing:.16em;color:var(--muted)}
+
+/* ── 暗场 ── */
+#dim{position:absolute;inset:0;z-index:30;pointer-events:none;opacity:0;transition:opacity 1s;background:rgba(28,28,26,.16)}
+#dim.on{opacity:1}
+.corner{position:absolute;font:500 14px 'IBM Plex Mono','Noto Sans SC';color:var(--muted);letter-spacing:.08em;z-index:9}
+#chap{left:52px;bottom:30px}
+#src{right:52px;bottom:30px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono';pointer-events:none}
+#track{height:5px;background:rgba(255,255,255,.1)}
+#bar{height:100%;width:0;background:var(--accent)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;color:#C6C5BF;
+  background:rgba(28,28,26,.94)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #555;color:#ccc;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(255,255,255,.12)}
+#replay.done{border-color:var(--accent);color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="cam">
+    <div id="bg"></div>
+    <div id="holoRing"></div>
+
+    <!-- 标题 -->
+    <div id="head">
+      <div id="kicker"><span class="dot"></span>EPISODE ROADMAP · 保姆级教程</div>
+      <div id="title">本期<span class="hl">路线图</span></div>
+      <div id="titleEn">FROM ZERO TO FLAG</div>
+    </div>
+
+    <!-- 主视觉：路线地图（三站节点链 + 流动粒子 + 发丝刻度） -->
+    <div id="mapBoard">
+      <svg id="map" viewBox="0 0 1680 700" preserveAspectRatio="xMidYMid meet">
+        <rect class="bpanel" x="1" y="1" width="1678" height="698" rx="14"/>
+        <g class="bterrain">
+          <path d="M60,140 q130,-70 280,-34 t250,6"/>
+          <path d="M30,206 q150,-80 320,-44 t270,2"/>
+          <path d="M1130,556 q150,-52 280,4"/>
+          <path d="M1180,610 q160,-60 300,-6"/>
+          <path d="M960,112 q120,-46 230,8"/>
+        </g>
+        <g class="bticks" stroke-linecap="round">
+          <path d="M40,700 V660 M120,700 V672 M200,700 V660 M1620,0 V40 M1540,0 V28 M1460,0 V40"/>
+        </g>
+
+        <!-- 起点标记 -->
+        <g class="mkstart">
+          <rect x="70" y="344" width="30" height="32" rx="5"/>
+          <path d="M112,360 l16,-9 v18 Z" fill="#1C1C1A" stroke="none"/>
+        </g>
+
+        <!-- 路线 -->
+        <path class="roadGlow" id="r0g" d="M92,360 C180,360 240,360 300,360"/>
+        <path class="road" id="r0" d="M92,360 C180,360 240,360 300,360"/>
+        <path class="roadGlow" id="r1g" d="M300,360 C500,360 640,300 840,300"/>
+        <path class="road" id="r1" d="M300,360 C500,360 640,300 840,300"/>
+        <path class="roadGlow" id="r2g" d="M840,300 C1040,300 1180,380 1380,380"/>
+        <path class="road" id="r2" d="M840,300 C1040,300 1180,380 1380,380"/>
+        <path id="roadAll" d="M92,360 C180,360 240,360 300,360 C500,360 640,300 840,300 C1040,300 1180,380 1380,380" fill="none" stroke="none"/>
+
+        <!-- 站 01 -->
+        <g transform="translate(300,360)">
+          <g class="stn" id="st1">
+            <circle class="ring" r="112"/>
+            <circle class="pulse p1" r="54"/><circle class="pulse p2" r="54"/>
+            <circle class="core" r="50"/>
+            <g class="ic">
+              <g transform="translate(-38.5,-11.5) scale(.5)"><rect x="7" y="8" width="32" height="23" rx="3"/><path d="M17 36 H29 M23 31 V36"/><path d="M13 15 L18 19 L13 23"/><path d="M21 23 H28"/></g>
+              <g transform="translate(-11.5,-11.5) scale(.5)"><circle cx="12" cy="10" r="4"/><circle cx="12" cy="36" r="4"/><circle cx="34" cy="23" r="4"/><path d="M12 14 V32 M15 13 C24 16 27 18 30 21"/></g>
+              <g transform="translate(15.5,-11.5) scale(.5)"><rect x="8" y="6" width="30" height="34" rx="4"/><path d="M14 15 H32 M14 22 H26 M14 29 H30"/></g>
+            </g>
+          </g>
+        </g>
+        <text class="snum" id="sn1" x="300" y="270">01</text>
+        <text class="sname" id="snm1" x="300" y="462">三个准备工作</text>
+        <text class="ssub" id="ssb1" x="300" y="498">虚拟机 · 命令行 · git</text>
+
+        <!-- 站 02 -->
+        <g transform="translate(840,300)">
+          <g class="stn" id="st2">
+            <circle class="ring" r="112"/>
+            <circle class="pulse p1" r="54"/><circle class="pulse p2" r="54"/>
+            <circle class="core" r="50"/>
+            <g class="ic">
+              <g transform="translate(-20.8,-20.8) scale(.8)"><path d="M26 7 L29 13 L35.5 11.5 L36 18 L42.5 19.5 L39.5 25.5 L44 30.5 L37.5 33 L38 39.5 L31.5 38.5 L28 44 L23 39.5 L16.5 42 L15.5 35.5 L9 33.5 L12.5 28 L8.5 22.5 L15 20.5 L15 14 L21.5 15 Z"/><circle cx="26" cy="26" r="7"/></g>
+            </g>
+          </g>
+        </g>
+        <text class="snum" id="sn2" x="840" y="210">02</text>
+        <text class="sname" id="snm2" x="840" y="402">搭环境</text>
+        <text class="ssub" id="ssb2" x="840" y="438">装好 · 配通 · 能跑</text>
+
+        <!-- 站 03 · 主角 -->
+        <g transform="translate(1380,380)">
+          <g class="stn" id="st3">
+            <circle class="ring" r="112"/>
+            <circle class="pulse p1" r="54"/><circle class="pulse p2" r="54"/>
+            <circle class="core" r="50"/>
+            <g class="ic">
+              <g transform="translate(-18.7,-18.7) scale(.72)"><circle cx="26" cy="26" r="18"/><circle cx="26" cy="26" r="10" stroke-dasharray="4 5"/><path d="M26 1 V9 M26 43 V51 M1 26 H9 M43 26 H51"/></g>
+            </g>
+          </g>
+        </g>
+        <text class="snum" id="sn3" x="1380" y="290">03</text>
+        <text class="sname" id="snm3" x="1380" y="482">实战拿 flag</text>
+        <text class="ssub" id="ssb3" x="1380" y="518">靶场 · AI 出手 · 通关</text>
+
+        <!-- 路径粒子 -->
+        <g id="dots">
+          <circle class="fdot" id="d0" r="6" opacity="0"/>
+          <circle class="fdot" id="d1" r="6" opacity="0"/>
+          <circle class="fdot" id="d2" r="6" opacity="0"/>
+          <circle class="fdot pk" id="d3" r="6" opacity="0"/>
+          <circle class="fdot pk" id="d4" r="6" opacity="0"/>
+          <circle class="fdot pk" id="d5" r="6" opacity="0"/>
+          <circle class="fdot" id="p0" r="5" opacity="0"/>
+          <circle class="fdot" id="p1" r="5" opacity="0"/>
+          <circle class="fdot pk" id="p2" r="5" opacity="0"/>
+          <circle class="fdot pk" id="p3" r="5" opacity="0"/>
+          <circle class="fdot" id="p4" r="5" opacity="0"/>
+        </g>
+
+        <!-- archify 流线层 -->
+        <g id="flowLayer">
+          <path id="f0" class="a-default" d="M92,360 C180,360 240,360 300,360"/>
+          <path id="f1" class="a-default" d="M300,360 C500,360 640,300 840,300"/>
+          <path id="f2" class="a-emphasis" d="M840,300 C1040,300 1180,380 1380,380"/>
+        </g>
+
+        <!-- lieflat F2 发丝刻度 -->
+        <g id="pgtrack">
+          <line id="pgFill" x1="92" y1="632" x2="92" y2="632"/>
+        </g>
+      </svg>
+    </div>
+
+    <!-- 条件条 -->
+    <div id="notes">
+      <div class="note" id="nt1"><span class="tick">/</span>不需要会编程</div>
+      <div class="note" id="nt2"><span class="tick">/</span>会装软件</div>
+      <div class="note" id="nt3"><span class="tick">/</span>会复制粘贴</div>
+      <div class="note acc" id="nt4"><span class="tick">/</span>看完就能跑通</div>
+    </div>
+
+    <!-- 大肥鱼 -->
+    <div id="fish1">
+      <div class="say">跟着做，你也能<b>跑通</b>！</div>
+      <img src="Shark-GIF/006_双手身前微笑乖巧期待.gif" alt="大肥鱼">
+    </div>
+
+    <!-- Let's begin 收尾 -->
+    <div id="beginWrap">
+      <div id="beginInner">
+        <div id="beginGlow"></div>
+        <div id="bRingA"></div>
+        <div id="bRingB"></div>
+        <div id="beginMark">VULNCLAW</div>
+        <div id="beginRule"></div>
+        <div id="beginBig">Let&#39;s begin</div>
+        <div id="beginUnder"></div>
+        <div id="beginSub">本期教程 · 正式开始</div>
+        <div id="beginScale"></div>
+        <div id="beginTags"><span>新手向</span><span>全程演示</span><span>可复现</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="dim"></div>
+  <div class="corner" id="chap">章 0 · 开场 ｜ 镜头 4 · 本期路线图 · 1:10–1:37</div>
+  <div class="corner" id="src">口播对齐 timeline.md ｜ metro 线路图 · 收尾变体</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-4 · 本期路线图 · 27s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=27000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ───────── 本镜头专用小工具 ───────── */
+function drawRoad(id,dur,start){
+  const p=document.getElementById(id);if(!p)return;
+  const L=p.getTotalLength();
+  p.style.strokeDasharray=L;p.style.strokeDashoffset=L;
+  const g=document.getElementById(id+'g');
+  if(g){g.style.strokeDasharray=L;g.style.strokeDashoffset=L;}
+  tws.push({t:start,d:dur,e:eo,f:x=>{
+    const o=L*(1-x);
+    p.style.strokeDashoffset=o;if(g)g.style.strokeDashoffset=o;
+  }});
+}
+function flowOn(el,path,start,total,durPerLoop,phase,fade){
+  if(!el||!path)return;
+  const L=path.getTotalLength(),loops=total/durPerLoop;
+  tws.push({t:start,d:total,f:p=>{
+    const s=p*loops+phase,k=s%1;
+    const pt=path.getPointAtLength(L*k);
+    el.setAttribute('cx',pt.x.toFixed(1));el.setAttribute('cy',pt.y.toFixed(1));
+    const o=fade?(k<.12?k/.12:(k>.88?(1-k)/.12:1)):1;
+    el.setAttribute('opacity',o.toFixed(2));
+  },done:()=>{el.setAttribute('opacity','0');}});
+}
+['r0','r1','r2'].forEach(id=>{
+  const p=document.getElementById(id);if(!p)return;
+  const L=p.getTotalLength();
+  p.style.strokeDasharray=L;p.style.strokeDashoffset=L;
+  const g=document.getElementById(id+'g');
+  if(g){g.style.strokeDasharray=L;g.style.strokeDashoffset=L;}
+});
+
+/* ── lieflat F2 发丝刻度：三站进度（1 刻度 = 一步 · 每 5 刻度加重） ── */
+(function(){
+  const g=document.getElementById('pgtrack');if(!g)return;
+  const NS='http://www.w3.org/2000/svg',x0=92,x1=1380,y=632;
+  const mk=(t,a)=>{const n=document.createElementNS(NS,t);for(const k in a)n.setAttribute(k,a[k]);g.appendChild(n);return n};
+  mk('line',{class:'base',x1:x0,y1:y,x2:x1,y2:y});
+  for(let x=x0,i=0;x<=x1;x+=16,i++){
+    const major=(i%5===0);
+    mk('line',{class:'tk'+(major?' major':''),x1:x,y1:y,x2:x,y2:y-(major?11:6)});
+  }
+  [[300,'01'],[840,'02'],[1380,'03']].forEach(([x,t])=>{
+    mk('circle',{class:'fdot2',cx:x,cy:y,r:3.8});
+    mk('text',{class:'pglbl',x:x,y:y+26,'text-anchor':'middle'}).textContent=t;
+  });
+  mk('text',{class:'pgunit',x:x0,y:y-30,'text-anchor':'start'}).textContent='1 刻度 = 一步 · 圆点 = 每一站';
+})();
+
+/* ── 收尾 lieflat 发丝刻度尺（41 齿 · 每 5 齿加重） ── */
+(function(){
+  const sc=document.getElementById('beginScale');if(!sc)return;
+  for(let i=0;i<41;i++){const t=document.createElement('i');if(i%5===0)t.className='major';sc.appendChild(t);}
+})();
+
+function pgFillTo(x,start,dur){
+  const el=document.getElementById('pgFill');if(!el)return;
+  const from=+el.getAttribute('x2');
+  tws.push({t:start,d:dur,e:eo,f:p=>{el.setAttribute('x2',(from+(x-from)*p).toFixed(1))}});
+}
+
+/* ───────── 镜头 4 叙事 cue（27s · 本期路线图） ───────── */
+on(150,()=>{$('#bg').classList.add('in');$('#holoRing').classList.add('in');__sfx.swipe(.3);});   // 黑场渐显 · 发丝环亮起
+on(400,()=>{$('#head').classList.add('in');__sfx.whoosh(.9,.5);});                                // 1:10「那么这期视频」「我会带来一个VulnClaw的完整的保姆级教程」
+on(1200,()=>__sfx.pop(.5));                                                                        // 标题落定
+on(3000,()=>{                                                                                      // 1:13「从虚拟机命令行git三个准备工作开始」
+  $('#mapBoard').classList.add('in');
+  $('#st1').classList.add('in');
+  $('#sn1').classList.add('lit');$('#snm1').classList.add('lit');$('#ssb1').classList.add('lit');
+  drawRoad('r0',480,3000);
+  camFocus(960,600,1.05,.55);
+  __sfx.pop(.75);
+});
+on(6000,()=>{                                                                                      // 1:16「一步步的带大家把环境给搭起来」
+  $('#st2').classList.add('in');
+  $('#sn2').classList.add('lit');$('#snm2').classList.add('lit');$('#ssb2').classList.add('lit');
+  drawRoad('r1',760,6000);
+  flowOn($('#d0'),$('#r1'),6000,5200,1300,0,true);
+  flowOn($('#d1'),$('#r1'),6000,5200,1300,.33,true);
+  flowOn($('#d2'),$('#r1'),6000,5200,1300,.66,true);
+  camFocus(1050,600,1.05,.55);
+  __sfx.pop(.72);
+});
+on(9000,()=>{                                                                                      // 1:19「最后再用它在靶场上实战拿取flag」
+  $('#st3').classList.add('in');
+  $('#sn3').classList.add('lit');$('#snm3').classList.add('lit');$('#ssb3').classList.add('lit');
+  drawRoad('r2',760,9000);
+  flowOn($('#d3'),$('#r2'),9000,5200,1300,0,true);
+  flowOn($('#d4'),$('#r2'),9000,5200,1300,.33,true);
+  flowOn($('#d5'),$('#r2'),9000,5200,1300,.66,true);
+  camFocus(1300,620,1.05,.55);
+  __sfx.thud(.4);__sfx.pop(.75);
+  $('#dim').classList.add('on');
+});
+on(10600,()=>{                                                                                     // 全线粒子持续流动（装饰节拍，非口播）
+  flowOn($('#p0'),$('#roadAll'),10600,6400,1250,0,false);
+  flowOn($('#p1'),$('#roadAll'),10600,6400,1250,.2,false);
+  flowOn($('#p2'),$('#roadAll'),10600,6400,1250,.4,false);
+  flowOn($('#p3'),$('#roadAll'),10600,6400,1250,.6,false);
+  flowOn($('#p4'),$('#roadAll'),10600,6400,1250,.8,false);
+});
+on(11000,()=>{$('#notes').classList.add('in');$('#nt1').classList.add('in');__sfx.pop(.5);});      // 1:21「不需要你学会编程」
+on(13000,()=>{$('#nt2').classList.add('in');__sfx.pop(.5);});                                      // 1:23「只需要你去学会装软件」
+on(14000,()=>{$('#nt3').classList.add('in');__sfx.pop(.5);});                                      // 1:24「会复制粘贴」
+on(14600,()=>{$('#fish1').classList.add('in');__sfx.pop(.5);});                                    // 大肥鱼快闪入场
+on(15100,()=>{$('#fish1').classList.add('bub');__sfx.pop(.35);});                                  // 气泡
+on(15800,()=>{$('#nt4').classList.add('in');__sfx.ding(.42);});                                    // 1:25「看完这一期视频」1:26「你就能跑通了」
+on(16500,()=>{$('#fish1').classList.add('out');});                                                 // 鱼收
+on(17000,()=>{                                                                                      // 1:27「Let's begin」
+  $('#head').classList.add('out');$('#mapBoard').classList.add('out');$('#notes').classList.add('out');
+  $('#fish1').classList.add('out');
+  camCut(0,0,1);  $('#beginWrap').classList.add('in');
+  __sfx.thud(.55);__sfx.whoosh(1.0,.45);
+  tws.push({t:17400,d:9400,f:p=>{const s=1+p*0.032,up=p>0.6?(1-Math.pow(1-(p-0.6)/0.4,3))*12:0;$('#beginInner').style.transform='translateY('+(-up).toFixed(1)+'px) scale('+s.toFixed(3)+')'}});  // 缓慢推进 + 末段轻微上移（定格不僵）
+});
+on(17800,()=>__sfx.ding(.6));                                                                      // 收尾定音
+on(24000,()=>{                                                                                     // 尾音 + 收尾活气：下划线描线 / 发丝刻度走完（快进快停）
+  const u=document.getElementById('beginUnder');
+  if(u)tws.push({t:24000,d:640,e:eo,f:p=>{u.style.transform='scaleX('+p.toFixed(3)+')'}});
+  const sc=document.getElementById('beginScale');
+  if(sc){const ts=sc.children,n=ts.length-1;
+    tws.push({t:24040,d:1700,e:eo,f:p=>{for(let i=0;i<=n;i++)ts[i].classList.toggle('on',(i/n)<=p);},
+      done:()=>{if(ts[n])ts[n].classList.add('acc');}});}
+  __sfx.ding(.35);
+});
+
+/* ── 增补节拍：archify 流线层逐段亮起 + lieflat F2 三站进度发丝线推进（不动任何既有 cue） ── */
+on(3200,()=>$('#pgtrack').classList.add('on'));
+on(3480,()=>{$('#f0').classList.add('on');pgFillTo(1380,3480,6300);});
+on(6480,()=>$('#f1').classList.add('on'));
+on(9480,()=>$('#f2').classList.add('on'));
+
+/* ===== [不动] QA 专用（正常播放不触发）：hash 带 t=毫秒 → 起播后跳转该时刻并冻结 ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

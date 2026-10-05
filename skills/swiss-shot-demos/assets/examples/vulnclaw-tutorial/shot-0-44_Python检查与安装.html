@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+     镜头 0-44 · Python 检查与安装 · 18:50–19:29 · DUR 39000  【v4 瑞士国际主义 · B 类】
+     仿真本体：Python 安装向导（原样保留）→ 外围瑞士化
+     主视觉：A 认两样（白卡）· B 查版本（墨底终端卡，抽象回显）· C 下载 + 安装向导 + Add to PATH 教学标记
+     字体 Inter × IBM Plex Mono × Noto Sans SC · 纸底 #F0EFEB × 墨 #1C1C1A × 唯一橙 #F5572F（PATH 那一步）
+============================================================= -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 0-44 · Python 检查与安装 · 39s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;
+  --accent:#F5572F;--dark:#1C1C1A;--darkink:#F0EFEB;--darkgrid:#2E2D29;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:var(--paper);overflow:hidden;color:var(--ink);
+  font-family:'Inter','Noto Sans SC',sans-serif;-webkit-font-smoothing:antialiased}
+body.paused *{animation-play-state:paused!important}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#bg{position:absolute;inset:0;z-index:0;
+  background-image:linear-gradient(rgba(28,28,26,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.05) 1px,transparent 1px);
+  background-size:44px 44px}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ── v4 页头（外围） ── */
+#hd{position:absolute;left:88px;top:56px;z-index:40}
+#hd .eyebrow{font:600 15px Inter,'Noto Sans SC';letter-spacing:.14em;text-transform:uppercase;color:var(--ink);display:flex;gap:12px;align-items:center}
+#hd .eyebrow .no{background:var(--ink);color:var(--paper);padding:3px 10px;border-radius:3px;font-weight:700}
+#hd h1{margin-top:16px;font:800 50px/1 'Inter','Noto Sans SC';letter-spacing:-.02em;color:var(--ink);
+  opacity:0;transform:translateY(18px);transition:all .6s cubic-bezier(.16,1,.3,1)}
+#hd h1.in{opacity:1;transform:translateY(0)}
+#hd h1 b{font-weight:900}
+#hd .en{margin-top:8px;font:600 14px 'IBM Plex Mono';letter-spacing:.18em;color:var(--muted);text-transform:uppercase;opacity:0;transition:opacity .5s .3s}
+#hd .en.in{opacity:1}
+/* 步骤轨（外围） */
+#rail{position:absolute;right:88px;top:70px;z-index:40;display:flex;gap:10px;align-items:center}
+#rail .st{display:flex;align-items:center;gap:8px;font:700 14px 'IBM Plex Mono';letter-spacing:.08em;color:var(--muted);
+  border:1px solid var(--grid);border-radius:999px;padding:6px 15px;transition:all .4s}
+#rail .st i{width:7px;height:7px;border-radius:50%;background:var(--faint)}
+#rail .st.on{color:var(--ink);border-color:var(--ink)}
+#rail .st.on i{background:var(--ink)}
+#rail .st.done{color:var(--ink);border-color:var(--ink)}
+#rail .st.done i{background:var(--accent)}
+
+.scene{position:absolute;inset:0;opacity:0;transform:translateY(24px);pointer-events:none;transition:opacity .6s ease,transform .6s cubic-bezier(.16,1,.3,1)}
+.scene.in{opacity:1;transform:translateY(0)}
+
+/* ── 场景 A：概念 + 两样东西（白卡） ── */
+#aBadge{position:absolute;left:200px;top:214px;z-index:12;font:800 34px 'Noto Sans SC';color:var(--paper);
+  background:var(--ink);border-radius:4px;padding:10px 28px;letter-spacing:.1em;opacity:0;transform:scale(.8);
+  transition:all .5s cubic-bezier(.2,1.5,.4,1)}
+#aBadge.in{opacity:1;transform:scale(1)}
+#aSub{position:absolute;left:206px;top:288px;z-index:12;font:500 23px 'Noto Sans SC';color:var(--muted);opacity:0;transition:opacity .5s .2s}
+#aSub.in{opacity:1}
+#aSub b{color:var(--ink);font-weight:900}
+#aChips{position:absolute;left:200px;top:356px;z-index:12;display:flex;gap:14px;flex-wrap:wrap;width:1120px}
+.chip{font:600 20px 'IBM Plex Mono';letter-spacing:.02em;color:var(--ink);background:#fff;
+  border:1.5px solid var(--ink);border-radius:999px;padding:9px 22px;opacity:0;transform:translateY(14px);transition:all .45s cubic-bezier(.2,1.4,.4,1)}
+.chip.in{opacity:1;transform:translateY(0)}
+.chip.hot{background:var(--accent);border-color:var(--accent);color:#fff}
+.chip.more{color:var(--muted);border-color:var(--faint);border-style:dashed}
+#aDiv{position:absolute;left:200px;top:474px;z-index:12;font:900 31px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em;
+  opacity:0;transform:translateY(16px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#aDiv.in{opacity:1;transform:translateY(0)}
+#aDiv em{color:var(--accent);font-style:normal;font-weight:900}
+#aCards{position:absolute;left:200px;top:556px;z-index:12;display:flex;gap:26px}
+.card{width:630px;height:248px;border-radius:12px;padding:26px 30px;background:#fff;border:1px solid var(--grid);
+  opacity:0;transform:translateY(26px);transition:all .55s cubic-bezier(.16,1,.3,1);position:relative;overflow:hidden}
+.card.in{opacity:1;transform:translateY(0)}
+.card.hot{border-color:var(--ink);border-width:2px}
+.card.ghost{border-color:var(--grid);background:#FAFAF8}
+.card .cnum{position:absolute;right:24px;top:16px;font:800 54px Inter;color:var(--faint)}
+.card.hot .cnum{color:var(--ink)}
+.card .ct{font:900 30px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em}
+.card .cd{margin-top:14px;font:400 19px 'Noto Sans SC';color:var(--muted);line-height:1.6}
+.card .cd b{color:var(--ink);font-weight:900}
+.card .ver{position:absolute;left:30px;bottom:26px;font:700 20px 'IBM Plex Mono';color:#fff;
+  background:var(--ink);border-radius:4px;padding:6px 16px;opacity:0;transform:scale(.7);transition:all .45s cubic-bezier(.2,1.6,.4,1)}
+.card .ver.in{opacity:1;transform:scale(1)}
+.card.ghost .ct{color:var(--muted)}
+.card.ghost .cd{color:var(--faint)}
+.card .lock{position:absolute;left:30px;bottom:24px;font:600 15px 'IBM Plex Mono';letter-spacing:.06em;color:var(--muted);opacity:0;transition:opacity .5s}
+.card .lock.in{opacity:1}
+
+/* ── 场景 B：版本检查（墨底终端卡 + 抽象回显） ── */
+#bTerm{position:absolute;left:300px;top:236px;width:1320px;height:300px;z-index:12;border-radius:10px;overflow:hidden;
+  background:var(--dark);border:1px solid var(--darkgrid)}
+#bTerm .tb{height:46px;display:flex;align-items:center;padding:0 20px;border-bottom:1px solid var(--darkgrid);
+  font:600 14px 'IBM Plex Mono';color:#8F8E88;letter-spacing:.06em}
+#bTerm .tb .lv{margin-left:auto;color:#8F8E88}
+#bTerm .body{padding:30px 26px;font:500 27px 'IBM Plex Mono';color:var(--darkink)}
+#bTerm .ps{color:#8F8E88}
+#bCur{color:var(--paper)}
+#bReq{position:absolute;left:300px;top:180px;z-index:12;font:700 16px 'IBM Plex Mono';letter-spacing:.06em;color:var(--paper);
+  background:var(--ink);border-radius:3px;padding:6px 16px;opacity:0;transform:translateY(-10px);transition:all .5s cubic-bezier(.2,1.4,.4,1)}
+#bReq.in{opacity:1;transform:translateY(0)}
+#bOut{position:absolute;left:300px;top:566px;width:1320px;height:238px;z-index:12;border-radius:10px;padding:22px 28px;
+  background:#fff;border:1px solid var(--grid);opacity:0;transform:translateY(22px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#bOut.in{opacity:1;transform:translateY(0)}
+#bOut .oh{font:600 13px 'IBM Plex Mono';letter-spacing:.14em;color:var(--muted);display:flex;align-items:center;gap:10px}
+#bOut .oh .tg{color:var(--paper);background:var(--ink);border-radius:3px;padding:3px 10px;font-family:'Noto Sans SC';font-size:12px}
+#bOut .blocks{margin-top:16px;display:flex;flex-direction:column;gap:10px}
+#bOut .bk{height:20px;border-radius:4px;background:#E4E3DE;opacity:0;transform:scaleX(.4);transform-origin:0 50%;transition:all .5s cubic-bezier(.16,1,.3,1)}
+#bOut .bk.in{opacity:1;transform:scaleX(1)}
+#bOut .judge{margin-top:16px;display:flex;gap:16px;align-items:center}
+.jchip{font:700 20px 'Noto Sans SC';border-radius:4px;padding:10px 22px;opacity:0;transform:scale(.75);transition:all .45s cubic-bezier(.2,1.6,.4,1)}
+.jchip.ok{color:var(--paper);background:var(--ink)}
+.jchip.warn{color:#fff;background:var(--accent)}
+.jchip.in{opacity:1;transform:scale(1)}
+#bOut .jnote{font:400 18px 'Noto Sans SC';color:var(--muted);opacity:0;transition:all .5s cubic-bezier(.2,1.4,.4,1)}
+#bOut .jnote.in{opacity:1}
+#bOut .jnote b{color:var(--ink);font-weight:900}
+
+/* ── 场景 C：下载 + 安装向导 ── */
+#cBar{position:absolute;left:220px;top:206px;width:880px;height:60px;z-index:12;border-radius:8px;display:flex;align-items:center;gap:12px;padding:0 20px;
+  background:#fff;border:1px solid var(--grid);opacity:0;transform:translateY(-14px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#cBar.in{opacity:1;transform:translateY(0)}
+#cBar .lock{color:var(--muted)}
+#cBar .u{font:500 19px 'IBM Plex Mono';color:var(--ink)}
+#cBar .u b{color:var(--ink);font-weight:700}
+#cDl{position:absolute;left:220px;top:292px;width:880px;height:150px;z-index:12;border-radius:8px;padding:22px 24px;
+  background:#fff;border:1px solid var(--grid);opacity:0;transform:translateY(18px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#cDl.in{opacity:1;transform:translateY(0)}
+#cDl .dl{font:700 20px 'Noto Sans SC';color:var(--ink);display:flex;align-items:center;gap:12px}
+#cDl .dl .exe{font:500 14px 'IBM Plex Mono';color:var(--muted)}
+#cDl .track{margin-top:20px;height:10px;border-radius:5px;background:#EEEDE8;border:1px solid var(--grid);overflow:hidden}
+#cDl .fill{height:100%;width:0;background:var(--ink)}
+#cDl .pc{margin-top:12px;font:600 14px 'IBM Plex Mono';color:var(--muted);text-align:right}
+#cWarn{position:absolute;left:220px;top:470px;width:880px;height:220px;z-index:12;border-radius:8px;padding:24px 28px;
+  background:#fff;border:1px solid var(--grid);border-left:5px solid var(--accent);opacity:0;transform:translateY(20px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#cWarn.in{opacity:1;transform:translateY(0)}
+#cWarn .wt{font:600 13px 'IBM Plex Mono';letter-spacing:.14em;color:var(--accent)}
+#cWarn .wl{margin-top:14px;font:900 26px 'Noto Sans SC';color:var(--ink);line-height:1.5}
+#cWarn .wl b{color:var(--accent);font-weight:900}
+#cWarn .wl.dim{color:var(--muted)}
+
+/* 安装向导（仿真本体保留 · 原生配色） */
+#inst{position:absolute;left:1140px;top:200px;width:660px;height:560px;z-index:13;border-radius:8px;overflow:hidden;
+  background:#f4f7fa;border:1px solid #b9c6d3;opacity:0;transform:translateY(28px);transition:all .6s cubic-bezier(.16,1,.3,1)}
+#inst.in{opacity:1;transform:translateY(0)}
+#inst .ib{height:48px;background:#3a6ea5;display:flex;align-items:center;padding:0 18px;color:#fff;
+  font:700 17px 'Noto Sans SC';letter-spacing:.02em}
+#inst .ib .x{margin-left:auto;font:600 18px 'IBM Plex Mono';color:#d8e6f3}
+#inst .body{padding:26px 30px;color:#1c2c3c}
+#inst .head{font:900 26px 'Noto Sans SC';color:#14304d}
+#inst .step{margin-top:22px;display:flex;gap:16px;align-items:flex-start}
+#inst .n{width:40px;height:40px;flex:none;border-radius:50%;background:#e3ebf3;color:#2f5d8f;font:800 20px Inter;
+  display:flex;align-items:center;justify-content:center}
+#inst .tx{font:400 19px 'Noto Sans SC';color:#33475c;line-height:1.5}
+#inst .tx b{color:#14304d;font-weight:900}
+#inst .foot{position:absolute;left:0;right:0;bottom:0;height:112px;background:#e8eef4;border-top:1px solid #cfdae5;padding:18px 26px;display:flex;align-items:center;gap:16px}
+#cbx{width:30px;height:30px;border-radius:6px;border:2.5px solid #7b93aa;background:#fff;flex:none;position:relative;transition:all .3s}
+#cbx .tick{position:absolute;left:5px;top:2px;font:900 22px 'Noto Sans SC';color:#fff;opacity:0;transition:opacity .25s}
+#cbx.chk{background:#2f9e6a;border-color:#2f9e6a}
+#cbx.chk .tick{opacity:1}
+#inst .lbl{font:700 20px 'Noto Sans SC';color:#14304d}
+#inst .lbl small{display:block;font-weight:400;font-size:14px;color:#6b8299;margin-top:3px}
+#inst .go{margin-left:auto;font:700 18px 'Noto Sans SC';color:#fff;background:#2f5d8f;border-radius:8px;padding:12px 26px}
+/* 教学标记（v4 标注风：橙框 + 橙色指引，无发光/无旋转） */
+#mark{position:absolute;left:1140px;top:508px;width:640px;height:230px;z-index:20;opacity:0;transition:opacity .5s cubic-bezier(.16,1,.3,1);pointer-events:none}
+#mark.on{opacity:1}
+#mark .ring{position:absolute;left:20px;top:154px;width:112px;height:112px;border:3px solid var(--accent);border-radius:8px}
+#mark .arw{position:absolute;left:78px;top:104px;width:0;height:0;border-left:20px solid var(--accent);border-top:12px solid transparent;border-bottom:12px solid transparent;transform:rotate(90deg)}
+#mark .tg{position:absolute;left:22px;top:2px;font:900 23px 'Noto Sans SC';color:var(--accent);white-space:nowrap}
+#mark .tg small{display:block;font-size:14px;font-weight:600;color:var(--ink);margin-top:4px}
+
+/* 大肥鱼 */
+#fish{position:absolute;left:1560px;top:806px;width:214px;z-index:35;opacity:0;transform:translateY(26px) scale(.68);
+  transition:all .45s cubic-bezier(.34,1.6,.64,1);pointer-events:none}
+#fish.show{opacity:1;transform:none}
+#fish img{width:100%;display:block}
+#fish .say{position:absolute;width:288px;left:-300px;top:-4px;background:#fff;border:1.5px solid var(--ink);border-radius:10px;
+  padding:12px 16px;font:900 21px 'Noto Sans SC';color:var(--ink);line-height:1.45;
+  opacity:0;transform:scale(.6);transition:all .4s cubic-bezier(.34,1.6,.64,1) .15s}
+#fish.show .say{opacity:1;transform:scale(1)}
+#fish .say b{font-weight:900}
+#fish .say::after{content:'';position:absolute;right:-16px;top:36px;border:9px solid transparent;border-left:11px solid #fff}
+
+/* 角注 / HUD */
+.corner{position:absolute;font:600 15px Inter,'Noto Sans SC';letter-spacing:.1em;color:var(--faint);z-index:41}
+#chap{left:88px;bottom:30px}
+#src{right:88px;bottom:30px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:rgba(28,28,26,.1)}
+#bar{height:100%;width:0;background:var(--accent)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:var(--ink);color:var(--paper)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #556;color:#ccc;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(245,87,47,.18)}
+#replay.done{border-color:var(--accent);color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="bg"></div>
+  <div id="cam">
+    <div id="hd">
+      <div class="eyebrow"><span class="no">SHOT 0-44</span><span>第三章 · 环境准备</span></div>
+      <h1 id="h1">装工具前 · 先备好 <b>Python</b></h1>
+      <div class="en" id="en">check version → download → add to PATH</div>
+    </div>
+    <div id="rail">
+      <div class="st" id="st1"><i></i>1 认两样</div>
+      <div class="st" id="st2"><i></i>2 查版本</div>
+      <div class="st" id="st3"><i></i>3 安装</div>
+    </div>
+
+    <!-- ===== 场景 A ===== -->
+    <div class="scene" id="scA">
+      <div id="aBadge">免费 · 开源</div>
+      <div id="aSub">模型支持国内外 <b>十几家</b> · 几乎所有的模型</div>
+      <div id="aChips">
+        <div class="chip" id="cp1">DeepSeek</div>
+        <div class="chip" id="cp2">智谱</div>
+        <div class="chip" id="cp3">Claude</div>
+        <div class="chip" id="cp4">GPT</div>
+        <div class="chip more">… 等等</div>
+      </div>
+      <div id="aDiv">正式开始前 · 先查好 <em>两样东西</em></div>
+      <div id="aCards">
+        <div class="card" id="c1">
+          <div class="cnum">01</div>
+          <div class="ct">Python</div>
+          <div class="cd">VulnClaw 是<b>用 Python 写的</b><br>本机必须装 <b>3.10 以上</b> 的版本</div>
+          <div class="ver" id="c1ver">Python 3.10+</div>
+        </div>
+        <div class="card ghost" id="c2">
+          <div class="cnum">02</div>
+          <div class="ct">大模型 API Key</div>
+          <div class="cd">VulnClaw 自己不带大脑<br>推理交给大模型 → 下一镜说</div>
+          <div class="lock" id="c2lock">→ 下一个镜头</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== 场景 B ===== -->
+    <div class="scene" id="scB">
+      <div id="bReq">要求：本机 Python 3.10+</div>
+      <div id="bTerm">
+        <div class="tb">命令提示符 <span class="lv">C:\Users\demo</span></div>
+        <div class="body"><span class="ps">PS&gt;</span> <span id="bCmd"></span><span id="bCur">▌</span></div>
+      </div>
+      <div id="bOut">
+        <div class="oh">运行结果 <span class="tg">示意 · 非真实回显</span></div>
+        <div class="blocks">
+          <div class="bk" id="bk1"></div>
+          <div class="bk" id="bk2" style="width:62%"></div>
+        </div>
+        <div class="judge">
+          <div class="jchip ok" id="jok">≥ 3.10 → 过关</div>
+          <div class="jchip warn" id="jwarn">找不到命令 → 先装 Python</div>
+          <div class="jnote" id="jnote">结果只是<b>抽象示意</b>，别背数字</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== 场景 C ===== -->
+    <div class="scene" id="scC">
+      <div id="cBar"><span class="lock">🔒</span><span class="u">python.org / <b>downloads</b></span></div>
+      <div id="cDl">
+        <div class="dl">下载 Python 安装包 <span class="exe">python-3.x-installer.exe（示意）</span></div>
+        <div class="track"><div class="fill" id="dlfill"></div></div>
+        <div class="pc" id="dlpc">0%</div>
+      </div>
+      <div id="cWarn">
+        <div class="wt">!! 容易漏的一步</div>
+        <div class="wl" id="w1">漏勾 Add Python to PATH，<b>后面每一步都会报错</b></div>
+        <div class="wl dim" id="w2" style="font-size:20px;margin-top:10px">命令行就找不到 Python</div>
+      </div>
+      <div id="inst">
+        <div class="ib">Python 3.10+ 安装向导<span class="x">✕</span></div>
+        <div class="body">
+          <div class="head">Install Python</div>
+          <div class="step"><div class="n">1</div><div class="tx">选择 <b>Install Now</b> 默认安装</div></div>
+          <div class="step"><div class="n">2</div><div class="tx">等待安装完成</div></div>
+          <div class="step"><div class="n">3</div><div class="tx">安装结束后关闭窗口即可</div></div>
+        </div>
+        <div class="foot">
+          <div id="cbx"><span class="tick">✓</span></div>
+          <div class="lbl">Add Python to PATH<small>勾上它，命令行才找得到 Python</small></div>
+          <div class="go">Install Now</div>
+        </div>
+      </div>
+      <div id="mark">
+        <div class="tg">务必勾上<small>第一个勾选框 · Add Python to PATH</small></div>
+        <div class="arw"></div>
+        <div class="ring"></div>
+      </div>
+    </div>
+
+    <div id="fish">
+      <div class="say">这个勾 <b>千万别漏</b>，<br>不然步步报错</div>
+      <img src="Shark-GIF/006_双手身前微笑乖巧期待.gif" alt="大肥鱼">
+    </div>
+  </div>
+
+  <div class="corner" id="chap">第三章 · 环境准备 · Python 检查与安装</div>
+  <div class="corner" id="src">界面/回显为演示示意 · 非实拍 · 口播对齐 timeline.md</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-44 · Python 检查与安装 · 39s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=39000; /* ←⑤ DUR */
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ============ ⑤ DUR 与 cue 表 ============ */
+function typeText(el,str,dur,start){let i=0;tws.push({t:start,d:dur,e:p=>p,f:p=>{const n=Math.floor(p*str.length);
+  if(n>i){i=n;el.textContent=str.slice(0,n);if(window.__sfx)__sfx.type(.6)}}})}
+function rail(id,cls){['st1','st2','st3'].forEach(s=>{const e=$('#'+s);e.classList.remove('on','done')});if(cls==='done'){['st1','st2','st3'].forEach(s=>$('#'+s).classList.remove('on','done'))}$('#'+id).classList.add(cls);}
+function scene(show){['scA','scB','scC'].forEach(id=>{const e=$('#'+id);e.classList.toggle('in',id===show)})}
+
+/* ---- 场景 A ---- */
+on(150,()=>{scene('scA');$('#h1').classList.add('in');$('#en').classList.add('in');$('#aBadge').classList.add('in');rail('st1','on');__sfx.pop(.7);}); // 18:50「那么这个工具是免费开源的」
+on(2000,()=>{$('#aSub').classList.add('in');['cp1','cp2','cp3','cp4'].forEach((c,k)=>setTimeout(()=>{ $('#'+c).classList.add('in');$('#'+c).parentNode.querySelector('.more').classList.add('in');__sfx.pop(.35)},k*180));}); // 18:52「模型也支持国内外十几家」
+on(4000,()=>{$('#cp1').classList.add('hot');__sfx.ding(.45);});                 // 18:54「包括DeepSeek」
+on(5000,()=>{$('#cp2').classList.add('hot');__sfx.pop(.4);});                   // 18:55「智谱」
+on(6000,()=>{$('#cp3').classList.add('hot');$('#cp4').classList.add('hot');__sfx.pop(.4);}); // 18:56「Claude / GPT」
+on(7000,()=>{$('#aDiv').classList.add('in');__sfx.swipe(.6);});                 // 18:57「那么在正式开始安装工具之前」
+on(9000,()=>{$('#c1').classList.add('in');setTimeout(()=>{$('#c2').classList.add('in');__sfx.pop(.5)},300);$('#c2lock').classList.add('in');}); // 18:59「我们还需要先查好两样东西」
+on(11000,()=>{$('#c1').classList.add('hot');__sfx.pop(.6);camFocus(600,660,1.03,.5);}); // 19:01「第一个是Python」
+on(14700,()=>{$('#c1ver').classList.add('in');__sfx.ding(.5);});                 // 19:05「要求本机安装Python 3.10以上的版本」
+
+/* ---- 场景 B ---- */
+on(17200,()=>{scene('scB');rail('st2','on');camFocus(960,540,1,.5);__sfx.whoosh(.7,.6);}); // 19:08「我们要查版本的话」
+on(18500,()=>{$('#bReq').classList.add('in');$('#bOut').classList.add('in');__sfx.pop(.5);}); // 19:09「就在命令行输入以下命令」
+on(19200,()=>{typeText($('#bCmd'),'python --version',460,19200);__sfx.type(.8);});  // 19:11「Python / 然后--version」
+on(20500,()=>{$('#bk1').classList.add('in');setTimeout(()=>$('#bk2').classList.add('in'),220);__sfx.pop(.4);});
+on(21500,()=>{$('#jok').classList.add('in');$('#jnote').classList.add('in');__sfx.ding(.6);});   // 19:12「如果显示出3.10以上就过关」
+on(24200,()=>{$('#jwarn').classList.add('in');$('#jnote').classList.add('in');__sfx.thud(.5);camFocus(960,640,1.03,.5);}); // 19:14「如果其实找不到命令的」
+on(25100,()=>{$('#jnote').style.color='#F5572F';__sfx.pop(.4);});
+
+/* ---- 场景 C ---- */
+on(26500,()=>{scene('scC');rail('st3','on');camFocus(660,300,1.1,.5);$('#cBar').classList.add('in');$('#cDl').classList.add('in');__sfx.whoosh(.8,.6);}); // 19:16「我们先去Python的官网」
+on(27600,()=>{ // 19:17「python.org下载安装包」
+  let v=0;tws.push({t:27600,d:1500,e:eo,f:p=>{const n=Math.round(p*100);if(n!==v){v=n;$('#dlfill').style.width=n+'%';$('#dlpc').textContent=n+'%';if(n%12<2)__sfx.type(.4)}}});
+});
+on(29500,()=>{$('#inst').classList.add('in');camFocus(1500,470,1.04,.5);__sfx.pop(.7);});   // 19:19「在安装界面这里」
+on(30800,()=>{$('#mark').classList.add('on');__sfx.pop(.6);});                   // 19:20「第一个勾选框」
+on(32000,()=>{$('#mark').classList.add('on');__sfx.ding(.4);});                  // 19:21「Add Python to PATH」
+on(32800,()=>{$('#cbx').classList.add('chk');__sfx.thud(.7);});                  // 19:23「务必要勾上」
+on(34200,()=>{$('#cWarn').classList.add('in');__sfx.pop(.5);});                  // 19:24「这个勾决定命令行能不能找得到Python」
+on(37000,()=>{$('#w1').innerHTML='漏勾 Add Python to PATH，<b>后面每一步都会报错</b>';$('#w2').classList.remove('dim');$('#cWarn').style.borderLeftColor='#F5572F';__sfx.thud(.8);}); // 19:27「如果漏了它」
+on(20000,()=>{$('#fish').classList.add('show');__sfx.pop(.5);}); // 角色定场（大肥鱼）
+on(38000,()=>{__sfx.whoosh(.6,.5);});                                            // 19:29「后面每一步都会报错的」
+
+/* ===== [不动] QA 专用 ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

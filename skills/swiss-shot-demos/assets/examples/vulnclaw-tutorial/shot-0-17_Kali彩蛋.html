@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+  ◆ 分镜演示页：镜头 0-17 · Kali彩蛋（22s）◆ ｜v4 瑞士国际主义
+  主视觉：lieflat F1 可数化 + 网格工具矩阵（5×4 灰阶，1 格 = 1 工具）
+          + 抽象终端窗 / 三步流程流线
+  纸底 #F0EFEB × 墨 #1C1C1A × 灰阶 × 唯一橙 #F5572F（焦点 = 彩蛋）
+  字体：Inter × Noto Sans SC × IBM Plex Mono
+============================================================= -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});}
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 0-17 · Kali彩蛋 · 22s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;
+  --grid:#DEDDD6;--accent:#F5572F;--dark:#1C1C1A;--darkink:#F0EFEB;--darkgrid:#2E2D29;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Inter','Noto Sans SC',sans-serif;color:var(--ink)}
+body.paused *{animation-play-state:paused!important}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#stage::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:1;
+  background-image:linear-gradient(rgba(28,28,26,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.05) 1px,transparent 1px);
+  background-size:132px 132px}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ============ ③ 画面层 CSS ============ */
+/* ── 页眉 ── */
+#head{position:absolute;left:88px;top:44px;width:1744px;display:flex;justify-content:space-between;align-items:flex-start;
+  z-index:20;opacity:0;transform:translateY(-16px);transition:all .6s cubic-bezier(.16,1,.3,1),opacity .6s}
+#head.in{opacity:1;transform:translateY(0)}
+#head.dim{opacity:.4}
+#head .eyebrow{display:flex;gap:12px;align-items:center;font:600 15px 'Inter';letter-spacing:.14em;text-transform:uppercase;color:var(--ink)}
+#head .no{background:var(--ink);color:var(--paper);padding:3px 10px;border-radius:3px;font-weight:700;letter-spacing:.14em}
+#head .cn{font-family:'Noto Sans SC';letter-spacing:.06em}
+#head h1{margin-top:16px;font:800 56px/1.05 'Inter','Noto Sans SC';letter-spacing:-.03em;color:var(--ink)}
+#head h1 b{font-family:'Noto Sans SC';font-weight:900;color:var(--ink)}
+#head .en{margin-top:12px;font:600 13px 'IBM Plex Mono';color:var(--muted);letter-spacing:.3em;text-transform:uppercase}
+/* 彩蛋图标 = 唯一橙焦点 */
+#head .egg{position:relative;width:132px;height:132px;flex:none}
+#head .egg svg{width:132px;height:132px;transform:rotate(-8deg)}
+#head .egg .tag{position:absolute;left:50%;bottom:-4px;transform:translateX(-50%) rotate(-6deg);
+  font:900 20px 'Noto Sans SC';letter-spacing:.14em;color:var(--paper);background:var(--ink);
+  border-radius:999px;padding:4px 16px;opacity:0;transition:opacity .4s}
+#head .egg.on .tag{opacity:1}
+
+/* ── 主视觉：Kali 工具矩阵板（≥55%，第一焦点） ── */
+#board{position:absolute;left:64px;top:196px;width:1792px;height:660px;z-index:12;
+  border:1.5px solid var(--ink);border-radius:18px;background:var(--card);
+  opacity:0;transform:translateY(24px) scale(.985);transition:all .7s cubic-bezier(.16,1,.3,1),border-color .4s}
+#board.in{opacity:1;transform:none}
+#board.dim{opacity:.4}
+#board.glow{border-width:2.5px}
+/* 板角刻度 */
+.corner-tick{position:absolute;width:24px;height:24px;border:2px solid var(--ink);pointer-events:none}
+.corner-tick.tl{left:12px;top:12px;border-right:0;border-bottom:0;border-radius:8px 0 0 0}
+.corner-tick.tr{right:12px;top:12px;border-left:0;border-bottom:0;border-radius:0 8px 0 0}
+.corner-tick.bl{left:12px;bottom:12px;border-right:0;border-top:0;border-radius:0 0 0 8px}
+.corner-tick.br{right:12px;bottom:12px;border-left:0;border-top:0;border-radius:0 0 8px 0}
+.btitle{position:absolute;left:34px;top:16px;font:700 14px 'IBM Plex Mono';letter-spacing:.2em;color:var(--ink);text-transform:uppercase}
+.btitle b{color:var(--muted)}
+
+/* 定位小卡（渗透测试专用系统） */
+#tagSpec{position:absolute;left:34px;top:44px;display:flex;align-items:center;gap:9px;z-index:6;
+  font:500 15px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em;
+  opacity:0;transform:translateX(-14px);transition:all .5s cubic-bezier(.2,1.4,.4,1)}
+#tagSpec.in{opacity:1;transform:none}
+#tagSpec i{width:10px;height:10px;border-radius:3px;background:var(--ink);transform:rotate(45deg)}
+#tagSpec b{color:var(--ink);font-weight:900;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:4px}
+
+/* READY 印章（墨底反白） */
+#stamp{position:absolute;right:38px;top:32px;font:800 26px 'Inter';letter-spacing:.16em;color:var(--paper);
+  background:var(--ink);border-radius:10px;padding:7px 20px;transform:rotate(-7deg) scale(2.6);opacity:0;
+  transition:transform .34s cubic-bezier(.2,1.5,.4,1),opacity .3s;z-index:7}
+#stamp.in{opacity:1;transform:rotate(-7deg) scale(1)}
+
+/* ── 终端窗（左，抽象行块，不写真实回显） ── */
+#term{position:absolute;left:28px;top:92px;width:596px;height:290px;z-index:5;border-radius:12px;overflow:hidden;
+  border:1.5px solid var(--ink);background:var(--paper);
+  opacity:0;transform:translateY(24px) scale(.97);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#term.in{opacity:1;transform:none}
+.vt-bar{height:34px;background:var(--ink);display:flex;align-items:center;gap:7px;padding:0 12px}
+.vt-bar i{width:9px;height:9px;border-radius:50%;background:#6A6963}
+.vt-bar i:nth-child(1){background:#B0AFA9}.vt-bar i:nth-child(2){background:#8F8E88}.vt-bar i:nth-child(3){background:#F0EFEB}
+.vt-bar .t{margin-left:6px;font:600 12px 'IBM Plex Mono';color:var(--paper);letter-spacing:.06em}
+.vt-body{position:relative;height:256px;padding:18px 20px}
+.vt-line{display:flex;align-items:center;gap:10px;height:34px}
+.vt-ps{flex:none;width:40px;height:11px;border-radius:3px;background:var(--ink);opacity:.9}
+.vt-b1{height:11px;border-radius:3px;background:var(--faint);transform:scaleX(0);transform-origin:left;
+  transition:transform .45s cubic-bezier(.16,1,.3,1)}
+.vt-b1.grow{transform:scaleX(1)}
+.vt-caret{display:inline-block;width:9px;height:17px;background:var(--ink);opacity:0}
+.vt-caret.on{animation:vtblk .8s steps(1) infinite;opacity:1}
+@keyframes vtblk{50%{opacity:0}}
+.vt-note{position:absolute;right:12px;bottom:8px;font:600 10px 'IBM Plex Mono';letter-spacing:.1em;color:var(--muted)}
+.vt-dragon{position:absolute;right:18px;top:14px;opacity:.5}
+
+/* ── 工具矩阵（右，5×4=20 逐格点亮 · 灰阶） ── */
+#matrix{position:absolute;left:648px;top:92px;width:1116px;height:290px;z-index:5;
+  display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:repeat(4,1fr);gap:12px;overflow:hidden;border-radius:12px}
+#matrix::after{content:'';position:absolute;inset:0;border-radius:12px;pointer-events:none;opacity:0;
+  background:rgba(28,28,26,.10);transform:translateX(-110%)}
+#matrix.scan::after{animation:mscan 1.15s ease 2}
+@keyframes mscan{0%{opacity:1;transform:translateX(-110%)}100%{opacity:1;transform:translateX(110%)}}
+.mtile{position:relative;display:flex;align-items:center;gap:10px;padding:0 14px;border-radius:10px;
+  background:var(--paper);border:1px solid var(--grid);
+  opacity:0;transform:scale(.7) translateY(10px);transition:all .4s cubic-bezier(.2,1.5,.4,1)}
+.mtile.in{opacity:1;transform:none}
+.mtile .ti{width:20px;height:20px;border-radius:5px;flex:none;background:var(--muted)}
+.mtile:nth-child(3n) .ti{background:#6A6963}
+.mtile:nth-child(3n+1) .ti{background:var(--faint)}
+.mtile .tn{font:600 14px 'IBM Plex Mono';color:var(--ink);letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mtile.pulse{border-color:var(--ink);border-width:2px}
+/* lieflat F1：工具矩阵可数化（1 格 = 1 个工具 · 每 5 格一个点标） */
+.mtile .tidx{position:absolute;right:9px;top:6px;font:600 10px 'IBM Plex Mono';letter-spacing:.06em;
+  color:var(--faint)}
+.mtile.m5::after{content:'';position:absolute;left:9px;bottom:7px;width:6px;height:6px;border-radius:50%;
+  background:var(--ink)}
+#munit{position:absolute;left:648px;top:384px;width:1116px;font:600 11px 'IBM Plex Mono';letter-spacing:.14em;
+  color:var(--muted);opacity:0;transition:opacity .5s;text-transform:uppercase}
+#board.in #munit{opacity:1}
+
+/* ── 三步流程路径（板内下带） + 粒子 ── */
+#lane{position:absolute;left:28px;top:406px;width:1736px;height:232px;z-index:5;border-radius:12px}
+.p-track{position:absolute;left:110px;top:56px;height:2px;width:1500px;background:var(--ink);
+  transform:scaleX(0);transform-origin:left;transition:transform .9s cubic-bezier(.16,1,.3,1)}
+.p-track.in{transform:scaleX(1)}
+.pp{position:absolute;top:50px;width:11px;height:11px;border-radius:50%;background:var(--ink);opacity:0}
+#lane.on .pp{animation:pflow 2.6s linear infinite}
+.pp:nth-of-type(3n){background:var(--muted)}
+@keyframes pflow{0%{left:110px;opacity:0}10%{opacity:1}90%{opacity:1}100%{left:1598px;opacity:0}}
+.pnode{position:absolute;top:8px;width:360px;text-align:center;opacity:0;transform:translateY(22px);
+  transition:all .55s cubic-bezier(.2,1.3,.4,1)}
+.pnode.in{opacity:1;transform:none}
+.pnode .pc{width:78px;height:78px;margin:0 auto;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font:800 32px 'Inter';color:var(--ink);
+  background:var(--card);border:3px solid var(--ink)}
+.pnode .pt{margin-top:12px;font:700 28px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em}
+.pnode .ps{margin-top:6px;font:500 15px 'Noto Sans SC';color:var(--muted);letter-spacing:.02em}
+.pnode.hot .pc{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.pnode.hot .pt{color:var(--ink)}
+
+/* 本期走 WinServer 标签 */
+#tagWin{position:absolute;right:34px;bottom:16px;display:flex;align-items:center;gap:10px;z-index:6;
+  font:500 15px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em;background:var(--paper);
+  border:1px solid var(--ink);border-radius:999px;padding:7px 18px;
+  opacity:0;transform:translateY(14px);transition:all .5s cubic-bezier(.2,1.4,.4,1)}
+#tagWin.in{opacity:1;transform:none}
+#tagWin.lit{border-width:2px}
+#tagWin.glow{border-width:2.5px}
+#tagWin b{color:var(--ink);font-weight:900;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:4px}
+#tagWin i{width:9px;height:9px;border-radius:2px;background:var(--ink);transform:rotate(45deg)}
+
+/* ── 尾注条 ── */
+#foot{position:absolute;left:64px;top:872px;width:1792px;height:64px;z-index:13;
+  display:flex;align-items:center;justify-content:center;gap:18px;
+  border:1px solid var(--grid);border-radius:12px;background:var(--card);
+  opacity:0;transform:translateY(16px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#foot.in{opacity:1;transform:translateY(0)}
+#foot .k{font:600 13px 'IBM Plex Mono';letter-spacing:.2em;color:var(--muted);text-transform:uppercase}
+#foot .v{font:700 28px 'Noto Sans SC';letter-spacing:.04em;color:var(--ink)}
+#foot .v b{color:var(--ink);font-weight:900;text-decoration:underline;text-decoration-thickness:3px;text-underline-offset:6px}
+
+/* ── 纸屑（灰阶单色装饰） ── */
+.conf{position:absolute;width:10px;height:16px;border-radius:2px;opacity:0;z-index:14;pointer-events:none}
+.conf.go{animation:confFall 1.9s cubic-bezier(.3,.7,.5,1) forwards}
+@keyframes confFall{0%{opacity:0;transform:translateY(-40px) rotate(0)}10%{opacity:1}100%{opacity:0;transform:translateY(300px) rotate(420deg)}}
+
+/* ── 大肥鱼 ── */
+.fish{position:absolute;width:264px;z-index:35;opacity:0;transform:translateY(24px) scale(.7);
+  transition:all .45s cubic-bezier(.34,1.5,.64,1);pointer-events:none}
+.fish.show{opacity:1;transform:translateY(0) scale(1)}
+.fish img{width:100%;display:block}
+.fish .say{position:absolute;width:250px;background:var(--card);border:1px solid var(--ink);border-radius:12px;
+  padding:13px 16px;font:900 21px/1.45 'Noto Sans SC';color:var(--ink);
+  opacity:0;transform:scale(.72);transition:all .4s cubic-bezier(.34,1.5,.64,1) .15s}
+.fish.show .say{opacity:1;transform:scale(1)}
+.fish .say b{font-weight:900;color:var(--ink);text-decoration:underline;text-decoration-thickness:3px;text-underline-offset:4px}
+#fish1{left:1558px;top:206px}
+#fish1 .say{right:250px;top:16px}
+#fish1 .say::after{content:'';position:absolute;right:-13px;top:50%;margin-top:-8px;width:14px;height:14px;background:var(--card);border-right:1px solid var(--ink);border-top:1px solid var(--ink);transform:rotate(45deg)}
+
+/* ── 角注 / HUD ── */
+.corner{position:absolute;font:500 13px 'IBM Plex Mono';letter-spacing:.14em;color:var(--muted);z-index:41;text-transform:uppercase}
+#chap{left:88px;bottom:30px}
+#src{right:88px;bottom:30px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:rgba(28,28,26,.12)}
+#bar{height:100%;width:0;background:var(--ink)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(240,239,235,.95);backdrop-filter:blur(4px);color:#555}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #999;color:#333;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(28,28,26,.08)}
+#replay.done{border-color:var(--accent);color:var(--accent)}
+/* ============ ③ 结束 ============ */
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- ============ ④ 画面层 HTML ============ -->
+  <div id="cam">
+
+    <div id="head">
+      <div class="left">
+        <div class="eyebrow"><span class="no">SHOT 0-17</span><span class="cn">第一章 · 准备工作 / 系统镜像</span></div>
+        <h1>再来一个<b>彩蛋</b></h1>
+        <div class="en">EASTER EGG · KALI LINUX</div>
+      </div>
+      <div class="egg" id="eggBadge">
+        <svg viewBox="0 0 100 120">
+          <ellipse cx="50" cy="66" rx="34" ry="46" fill="none" stroke="#F5572F" stroke-width="3"/>
+          <path d="M50 20 C56 34 50 40 50 40 C50 40 44 34 50 20 Z" fill="#F5572F" opacity=".55"/>
+          <circle cx="38" cy="60" r="4.5" fill="#1C1C1A"/><circle cx="62" cy="60" r="4.5" fill="#1C1C1A"/>
+          <path d="M36 86 C42 92 58 92 64 86" fill="none" stroke="#1C1C1A" stroke-width="3" stroke-linecap="round"/>
+          <path d="M28 48 L40 52 M72 48 L60 52" stroke="#1C1C1A" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+        <div class="tag">彩蛋</div>
+      </div>
+    </div>
+
+    <!-- ===== 主视觉：Kali 工具矩阵板 ===== -->
+    <div id="board">
+      <span class="corner-tick tl"></span><span class="corner-tick tr"></span>
+      <span class="corner-tick bl"></span><span class="corner-tick br"></span>
+      <div class="btitle">KALI <b>·</b> 工具矩阵</div>
+
+      <div id="tagSpec"><i></i>渗透测试专用系统 · <b>自带几百个安全工具</b></div>
+      <div id="stamp">READY</div>
+
+      <!-- 终端窗（抽象行块，不写真实回显） -->
+      <div id="term">
+        <div class="vt-bar"><i></i><i></i><i></i><span class="t">kali — terminal</span></div>
+        <div class="vt-body">
+          <svg class="vt-dragon" width="34" height="34" viewBox="0 0 40 40" fill="none">
+            <path d="M20 4 L32 12 V26 L20 36 L8 26 V12 Z" stroke="#1C1C1A" stroke-width="2" fill="none"/>
+            <circle cx="20" cy="20" r="4" fill="#1C1C1A"/>
+          </svg>
+          <div class="vt-line"><span class="vt-ps"></span><span class="vt-b1" id="vb1" style="width:62%"></span></div>
+          <div class="vt-line"><span class="vt-ps"></span><span class="vt-b1" id="vb2" style="width:44%"></span></div>
+          <div class="vt-line"><span class="vt-ps"></span><span class="vt-b1" id="vb3" style="width:70%"></span></div>
+          <div class="vt-line"><span class="vt-ps"></span><span class="vt-b1" id="vb4" style="width:54%"></span><span class="vt-caret" id="vtCaret"></span></div>
+          <span class="vt-note">示意图 · 非实拍</span>
+        </div>
+      </div>
+
+      <!-- 工具矩阵：5×4 逐格点亮 -->
+      <div id="matrix">
+        <div class="mtile" id="t1"><span class="ti"></span><span class="tn">nmap</span></div>
+        <div class="mtile" id="t2"><span class="ti"></span><span class="tn">sqlmap</span></div>
+        <div class="mtile" id="t3"><span class="ti"></span><span class="tn">hydra</span></div>
+        <div class="mtile" id="t4"><span class="ti"></span><span class="tn">john</span></div>
+        <div class="mtile" id="t5"><span class="ti"></span><span class="tn">nikto</span></div>
+        <div class="mtile" id="t6"><span class="ti"></span><span class="tn">gobuster</span></div>
+        <div class="mtile" id="t7"><span class="ti"></span><span class="tn">wpscan</span></div>
+        <div class="mtile" id="t8"><span class="ti"></span><span class="tn">hashcat</span></div>
+        <div class="mtile" id="t9"><span class="ti"></span><span class="tn">netcat</span></div>
+        <div class="mtile" id="t10"><span class="ti"></span><span class="tn">tcpdump</span></div>
+        <div class="mtile" id="t11"><span class="ti"></span><span class="tn">dnsrecon</span></div>
+        <div class="mtile" id="t12"><span class="ti"></span><span class="tn">responder</span></div>
+        <div class="mtile" id="t13"><span class="ti"></span><span class="tn">ettercap</span></div>
+        <div class="mtile" id="t14"><span class="ti"></span><span class="tn">openvas</span></div>
+        <div class="mtile" id="t15"><span class="ti"></span><span class="tn">zap</span></div>
+        <div class="mtile" id="t16"><span class="ti"></span><span class="tn">wireshark</span></div>
+        <div class="mtile" id="t17"><span class="ti"></span><span class="tn">metasploit</span></div>
+        <div class="mtile" id="t18"><span class="ti"></span><span class="tn">burpsuite</span></div>
+        <div class="mtile" id="t19"><span class="ti"></span><span class="tn">sqlitebrowser</span></div>
+        <div class="mtile" id="t20"><span class="ti"></span><span class="tn">searchsploit</span></div>
+      </div>
+
+      <div id="munit">示意网格 · 1 格 = 1 类工具 · 仅示部分</div>
+
+      <!-- 三步流程路径 + 粒子 -->
+      <div id="lane">
+        <div class="p-track" id="ptrack"></div>
+        <span class="pp" style="animation-delay:0s"></span><span class="pp" style="animation-delay:.43s"></span><span class="pp" style="animation-delay:.86s"></span>
+        <span class="pp" style="animation-delay:1.29s"></span><span class="pp" style="animation-delay:1.72s"></span><span class="pp" style="animation-delay:2.15s"></span>
+
+        <div class="pnode" id="p1" style="left:40px">
+          <div class="pc">01</div><div class="pt">下载镜像</div><div class="ps">官网给做好的虚拟机镜像</div>
+        </div>
+        <div class="pnode" id="p2" style="left:688px">
+          <div class="pc">02</div><div class="pt">解压</div><div class="ps">一个压缩包，解开就完事</div>
+        </div>
+        <div class="pnode" id="p3" style="left:1336px">
+          <div class="pc">03</div><div class="pt">打开就能用</div><div class="ps">连安装步骤都省了</div>
+        </div>
+      </div>
+
+      <div id="tagWin"><i></i>这期教学走 <b>Windows Server 2022</b></div>
+    </div>
+
+    <!-- 尾注 -->
+    <div id="foot"><span class="k">IF YOU WANT</span><span class="v">想直奔安全工具的朋友 · 回头可以试试 <b>Kali</b></span></div>
+
+    <!-- 纸屑 -->
+    <div class="conf" id="cf1"></div><div class="conf" id="cf2"></div><div class="conf" id="cf3"></div>
+    <div class="conf" id="cf4"></div><div class="conf" id="cf5"></div><div class="conf" id="cf6"></div>
+
+    <!-- 大肥鱼 -->
+    <div class="fish" id="fish1">
+      <div class="say">这个<b>我要玩</b>！</div>
+      <img src="Shark-GIF/026_双手合十微笑请求拜托.gif" alt="大肥鱼">
+    </div>
+
+  </div>
+  <div class="corner" id="chap">第一章 · 准备工作 / 系统镜像</div>
+  <div class="corner" id="src">Kali 定位与官方镜像形态依据口播（2026-09）</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-17 · Kali彩蛋 · 22s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=22000; /* ←⑤ DUR = 分镜时长(ms) */
+const $=s=>document.querySelector(s);
+const $$=s=>document.querySelectorAll(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ── F1 可数化：给 20 格工具矩阵编号 + 每 5 格点标 ── */
+(function(){
+  for(let i=1;i<=20;i++){
+    const el=$('#t'+i);if(!el)continue;
+    const s=document.createElement('span');s.className='tidx';s.textContent=(i<10?'0':'')+i;
+    el.appendChild(s);
+    if(i%5===0)el.classList.add('m5');
+  }
+})();
+
+/* ── 纸屑喷射（灰阶单色） ── */
+function confetti(){
+  const cols=['#1C1C1A','#6A6963','#8F8E88','#C6C5BF'];
+  for(let i=1;i<=6;i++){
+    const c=$('#cf'+i);
+    c.style.left=(520+i*150+ (i%3)*40)+'px';
+    c.style.top=(480+(i%2)*30)+'px';
+    c.style.background=cols[i%4];
+    c.classList.remove('go');void c.offsetWidth;c.classList.add('go');
+  }
+}
+
+/* ============ ⑤ DUR 与 cue 表 ============
+   镜头起点 7:36 · cue = 口播句起点 − 7:36
+*/
+on(120,()=>camTo(-57,0,1.055,1.6));                                  // 起手轻推，落定全幅（不裁边）
+on(200,()=>$('#head').classList.add('in'));                          // 7:36「然后这里我再给一个彩蛋」
+on(300,()=>{confetti();__sfx.swipe(.7)});                            // 彩蛋开场彩纸
+on(2000,()=>{$('#eggBadge').classList.add('on');$('#board').classList.add('in');__sfx.pop(.8)}); // 7:38「学网安的朋友们应该都听过Kali」
+on(3000,()=>{$('#tagSpec').classList.add('in');__sfx.pop(.6)});       // 7:39「渗透测试专用系统」
+on(3600,()=>confetti());
+on(5000,()=>{$('#board').classList.add('glow');});                    // 7:41「自带了几百个安全工具」（工具矩阵逐格点亮）
+
+/* 主视觉 · 三步流程路径 */
+on(7000,()=>{                                                        // 7:43「那么Kali的官网，它会直接提供做好的VMware虚拟机镜像」
+  camFocus(960,520,1.065,0.6);
+  $('#lane').classList.add('on');
+  $('#ptrack').classList.add('in');__sfx.swipe(.8);
+});
+on(7400,()=>{$('#p1').classList.add('in');__sfx.pop(.7)});           // 7:43「直接提供做好的 VMware 虚拟机镜像」→下载
+on(10000,()=>{$('#p2').classList.add('in');__sfx.pop(.8)});          // 7:46「这个是下载解压」
+on(12000,()=>{$('#p3').classList.add('in');__sfx.pop(.8)});          // 7:48「然后用VMware打开就能直接用的」
+on(14000,()=>{                                                       // 7:50「连安装步骤都省了」
+  $('#p3').classList.add('hot');confetti();__sfx.ding(.9);
+  $('#stamp').classList.add('in');
+});
+on(15000,()=>{$('#tagWin').classList.add('in');__sfx.pop(.7)});      // 7:51「不过我们这期视频教学」
+on(16000,()=>{$('#tagWin').classList.add('lit');__sfx.type(.7)});    // 7:52「用的是Windows Server 2022」
+on(17000,()=>{$('#tagWin').classList.add('glow');__sfx.type(.7)});
+on(14300,()=>{                                                       // 大肥鱼快闪：叠在压暗的页眉+工具板上
+  $('#head').classList.add('dim');$('#board').classList.add('dim');
+});
+on(16600,()=>{$('#head').classList.remove('dim');$('#board').classList.remove('dim')});
+on(11800,()=>{$('#fish1').classList.add('show');__sfx.pop(.6)});      // 大肥鱼提前定场（原 14300 过晚）
+on(20500,()=>$('#fish1').classList.remove('show'));                   // 退场顺延（原 16600 过早）
+on(18000,()=>{                                                       // 7:54「如果有想直奔安全工具的朋友」
+  camTo(0,0,1.02,0.7);$('#foot').classList.add('in');__sfx.thud(.8);
+});
+on(21000,()=>{__sfx.ding(1)}); // 7:57「回头也可以试试Kali」
+
+/* ── 主视觉动画：终端窗行块 + 工具矩阵逐格点亮 ── */
+on(3200,()=>{$('#term').classList.add('in');__sfx.whoosh(.6,.45);});   // 终端窗口入场
+on(3900,()=>{$('#vb1').classList.add('grow');__sfx.type(.5);});        // 抽象行块逐行生长
+on(4400,()=>{$('#vb2').classList.add('grow');__sfx.type(.5);});
+on(4900,()=>{$('#vb3').classList.add('grow');$('#vb4').classList.add('grow');$('#vtCaret').classList.add('on');__sfx.type(.5);});
+on(5000,()=>{$('#matrix').classList.add('on');});                      // 工具矩阵入场
+['t1','t2','t3','t4','t5','t6','t7','t8','t9','t10','t11','t12','t13','t14','t15','t16','t17','t18','t19','t20'].forEach((id,i)=>
+  on(5000+i*130,()=>{$('#'+id).classList.add('in');__sfx.pop(.4);})); // 7:41「自带几百个安全工具」逐个弹入
+on(6600,()=>{$('#matrix').classList.add('scan');});                    // 工具墙扫描扫光
+
+/* ===== [不动] QA 专用（正常播放不触发）：hash 带 t=毫秒 → 起播后跳转该时刻并冻结 ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

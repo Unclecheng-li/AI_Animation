@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+  ◆ 分镜演示页：镜头 0-12 · 电脑中的电脑（37s）◆ ｜v4 瑞士国际主义
+  主视觉：diagram-design type-nested（宿主框 / 客户机框 · 发丝线 + 编号）
+          + archify 剖视（OS / 硬盘 / 内存 三层 · 危害墨点撞隔离边界）
+  纸底 #F0EFEB × 墨 #1C1C1A × 灰阶 × 唯一橙 #F5572F（焦点 = 隔离的客户机）
+  字体：Inter × Noto Sans SC × IBM Plex Mono
+  口播区间 4:54–5:31（cue = 口播起点 − 4:54）
+============================================================= -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 0-12 · 电脑中的电脑 · 37s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;
+  --grid:#DEDDD6;--accent:#F5572F;--dark:#1C1C1A;--darkink:#F0EFEB;--darkgrid:#2E2D29;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Inter','Noto Sans SC',sans-serif;color:var(--ink)}
+body.paused *{animation-play-state:paused!important}
+/* 舞台：纸底 + 12 列发丝网格 */
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#stage::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:1;
+  background-image:linear-gradient(rgba(28,28,26,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.05) 1px,transparent 1px);
+  background-size:132px 132px}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+#world{position:absolute;inset:0}
+#world.quake{animation:quake .5s linear}
+@keyframes quake{20%{transform:translate(-9px,5px)}40%{transform:translate(8px,-6px)}60%{transform:translate(-5px,-4px)}80%{transform:translate(4px,3px)}}
+
+/* ── 标题组 ── */
+#ttl{position:absolute;left:88px;top:38px;z-index:20;opacity:0;transform:translateY(-14px);transition:all .6s cubic-bezier(.16,1,.3,1)}
+#ttl.in{opacity:1;transform:none}
+#ttl .eyebrow{display:flex;gap:12px;align-items:center;font:600 15px 'Inter';letter-spacing:.14em;text-transform:uppercase;color:var(--ink)}
+#ttl .no{background:var(--ink);color:var(--paper);padding:3px 10px;border-radius:3px;font-weight:700;letter-spacing:.14em}
+#ttl .cn{font-family:'Noto Sans SC';letter-spacing:.06em}
+#ttl h1{font:800 58px/1 'Inter','Noto Sans SC';letter-spacing:-.03em;color:var(--ink);margin-top:14px}
+#ttl h1 b{font-family:'Noto Sans SC';font-weight:900}
+#ttl .en{font:600 13px 'IBM Plex Mono';letter-spacing:.3em;color:var(--muted);margin-top:10px;text-transform:uppercase}
+
+/* ── 大框：宿主机（nested 外环 · 浅发丝） ── */
+#host{position:absolute;left:76px;top:206px;width:1768px;height:640px;border:1.5px solid rgba(28,28,26,.30);border-radius:12px;
+  background:rgba(28,28,26,.012);opacity:0;transform:scale(1.03);
+  transition:opacity .7s ease,transform .7s cubic-bezier(.16,1,.3,1);z-index:11}
+#host.in{opacity:1;transform:none}
+#host.safe{border-color:var(--ink);border-width:2.5px}
+#host .tik{position:absolute;width:24px;height:24px;border:2px solid var(--ink);opacity:0;transition:opacity .5s}
+#host.in .tik{opacity:.55}
+#host .tik.tl{left:-2px;top:-2px;border-right:0;border-bottom:0;border-radius:14px 0 0 0}
+#host .tik.tr{right:-2px;top:-2px;border-left:0;border-bottom:0;border-radius:0 14px 0 0}
+#host .tik.bl{left:-2px;bottom:-2px;border-right:0;border-top:0;border-radius:0 0 0 14px}
+#host .tik.br{right:-2px;bottom:-2px;border-left:0;border-top:0;border-radius:0 0 0 14px}
+#htag{position:absolute;left:28px;top:-16px;display:inline-flex;align-items:center;gap:10px;font:600 15px 'Inter','Noto Sans SC';
+  letter-spacing:.02em;color:var(--ink);border:1.5px solid rgba(28,28,26,.4);border-radius:6px;padding:6px 15px 5px;background:var(--paper);
+  transition:all .42s cubic-bezier(.2,1.4,.4,1)}
+#htag em{font-style:normal;font-weight:400;font-size:12px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;margin-left:2px}
+#htag .kind{margin-left:2px}
+/* nested 环层图注：架构语义 kind 铭牌（archify region） */
+.kind{display:inline-block;font:700 10.5px 'IBM Plex Mono';letter-spacing:.16em;padding:3px 8px;border-radius:3px;vertical-align:middle;text-transform:uppercase}
+.kind.region{color:var(--muted);background:var(--paper);border:1px solid var(--grid)}
+.kind.sg{color:#fff;background:var(--accent);border:1px solid var(--accent)}
+/* 中环图注：隔离域（nested 描边层级：外环 rule → 中环 muted → 内环 focal） */
+#ftag{position:absolute;left:18px;top:-40px;display:inline-flex;align-items:center;gap:8px;font:600 13px 'IBM Plex Mono';letter-spacing:.14em;
+  color:var(--accent);border:1.5px dashed var(--accent);border-radius:5px;padding:5px 13px;background:var(--paper);
+  opacity:0;transition:opacity .5s ease;z-index:7;text-transform:uppercase}
+#guest.zone #ftag{opacity:1}
+#htag.hi{color:var(--paper);background:var(--ink);border-color:var(--ink);transform:scale(1.07)}
+#htag.hi em{color:var(--faint)}
+#host .sub{position:absolute;left:30px;bottom:16px;font:500 12px 'IBM Plex Mono';letter-spacing:.18em;color:var(--muted);text-transform:uppercase}
+/* 真实系统内部（常驻 · 开场补空） */
+#realsys{position:absolute;left:28px;top:130px;display:flex;flex-direction:column;gap:16px;z-index:6}
+#realsys .rl{font:600 12px 'IBM Plex Mono';letter-spacing:.2em;color:var(--muted);margin-bottom:-2px;text-transform:uppercase}
+#realsys .ri{width:64px;height:64px;border:1.5px solid var(--grid);border-radius:10px;background:var(--card);
+  display:flex;align-items:center;justify-content:center;opacity:0;transform:translateX(-14px);transition:all .5s cubic-bezier(.2,1.4,.4,1)}
+#host.in .ri{opacity:1;transform:none}
+#host.in .ri:nth-of-type(2){transition-delay:.24s}
+#host.in .ri:nth-of-type(3){transition-delay:.4s}
+#host.in .ri:nth-of-type(4){transition-delay:.56s}
+
+/* ── 内框：客户机（nested 焦点 · 唯一橙粗边界） ── */
+#guest{position:absolute;left:400px;top:286px;width:1120px;height:520px;z-index:14;
+  border:3px solid var(--accent);border-radius:14px;background:rgba(245,87,47,.022);
+  box-shadow:0 0 0 9px rgba(245,87,47,.09);
+  opacity:0;transform:scale(.72);
+  transition:opacity .45s ease,transform .5s cubic-bezier(.2,1.5,.4,1),box-shadow .6s}
+#guest.in{opacity:1;transform:none}
+#guest.block{animation:blk .55s ease-out}
+@keyframes blk{
+  0%{box-shadow:0 0 0 9px rgba(245,87,47,.09)}
+  45%{box-shadow:0 0 0 18px rgba(245,87,47,.24)}
+  100%{box-shadow:0 0 0 9px rgba(245,87,47,.09)}}
+#guest.boom{animation:gboom .6s ease-in}
+@keyframes gboom{0%{transform:scale(1)}28%{transform:scale(1.035) translate(7px,-6px)}58%{transform:scale(.985) translate(-7px,5px)}100%{transform:scale(1)}}
+#guest.dead{opacity:0;transform:scale(.9)}
+#guest.reborn{animation:greb .7s ease-out}
+@keyframes greb{
+  0%{box-shadow:0 0 0 3px rgba(245,87,47,.5)}
+  100%{box-shadow:0 0 0 9px rgba(245,87,47,.09)}}
+/* 危害被挡在内框里：贴着隔离边界的内侧墨色虚线环（无发光） */
+#hzglow{position:absolute;left:9px;top:9px;width:1094px;height:494px;border:2px dashed rgba(28,28,26,.5);border-radius:11px;z-index:2;pointer-events:none;
+  opacity:0;transition:opacity .6s ease}
+#hzglow.on{opacity:1}
+/* 内容层永远压在危害环之上 */
+#gtag,#guest .gsub,#guest .lfhead,#guest .cap,.spec,#todo,#gstrip{z-index:6}
+/* 隔离围栏（描粗边界的第二层） */
+#fence{position:absolute;left:-24px;top:-24px;width:1168px;height:568px;overflow:visible;opacity:0;transition:opacity .6s;pointer-events:none}
+#guest.zone #fence{opacity:1}
+#fence rect{fill:none;stroke:var(--accent);stroke-width:2.5;stroke-dasharray:14 12;animation:dash 9s linear infinite}
+@keyframes dash{to{stroke-dashoffset:-260}}
+#fence circle{fill:var(--accent)}
+#gtag{position:absolute;left:24px;top:16px;display:inline-flex;align-items:center;gap:9px;font:700 18px 'Inter','Noto Sans SC';letter-spacing:.02em;
+  color:#fff;background:var(--accent);border-radius:6px;padding:8px 18px;transition:all .42s cubic-bezier(.2,1.4,.4,1)}
+#gtag em{font-style:normal;font-weight:400;font-size:12px;letter-spacing:.14em;color:rgba(255,255,255,.82);text-transform:uppercase}
+#gtag.hi{box-shadow:0 0 0 3px rgba(245,87,47,.28);transform:scale(1.06)}
+#guest .gsub{position:absolute;left:28px;top:62px;font:500 12px 'IBM Plex Mono';letter-spacing:.2em;color:var(--muted);text-transform:uppercase}
+#guest .lfhead{position:absolute;left:24px;top:98px;font:700 18px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em}
+#guest .lfhead b{font-weight:900;color:var(--ink);text-decoration:underline;text-decoration-thickness:3px;text-underline-offset:5px}
+/* 三张规格小卡 */
+.spec{position:absolute;top:146px;width:146px;height:150px;border:1px solid var(--grid);border-radius:12px;background:var(--card);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+  opacity:0;transform:translateY(16px);transition:all .45s cubic-bezier(.2,1.4,.4,1)}
+.spec.in{opacity:1;transform:none}
+.spec .ic{height:48px;display:flex;align-items:center;justify-content:center}
+.spec .nm{font:700 14px 'Noto Sans SC';letter-spacing:.02em;color:var(--ink);text-align:center;line-height:1.4}
+.spec .nm em{font-style:normal;display:block;color:var(--muted);font:600 11px 'IBM Plex Mono';letter-spacing:.16em;margin-top:2px}
+#sp1{left:24px}#sp2{left:182px}#sp3{left:340px}
+.chipset{display:flex;gap:5px;align-items:flex-end}
+.chipset i{display:block;width:9px;height:30px;border-radius:2px;background:var(--ink);opacity:.85}
+.chipset i:nth-child(2){height:36px}#sp3 .chipset i:nth-child(3){height:26px}#sp3 .chipset i:nth-child(4){height:32px}
+#guest .cap{position:absolute;left:24px;top:314px;width:462px;font:500 13px 'Noto Sans SC';letter-spacing:.02em;color:var(--muted);line-height:1.6}
+#guest .cap b{color:var(--ink);font-weight:700;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:4px}
+/* 折腾清单 */
+#todo{position:absolute;left:496px;top:106px;width:584px;height:330px;border:1px solid var(--grid);border-radius:14px;
+  background:var(--card);opacity:0;transform:translateX(26px);transition:all .55s cubic-bezier(.16,1,.3,1);
+  display:flex;align-items:stretch;gap:14px;padding:22px 18px}
+#todo.in{opacity:1;transform:none}
+#todo.flash{animation:todof .55s ease-out}
+@keyframes todof{45%{transform:translateX(6px)}}
+#todo .th{position:absolute;left:18px;top:-15px;display:flex;align-items:center;gap:9px;padding:5px 14px;
+  border:1.5px solid var(--ink);border-radius:6px;background:var(--paper);
+  font:700 13px 'IBM Plex Mono';letter-spacing:.12em;color:var(--ink);text-transform:uppercase}
+#todo .th .dot{width:8px;height:8px;border-radius:50%;background:var(--ink);animation:blip 1.6s ease-in-out infinite}
+@keyframes blip{50%{opacity:.25}}
+.grow{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+  border:1px solid var(--grid);border-radius:12px;background:var(--paper);
+  opacity:0;transform:translateY(16px);transition:all .45s cubic-bezier(.2,1.4,.4,1)}
+.grow.in{opacity:1;transform:none}
+.grow .ic{height:66px;display:flex;align-items:center;justify-content:center}
+.grow .tx{font:700 20px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em;text-align:center}
+.hit{animation:hitWall .68s cubic-bezier(.3,.9,.4,1)}
+@keyframes hitWall{0%{transform:translateX(0)}28%{transform:translateX(36px)}54%{transform:translateX(4px)}76%{transform:translateX(22px)}100%{transform:translateX(0)}}
+.hit .mark{opacity:1;transform:scale(1)}
+.mark{position:absolute;right:10px;bottom:10px;transform:scale(.3);opacity:0;
+  font:800 18px 'Noto Sans SC';color:var(--paper);background:var(--ink);border-radius:5px;padding:2px 9px;
+  transition:all .4s cubic-bezier(.2,1.7,.4,1)}
+/* 内框状态条 */
+#gstrip{position:absolute;left:22px;top:468px;width:1076px;height:38px;border-radius:8px;border:1.5px dashed var(--ink);
+  display:flex;align-items:center;padding:0 16px;font:600 15px 'Noto Sans SC';letter-spacing:.02em;color:var(--ink);
+  background:var(--card);opacity:0;transition:opacity .4s ease}
+#gstrip.in{opacity:1}
+#gstrip b{font-weight:900;color:var(--ink);text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:4px}
+#gstrip.swap{animation:swapx .42s ease-out}
+@keyframes swapx{0%{transform:translateX(12px)}100%{transform:none}}
+
+/* ── 右侧空档区：重建计时 / 毫发无损 ── */
+#timer{position:absolute;left:1562px;top:452px;width:250px;padding:14px 16px;border:1px solid var(--grid);border-radius:12px;
+  background:var(--card);z-index:18;opacity:0;transform:translateX(24px);transition:all .45s cubic-bezier(.2,1.4,.4,1)}
+#timer.in{opacity:1;transform:none}
+#timer .t1{font:600 11px 'IBM Plex Mono';letter-spacing:.18em;color:var(--muted);text-transform:uppercase}
+#timer .t2{font:700 18px 'Noto Sans SC';color:var(--ink);margin-top:8px;letter-spacing:.02em}
+#timer .t2 b{font-weight:900;color:var(--ink);text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:4px}
+#timer .sp{height:4px;margin-top:12px;border-radius:2px;background:var(--grid);overflow:hidden}
+#timer .sp i{display:block;height:100%;width:0;background:var(--ink);transition:width .8s ease}
+#safe{position:absolute;left:1560px;top:286px;width:262px;padding:16px 18px;border-radius:12px;
+  background:var(--ink);color:var(--paper);z-index:19;opacity:0;transform:scale(.5) rotate(-3deg);transition:all .5s cubic-bezier(.2,1.5,.4,1)}
+#safe.in{opacity:1;transform:scale(1) rotate(-2deg)}
+#safe .s1{font:900 24px 'Noto Sans SC';color:var(--paper);letter-spacing:.12em}
+#safe .s2{font:600 11px 'IBM Plex Mono';letter-spacing:.16em;color:var(--faint);margin-top:7px;text-transform:uppercase}
+
+/* ── AI 代码芯片（飞入内框） ── */
+#aichip{position:absolute;left:-340px;top:714px;z-index:20;padding:11px 20px;border:1.5px solid var(--ink);border-radius:10px;
+  background:var(--card);white-space:nowrap;
+  display:flex;align-items:center;gap:11px;transition:left 1.05s cubic-bezier(.3,1,.4,1),top 1.05s cubic-bezier(.3,1,.4,1),opacity .35s}
+#aichip .d{width:10px;height:10px;border-radius:2px;background:var(--ink)}
+#aichip .t{font:700 15px 'Noto Sans SC';letter-spacing:.02em;color:var(--ink)}
+#aichip.trail::after{content:'';position:absolute;right:100%;top:50%;width:150px;height:2px;transform:translateY(-50%);
+  background:linear-gradient(90deg,transparent,rgba(28,28,26,.5))}
+
+/* ── 中段大字「电脑中的电脑」 ── */
+#midbig{position:absolute;left:0;right:0;top:440px;text-align:center;z-index:24;opacity:0;transform:scale(1.5);
+  transition:all .34s cubic-bezier(.2,1.5,.4,1);pointer-events:none}
+#midbig.in{opacity:1;transform:scale(1)}
+#midbig .m1{font:900 148px/1 'Inter','Noto Sans SC';color:var(--ink);letter-spacing:-.03em}
+#midbig .m2{font:600 14px 'IBM Plex Mono';letter-spacing:.36em;color:var(--muted);margin-top:14px;text-indent:.36em;text-transform:uppercase}
+#midveil{position:absolute;inset:0;background:radial-gradient(closest-side at 50% 46%,rgba(240,239,235,.94) 34%,rgba(240,239,235,.66) 100%);
+  z-index:23;opacity:0;transition:opacity .34s;pointer-events:none}
+#midveil.in{opacity:1}
+
+/* ── 大肥鱼 ── */
+#fish{position:absolute;left:1600px;top:756px;width:232px;z-index:26;opacity:0;transform:translateY(22px) scale(.7);
+  transition:all .45s cubic-bezier(.34,1.5,.64,1);pointer-events:none}
+#fish.show{opacity:1;transform:none}
+#fish img{width:100%;display:block}
+#fish .say{position:absolute;left:0;top:-114px;width:236px;background:var(--card);border:1px solid var(--ink);border-radius:12px;
+  padding:13px 16px;font:900 21px/1.42 'Noto Sans SC';color:var(--ink);
+  opacity:0;transform:scale(.72);transition:all .4s cubic-bezier(.34,1.5,.64,1) .16s}
+#fish.show .say{opacity:1;transform:scale(1)}
+#fish .say b{font-weight:900;color:var(--ink);text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:4px}
+#fish .say::after{content:'';position:absolute;left:26px;bottom:-13px;width:14px;height:14px;background:var(--card);border-right:1px solid var(--ink);border-bottom:1px solid var(--ink);transform:rotate(45deg)}
+
+/* ── 终幕：第一个能力 ── */
+#act2{position:absolute;inset:0;z-index:30;opacity:0;visibility:hidden;transition:opacity .5s ease}
+#act2.on{opacity:1;visibility:visible}
+#act2 .a1{position:absolute;left:0;right:0;top:322px;text-align:center;font:500 36px 'Noto Sans SC';letter-spacing:.14em;color:var(--muted);
+  opacity:0;transform:translateY(14px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#act2.on .a1{opacity:1;transform:none}
+#act2 .a2{position:absolute;left:0;right:0;top:392px;text-align:center;font:800 96px 'Inter','Noto Sans SC';
+  letter-spacing:-.02em;color:var(--ink);opacity:0;transform:scale(1.2);transition:all .4s cubic-bezier(.2,1.5,.4,1) .18s}
+#act2.big .a2{opacity:1;transform:none}
+#act2 .a3{position:absolute;left:0;right:0;top:508px;text-align:center;font:900 244px/1 'Noto Sans SC';
+  color:var(--accent);letter-spacing:.12em;text-indent:.12em;opacity:0;transform:scale(1.7);
+  transition:all .42s cubic-bezier(.2,1.6,.4,1)}
+#act2.big .a3{opacity:1;transform:scale(1)}
+#act2 .rule{position:absolute;left:50%;top:864px;width:520px;height:4px;margin-left:-260px;background:var(--ink);
+  transform:scaleX(0);transition:transform .5s cubic-bezier(.2,.9,.3,1) .3s}
+#act2.big .rule{transform:scaleX(1)}
+#act2 .recap{position:absolute;left:0;right:0;top:902px;text-align:center;font:600 14px 'IBM Plex Mono';letter-spacing:.2em;
+  color:var(--muted);opacity:0;transition:opacity .5s .4s;text-transform:uppercase}
+#act2.big .recap{opacity:1}
+/* 终幕时，第一幕全部元素按 cue 淡出 */
+#world.done #ttl,#world.done #host,#world.done #guest,#world.done #safe,#world.done #timer,#world.done #aichip{
+  opacity:0;transition:opacity .45s ease}
+
+/* ── 可视化升级：危害墨点撞隔离边界（viz-） ── */
+.hzp{position:absolute;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:var(--ink);z-index:15;
+  opacity:0;pointer-events:none}
+.hzp::after{content:'';position:absolute;left:50%;top:50%;width:34px;height:2px;transform-origin:0 50%;
+  background:linear-gradient(90deg,rgba(28,28,26,.5),transparent);transform:rotate(var(--ta,0deg))}
+
+/* ── 底盘：角注 / HUD ── */
+#vig{display:none}
+.corner{position:absolute;font:500 13px 'IBM Plex Mono';letter-spacing:.14em;color:var(--muted);z-index:41;text-transform:uppercase}
+#chap{left:88px;bottom:34px}
+#src{right:88px;bottom:34px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:rgba(28,28,26,.12)}
+#bar{height:100%;width:0;background:var(--ink)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(240,239,235,.95);backdrop-filter:blur(4px);color:#555}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #999;color:#333;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(28,28,26,.08)}
+#replay.done{border-color:var(--accent);color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="cam">
+  <div id="world">
+
+    <!-- 标题 -->
+    <div id="ttl">
+      <div class="eyebrow"><span class="no">SHOT 0-12</span><span class="cn">第三章 · 准备工作 / 虚拟机</span></div>
+      <h1>电脑中的<b>电脑</b></h1>
+      <div class="en">A COMPUTER INSIDE YOUR COMPUTER</div>
+    </div>
+
+    <!-- 大框：宿主机（nested 外环 · 编号 01） -->
+    <div id="host">
+      <div class="tik tl"></div><div class="tik tr"></div><div class="tik bl"></div><div class="tik br"></div>
+      <div id="htag"><span>01</span>宿主机<em>你的真实电脑</em><span class="kind region">REGION</span></div>
+      <!-- 真实系统内部（常驻） -->
+      <div id="realsys">
+        <div class="rl">真实资料</div>
+        <div class="ri"><svg width="34" height="34" viewBox="0 0 40 40" fill="none"><path d="M5 11 h12 l3 4 h15 v18 a2 2 0 0 1 -2 2 H7 a2 2 0 0 1 -2 -2 Z" stroke="#1C1C1A" stroke-width="2.2" stroke-linejoin="round"/></svg></div>
+        <div class="ri"><svg width="34" height="34" viewBox="0 0 40 40" fill="none"><rect x="5" y="7" width="30" height="23" rx="3" stroke="#1C1C1A" stroke-width="2.2"/><circle cx="14" cy="16" r="3" stroke="#1C1C1A" stroke-width="2"/><path d="M7 27 L15 20 L21 26 L26 22 L33 27" stroke="#1C1C1A" stroke-width="2.2" stroke-linejoin="round"/></svg></div>
+        <div class="ri"><svg width="34" height="34" viewBox="0 0 40 40" fill="none"><circle cx="14" cy="14" r="6.5" stroke="#1C1C1A" stroke-width="2.2"/><path d="M19 19 L32 32 M27 27 L31 23 M23 23 L27 19" stroke="#1C1C1A" stroke-width="2.2" stroke-linecap="round"/></svg></div>
+      </div>
+      <div class="sub">HOST MACHINE · 真实的这一台</div>
+    </div>
+
+    <!-- 内框：客户机（nested 焦点 · 编号 02） -->
+    <div id="guest">
+      <svg id="fence" viewBox="0 0 1168 568" preserveAspectRatio="none"><rect x="2" y="2" width="1164" height="564" rx="24" ry="24"/><circle r="4.5"><animateMotion dur="6s" repeatCount="indefinite" path="M2,2 H1166 V566 H2 Z"/></circle></svg>
+      <div id="ftag">隔离域<span class="kind sg">SECURITY GROUP</span></div>
+      <div id="gtag"><span>02</span>客户机<em>软件模拟出的完整电脑</em></div>
+      <div class="gsub">GUEST MACHINE</div>
+      <div class="lfhead">它 <b>自己也是一台完整的电脑</b></div>
+
+      <div class="spec" id="sp1">
+        <div class="ic"><svg width="44" height="44" viewBox="0 0 48 48" fill="none"><rect x="5" y="8" width="38" height="26" rx="3" stroke="#1C1C1A" stroke-width="2.3"/><path d="M14 41h20" stroke="#1C1C1A" stroke-width="2.3" stroke-linecap="round"/><path d="M24 34v7" stroke="#1C1C1A" stroke-width="2.3"/><path d="M11 14h12M11 20h7" stroke="#8F8E88" stroke-width="2" stroke-linecap="round"/></svg></div>
+        <div class="nm">自己的操作系统<em>OS</em></div>
+      </div>
+      <div class="spec" id="sp2">
+        <div class="ic"><svg width="44" height="44" viewBox="0 0 48 48" fill="none"><rect x="6" y="11" width="36" height="26" rx="5" stroke="#1C1C1A" stroke-width="2.3"/><circle cx="36" cy="29" r="2.6" fill="#1C1C1A"/><rect x="12" y="17" width="16" height="4.5" rx="2.2" fill="#C6C5BF"/><rect x="12" y="25" width="12" height="4.5" rx="2.2" fill="#1C1C1A"/></svg></div>
+        <div class="nm">自己的硬盘<em>DISK</em></div>
+      </div>
+      <div class="spec" id="sp3">
+        <div class="ic"><div class="chipset"><i></i><i></i><i></i><i></i></div></div>
+        <div class="nm">自己的内存<em>RAM</em></div>
+      </div>
+
+      <div class="cap">系统 / 硬盘 / 内存 全在里面 —— 与主系统<b>完全隔开</b></div>
+
+      <!-- 折腾区（图标格 · 图形化） -->
+      <div id="todo">
+        <div class="th"><span class="dot"></span>客户机里随便折腾</div>
+        <div class="grow" id="grow">
+          <div class="ic"><svg width="60" height="60" viewBox="0 0 60 60" fill="none"><rect x="7" y="12" width="46" height="32" rx="4" stroke="#1C1C1A" stroke-width="2.4"/><path d="M30 19 L36 28 H24 Z" stroke="#1C1C1A" stroke-width="2.2" stroke-linejoin="round"/><path d="M25 36 h10 M22 41 h16" stroke="#8F8E88" stroke-width="2.2" stroke-linecap="round"/><path d="M44 45 L55 56" stroke="#1C1C1A" stroke-width="3" stroke-linecap="round"/></svg></div>
+          <div class="tx">装坏系统</div>
+          <div class="mark">封</div>
+        </div>
+        <div class="grow" id="grow2">
+          <div class="ic"><svg width="60" height="60" viewBox="0 0 60 60" fill="none"><circle cx="30" cy="30" r="13" stroke="#1C1C1A" stroke-width="2.4"/><circle cx="24" cy="26" r="2.5" fill="#1C1C1A"/><circle cx="36" cy="26" r="2.5" fill="#1C1C1A"/><path d="M24 36 c4 3 8 3 12 0" stroke="#1C1C1A" stroke-width="2.2" stroke-linecap="round"/><path d="M30 17 V8 M30 43 V52 M17 30 H8 M43 30 H52" stroke="#8F8E88" stroke-width="2" stroke-linecap="round"/></svg></div>
+          <div class="tx">跑中毒文件</div>
+          <div class="mark">封</div>
+        </div>
+        <div class="grow" id="grow3">
+          <div class="ic"><svg width="60" height="60" viewBox="0 0 60 60" fill="none"><path d="M8 16 h16 l4 5 h24 v26 a3 3 0 0 1 -3 3 H11 a3 3 0 0 1 -3 -3 Z" stroke="#1C1C1A" stroke-width="2.4" stroke-linejoin="round"/><path d="M22 33 L39 47 M39 33 L22 47" stroke="#1C1C1A" stroke-width="3" stroke-linecap="round"/></svg></div>
+          <div class="tx">删错目录</div>
+          <div class="mark">封</div>
+        </div>
+      </div>
+
+      <div id="gstrip"><span id="gstriptx">—</span></div>
+      <div id="hzglow"></div>
+    </div>
+
+    <!-- 右侧空档区 -->
+    <div id="timer"><div class="t1">DELETE &amp; REBUILD</div><div class="t2">整台删掉 · <b>重建一台</b></div><div class="sp"><i id="timerbar"></i></div></div>
+    <div id="safe"><div class="s1">✓ 毫发无损</div><div class="s2">外面的真实电脑 · UNTOUCHED</div></div>
+
+    <!-- AI 代码芯片 -->
+    <div id="aichip"><span class="d"></span><span class="t">不可信的 AI 代码</span></div>
+
+    <!-- 中段大字 -->
+    <div id="midveil"></div>
+    <div id="midbig"><div class="m1">电脑中的电脑</div><div class="m2">A COMPUTER INSIDE A COMPUTER</div></div>
+
+    <!-- 大肥鱼 -->
+    <div id="fish">
+      <div class="say">怎么折腾都<b>连累不到</b>外面</div>
+      <img src="Shark-GIF/041_趴键盘愤怒符号抓狂打字.gif" alt="大肥鱼">
+    </div>
+
+    <!-- 终幕 -->
+    <div id="act2">
+      <div class="a1">这就是虚拟机给你的</div>
+      <div class="a2">第一个能力</div>
+      <div class="a3">隔离</div>
+      <div class="rule"></div>
+      <div class="recap">虚拟机 = 电脑中的电脑 · 里外完全隔开</div>
+    </div>
+
+  </div>
+  </div>
+
+  <div id="vig"></div>
+  <div class="corner" id="chap">第三章 · 准备工作 / 虚拟机</div>
+  <div class="corner" id="src">口播对齐 timeline.md · 4:54–5:31</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-12 · 电脑中的电脑 · 37s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=37000;
+const $=s=>document.querySelector(s);
+const $$=s=>document.querySelectorAll(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ── 辅助 ── */
+function quake(){const w=$('#world');w.classList.remove('quake');void w.offsetWidth;w.classList.add('quake')}
+function ping(el){const r=document.createElement('div');r.className='ping';
+  const b=el.getBoundingClientRect();const s=$('#stage').getBoundingClientRect();const k=s.width/1920;
+  r.style.left=((b.left-s.left)/k+b.width/(2*k))+'px';r.style.top=((b.top-s.top)/k+b.height/(2*k))+'px';
+  $('#world').appendChild(r);setTimeout(()=>r.remove(),1000);return r}
+function hit(id){
+  const el=$(id);el.classList.add('hit');$('#guest').classList.remove('block');void $('#guest').offsetWidth;$('#guest').classList.add('block');
+  __sfx.thud(.8);const p=ping(el);p.style.borderColor='#1C1C1A';
+}
+function setStrip(html){const s=$('#gstrip');$('#gstriptx').innerHTML=html;s.classList.remove('swap');void s.offsetWidth;s.classList.add('swap');}
+function frag(){
+  for(let i=0;i<16;i++){
+    const f=document.createElement('i');f.className='frag';
+    f.style.left=(400+Math.random()*1120)+'px';f.style.top=(286+Math.random()*520)+'px';
+    const ang=Math.random()*Math.PI*2,d=90+Math.random()*230;
+    f.style.setProperty('--dx',(Math.cos(ang)*d).toFixed(1)+'px');
+    f.style.setProperty('--dy',(Math.sin(ang)*d-40).toFixed(1)+'px');
+    $('#world').appendChild(f);setTimeout(()=>f.remove(),900);
+  }
+}
+/* ping / frag 的样式（动态元素） */
+(function(){var st=document.createElement('style');
+ st.textContent='.ping{position:absolute;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;border:3px solid #1C1C1A;pointer-events:none;z-index:22;animation:pingA .9s cubic-bezier(.2,.7,.3,1) forwards}@keyframes pingA{0%{opacity:.95;transform:scale(.3)}100%{opacity:0;transform:scale(3.4)}}.frag{position:absolute;width:16px;height:16px;background:#1C1C1A;opacity:0;pointer-events:none;z-index:16;animation:fragA .82s ease-out forwards}@keyframes fragA{0%{opacity:1;transform:translate(0,0) rotate(0)}100%{opacity:0;transform:translate(var(--dx),var(--dy)) rotate(220deg)}}';
+ document.head.appendChild(st)})();
+
+/* ────────────────────────────────────────────────
+   本镜头 cue（4:54–5:31，37s）
+   cue 时刻 = 口播句起点(绝对) − 4:54
+   ──────────────────────────────────────────────── */
+on(200,()=>{$('#ttl').classList.add('in');__sfx.pop(.5)});
+on(500,()=>{$('#host').classList.add('in');__sfx.whoosh(1.2,.5)});                  // 4:54「虚拟机就是一个软件模拟出来的一个完整的电脑」
+on(5800,()=>{$('#midveil').classList.add('in');$('#midbig').classList.add('in');__sfx.thud(.8)}); // 5:00「是电脑中的电脑」
+on(7200,()=>{$('#midveil').classList.remove('in');$('#midbig').classList.remove('in')});
+on(7000,()=>{$('#guest').classList.add('in');__sfx.thud(1);camTo(-40,-24,1.06,.5)}); // 5:01「虚拟机有自己的操作系统」
+on(7400,()=>{$('#sp1').classList.add('in');__sfx.pop(.6)});
+on(9000,()=>{$('#sp2').classList.add('in');__sfx.pop(.6)});                          // 5:03「有自己的硬盘」
+on(10000,()=>{$('#sp3').classList.add('in');__sfx.pop(.6)});                         // 5:04「自己的内存」
+on(11000,()=>{$('#guest').classList.add('zone');__sfx.swipe(.8)});                    // 5:05「然后跟你的主系统完全隔离开」
+on(13000,()=>{$('#htag').classList.add('hi');ping($('#htag'));__sfx.ding(.8);camTo(-152,-74,1.12,.5)}); // 5:07「行业内把这台真实的电脑叫做宿主机」
+on(14000,()=>{$('#htag').classList.remove('hi')});
+on(14300,()=>camTo(-40,-24,1.06,.5));
+on(15000,()=>{$('#gtag').classList.add('hi');ping($('#gtag'));__sfx.ding(.8);camTo(-98,-62,1.10,.5)}); // 5:09「然后虚拟机的那一台叫做客户机」
+on(16000,()=>{$('#gtag').classList.remove('hi')});
+on(16300,()=>camTo(0,0,1,.5));
+on(17000,()=>{$('#todo').classList.add('in');__sfx.whoosh(.9,.55)});                  // 5:11「客户机里就可以随便折腾了」
+on(17400,()=>{$('#grow').classList.add('in');__sfx.pop(.5)});
+on(17700,()=>{$('#grow2').classList.add('in');__sfx.pop(.5)});
+on(18000,()=>{$('#grow3').classList.add('in');__sfx.pop(.5)});
+on(19000,()=>hit('#grow'));                                                          // 5:13「你装坏系统」
+on(20000,()=>hit('#grow2'));                                                         // 5:14「跑中毒的文件」
+on(21000,()=>hit('#grow3'));                                                         // 5:15「删错目录」
+on(22000,()=>{$('#gstrip').classList.add('in');setStrip('这些都<b>只发生在客户机里面</b>');__sfx.ding(.7)}); // 5:16「这些都只发生在客户机里面」
+on(23000,()=>{quake();__sfx.thud(1);                                                 // 5:17「就算真出大事」
+  $('#todo').classList.remove('flash');void $('#todo').offsetWidth;$('#todo').classList.add('flash')});
+on(18200,()=>$('#fish').classList.add('show'));
+on(36500,()=>$('#fish').classList.remove('show'));   // 鱼新政：保持到 DUR−2000 之后（37s − 2s = 35s）
+on(25000,()=>{$('#guest').classList.add('boom');__sfx.thud(1);frag();camTo(-32,-20,1.05,.4)});  // 5:19「也可以整台删掉再重建一台」
+on(25600,()=>{$('#guest').classList.add('dead')});
+on(26200,()=>{$('#guest').classList.remove('dead','boom');$('#guest').classList.add('reborn','in'); // 5:20「只需要几分钟就好了」
+  $('#timer').classList.add('in');__sfx.ding(.9)});
+on(26600,()=>{$('#timerbar').style.width='100%';__sfx.type(.6)});
+on(28000,()=>{$('#host').classList.add('safe');$('#safe').classList.add('in');       // 5:22「而外面的真实的电脑毫发无损」
+  setStrip('外面的<b>真实电脑</b>毫发无损');__sfx.ding(1)});
+on(30000,()=>{$('#aichip').classList.add('trail');__sfx.whoosh(.9,.7);               // 5:24「所以你可以在里面跑那些不可信的AI代码」
+  $('#aichip').style.left='620px';$('#aichip').style.top='688px'});
+on(30700,()=>{$('#aichip').classList.remove('trail');setStrip('不可信的 <b>AI 代码</b>，就关在这里面跑')});
+on(32000,()=>{__sfx.thud(.9);$('#hzglow').classList.add('on');                             // 5:26「危害也只会被挡在这一台客户机里面」
+  $('#guest').classList.remove('block');void $('#guest').offsetWidth;$('#guest').classList.add('block')});
+on(32400,()=>setStrip('危害也<b>被挡在这里面</b>'));
+on(34500,()=>{$('#world').classList.add('done');$('#act2').classList.add('on');      // 5:29「这就是虚拟机给你的第一个能力」
+  camCut(0,0,1);__sfx.whoosh(1,.8)});
+on(36200,()=>{$('#act2').classList.add('big');__sfx.thud(1.1)});                     // 5:30「隔离」
+
+/* ── 可视化升级：危害墨点从内框飞向隔离边界，被弹回/熄灭（时间轴驱动，循环 3 波） ── */
+function hzShot(x0,y0,x1,y1,tStart){
+  const el=document.createElement('div');el.className='hzp';
+  el.style.left=x0+'px';el.style.top=y0+'px';
+  el.style.setProperty('--ta',(Math.atan2(y0-y1,x0-x1)*180/Math.PI)+'deg');
+  $('#world').appendChild(el);
+  tws.push({t:tStart,d:1080,e:eo,f:p=>{
+    if(p<.48){const q=p/.48;el.style.opacity=Math.min(1,q*5);
+      el.style.left=(x0+(x1-x0)*q)+'px';el.style.top=(y0+(y1-y0)*q)+'px';}
+    else{
+      if(!el.dataset.hit){el.dataset.hit=1;
+        const g=$('#guest');g.classList.remove('block');void g.offsetWidth;g.classList.add('block');__sfx.thud(.5);}
+      const q=(p-.48)/.52;
+      el.style.left=(x1+(x0-x1)*.5*q)+'px';el.style.top=(y1+(y0-y1)*.5*q)+'px';el.style.opacity=1-q;}
+  },done:()=>{el.style.opacity=0;el.remove();}});
+}
+function hzWave(tStart){
+  hzShot(960,540,1508,470,tStart);          // 撞右边界
+  hzShot(900,520,1090,294,tStart+260);      // 撞上边界
+  hzShot(880,560,414,640,tStart+520);       // 撞左边界
+}
+on(31200,()=>hzWave(31200));                 // 5:26 危害粒子波①（与辉光同起）
+on(32000,()=>hzWave(32000));                 // 波②
+on(32800,()=>hzWave(32800));                 // 波③（终幕前全部熄灭）
+
+/* ===== [不动] QA 专用（正常播放不触发）：hash 带 t=毫秒 → 起播后跳转该时刻并冻结 ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

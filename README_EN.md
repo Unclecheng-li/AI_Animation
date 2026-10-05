@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](./LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](#contributing)
-[![Skills count](https://img.shields.io/badge/Skills-10-orange?style=flat-square)](#skills-gallery)
+[![Skills count](https://img.shields.io/badge/Skills-11-orange?style=flat-square)](#skills-gallery)
 [![Spec](https://img.shields.io/badge/Spec-SKILL.md-black?style=flat-square)](https://agentskills.io)
 
 🌐 **中文版**: [`README.md`](README.md)
@@ -30,6 +30,7 @@ One sentence is all it takes:
 - 📱 **Phone UI demos** — a "real phone" performing a choreographed screen recording: lockscreen notifications, chats, settings, App screens shot by shot, HyperOS-grade motion + a 3D-posture phone actor
 - 🗂️ **Stacked data cards** — argument cards pop in from the bottom while used ones stack to the left as a deck: line-drawing, count-ups, gauges and more cascade in on a millisecond timeline synced to the voiceover — fullscreen-record it and it's a finished cut
 - 🖥️ **Windows 11 simulation** — a "real PC" rebuilt 1:1: Explorer, Start menu, system dialogs and the blue repair screen shot by shot, with a performing cursor leading the viewer and teaching markers layered on top
+- 📐 **Swiss-style chart demos** — editorial-grade typography on paper-and-ink: every shot gets one content-matched visualization (timelines, loops, flow chains, heat matrices… 20 vocab types) with a single accent orange
 
 <div align="center">
 
@@ -94,6 +95,13 @@ One sentence is all it takes:
 <a href="#win11-ui-demos"><img width="2560" height="1440" alt="win11-ui-demos" src="./skills/win11-ui-demos/assets/preview/main.png" /></a>
 <br/><a href="#win11-ui-demos"><strong>win11-ui-demos</strong></a>
 <br/><sub>Windows 11 simulation / cursor performance</sub>
+</td>
+</tr>
+<tr>
+<td colspan="4" valign="top" align="center">
+<a href="#swiss-shot-demos"><img width="2560" height="1440" alt="swiss-shot-demos" src="./skills/swiss-shot-demos/assets/preview/main.png" /></a>
+<br/><a href="#swiss-shot-demos"><strong>swiss-shot-demos</strong></a>
+<br/><sub>Swiss-style chart demos / editorial typography</sub>
 </td>
 </tr>
 </table>
@@ -499,6 +507,52 @@ Links: [README](./skills/win11-ui-demos/README.md) · [SKILL.md](./skills/win11-
 
 <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
 
+#### `swiss-shot-demos`
+
+<a href="./skills/swiss-shot-demos">
+<img width="2560" height="1440" alt="swiss-shot-demos preview" src="./skills/swiss-shot-demos/assets/preview/main.png" />
+</a>
+
+**Category:** Swiss-style chart demos / editorial typography
+**For:** knowledge-course videos, tech retrospectives, product launches, security explainers — anywhere needing the restrained aesthetic of "paper & ink + one content-matched visualization per shot"; also the systematic cure for AI's default dark-and-shiny demos.
+
+`swiss-shot-demos` produces Swiss / International Typographic Style shot demos: paper-grey base, charcoal ink, hairline rules, a 7-step grayscale ladder (lightness *is* data), and a single accent orange per page — editorial-grade typography with Inter at display sizes on a 12-column grid. The core method is **chart-first**: ask "what chart is this?" for every voiceover line, then pick from 20 vocab types (big-number counters, hairline bar charts, timelines, loop rings, flow chains, swimlanes, state machines, split comparisons, nested frames, heat matrices, dot arrays, tally lists, ink-terminal cards…), with the main graphic filling ≥55% of the frame. Glow/neon/gradient effects are banned outright. Ships with 68 production shots (a complete AI-pentest tutorial) + a starter template with the Swiss system preinstalled.
+
+Highlights:
+- One canonical Swiss token set: paper `#F0EFEB` / ink `#1C1C1A` / grayscale L1–L7 / a single accent orange `#F5572F` highlighting exactly one hero per page
+- 20-entry content→chart vocabulary, all pure CSS/SVG, zero external chart libraries
+- A hard ban list that vetoes the entire dark-and-shiny family (glow, blooms, gradients, scanlines, bouncing)
+- Three entrance verbs — pop / fade / draw (SVG stroke) — with fast-in-fast-out easing; beat animations always cue+tws, freezable
+- Built-in QA freeze hook: append `#auto,t=ms` to the URL to auto-start and freeze at any moment for headless screenshots
+- Production discipline: cue times derived from absolute voiceover offsets, a number whitelist (no invented figures), no faked terminal output
+
+<table>
+<tr>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="AI loop" src="./skills/swiss-shot-demos/assets/preview/shot-01.png" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="meltdown timeline" src="./skills/swiss-shot-demos/assets/preview/shot-05.png" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="dot collision" src="./skills/swiss-shot-demos/assets/preview/shot-06.png" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="nested frame" src="./skills/swiss-shot-demos/assets/preview/shot-12.png" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="split compare" src="./skills/swiss-shot-demos/assets/preview/shot-40.png" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="heat matrix" src="./skills/swiss-shot-demos/assets/preview/shot-49.png" /></td>
+</tr>
+<tr>
+<td align="center"><sub><code>AI loop ring</code><br />shot-0-1 five acts</sub></td>
+<td align="center"><sub><code>Meltdown timeline</code><br />four darkening steps</sub></td>
+<td align="center"><sub><code>Dot collision</code><br />15 → 50+ tripling</sub></td>
+<td align="center"><sub><code>Nested frame</code><br />host ⊃ guest VM</sub></td>
+<td align="center"><sub><code>Split compare</code><br />CTF vs range</sub></td>
+<td align="center"><sub><code>Heat matrix</code><br />grayscale = data</sub></td>
+</tr>
+</table>
+
+<sub>↑ 6 of 20 chart vocab types — <a href="./skills/swiss-shot-demos/README.md"><b>open the full chart vocabulary</b></a> (68 runnable production samples).</sub>
+
+Links: [README](./skills/swiss-shot-demos/README.md) · [SKILL.md](./skills/swiss-shot-demos/SKILL.md)
+
+---
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
 ### Installation
 
 | # | Method | Best for | Pin a version? |
@@ -594,6 +648,10 @@ Use stacked-data-cards to turn these three arguments into a stacked data-card an
 Use win11-ui-demos to turn this Windows tutorial's operations into cursor-driven simulation animations — show me the storyboard first
 ```
 
+```
+Use swiss-shot-demos to turn this video's voiceover script into demo animations: Swiss style, chart-first — show me the chart-selection storyboard first
+```
+
 ### Directory Structure
 
 ```text
@@ -655,6 +713,11 @@ ai-animation-skills/
 │       ├── README.md
 │       ├── references/          ← win11-kit specs / simulation-patterns playbook
 │       └── assets/              ← Simulation-kit template + 21-shot example + previews
+│   ├── swiss-shot-demos/
+│       ├── SKILL.md             ← chart-first philosophy + cp workflow
+│       ├── README.md
+│       ├── references/          ← swiss-system tokens / chart-vocabulary / production-spec
+│       └── assets/              ← Swiss starter template + 68-shot example + previews
 ├── web_animation/               ← Original example HTML (historical archive)
 ├── UI/                          ← UI design reference images
 ├── prompt.md                    ← Prompt template collection

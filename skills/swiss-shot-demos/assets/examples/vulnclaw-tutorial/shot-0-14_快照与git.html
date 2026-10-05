@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+  ◆ 分镜演示页：镜头 0-14 · 快照与git（15s）◆ ｜v4 瑞士国际主义
+  主视觉：diagram-design type-line 两状态 slopegraph（两栏对照）
+          + 快照相机小图示 / git 提交链
+  纸底 #F0EFEB × 墨 #1C1C1A × 灰阶 × 唯一橙 #F5572F（焦点 = 结论）
+  字体：Inter × Noto Sans SC × IBM Plex Mono
+  口播区间 5:56–6:11（cue = 口播起点 − 5:56）
+============================================================= -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 0-14 · 快照与git · 15s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;
+  --grid:#DEDDD6;--accent:#F5572F;--dark:#1C1C1A;--darkink:#F0EFEB;--darkgrid:#2E2D29;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Inter','Noto Sans SC',sans-serif;color:var(--ink)}
+body.paused *{animation-play-state:paused!important}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#stage::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:1;
+  background-image:linear-gradient(rgba(28,28,26,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.05) 1px,transparent 1px);
+  background-size:132px 132px}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+#world{position:absolute;inset:0}
+
+/* ── 标题组 ── */
+#ttl{position:absolute;left:88px;top:52px;z-index:20;opacity:0;transform:translateY(-14px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#ttl.in{opacity:1;transform:none}
+#ttl .eyebrow{display:flex;gap:12px;align-items:center;font:600 15px 'Inter';letter-spacing:.14em;text-transform:uppercase;color:var(--ink)}
+#ttl .no{background:var(--ink);color:var(--paper);padding:3px 10px;border-radius:3px;font-weight:700;letter-spacing:.14em}
+#ttl .cn{font-family:'Noto Sans SC';letter-spacing:.06em}
+#ttl h1{font:800 64px/1 'Inter','Noto Sans SC';letter-spacing:-.03em;color:var(--ink);margin-top:16px}
+#ttl h1 b{font-family:'Noto Sans SC';font-weight:900}
+#ttl .en{font:600 13px 'IBM Plex Mono';letter-spacing:.3em;color:var(--muted);margin-top:12px;text-transform:uppercase}
+#ctx{position:absolute;left:88px;top:196px;font:500 20px 'Noto Sans SC';letter-spacing:.02em;color:var(--muted);z-index:20;
+  opacity:0;transform:translateY(12px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#ctx.in{opacity:1;transform:none}
+#ctx b{color:var(--ink);font-weight:900;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:5px}
+
+/* ── 双轨对比（上轨：整机快照 / 下轨：git） ── */
+#split{position:absolute;left:100px;top:250px;width:1720px;height:660px;z-index:14}
+.col{position:absolute;left:0;width:1720px;height:290px;overflow:hidden;
+  background:var(--card);border:1.5px solid var(--grid);opacity:0;border-radius:14px;
+  transition:opacity .5s ease,transform .55s cubic-bezier(.2,1.4,.4,1),border-color .4s,box-shadow .4s}
+.col.up{transform:translateY(-46px)}
+.col.down{transform:translateY(46px)}
+#colA{top:0;border:2px solid rgba(28,28,26,.5)}
+#colB{top:392px}
+.col.in{opacity:1;transform:none}
+.col.hi{border-color:var(--ink);border-width:2.5px;box-shadow:0 0 0 4px rgba(28,28,26,.07)}
+.col .tag{position:absolute;left:34px;top:26px;font:800 18px 'Inter','Noto Sans SC';letter-spacing:.04em;color:var(--paper);background:var(--ink);border-radius:6px;padding:7px 16px;
+  opacity:0;transform:translateY(-10px);transition:all .42s cubic-bezier(.2,1.4,.4,1)}
+.col.tagged .tag{opacity:1;transform:none}
+.col .en{position:absolute;left:36px;top:70px;font:600 12px 'IBM Plex Mono';letter-spacing:.22em;color:var(--muted);
+  opacity:0;transition:opacity .4s .08s;text-transform:uppercase}
+.col.tagged .en{opacity:1}
+.col .name{position:absolute;left:32px;top:100px;width:312px;font:900 42px/1.18 'Noto Sans SC';color:var(--ink);
+  letter-spacing:.02em;opacity:0;transform:translateY(16px);transition:all .5s cubic-bezier(.2,1.4,.4,1) .06s}
+.col.named .name{opacity:1;transform:none}
+.col .ic{position:absolute;right:30px;top:38px;opacity:0;transform:scale(.72) rotate(-9deg);transition:all .5s cubic-bezier(.2,1.5,.4,1) .12s}
+.col.named .ic{opacity:1;transform:none}
+.col::after{content:'';position:absolute;left:360px;right:260px;top:282px;height:2px;
+  background:var(--ink);opacity:.28}
+.col .rspark{position:absolute;top:278px;width:11px;height:11px;border-radius:50%;background:var(--ink);
+  animation:railflow 4.4s linear infinite}
+@keyframes railflow{0%{left:368px;opacity:0}10%{opacity:1}90%{opacity:1}100%{left:1452px;opacity:0}}
+.col .items{position:absolute;left:360px;top:52px;width:1100px;list-style:none;display:flex;gap:22px}
+.col .items li{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;height:186px;
+  border:1px solid var(--grid);border-radius:12px;background:var(--paper);
+  font:700 20px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em;text-align:center;
+  opacity:0;transform:translateY(-18px);transition:all .42s cubic-bezier(.2,1.4,.4,1)}
+.col .items li.on{opacity:1;transform:none}
+.col .items li .b{width:30px;height:30px;flex:none;border-radius:7px;background:transparent;border:2.5px solid var(--ink);transform:rotate(45deg)}
+.col .items li.on .b{background:var(--ink)}
+.col .items li em{font-style:normal;font:600 11px 'IBM Plex Mono';letter-spacing:.16em;color:var(--muted);text-transform:uppercase}
+.col .foot{position:absolute;left:34px;bottom:22px;font:600 13px 'IBM Plex Mono';letter-spacing:.12em;color:var(--muted);
+  opacity:0;transition:opacity .45s;text-transform:uppercase}
+.col.footon .foot{opacity:1}
+/* 双轨中缝 → type-line 两状态 slopegraph（两条轴 + 系列连接线 + 端点圆点 + 状态注） */
+#seam{position:absolute;left:100px;top:542px;width:1720px;height:100px;z-index:17;border-radius:12px;
+  background:var(--card);border:1px solid var(--grid);
+  opacity:0;transform:scaleY(.35);transition:all .6s cubic-bezier(.2,1.3,.4,1)}
+#seam.in{opacity:1;transform:none}
+#slope{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.slax{stroke:rgba(28,28,26,.28);stroke-width:1}
+.slcap{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.18em;fill:#8F8E88}
+.slname{font-family:'Inter','Noto Sans SC',sans-serif;font-size:12px;font-weight:700;fill:#1C1C1A}
+.slser{fill:none;stroke-linecap:round}
+.slser.focal{stroke:#1C1C1A;stroke-width:2.4}
+.slser.mute{stroke:rgba(28,28,26,.5);stroke-width:1.4}
+.sldot{stroke:#FFFFFF;stroke-width:1.4}
+
+/* ── 底部结论（唯一橙焦点） ── */
+#concl{position:absolute;left:100px;top:936px;width:1720px;height:96px;z-index:16;border-radius:14px;
+  border:1px solid var(--grid);background:var(--card);
+  display:flex;align-items:center;justify-content:center;gap:14px;
+  opacity:0;transform:translateY(20px);transition:all .55s cubic-bezier(.2,1.4,.4,1)}
+#concl.in{opacity:1;transform:none}
+#concl .c1{font:500 38px 'Noto Sans SC';color:var(--muted);letter-spacing:.06em}
+#concl .c2{font:900 46px 'Noto Sans SC';color:var(--ink);letter-spacing:.06em}
+#concl .c2 b{color:var(--accent)}
+#concl .ai{font:900 46px 'Noto Sans SC';color:var(--ink)}
+
+/* ── 可视化升级：两栏底部图标动画（viz-） ── */
+.viz-strip{position:absolute;right:40px;bottom:8px;height:46px;display:flex;align-items:center;gap:12px;
+  opacity:0;transform:translateX(18px);transition:all .45s cubic-bezier(.2,1.4,.4,1);pointer-events:none}
+.viz-strip.in{opacity:1;transform:none}
+/* 左：整机小框 + 相机闪光 → 快照点 */
+.vm-mini{position:relative;width:52px;height:40px}
+.vm-mini .scr{position:absolute;left:0;top:0;width:52px;height:32px;border:2.5px solid var(--ink);border-radius:5px;background:var(--paper)}
+.vm-mini .scr::before{content:'';position:absolute;left:6px;top:6px;right:6px;height:4px;border-radius:2px;background:var(--muted)}
+.vm-mini .scr::after{content:'';position:absolute;left:6px;top:14px;width:22px;height:4px;border-radius:2px;background:var(--faint)}
+.vm-mini .base{position:absolute;left:14px;bottom:0;width:24px;height:3px;border-radius:2px;background:var(--ink)}
+.vsnap{position:absolute;left:50%;top:50%;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;
+  background:var(--ink);opacity:0;transform:scale(.3);transition:all .35s cubic-bezier(.2,1.6,.4,1)}
+.vsnap.on{opacity:1;transform:scale(1)}
+.vflash{position:absolute;left:50%;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;
+  border:2px solid var(--ink);opacity:0}
+.vflash.go{animation:vflA .5s ease-out forwards}
+@keyframes vflA{0%{opacity:.85;transform:scale(.6)}100%{opacity:0;transform:scale(4.4)}}
+/* 右：文件夹 + 提交圆点链 */
+.vfold{position:relative;width:46px;height:38px}
+.vfold::before{content:'';position:absolute;left:0;top:4px;width:20px;height:8px;border-radius:3px 3px 0 0;background:var(--muted)}
+.vfold::after{content:'';position:absolute;left:0;top:10px;width:46px;height:28px;border-radius:4px;background:var(--paper);border:2px solid var(--ink)}
+.vchain{display:flex;align-items:center;gap:0}
+.vchain .lk{width:26px;height:2.5px;background:var(--faint);transition:background .3s}
+.vchain .lk.on{background:var(--ink)}
+.vdot{width:13px;height:13px;border-radius:50%;background:var(--paper);border:2.5px solid var(--faint);
+  opacity:0;transform:scale(.3);transition:all .32s cubic-bezier(.2,1.6,.4,1)}
+.vdot.on{opacity:1;transform:scale(1);border-color:var(--ink);background:var(--ink)}
+
+/* ── 大肥鱼 ── */
+.fish{position:absolute;width:224px;z-index:35;opacity:0;transform:translateY(24px) scale(.66);
+  transition:all .5s cubic-bezier(.34,1.5,.64,1);pointer-events:none}
+.fish.show{opacity:1;transform:none}
+.fish img{width:100%;display:block}
+.fish .say{position:absolute;left:-130px;top:-126px;width:322px;background:var(--card);border:1px solid var(--ink);border-radius:12px;
+  padding:14px 18px;font:900 23px/1.42 'Noto Sans SC';color:var(--ink);opacity:0;transform:scale(.72);
+  transition:all .45s cubic-bezier(.34,1.5,.64,1) .16s}
+.fish.show .say{opacity:1;transform:scale(1)}
+.fish .say b{font-weight:900;color:var(--ink);text-decoration:underline;text-decoration-thickness:3px;text-underline-offset:5px}
+.fish .say::after{content:'';position:absolute;left:78px;bottom:-13px;width:14px;height:14px;background:var(--card);border-right:1px solid var(--ink);border-bottom:1px solid var(--ink);transform:rotate(45deg)}
+#fish1{left:1666px;top:16px}
+#fish1 .say{left:auto;right:236px;top:12px;width:322px}
+#fish1 .say::after{content:'';position:absolute;left:auto;bottom:auto;right:-13px;top:26px;width:14px;height:14px;background:var(--card);border-right:1px solid var(--ink);border-top:1px solid var(--ink);transform:rotate(45deg)}
+
+/* ── 底盘 ── */
+#vig{display:none}
+.corner{position:absolute;font:500 13px 'IBM Plex Mono';letter-spacing:.14em;color:var(--muted);z-index:41;text-transform:uppercase}
+#chap{left:88px;bottom:34px}
+#src{right:88px;bottom:34px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:rgba(28,28,26,.12)}
+#bar{height:100%;width:0;background:var(--ink)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(240,239,235,.95);backdrop-filter:blur(4px);color:#555}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #999;color:#333;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(28,28,26,.08)}
+#replay.done{border-color:var(--accent);color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="cam">
+  <div id="world">
+
+    <div id="ttl">
+      <div class="eyebrow"><span class="no">SHOT 0-14</span><span class="cn">第三章 · 准备工作 / 快照 与 git</span></div>
+      <h1>快照 与 <b>git</b></h1>
+      <div class="en">TWO KINDS OF SAVE</div>
+    </div>
+    <div id="ctx">它做的事情也差不多 —— 都是<b>把状态存下来</b>，随时能退回去</div>
+
+    <div id="split">
+      <!-- 上：虚拟机快照 -->
+      <div class="col up" id="colA">
+        <div class="tag">虚拟机 · 快照</div>
+        <div class="en">VM SNAPSHOT</div>
+        <div class="name">整台电脑</div>
+        <div class="ic">
+          <svg width="146" height="146" viewBox="0 0 120 120" fill="none">
+            <rect x="12" y="22" width="96" height="66" rx="7" stroke="#1C1C1A" stroke-width="3.4"/>
+            <path d="M60 88v14M42 106h36" stroke="#1C1C1A" stroke-width="3.4" stroke-linecap="round"/>
+            <rect x="26" y="36" width="68" height="9" rx="4.5" fill="#C6C5BF"/>
+            <rect x="26" y="52" width="46" height="9" rx="4.5" fill="#1C1C1A"/>
+            <rect x="26" y="68" width="58" height="9" rx="4.5" fill="#8F8E88"/>
+          </svg>
+        </div>
+        <ul class="items">
+          <li><span class="b"></span>整个系统一起存<em>FULL MACHINE</em></li>
+          <li><span class="b"></span>里面所有文件都算在内<em>ALL FILES</em></li>
+          <li><span class="b"></span>想退，就退回那一刻<em>ROLLBACK</em></li>
+        </ul>
+        <div class="foot">范围 = 一整台机器</div>
+        <!-- 可视化升级：整机小框 + 相机闪光 → 快照点 -->
+        <div class="viz-strip" id="vizA">
+          <div class="vm-mini"><div class="scr"></div><div class="base"></div>
+            <div class="vflash" id="vflA"></div><div class="vsnap" id="vsnapA"></div></div>
+        </div>
+        <span class="rspark"></span>
+      </div>
+
+      <!-- 下：git -->
+      <div class="col down" id="colB">
+        <div class="tag">git</div>
+        <div class="en">VERSION CONTROL</div>
+        <div class="name">文件夹里的文件</div>
+        <div class="ic">
+          <svg width="146" height="146" viewBox="0 0 120 120" fill="none">
+            <path d="M34 30V90" stroke="#1C1C1A" stroke-width="3.4" stroke-linecap="round"/>
+            <circle cx="34" cy="26" r="11" fill="#FFFFFF" stroke="#1C1C1A" stroke-width="3.4"/>
+            <circle cx="34" cy="94" r="11" fill="#FFFFFF" stroke="#1C1C1A" stroke-width="3.4"/>
+            <path d="M34 62h26a14 14 0 0 1 14 14v6" stroke="#1C1C1A" stroke-width="3.4" stroke-linecap="round"/>
+            <circle cx="74" cy="90" r="11" fill="#FFFFFF" stroke="#1C1C1A" stroke-width="3.4"/>
+          </svg>
+        </div>
+        <ul class="items">
+          <li><span class="b"></span>只管一个文件夹<em>ONE FOLDER</em></li>
+          <li><span class="b"></span>每次改动存成一条记录<em>COMMIT</em></li>
+          <li><span class="b"></span>一键回到任意历史版本<em>RESTORE</em></li>
+        </ul>
+        <div class="foot">范围 = 一个文件夹</div>
+        <!-- 可视化升级：文件夹 + 提交圆点链 -->
+        <div class="viz-strip" id="vizB">
+          <div class="vfold"></div>
+          <div class="vchain">
+            <span class="vdot" id="vd1"></span><span class="lk" id="lk1"></span>
+            <span class="vdot" id="vd2"></span><span class="lk" id="lk2"></span>
+            <span class="vdot" id="vd3"></span>
+          </div>
+        </div>
+        <span class="rspark"></span>
+      </div>
+    </div>
+    <div id="seam">
+      <svg id="slope" viewBox="0 0 1720 100" preserveAspectRatio="none">
+        <line class="slax" x1="70" y1="30" x2="1650" y2="30"/>
+        <line class="slax" x1="70" y1="72" x2="1650" y2="72"/>
+        <text class="slcap" x="70" y="22">快照 · SNAPSHOT</text>
+        <text class="slcap" x="70" y="90">git · VERSION CONTROL</text>
+        <text class="slcap" x="1650" y="52" text-anchor="end">同一把尺子 · 覆盖范围 大 → 小</text>
+        <!-- 系列：回退能力（两者都有，持平） -->
+        <polyline class="slser mute" points="1010,30 1010,72"/>
+        <circle class="sldot" cx="1010" cy="30" r="3" fill="#8F8E88"/>
+        <circle class="sldot" cx="1010" cy="72" r="3" fill="#8F8E88"/>
+        <text class="slname" x="1022" y="70">回退能力</text>
+        <!-- 系列：覆盖范围（快照广 → git 窄，焦点） -->
+        <polyline class="slser focal" points="1180,30 760,72"/>
+        <circle class="sldot" cx="1180" cy="30" r="4.5" fill="#1C1C1A"/>
+        <circle class="sldot" cx="760" cy="72" r="4.5" fill="#1C1C1A"/>
+        <text class="slname" x="1194" y="34">覆盖范围</text>
+      </svg>
+    </div>
+
+    <div id="concl">
+      <span class="c1">有了</span>
+      <span class="c2"><b>隔离 + 回滚</b></span>
+      <span class="c1">才敢放手让</span>
+      <span class="c2"><span class="ai">AI</span> 折腾</span>
+    </div>
+
+    <!-- 大肥鱼 -->
+    <div class="fish" id="fish1">
+      <div class="say">两种存档，<b>都要会</b></div>
+      <img src="Shark-GIF/006_双手身前微笑乖巧期待.gif" alt="大肥鱼">
+    </div>
+
+  </div>
+  </div>
+
+  <div id="vig"></div>
+  <div class="corner" id="chap">第三章 · 准备工作 / 快照 与 git</div>
+  <div class="corner" id="src">口播对齐 timeline.md · 5:56–6:11</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-14 · 快照与git · 15s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=15000;
+const $=s=>document.querySelector(s);
+const $$=s=>document.querySelectorAll(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ────────────────────────────────────────────────
+   本镜头 cue（5:56–6:11，15s）
+   cue 时刻 = 口播句起点(绝对) − 5:56
+   ──────────────────────────────────────────────── */
+on(150,()=>{$('#ttl').classList.add('in');__sfx.pop(.5)});                            // 5:56「然后我接下来要讲的这个git」
+on(800,()=>{$('#ctx').classList.add('in')});                                          // 5:57「它做的事情也差不多」
+on(1500,()=>{$('#seam').classList.add('in');__sfx.swipe(.7);camTo(0,0,1.03,.6)});       // 双轨中缝落下
+on(1800,()=>{$('#colB').classList.add('in');__sfx.thud(.9)});                          // 5:58「只不过git是给代码来存档」
+on(1900,()=>{$('#colA').classList.add('in')});                                        // 上轨框架先立（增补节拍：双轨并列）
+on(2300,()=>{$('#colB').classList.add('tagged');__sfx.pop(.5)});
+on(2900,()=>{$('#colB').classList.add('named');__sfx.pop(.6)});
+on(3400,()=>{$('#colB').classList.add('footon')});
+on(3600,()=>{$$('#colB .items li')[0].classList.add('on');__sfx.pop(.45)});            // 6:00「git存的是文件夹里的文件」
+on(4000,()=>{$$('#colB .items li')[1].classList.add('on');__sfx.pop(.45)});
+on(4400,()=>{$$('#colB .items li')[2].classList.add('on');__sfx.pop(.45)});
+on(5000,()=>{$('#colA').classList.add('in');__sfx.thud(.9);camTo(0,-18,1.04,.6)});     // 6:02「而快照它存的是整一台电脑」
+on(5500,()=>{$('#colA').classList.add('tagged');__sfx.pop(.5)});
+on(6100,()=>{$('#colA').classList.add('named');__sfx.pop(.6)});
+on(6600,()=>{$('#colA').classList.add('footon')});
+on(6800,()=>{$$('#colA .items li')[0].classList.add('on');__sfx.pop(.45)});
+on(7000,()=>{$('#fish1').classList.add('show');__sfx.pop(.55)});                       // 大肥鱼中段出场：两种存档都要会
+on(14200,()=>$('#fish1').classList.remove('show'));                                    // 鱼新政：保持到 DUR−2000 之后（15s − 2s = 13s）
+on(7200,()=>{$$('#colA .items li')[1].classList.add('on');__sfx.pop(.45)});
+on(7600,()=>{$$('#colA .items li')[2].classList.add('on');__sfx.pop(.45)});
+on(8000,()=>{$('#colA').classList.add('hi');$('#colB').classList.remove('hi');__sfx.ding(.85)});  // 6:04「那么这两个操作后面都会用到」
+on(9600,()=>{$('#colB').classList.remove('hi');$('#colA').classList.add('hi');__sfx.ding(.85);camTo(0,-6,1.03,.5)});  // 6:05「我们先讲快照这个」
+on(11200,()=>{$('#concl').classList.add('in');__sfx.thud(.9);camTo(0,0,1,.5)});        // 6:06「那么虚拟机的隔离加回滚」
+on(13000,()=>{__sfx.ding(1)});                                            // 6:09「我们才敢放手来让AI折腾」
+
+/* ── 可视化升级：两栏图标动画（左：整机+相机闪光；右：文件夹+提交链） ── */
+on(5200,()=>{$('#vizA').classList.add('in');});                                        // 左栏整机小框入场
+on(6900,()=>{const f=$('#vflA');f.classList.remove('go');void f.offsetWidth;f.classList.add('go');
+  $('#vsnapA').classList.add('on');__sfx.type(.7);});                                  // 相机闪光 → 快照点亮
+on(2000,()=>{$('#vizB').classList.add('in');});                                        // 右栏文件夹入场
+on(3600,()=>{$('#vd1').classList.add('on');__sfx.pop(.35);});                          // 提交圆点①
+on(4000,()=>{$('#lk1').classList.add('on');$('#vd2').classList.add('on');__sfx.pop(.35);}); // 提交圆点②
+on(4400,()=>{$('#lk2').classList.add('on');$('#vd3').classList.add('on');__sfx.pop(.35);}); // 提交圆点③
+
+/* ===== [不动] QA 专用（正常播放不触发）：hash 带 t=毫秒 → 起播后跳转该时刻并冻结 ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

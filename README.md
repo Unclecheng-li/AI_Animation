@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](./LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](#贡献与许可)
-[![Skills count](https://img.shields.io/badge/Skills-10-orange?style=flat-square)](#skills-gallery)
+[![Skills count](https://img.shields.io/badge/Skills-11-orange?style=flat-square)](#skills-gallery)
 [![Spec](https://img.shields.io/badge/Spec-SKILL.md-black?style=flat-square)](https://agentskills.io)
 
 🌐 **English version**: [`README_EN.md`](README_EN.md)
@@ -30,6 +30,7 @@
 - 📱 **手机系统 UI 演示** — 一台"真手机"的电影化编排录屏：锁屏通知、聊天、设置页、App 界面逐镜头呈现，HyperOS 级手感动效 + 3D 姿态手机演员
 - 🗂️ **叠放数据卡** — 论点卡从底部依次弹入、旧卡左叠成牌堆：折线描边 / 数字滚动 / 环形仪表按毫秒级时间线级联入场，自动播放对齐口播，录屏即成片
 - 🖥️ **仿 Win11 系统仿真** — 1:1 还原真电脑：资源管理器、开始菜单、系统弹窗、蓝屏修复逐镜头呈现，光标演出引导操作 + 教学标记层，全屏录屏即成片
+- 📐 **瑞士风格图表演示** — 纸底墨字发丝线的编辑部级排版：每页一张匹配内容的可视化图表（时间线/循环环/流程链/热力矩阵…20 种词汇），唯一强调橙，一镜一 HTML
 
 <div align="center">
 
@@ -94,6 +95,13 @@
 <a href="#win11-ui-demos"><img width="2560" height="1440" alt="win11-ui-demos" src="./skills/win11-ui-demos/assets/preview/main.png" /></a>
 <br/><a href="#win11-ui-demos"><strong>win11-ui-demos</strong></a>
 <br/><sub>仿 Win11 系统仿真 / 光标演出动画</sub>
+</td>
+</tr>
+<tr>
+<td colspan="4" valign="top" align="center">
+<a href="#swiss-shot-demos"><img width="2560" height="1440" alt="swiss-shot-demos" src="./skills/swiss-shot-demos/assets/preview/main.png" /></a>
+<br/><a href="#swiss-shot-demos"><strong>swiss-shot-demos</strong></a>
+<br/><sub>瑞士风格图表演示 / 编辑级排版动画</sub>
 </td>
 </tr>
 </table>
@@ -499,6 +507,52 @@ Links: [README](./skills/win11-ui-demos/README.md) · [SKILL.md](./skills/win11-
 
 <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
 
+#### `swiss-shot-demos`
+
+<a href="./skills/swiss-shot-demos">
+<img width="2560" height="1440" alt="swiss-shot-demos preview" src="./skills/swiss-shot-demos/assets/preview/main.png" />
+</a>
+
+**分类:** 瑞士风格图表演示 / 编辑级排版动画
+**适用于:** 知识教程视频、技术复盘、产品发布、安全科普——需要"纸底墨字 + 匹配内容的可视化图表"的克制美学演示场景；也专治 AI 默认生成的"黑底油光"审美疲劳。
+
+`swiss-shot-demos` 制作瑞士国际主义风格（Swiss / International Typographic Style）的分镜演示动画：纸灰底、炭黑墨、发丝线、灰阶明度阶梯、每页唯一强调橙——编辑部级排版（Inter 大字 + 12 列网格 + 非对称布局）。核心方法论是**图表驱动**：拿到口播先问"这是什么图"，20 种图表词汇选型（大字计数、发丝轴柱、时间线、环形回路、流程链、泳道、状态机、双列对照、嵌套框、热力矩阵、点阵、计票清单、墨底终端卡…），主体图形区 ≥55% 面积。全面禁用 glow/霓虹/渐变光斑。内置 68 个成片镜头（AI 渗透教程全片）+ 预装瑞士系统的底盘模板。
+
+亮点:
+- 瑞士设计系统唯一正本：纸 `#F0EFEB` / 墨 `#1C1C1A` / 灰阶 L1-L7（明度即数据）/ 唯一强调橙 `#F5572F`（每页只标一个主角）
+- 图表词汇表 20 种"内容→图表"映射，纯 CSS/SVG 实现，零外部图表库
+- 禁用清单一票否决暗色油光全家桶（glow/光斑/渐变/扫描线/弹跳）
+- 入场三式 pop/fade/draw + 快进快停缓动；节拍动画一律 cue+tws 可冻结
+- QA 冻结钩子内置：URL 加 `#auto,t=毫秒` 自动起播冻结，无头截图零改文件
+- 生产纪律：cue 时刻=口播句绝对时间差、数字白名单不编造、不伪造终端回显
+
+<table>
+<tr>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="AI 循环环" src="./skills/swiss-shot-demos/assets/preview/shot-01.png" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="翻车时间线" src="./skills/swiss-shot-demos/assets/preview/shot-05.png" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="点阵对撞" src="./skills/swiss-shot-demos/assets/preview/shot-06.png" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="嵌套剖视" src="./skills/swiss-shot-demos/assets/preview/shot-12.png" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="双列对照" src="./skills/swiss-shot-demos/assets/preview/shot-40.png" /></td>
+<td align="center" width="16.6%"><img width="2560" height="1440" alt="热力矩阵" src="./skills/swiss-shot-demos/assets/preview/shot-49.png" /></td>
+</tr>
+<tr>
+<td align="center"><sub><code>AI 循环环</code><br />shot-0-1 五幕范本</sub></td>
+<td align="center"><sub><code>恶化时间线</code><br />四步逐级变深</sub></td>
+<td align="center"><sub><code>点阵对撞</code><br />15 → 50+ 翻倍</sub></td>
+<td align="center"><sub><code>嵌套剖视</code><br />宿主机套客户机</sub></td>
+<td align="center"><sub><code>双列对照</code><br />CTF vs 靶场</sub></td>
+<td align="center"><sub><code>热力矩阵</code><br />灰阶即数据</sub></td>
+</tr>
+</table>
+
+<sub>↑ 6 种图表词汇示例 — <a href="./skills/swiss-shot-demos/README.md"><b>打开完整图表词汇表</b></a>（68 个成片样板可直接运行）。</sub>
+
+Links: [README](./skills/swiss-shot-demos/README.md) · [SKILL.md](./skills/swiss-shot-demos/SKILL.md)
+
+---
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
 ### 安装
 
 | # | 方式 | 适用于 | 指定版本? |
@@ -523,6 +577,7 @@ npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/ca
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/video-shot-demos
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/phone-ui-demos
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/win11-ui-demos
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/swiss-shot-demos
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/stacked-data-cards
 ```
 
@@ -595,6 +650,10 @@ git clone https://github.com/Unclecheng-li/AI_Animation.git
 用 win11-ui-demos 把这段 Windows 教程的操作过程做成光标演示仿真动画，先出分镜表我确认
 ```
 
+```
+用 swiss-shot-demos 把这期视频的口播稿做成演示动画：瑞士风格、图表驱动，先出图表选型分镜表
+```
+
 ### 目录结构
 
 ```text
@@ -656,6 +715,11 @@ ai-animation-skills/
 │       ├── README.md
 │       ├── references/          ← win11-kit 组件规格 / simulation-patterns 叙事手法
 │       └── assets/              ← Win11 仿真套件模板 + wukong 21 镜头实例 + 预览图
+│   ├── swiss-shot-demos/
+│       ├── SKILL.md             ← 图表优先哲学 + cp 工作流 + 交付标准
+│       ├── README.md
+│       ├── references/          ← swiss-system 设计正本 / chart-vocabulary 图表词汇 / production-spec 生产纪律
+│       └── assets/              ← 瑞士底盘模板（tokens+组件库预装）+ 68 镜头实例 + 预览图
 ├── web_animation/               ← 原始示例 HTML（历史存档）
 ├── UI/                          ← UI 设计参考图
 ├── prompt.md                    ← Prompt 模板集合

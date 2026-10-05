@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+     镜头演示动画 · 镜20 写实仿真 W3「系统安装快剪」
+     ============================================================ -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80);
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 0-20 · 系统安装快剪 · 46s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;--accent:#F5572F;--dark:#1C1C1A}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Noto Sans SC',sans-serif}
+body.paused *{animation-play-state:paused!important}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;
+  background:var(--paper)}
+#stage::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:1;opacity:.5;
+  background-image:linear-gradient(rgba(28,28,26,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.045) 1px,transparent 1px);
+  background-size:64px 64px}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ============ ③ 画面层 CSS ============ */
+/* ── 页头（v4 · 底部栏式 slate） ── */
+#head{position:absolute;left:56px;bottom:64px;z-index:31;display:flex;align-items:center;gap:14px;opacity:0;transform:translateY(10px);transition:all .55s cubic-bezier(.16,1,.3,1);
+  background:#fff;border:1px solid var(--grid);border-radius:10px;padding:9px 16px;box-shadow:0 8px 20px rgba(28,28,26,.10)}
+#head.in{opacity:1;transform:none}
+#head .no{display:inline-block;font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:13px;letter-spacing:3px;
+  color:var(--paper);background:var(--ink);border-radius:4px;padding:4px 12px}
+#head h1{font-family:'Inter','Noto Sans SC',sans-serif;font-weight:800;font-size:26px;line-height:1;letter-spacing:-.02em;color:var(--ink)}
+/* Windows 安装器共通 */
+#setup{position:absolute;inset:0}
+.winlogo{position:absolute;left:64px;top:46px;display:flex;align-items:center;gap:12px;color:#4a5a6e;font-size:15px}
+.winlogo .sq{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:3px;width:26px;height:26px}
+.winlogo .sq i{background:#0a6ecb;display:block}
+.scr{position:absolute;inset:0;opacity:0;transform:scale(1.015);transition:opacity .24s ease,transform .32s cubic-bezier(.16,1,.3,1)}
+.scr.on{opacity:1;transform:none}
+.body{position:absolute;left:210px;right:210px;top:176px;bottom:250px}
+.body h1{font-size:38px;font-weight:400;color:#1b2733;letter-spacing:.5px}
+.body .p{margin-top:16px;font-size:17px;color:#5a6b7d;line-height:1.7}
+.wfld{display:inline-flex;align-items:center;height:42px;width:600px;background:#fff;border:1px solid #9fb0c2;border-radius:2px;
+  margin-top:26px;padding:0 14px;font-family:'Space Grotesk','Noto Sans SC',monospace;font-size:17px;color:#22303f}
+.wfld.caret::after{content:'';width:2px;height:22px;background:#0a6ecb;margin-left:2px;animation:blk .9s steps(1) infinite}
+@keyframes blk{50%{opacity:0}}
+.wchk{display:flex;align-items:center;gap:12px;margin-top:24px;font-size:16px;color:#2c3a49}
+.wchk i{width:20px;height:20px;border:1.6px solid #7a8b9d;background:#fff;border-radius:2px;display:flex;align-items:center;justify-content:center;
+  font-style:normal;font-size:14px;color:#fff;transition:all .22s}
+.wchk.sel i{background:#0a6ecb;border-color:#0a6ecb}
+.wchk.sel i::after{content:'✓'}
+.actions{position:absolute;right:210px;bottom:200px;display:flex;align-items:center;gap:20px}
+.wbtn{min-width:132px;height:40px;background:#0a6ecb;color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center;
+  border-radius:2px;border:1px solid #0a6ecb}
+.wbtn.ghost{background:#e8edf4;color:#31404f;border-color:#9fb0c2}
+.wbtn.press{box-shadow:0 0 0 4px rgba(10,110,203,.28);transform:translateY(1px)}
+.wlink{position:absolute;left:210px;bottom:212px;font-size:16px;color:#0a6ecb;text-decoration:underline;text-underline-offset:3px}
+.wlink.hi{background:rgba(10,110,203,.12);box-shadow:0 0 0 8px rgba(10,110,203,.12);border-radius:2px;animation:lp 1s infinite}
+@keyframes lp{50%{box-shadow:0 0 0 8px rgba(10,110,203,.3)}}
+
+/* 版本列表 */
+.oslist{margin-top:24px;display:flex;flex-direction:column;gap:12px;max-width:1180px;position:relative;overflow:hidden}
+#optBand{display:none}
+.opt{position:relative;background:#fff;border:1px solid #b3c1d1;border-radius:2px;padding:15px 22px;font-size:17px;color:#22303f;
+  display:flex;align-items:center;gap:14px;opacity:0;transform:translateY(14px);transition:all .34s cubic-bezier(.16,1,.3,1)}
+.opt.on{opacity:1;transform:none}
+.opt .tg{font-style:normal;font-size:14px;padding:3px 11px;border-radius:3px;background:#eef1f5;border:1px solid #c6d0dc;color:#5f7183;display:none}
+.opt.tagshow .tg{display:inline-block}
+.opt.core{background:#f0f3f7;color:#8494a5}
+.opt.core.dead{background:#e6eaef;border-style:dashed;border-color:#aab6c3;color:#93a1b0}
+.opt.core.dead .ico{display:inline-block}
+.opt .ico{display:none;width:30px;height:20px;background:#12161c;border:1px solid #2c3440;border-radius:2px;position:relative;flex:none}
+.opt .ico::after{content:'_';position:absolute;left:4px;top:2px;font-family:'Space Grotesk',monospace;font-size:11px;color:#7ee0a0}
+.opt.pick{border-color:#0a6ecb;box-shadow:0 0 0 2px rgba(10,110,203,.35);animation:lp 1.1s infinite}
+.opt.sel{background:#e7f1fd;border-color:#0a6ecb;box-shadow:0 0 0 2px rgba(10,110,203,.55)}
+.opt.sel::before{content:'●';position:absolute;left:-26px;color:#0a6ecb;font-size:14px}
+
+/* 安装类型 */
+.typecards{margin-top:24px;display:flex;flex-direction:column;gap:14px;max-width:1100px}
+.tc{background:#fff;border:1px solid #b3c1d1;border-radius:2px;padding:18px 24px;font-size:16px;color:#22303f}
+.tc b{font-weight:600}
+.tc span{display:block;margin-top:4px;font-size:14px;color:#6a7b8d}
+.tc.sel{background:#e7f1fd;border-color:#0a6ecb;box-shadow:0 0 0 2px rgba(10,110,203,.45)}
+
+/* 分区表 */
+.dtab{margin-top:24px;width:1240px;border:1px solid #b3c1d1;background:#fff}
+.dtab .dh,.dtab .dr{display:grid;grid-template-columns:3fr 1.1fr 1.1fr 1.1fr 1.2fr;padding:11px 18px;font-size:15px;align-items:center}
+.dtab .dh{background:#eef2f7;color:#4a5a6e;border-bottom:1px solid #cdd8e2;font-weight:500}
+.dtab .dr{border-bottom:1px solid #e5eaf0;color:#22303f}
+.dtab .dr.sel{background:#0a6ecb;color:#fff}
+.dtab .dr.sel .tag{color:#cfe6ff}
+.dtab .dr.sel .ptag{background:rgba(255,255,255,.24);border-color:#fff;color:#fff}
+.dtag{position:absolute;right:210px;bottom:200px}
+.ptag{display:inline-block;margin-left:10px;font-size:14px;background:rgba(10,110,203,.14);border:1px solid rgba(10,110,203,.5);color:#0a6ecb;padding:2px 10px;border-radius:3px}
+.dtoolbar{display:flex;gap:16px;margin-top:18px;font-size:15px;color:#3d4c5c}
+.dtoolbar span{border:1px solid #b3c1d1;background:#fff;padding:8px 20px;border-radius:2px}
+
+/* diagram-design 标注规则：发丝引线（1px 虚线 leader + 落点 dot） + 编辑边注 */
+.anno{position:absolute;z-index:36;pointer-events:none}
+.anno .lead{position:absolute;right:100%;top:0;overflow:visible}
+.anno .lead path{fill:none;stroke:rgba(45,49,66,.42);stroke-width:1;stroke-dasharray:4,3}
+.anno .lead circle{fill:#2d3142}
+.anno .tx{display:block;font-family:'Inter','Noto Sans SC',sans-serif;font-style:normal;font-size:14px;line-height:1.5;color:var(--muted)}
+
+/* 进度 */
+#pwrap{margin-top:30px;max-width:1100px}
+#pwrap .pt{font-size:16px;color:#31404f}
+.pbar{position:relative;margin-top:14px;height:16px;background:#dfe5ed;border:1px solid #b9c5d3;border-radius:8px;overflow:hidden}
+.pbar i{display:block;height:100%;width:0;background:#0a6ecb}
+.pbar::after{content:'';position:absolute;inset:0;border-radius:8px;pointer-events:none;opacity:0}
+.pbar.run::after{animation:none}
+.spk{position:absolute;top:50%;width:7px;height:7px;margin-top:-3.5px;border-radius:50%;background:#fff;opacity:0}
+.pbar.run .spk{animation:spark 1.9s linear infinite}
+@keyframes spark{0%{left:2%;opacity:0}15%{opacity:1}85%{opacity:1}100%{left:97%;opacity:0}}
+#pPct{margin-top:12px;font-family:'Space Grotesk',monospace;font-size:15px;color:#5a6b7d}
+
+/* 四屏快剪加速感：横向速度线（v4：移除扫描线光效） */
+#cutfx{display:none}
+
+/* 重启黑屏 */
+#restart{position:absolute;inset:0;background:#0a1a30;display:flex;align-items:center;justify-content:center;flex-direction:column;opacity:0;
+  transition:opacity .3s ease;z-index:12}
+#restart.in{opacity:1}
+#restart .sp{width:44px;height:44px;border:4px solid rgba(255,255,255,.22);border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#restart .t{margin-top:30px;font-size:22px;color:#e8eef8;letter-spacing:1.5px}
+
+/* 桌面收尾 */
+#desk{position:absolute;inset:0;opacity:0;transition:opacity .5s ease;z-index:11;
+  background:radial-gradient(120% 100% at 70% 20%,#12467e 0%,#0a2748 45%,#061222 100%)}
+#desk.in{opacity:1}
+#desk .wall{position:absolute;inset:0;background:
+  radial-gradient(70% 90% at 72% 30%,rgba(90,180,255,.35),transparent 60%),
+  linear-gradient(200deg,#0d3a6b,#082036 70%,#050f1c)}
+#desk .icons{position:absolute;left:44px;top:168px;display:flex;flex-direction:column;gap:26px;color:#eaf2ff;font-size:14px;text-align:center}
+#desk .icons div{width:86px}
+#desk .icons i{display:block;width:46px;height:40px;margin:0 auto 6px;border-radius:4px;background:linear-gradient(#f5d76e,#e0b542)}
+#desk .icons div:nth-child(2) i{background:linear-gradient(#7ecbff,#3b93e0)}
+#desk .tb{position:absolute;left:0;right:0;bottom:0;height:56px;background:rgba(10,18,30,.86);backdrop-filter:blur(8px);
+  display:flex;align-items:center;gap:26px;padding:0 26px;color:#dbe8f8;font-size:14px}
+#desk .tb .st{width:30px;height:30px;border-radius:4px;background:linear-gradient(135deg,#4ea8ff,#0a6ecb)}
+#desk .tb .clk{margin-left:auto;font-family:'Space Grotesk',monospace;font-size:13px;line-height:1.35;text-align:right}
+#desk .mid{position:absolute;left:0;right:0;top:400px;text-align:center;color:#eaf3ff}
+#desk .mid b{font-size:40px;font-weight:300;letter-spacing:6px}
+#desk .mid span{display:block;margin-top:14px;font-size:17px;color:#9dc4ee;letter-spacing:3px}
+
+/* 可视化升级：白色箭头光标 + 点击涟漪 + 进度细节（viz-） */
+#vizCur{position:absolute;left:1100px;top:880px;width:34px;height:34px;z-index:45;opacity:0;pointer-events:none;
+  transition:left .7s cubic-bezier(.3,.8,.4,1),top .7s cubic-bezier(.3,.8,.4,1),opacity .3s;
+  filter:drop-shadow(0 4px 10px rgba(0,0,0,.45))}
+#vizCur.in{opacity:1}
+.vrip{position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;border:2.5px solid var(--ink);
+  pointer-events:none;z-index:44;animation:vripA .75s cubic-bezier(.2,.7,.3,1) forwards}
+@keyframes vripA{0%{opacity:.95;transform:scale(.35)}100%{opacity:0;transform:scale(3)}}
+#pCheck{margin-top:12px;font-size:15px;color:#1d7a45;opacity:0;transition:opacity .4s}
+#pCheck.on{opacity:1}
+
+/* 花字条（顶部横幅） */
+#cal{position:absolute;left:0;right:0;top:0;height:104px;display:flex;align-items:center;gap:22px;padding:0 60px;
+  background:#fff;border-bottom:1px solid var(--grid);box-shadow:0 8px 20px rgba(28,28,26,.06);
+  opacity:0;transform:translateY(-18px);transition:opacity .34s ease,transform .4s cubic-bezier(.16,1,.3,1);z-index:30}
+#cal.in{opacity:1;transform:none}
+#cal .big{font-family:'Inter','Noto Sans SC',sans-serif;font-size:38px;font-weight:800;letter-spacing:0;color:var(--ink)}
+#cal .big em{font-style:normal;color:var(--accent)}
+#cal .sub{font-size:19px;color:var(--muted);letter-spacing:0}
+
+.corner{position:absolute;font-family:'Inter','IBM Plex Mono',sans-serif;font-size:14px;color:var(--muted);letter-spacing:.06em;z-index:41}
+#chap{left:52px;bottom:30px}
+#src{right:52px;bottom:30px}
+
+/* ── 大肥鱼 ── */
+.fish{position:absolute;width:236px;z-index:35;opacity:0;transform:translateY(24px) scale(.7);
+  transition:all .45s cubic-bezier(.34,1.6,.64,1);pointer-events:none;filter:drop-shadow(0 12px 26px rgba(0,0,0,.35))}
+.fish.show{opacity:1;transform:none}
+.fish img{width:100%;display:block}
+.fish .say{position:absolute;right:226px;top:20px;width:246px;background:#fff;border:1px solid var(--ink);border-radius:14px;
+  padding:12px 16px;font-size:19px;font-weight:700;color:var(--ink);line-height:1.45;
+  opacity:0;transform:scale(.6);transition:all .4s cubic-bezier(.34,1.6,.64,1) .15s;box-shadow:0 10px 26px rgba(28,28,26,.20)}
+.fish.show .say{opacity:1;transform:scale(1)}
+.fish .say b{color:var(--accent)}
+.fish .say::after{content:'';position:absolute;right:-16px;top:50%;margin-top:-9px;border:9px solid transparent;border-left:11px solid #fff}
+#fish1{right:28px;bottom:118px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:var(--grid)}
+#bar{height:100%;width:0;background:var(--ink);box-shadow:none}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(5,8,14,.92);backdrop-filter:blur(4px);color:#aab}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #556;color:#ccc;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(28,28,26,.08)}
+#replay.done{animation:pulse 1.2s infinite;border-color:var(--accent);color:var(--accent)}
+@keyframes pulse{50%{opacity:.5}}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="head">
+    <span class="no">SHOT 0-20</span>
+    <h1>系统安装快剪 · 认准<b>桌面体验版</b></h1>
+  </div>
+  <div id="cam">
+    <div id="setup">
+      <div class="winlogo"><span class="sq"><i></i><i></i><i></i><i></i></span><span>Windows Server 2022 安装程序</span></div>
+
+      <!-- S1 产品密钥 -->
+      <div class="scr on" id="s1">
+        <div class="body">
+          <h1>输入产品密钥以激活 Windows</h1>
+          <p class="p">产品密钥可在 Windows 包装盒内或确认电子邮件中找到。</p>
+          <div class="wfld caret" id="keyFld"></div>
+          <div class="wchk"><i></i><span>自动激活 Windows(A)</span></div>
+        </div>
+        <div class="wlink" id="noKey">我没有产品密钥</div>
+        <div class="actions"><span class="wbtn" id="s1next">下一步</span></div>
+      </div>
+
+      <!-- S2 版本选择 -->
+      <div class="scr" id="s2">
+        <div class="body">
+          <h1>选择要安装的操作系统</h1>
+          <div class="oslist" id="osList">
+            <div id="optBand"></div>
+            <div class="opt core" id="o1"><b>Windows Server 2022 Standard</b><i class="ico"></i><i class="tg">Server Core · 无图形界面</i></div>
+            <div class="opt" id="o2"><b>Windows Server 2022 Standard (Desktop Experience)</b></div>
+            <div class="opt core" id="o3"><b>Windows Server 2022 Datacenter</b><i class="ico"></i><i class="tg">Server Core · 无图形界面</i></div>
+            <div class="opt" id="o4"><b>Windows Server 2022 Datacenter (Desktop Experience)</b></div>
+          </div>
+        </div>
+        <div class="actions"><span class="wbtn ghost">上一步</span><span class="wbtn" id="s2next">下一步</span></div>
+        <div class="anno" style="left:1500px;top:308px;width:330px"><svg class="lead" width="130" height="60" viewBox="0 0 130 60" aria-hidden="true"><path d="M128 18 Q 66 27 20 36"/><circle cx="20" cy="36" r="2.4"/></svg><span class="tx">含桌面的完整版</span></div>
+      </div>
+
+      <!-- S3 条款 -->
+      <div class="scr" id="s3">
+        <div class="body">
+          <h1>适用的声明和许可条款</h1>
+          <p class="p">若要继续，请阅读并接受许可条款。</p>
+          <div class="wchk" id="accept"><i></i><span>我接受 Windows Server 的许可条款(A)</span></div>
+        </div>
+        <div class="actions"><span class="wbtn" id="s3next">下一步</span></div>
+      </div>
+
+      <!-- S4 安装类型 -->
+      <div class="scr" id="s4">
+        <div class="body">
+          <h1>你想执行哪种类型的安装?</h1>
+          <div class="typecards">
+            <div class="tc" id="tcUp"><b>升级: 安装 Windows 并保留文件、设置和应用程序</b><span>保留现有系统配置直接升级。</span></div>
+            <div class="tc" id="tcCus"><b>自定义: 仅安装 Windows(高级)</b><span>全新安装，自选磁盘与分区。</span></div>
+          </div>
+        </div>
+        <div class="actions"><span class="wbtn ghost">上一步</span></div>
+      </div>
+
+      <!-- S5 选盘 -->
+      <div class="scr" id="s5">
+        <div class="body">
+          <h1>你想将 Windows 安装在哪里?</h1>
+          <div class="dtab">
+            <div class="dh"><span>名称</span><span>总大小</span><span>可用空间</span><span>类型</span></div>
+            <div class="dr"><span>驱动器 0 分区 1</span><span>100.0 MB</span><span>92.0 MB</span><span>系统</span><span></span></div>
+            <div class="dr" id="p60"><span>驱动器 0 分区 2</span><span>60.0 GB</span><span>60.0 GB</span><span>主要</span><span><b class="ptag">60 GB</b></span></div>
+            <div class="dr"><span>驱动器 0 分区 3</span><span>500.0 MB</span><span>498.0 MB</span><span>恢复</span><span></span></div>
+            <div class="dr"><span>驱动器 0 未分配的空间</span><span>—</span><span>—</span><span>—</span><span></span></div>
+          </div>
+          <div class="dtoolbar"><span>刷新(R)</span><span>删除(D)</span><span>格式化(F)</span><span>新建(N)</span><span>加载驱动程序(L)</span></div>
+        </div>
+        <div class="actions"><span class="wbtn" id="s5next">下一步</span></div>
+        <div class="anno" style="left:1500px;top:322px;width:320px"><svg class="lead" width="160" height="70" viewBox="0 0 160 70" aria-hidden="true"><path d="M158 22 Q 90 30 20 35"/><circle cx="20" cy="35" r="2.4"/></svg><span class="tx">系统盘 · 就是之前新建的那块</span></div>
+      </div>
+
+      <!-- S6 进度 -->
+      <div class="scr" id="s6">
+        <div class="body">
+          <h1>正在安装 Windows</h1>
+          <div id="pwrap">
+            <div class="pt" id="pTask">正在复制 Windows 文件</div>
+            <div class="pbar" id="pbar"><i id="pBar"></i>
+              <span class="spk" style="animation-delay:0s"></span><span class="spk" style="animation-delay:.32s"></span><span class="spk" style="animation-delay:.64s"></span>
+              <span class="spk" style="animation-delay:.96s"></span><span class="spk" style="animation-delay:1.28s"></span><span class="spk" style="animation-delay:1.6s"></span></div>
+            <div id="pPct">0%</div>
+            <div id="pCheck">✓ 文件复制完成，正在安装功能…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- S7 管理员密码 -->
+      <div class="scr" id="s7">
+        <div class="body">
+          <h1>自定义设置</h1>
+          <p class="p">为管理员帐户设置密码，之后每次登录系统都要用到它。</p>
+          <div style="margin-top:26px;display:flex;flex-direction:column;gap:16px">
+            <div style="display:flex;align-items:center;gap:16px"><span style="width:130px;font-size:16px;color:#31404f">密码</span><span class="wfld" id="pw1" style="width:460px"></span></div>
+            <div style="display:flex;align-items:center;gap:16px"><span style="width:130px;font-size:16px;color:#31404f">确认密码</span><span class="wfld" id="pw2" style="width:460px"></span></div>
+            <div style="display:flex;align-items:center;gap:16px"><span style="width:130px;font-size:16px;color:#5a6b7d">密码提示</span><span class="wfld" style="width:460px">admin</span></div>
+          </div>
+        </div>
+        <div class="actions"><span class="wbtn" id="s7done">完成</span></div>
+      </div>
+
+      <div id="restart"><div class="sp"></div><div class="t">正在重新启动…</div></div>
+    </div>
+
+    <div id="desk">
+      <div class="wall"></div>
+      <div class="icons"><div><i></i>此电脑</div><div><i></i>回收站</div></div>
+      <div class="mid"><b>Windows Server 2022</b><span>系统安装完毕</span></div>
+      <div class="tb"><span class="st"></span><span>开始</span><span>文件资源管理器</span><span class="clk">21:12<br>2026/9/30</span></div>
+    </div>
+    <!-- 可视化升级：白色箭头光标（随镜头层同变换，坐标保持舞台系） -->
+    <div id="vizCur"><svg width="34" height="34" viewBox="0 0 24 24"><path d="M5 2 L5 19 L9.6 15.2 L12.4 21 L15 19.8 L12.2 14 L18 13.2 Z" fill="#fff" stroke="#1a1a2e" stroke-width="1.4" stroke-linejoin="round"/></svg></div>
+  </div>
+
+  <div id="cal"><b class="big"></b><span class="sub"></span></div>
+  <div class="fish" id="fish1"><div class="say">几十分钟呢，去<b>泡杯茶</b> ~</div><img src="Shark-GIF/006_双手身前微笑乖巧期待.gif" alt="大肥鱼"></div>
+  <div id="cutfx"></div>
+  <div class="corner" id="chap">第二章 · 准备工作 · 虚拟机</div>
+  <div class="corner" id="src">口播对齐 timeline.md 8:42–9:28 · 界面为示意仿真，非实拍</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-20 · 系统安装快剪 · 46s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=46000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ===== 本页工具 ===== */
+const SCRS=['s1','s2','s3','s4','s5','s6','s7'];
+function scr(id){SCRS.forEach(k=>$('#'+k).classList.toggle('on',k===id));
+  const c=$('#cutfx');c.classList.remove('go');void c.offsetWidth;c.classList.add('go');}
+function callout(big,sub){const c=$('#cal');c.querySelector('.big').innerHTML=big;c.querySelector('.sub').textContent=sub||'';
+  c.classList.remove('in');void c.offsetWidth;c.classList.add('in');if(window.__sfx)__sfx.pop(.5);}
+
+/* ============ ⑤ DUR 与 cue 表 ============ */
+on(300,()=>{__sfx.whoosh(.5,.4);$('#head').classList.add('in');});                                          // 8:42「接下来就进入正式安装」
+on(1000,()=>{callout('安装流程跟个人系统差不多','');});                        // 8:43「这个流程跟个人系统差不多」
+on(3000,()=>{callout('但有两处要留意','');});                                 // 8:45「但是有两个地方还是要讲一下」
+on(5000,()=>{callout('<em>①</em> 产品密钥','先问你要产品密钥');});              // 8:47「第一个就是问你要产品密钥的时候」
+on(6000,()=>{callout('<em>①</em> 产品密钥 · 留意下面那行小字','');__sfx.pop(.4);});      // 8:48「要点下面那行小字」
+on(8000,()=>{$('#noKey').classList.add('hi');callout('<em>①</em> 产品密钥 · 点「我没有产品密钥」','');__sfx.pop(.7);});  // 8:50「我没有密钥」
+on(9000,()=>{camTo(0,0,1,.35);scr('s2');$('#s1next').classList.remove('press');__sfx.whoosh(.6,.5);});  // 8:51「另一个就是选系统版本」
+on(10000,()=>{$('#o1').classList.add('on');__sfx.pop(.4);});                 // 8:52「列表里面会列出来4个选项」
+on(10150,()=>{$('#o2').classList.add('on');__sfx.pop(.4);});
+on(10300,()=>{$('#o3').classList.add('on');__sfx.pop(.4);});
+on(10450,()=>{$('#o4').classList.add('on');__sfx.pop(.4);});
+on(12000,()=>{$('#o1').classList.add('tagshow');$('#o3').classList.add('tagshow');camFocus(720,470,1.06,.5);
+  $('#osList').classList.remove('hl');void $('#osList').offsetWidth;$('#osList').classList.add('hl');
+  callout('<em>②</em> 名字里带 Core 的，没有图形界面','');__sfx.pop(.6);});  // 8:54「名字里带Core的是没有图形界面的」
+on(15000,()=>{$('#o1').classList.add('dead');$('#o3').classList.add('dead');
+  $('#osList').classList.remove('hl');void $('#osList').offsetWidth;$('#osList').classList.add('hl');
+  callout('<em>②</em> 装完只有一个黑窗口','Server Core 是纯命令行');__sfx.thud(.5);});  // 8:57「那么这个东西装完只有一个黑窗口」
+on(17000,()=>{callout('<em>②</em> 小白根本用不了','');__sfx.pop(.5);});       // 8:59「我们小白根本用不了」
+on(18000,()=>{$('#o2').classList.add('pick');$('#o4').classList.add('pick');__sfx.pop(.6);});  // 9:00「所以我们要选名字里面带Desktop Experience的」
+on(21000,()=>{callout('<em>②</em> 选名字里带 Desktop Experience 的','= 带桌面体验');__sfx.pop(.5);}); // 9:03「也就是带桌面体验的版本」
+on(23000,()=>{callout('<em>②</em> 那才是完整的图形界面','');__sfx.pop(.5);}); // 9:05「那么那个才是完整图形界面」
+on(24000,()=>{callout('<em>②</em> 标准版 vs 数据中心版','');__sfx.pop(.4);});  // 9:06「而标准版和数据中心版」
+on(26000,()=>{callout('<em>②</em> 两个版本 · 对我们没区别','');__sfx.pop(.5);}); // 9:08「对我们来说是没有区别的」
+on(27000,()=>{$('#o2').classList.add('sel');$('#o2').classList.remove('pick');$('#o4').classList.remove('pick');camTo(0,0,1,.4);
+  $('#s2next').classList.add('press');__sfx.pop(.7);});                       // 9:09「我们挑一个带桌面体验的就行了」
+on(29000,()=>{scr('s3');camCut(0,0,1);__sfx.whoosh(.6,.5);});   // 9:11「往后就是常规流程」
+on(30000,()=>{$('#accept').classList.add('sel');$('#s3next').classList.add('press');
+  callout('接受条款 → 选「自定义安装」','');__sfx.pop(.6);});                  // 9:12「接受条款选自定义安装」
+on(30600,()=>{scr('s4');__sfx.whoosh(.45,.45);});                            // 9:12 → 安装类型
+on(31200,()=>{$('#tcUp').classList.add('on');$('#tcCus').classList.add('on');$('#s3next').classList.remove('press');}); // 9:12 类型卡
+on(31500,()=>{$('#tcCus').classList.add('sel');$('#tcUp').classList.remove('sel');}); // 9:13 选自定义
+on(32200,()=>{scr('s5');__sfx.whoosh(.5,.5);});                              // 9:14「然后挑之前那一块60GB的盘」
+on(32500,()=>{$('#p60').classList.add('sel');callout('挑那块 60 GB 的盘','驱动器 0 分区 2');__sfx.pop(.7);}); // 9:14 选盘
+on(34000,()=>{scr('s6');camFocus(760,500,1.05,.5);$('#pbar').classList.add('run');__sfx.whoosh(.6,.5);  tws.push({t:34000,d:4200,e:eo,f:p=>{const v=Math.round(p*62);$('#pBar').style.width=v+'%';$('#pPct').textContent=v+'%';}});
+  $('#pTask').textContent='正在复制 Windows 文件 (1)';});                     // 9:16「接下来等进度条」
+on(35000,()=>{callout('中间还会自动重启几次','');__sfx.pop(.5);});            // 9:17「中间可能会自动重启几次」
+on(37000,()=>{callout('整个安装流程有几十分钟','耐心等一下，去泡杯茶');__sfx.pop(.6);}); // 9:19「整个安装流程有几十分钟」
+on(23000,()=>{$('#fish1').classList.add('show');__sfx.pop(.45);});             // 角色定场（大肥鱼）
+on(37800,()=>{$('#pPct').textContent='66%';$('#pBar').style.width='66%';$('#pTask').textContent='正在安装功能';
+  $('#restart').classList.add('in');__sfx.thud(.5);});                        // 9:20「这样子」→ 自动重启
+on(38800,()=>{$('#restart').classList.remove('in');$('#pbar').classList.remove('run');scr('s7');camTo(0,0,1,.4);callout('给管理员设置账号密码','');__sfx.whoosh(.6,.5);}); // 9:21「最后会再让你给管理员设置一个账号密码」
+on(39600,()=>{$('#pw1').textContent='••••••••';__sfx.type(.3);});
+on(40300,()=>{$('#pw2').textContent='••••••••';__sfx.type(.3);});
+on(41000,()=>{callout('记住这个密码','之后每次进系统都要用');__sfx.ding(.6);});  // 9:23「记住这个密码」
+on(42200,()=>{$('#s7done').classList.add('press');callout('之后每次进系统都要用到它','');__sfx.pop(.4);}); // 9:24
+on(43800,()=>{$('#setup').style.transition='opacity .6s ease';$('#setup').style.opacity='0';
+  $('#desk').classList.add('in');__sfx.whoosh(.9,.5);});                      // 9:26「好了那么这样子」
+on(44500,()=>{$('#fish1').classList.remove('show')});                         // 大肥鱼常驻至结尾前
+on(45000,()=>{callout('系统安装完毕','Windows Server 2022 已就绪');__sfx.ding(.7);}); // 9:27「系统就安装完毕了」
+
+/* ── 可视化升级（轻量）：白色箭头光标 + 点击涟漪 + 进度细节 ── */
+function curTo(x,y){$('#vizCur').style.left=x+'px';$('#vizCur').style.top=y+'px';}
+function curClick(x,y){const r=document.createElement('div');r.className='vrip';r.style.left=x+'px';r.style.top=y+'px';
+  $('#cam').appendChild(r);setTimeout(()=>r.remove(),800);__sfx.pop(.5);}
+on(7000,()=>{$('#vizCur').classList.add('in');curTo(300,858);});               // 光标移向「我没有产品密钥」
+on(7950,()=>curClick(300,858));                                                // 点击
+on(26200,()=>curTo(420,430));                                                  // 移向带桌面体验的版本
+on(26950,()=>curClick(420,430));                                               // 点击选中
+on(28200,()=>curTo(1644,860));                                                 // 移向「下一步」
+on(28950,()=>curClick(1644,860));                                              // 点击
+on(29700,()=>curTo(360,430));                                                  // 移向接受条款勾选
+on(29950,()=>curClick(360,430));                                               // 勾选
+on(31300,()=>curTo(420,470));                                                  // 移向「自定义安装」
+on(31450,()=>curClick(420,470));                                               // 点击
+on(32300,()=>curTo(600,330));                                                  // 移向 60GB 分区
+on(32450,()=>curClick(600,330));                                               // 点击选盘
+on(36800,()=>{$('#pCheck').classList.add('on');__sfx.ding(.4);});              // 进度细节：复制完成提示
+on(37750,()=>{$('#vizCur').classList.remove('in');});                          // 重启黑屏时光标隐藏
+on(41900,()=>{$('#vizCur').classList.add('in');curTo(1644,860);});             // 移向「完成」
+on(42150,()=>curClick(1644,860));                                              // 点击完成
+on(43500,()=>{$('#vizCur').classList.remove('in');});                          // 光标退场
+
+/* ===== [不动] QA 专用（正常播放不触发） ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

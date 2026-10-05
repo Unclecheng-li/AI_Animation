@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+  ◆ 分镜演示页：镜头 0-36 · 存档习惯（15s）◆
+  底盘：虚拟时钟黑场播放器 / WebAudio 音效 / 1920×1080 舞台 / cam 镜头层
+  主视觉（一图为纲）：diagram-design type-loop —— 直径 430 的版本循环环，
+      四站（commit 存档 / 让 AI 改 / 跑一跑 / restore 回滚）嵌在环上，
+      虚线回写辐条指向中心 hub（累积点）；粒子沿环循环
+  字体：Inter × Noto Sans SC × IBM Plex Mono（v4 系统）
+  强调橙 #F5572F 唯一主角 = 「跑一跑」改坏的警示节点（恢复＝墨）
+  角注：循环四步与中心结论依据口播（2026-09）
+============================================================= -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});}
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- ① 页面标题 -->
+<title>镜头 0-36 · 存档习惯 · 15s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<!-- ② 字体：Inter × Noto Sans SC × IBM Plex Mono -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;
+  --accent:#F5572F;--dark:#1C1C1A;--darkink:#F0EFEB;--darkgrid:#2E2D29;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:var(--paper);overflow:hidden;color:var(--ink);
+  font-family:'Inter','Noto Sans SC',sans-serif;-webkit-font-smoothing:antialiased}
+body.paused *{animation-play-state:paused!important}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#stage::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:1;
+  background-image:linear-gradient(rgba(28,28,26,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.05) 1px,transparent 1px);
+  background-size:44px 44px}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ── 页眉 ── */
+#head{position:absolute;left:88px;top:48px;z-index:20;opacity:0;transform:translateY(-16px);transition:all .6s cubic-bezier(.16,1,.3,1)}
+#head.in{opacity:1;transform:translateY(0)}
+#head .no{display:inline-block;font:600 14px 'IBM Plex Mono';letter-spacing:.2em;
+  color:var(--paper);background:var(--ink);border-radius:4px;padding:6px 16px}
+#head h1{margin-top:14px;font:900 60px/1.1 'Noto Sans SC';letter-spacing:.02em;color:var(--ink)}
+#head h1 b{color:var(--ink);border-bottom:8px solid var(--ink);padding-bottom:2px}
+#head .en{margin-top:26px;font:600 15px 'IBM Plex Mono';color:var(--muted);letter-spacing:.16em;text-transform:uppercase}
+
+/* ── 主视觉：版本循环大环 ── */
+/* 底部 ~20%（y≥864）留白给字幕/进度条：整组上移并等比缩排，内部关系不变 */
+#visual{position:absolute;inset:0;transform-origin:960px 560px;transform:translateY(-75px) scale(.75)}
+#ring{position:absolute;left:0;top:0;width:1920px;height:1080px;z-index:11;pointer-events:none;opacity:0;transition:opacity .6s ease}
+#ring.in{opacity:1}
+#ring .track{fill:none;stroke:var(--grid);stroke-width:1.5;stroke-dasharray:2 7}
+#ring .arc{fill:none;stroke:var(--ink);stroke-width:3;stroke-linecap:round;
+  stroke-dasharray:1;stroke-dashoffset:1;transition:stroke-dashoffset .8s cubic-bezier(.16,1,.3,1)}
+#ring .seg.on .arc{stroke-dashoffset:0}
+#ring .ah{opacity:0;transition:opacity .3s .4s}
+#ring .seg.on .ah{opacity:1}
+#ring .ah polygon{fill:var(--ink)}
+/* type-loop：环站 → 中心 hub 的虚线回写辐条 + 累积点 */
+#ring .spoke{stroke:var(--muted);stroke-width:1.4;stroke-dasharray:5 4;opacity:0;transition:opacity .5s .25s}
+#ring .spk,#ring .acc{opacity:0;transition:opacity .5s .25s}
+#ring .seg.on .spoke,#ring .seg.on .spk,#ring .seg.on .acc{opacity:1}
+#ring .spk polygon{fill:var(--muted)}
+#ring .acc{fill:var(--ink)}
+#ringGlow{fill:none;stroke:var(--ink);stroke-width:1.5;opacity:0;transition:opacity .8s}
+#ringGlow.on{opacity:1}
+
+/* ── 环上四站点卡 ── */
+.site{position:absolute;width:340px;height:112px;z-index:13;border-radius:10px;padding:15px 20px;
+  background:#fff;border:1.5px solid var(--ink);
+  opacity:0;transform:scale(.86);transition:all .5s cubic-bezier(.16,1,.3,1)}
+.site.in{opacity:1;transform:scale(1)}
+.site .st{font:900 25px 'Noto Sans SC';letter-spacing:.02em;color:var(--ink)}
+.site .mono{position:absolute;right:16px;top:13px;font:600 12.5px 'IBM Plex Mono';
+  letter-spacing:.02em;color:var(--muted);border:1.5px solid var(--faint);border-radius:999px;padding:3px 11px}
+.site .n{position:absolute;left:-14px;top:-14px;width:34px;height:34px;border-radius:50%;background:var(--ink);color:var(--paper);
+  font:800 16px Inter;display:flex;align-items:center;justify-content:center}
+.site .mark{position:absolute;left:20px;bottom:12px;width:74px;height:8px;border-radius:4px;background:var(--grid)}
+.site.hot{border-width:2.5px;border-color:var(--ink)}
+.site.hot .mark{background:var(--ink)}
+.site.bad{border-width:2.5px;border-color:var(--accent)}
+.site.bad .n{background:var(--accent)}
+.site.bad .mark{background:var(--accent)}
+.bxmark{position:absolute;right:-16px;top:-16px;opacity:0;transform:scale(2.2) rotate(12deg);
+  transition:all .4s cubic-bezier(.16,1,.3,1)}
+.site.bad .bxmark{opacity:1;transform:scale(1) rotate(0)}
+
+/* 存档印章（commit 节点） */
+#stamp{position:absolute;left:1150px;top:34px;z-index:15;width:104px;height:104px;opacity:0;
+  transform:scale(2.4) rotate(-12deg);transition:all .4s cubic-bezier(.16,1,.3,1)}
+#stamp.on{opacity:1;transform:scale(1) rotate(-12deg)}
+
+/* ── 中心 hub（墨底反白 · 累积点） ── */
+#core{position:absolute;left:960px;top:560px;width:430px;height:430px;margin-left:-215px;margin-top:-215px;z-index:14;
+  border-radius:50%;background:var(--dark);border:2px dashed rgba(240,239,235,.4);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 54px}
+#core .l1{font:900 38px 'Noto Sans SC';letter-spacing:.02em;color:var(--darkink);line-height:1.3;
+  opacity:0;transform:translateY(14px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#core .l1.on{opacity:1;transform:translateY(0)}
+#core .l2{margin-top:14px;font:700 30px 'Noto Sans SC';color:var(--darkink);line-height:1.3;
+  letter-spacing:.02em;opacity:0;transform:translateY(14px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#core .l2.on{opacity:1;transform:translateY(0)}
+#core .l2 b{color:var(--accent);font-weight:900}
+#core.pulse{border-style:solid;border-color:var(--paper)}
+#hubTag{position:absolute;top:32px;left:50%;transform:translateX(-50%);white-space:nowrap;
+  font:600 12.5px 'IBM Plex Mono';letter-spacing:.16em;color:#B4B3AD;
+  border:1px solid rgba(240,239,235,.35);border-radius:999px;padding:3px 12px}
+
+/* ── 大肥鱼 ── */
+.fish{position:absolute;width:250px;z-index:35;opacity:0;transform:translateY(26px);transition:all .45s cubic-bezier(.16,1,.3,1);pointer-events:none}
+.fish.show{opacity:1;transform:translateY(0)}
+.fish img{width:100%;display:block}
+.fish .say{position:absolute;width:250px;background:#fff;border:1.5px solid var(--ink);border-radius:10px;
+  padding:12px 16px;font:700 21px 'Noto Sans SC';color:var(--ink);line-height:1.45;
+  opacity:0;transform:scale(.85);transition:all .4s cubic-bezier(.16,1,.3,1) .15s}
+.fish.show .say{opacity:1;transform:scale(1)}
+.fish .say b{font-weight:900;color:var(--ink)}
+#fish1{left:74px;top:560px}
+#fish1 .say{left:4px;top:-104px}
+
+/* ── 角注 / HUD ── */
+.corner{position:absolute;font:500 14px Inter,'Noto Sans SC';letter-spacing:.08em;color:var(--faint);z-index:41}
+#chap{left:88px;bottom:26px}
+#src{right:88px;bottom:26px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:var(--grid)}
+#bar{height:100%;width:0;background:var(--ink)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(240,239,235,.94);color:var(--muted)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid var(--faint);color:var(--ink);font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(28,28,26,.06)}
+#replay.done{border-color:var(--ink);color:var(--ink)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="cam">
+
+    <div id="head">
+      <div>
+        <span class="no">SHOT 0-36 · COMMIT HABIT</span>
+        <h1>把「<b>存档</b>」变成习惯</h1>
+        <div class="en">commit · let AI edit · run · restore</div>
+      </div>
+    </div>
+
+    <!-- 主视觉：版本循环大环 -->
+    <div id="visual">
+    <svg id="ring" viewBox="0 0 1920 1080">
+      <circle class="track" cx="960" cy="560" r="430"/>
+      <circle id="ringGlow" cx="960" cy="560" r="452"/>
+      <g class="seg" id="g1">
+        <path class="arc" pathLength="1" d="M960,130 A430,430 0 0 1 1390,560"/>
+        <g class="ah"><polygon points="0,-12 24,0 0,12" transform="translate(1264,256) rotate(45)"/></g>
+        <line class="spoke" x1="960" y1="186" x2="960" y2="330"/>
+        <polygon class="spk" points="960,341 952,326 968,326" fill="#8F8E88"/>
+        <circle class="acc" cx="960" cy="345" r="5"/>
+      </g>
+      <g class="seg" id="g2">
+        <path class="arc" pathLength="1" d="M1390,560 A430,430 0 0 1 960,990"/>
+        <g class="ah"><polygon points="0,-12 24,0 0,12" transform="translate(1264,864) rotate(135)"/></g>
+        <line class="spoke" x1="1216" y1="560" x2="1190" y2="560"/>
+        <polygon class="spk" points="1179,560 1194,552 1194,568" fill="#8F8E88"/>
+        <circle class="acc" cx="1175" cy="560" r="5"/>
+      </g>
+      <g class="seg" id="g3">
+        <path class="arc" pathLength="1" d="M960,990 A430,430 0 0 1 530,560"/>
+        <g class="ah"><polygon points="0,-12 24,0 0,12" transform="translate(656,864) rotate(225)"/></g>
+        <line class="spoke" x1="960" y1="934" x2="960" y2="790"/>
+        <polygon class="spk" points="960,779 952,794 968,794" fill="#8F8E88"/>
+        <circle class="acc" cx="960" cy="775" r="5"/>
+      </g>
+      <g class="seg" id="g4">
+        <path class="arc" pathLength="1" d="M530,560 A430,430 0 0 1 960,130"/>
+        <g class="ah"><polygon points="0,-12 24,0 0,12" transform="translate(656,256) rotate(315)"/></g>
+        <line class="spoke" x1="704" y1="560" x2="730" y2="560"/>
+        <polygon class="spk" points="741,560 726,552 726,568" fill="#8F8E88"/>
+        <circle class="acc" cx="745" cy="560" r="5"/>
+      </g>
+      <!-- 环上循环粒子（沿环一周 · 灰阶） -->
+      <g id="flow">
+        <circle r="5" fill="#1C1C1A"><animateMotion dur="9s" repeatCount="indefinite" begin="0s" path="M960,130 A430,430 0 1 1 960,990 A430,430 0 1 1 960,130"/></circle>
+        <circle r="4" fill="#8F8E88"><animateMotion dur="9s" repeatCount="indefinite" begin="-1.5s" path="M960,130 A430,430 0 1 1 960,990 A430,430 0 1 1 960,130"/></circle>
+        <circle r="4.5" fill="#6A6963"><animateMotion dur="9s" repeatCount="indefinite" begin="-3s" path="M960,130 A430,430 0 1 1 960,990 A430,430 0 1 1 960,130"/></circle>
+        <circle r="4" fill="#B0AFA9"><animateMotion dur="9s" repeatCount="indefinite" begin="-4.5s" path="M960,130 A430,430 0 1 1 960,990 A430,430 0 1 1 960,130"/></circle>
+        <circle r="4.5" fill="#C6C5BF"><animateMotion dur="9s" repeatCount="indefinite" begin="-6s" path="M960,130 A430,430 0 1 1 960,990 A430,430 0 1 1 960,130"/></circle>
+        <circle r="4" fill="#8F8E88"><animateMotion dur="9s" repeatCount="indefinite" begin="-7.5s" path="M960,130 A430,430 0 1 1 960,990 A430,430 0 1 1 960,130"/></circle>
+        <circle id="token" r="11" fill="#1C1C1A">
+          <animateMotion dur="9s" repeatCount="indefinite" begin="-2.2s" path="M960,130 A430,430 0 1 1 960,990 A430,430 0 1 1 960,130"/>
+        </circle>
+      </g>
+    </svg>
+
+    <!-- 环上四站点 -->
+    <div class="site" id="nCommit" style="left:790px;top:74px">
+      <span class="n">1</span><span class="mono">git commit</span>
+      <div class="st">commit 存档</div><div class="mark"></div>
+    </div>
+    <div class="site" id="nAI" style="left:1220px;top:504px">
+      <span class="n">2</span><span class="mono">AI EDIT</span>
+      <div class="st">让 AI 改</div><div class="mark"></div>
+    </div>
+    <div class="site" id="nRun" style="left:790px;top:934px">
+      <span class="n">3</span><span class="mono">RUN</span>
+      <div class="st">跑一跑</div><div class="mark"></div>
+      <span class="bxmark"><svg width="44" height="44" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#fff" stroke="#F5572F" stroke-width="2.2"/><line x1="8" y1="8" x2="16" y2="16" stroke="#F5572F" stroke-width="2.6" stroke-linecap="round"/><line x1="16" y1="8" x2="8" y2="16" stroke="#F5572F" stroke-width="2.6" stroke-linecap="round"/></svg></span>
+    </div>
+    <div class="site" id="nRestore" style="left:360px;top:504px">
+      <span class="n">4</span><span class="mono">git restore .</span>
+      <div class="st">restore 回滚</div><div class="mark"></div>
+    </div>
+
+    <!-- 存档印章 -->
+    <div id="stamp">
+      <svg width="112" height="112" viewBox="0 0 112 112">
+        <rect x="6" y="6" width="100" height="100" rx="14" fill="#1C1C1A"/>
+        <path d="M34 58 L50 74 L80 38" fill="none" stroke="#F0EFEB" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+
+    <!-- 中心 hub -->
+    <div id="core">
+      <span id="hubTag">HUB · 存档累积</span>
+      <div class="l1" id="coreL1">极低的试错成本</div>
+      <div class="l2" id="coreL2">才敢让 <b>AI</b><br>放手折腾</div>
+    </div>
+    </div>
+
+    <!-- 大肥鱼 -->
+    <div class="fish" id="fish1">
+      <div class="say">先存一档，<b>随便改</b>！</div>
+      <img src="Shark-GIF/006_双手身前微笑乖巧期待.gif" alt="大肥鱼">
+    </div>
+
+  </div>
+  <div class="corner" id="chap">章 0 · 准备三 git ｜ 镜头 36 · 存档习惯 · 15:49–16:04</div>
+  <div class="corner" id="src">diagram-design type-loop 循环环 ｜ 循环四步与中心结论依据口播（2026-09）</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-36 · 存档习惯 · 15s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=15000; /* ←⑤ DUR = 分镜时长(ms) */
+const $=s=>document.querySelector(s);
+const $$=s=>document.querySelectorAll(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ============ ⑤ DUR 与 cue 表 ============
+   镜头起点 15:49 · cue = 口播句起点 − 15:49
+*/
+on(120,()=>camTo(-30,0,1.025,1.6));                                  // 起手轻推，落定全幅（不裁边）
+on(200,()=>$('#head').classList.add('in'));                          // 15:49「放到AI时代」
+on(1000,()=>{                                                        // 15:50「这一套操作要变成一个习惯」
+  $('#ring').classList.add('in');__sfx.pop(.6);
+});
+on(3000,()=>{                                                        // 15:52「记住让AI帮你改东西之前先用commit存档」
+  camTo(-30,-34,1.03,0.6);
+  $('#nCommit').classList.add('in','hot');$('#g1').classList.add('on');__sfx.thud(.9);__sfx.ding(.6);
+});
+on(4300,()=>{camTo(-52,-10,1.045,0.6);$('#stamp').classList.add('on');__sfx.swipe(.8)});
+on(5000,()=>{$('#nAI').classList.add('in','hot');__sfx.pop(.8)});
+on(6000,()=>{                                                        // 15:55「AI改完之后跑一跑」
+  $('#g2').classList.add('on');
+  $('#nRun').classList.add('in','hot');__sfx.pop(.8);
+});
+on(7000,()=>{$('#g3').classList.add('on');$('#nCommit').classList.remove('hot');__sfx.swipe(.8)});
+on(8000,()=>{                                                        // 15:57「如果不对劲就用restore一键回滚」
+  $('#nRestore').classList.add('in','hot');__sfx.thud(1);__sfx.ding(.7);
+});
+on(9300,()=>{$('#g4').classList.add('on');$('#nAI').classList.remove('hot');__sfx.swipe(.8)});
+on(9700,()=>{$('#ringGlow').classList.add('on');$('#stamp').classList.remove('on');__sfx.pop(.7)});
+on(10000,()=>{                                                       // 15:59「这样子操作就会有极低的试错成本」
+  camTo(0,0,1,0.8);
+  $('#coreL1').classList.add('on');__sfx.ding(.9);
+});
+on(7500,()=>$('#fish1').classList.add('show'));                      // 大肥鱼：结尾定场（放心改）
+on(13000,()=>{                                                       // 16:02「这样我们才敢让AI放手折腾」
+  $('#coreL2').classList.add('on');$('#core').classList.add('pulse');
+  $('#nRestore').classList.remove('hot');$('#nRun').classList.remove('hot');
+  __sfx.thud(1);__sfx.ding(1);
+});
+
+/* —— 环上站点状态随叙事推进（原右侧面板场景改为环上演出） —— */
+on(3200,()=>{$('#token').classList.add('tok');__sfx.pop(.5)});        // commit 存档：环上 token 起跑
+on(5200,()=>{$('#nRun').classList.add('hot');__sfx.type(.6)});        // 让 AI 改
+on(5600,()=>{__sfx.pop(.45)});                                        // AI 改完
+on(6200,()=>{$('#nRun').classList.add('hot');__sfx.type(.5)});        // 跑一跑
+on(7200,()=>{                                                         // 不对劲：跑一跑节点爆红
+  $('#nRun').classList.add('bad');__sfx.thud(.55);
+});
+on(8200,()=>{                                                         // restore：节点转绿高亮（一键回滚）
+  $('#nRun').classList.remove('bad');$('#nRestore').classList.add('hot');__sfx.swipe(.6);
+});
+on(9900,()=>{                                                         // 再 commit：闭环重新点亮
+  $('#ringGlow').classList.add('on');$('#stamp').classList.add('on');__sfx.ding(.6);
+});
+
+/* ===== [不动] QA 专用（正常播放不触发）：hash 带 t=毫秒 → 起播后跳转该时刻并冻结 ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

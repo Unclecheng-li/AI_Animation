@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+     镜头演示动画 · 镜18 写实仿真 W1「新建虚拟机向导」
+     ============================================================ -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 0-18 · 新建虚拟机向导 · 20s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;--accent:#F5572F;--dark:#1C1C1A}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Noto Sans SC',sans-serif}
+body.paused *{animation-play-state:paused!important}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;
+  background:var(--paper)}
+#stage::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:1;opacity:.55;
+  background-image:linear-gradient(rgba(28,28,26,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.045) 1px,transparent 1px);
+  background-size:64px 64px}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ============ ③ 画面层 CSS ============ */
+/* ── 页头（v4） ── */
+#head{position:absolute;left:56px;top:34px;z-index:20;opacity:0;transform:translateY(-12px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#head.in{opacity:1;transform:none}
+#head .no{display:inline-block;font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:13px;letter-spacing:3px;
+  color:var(--paper);background:var(--ink);border-radius:4px;padding:4px 13px}
+#head h1{margin-top:7px;font-family:'Inter','Noto Sans SC',sans-serif;font-weight:800;font-size:38px;line-height:1.04;letter-spacing:-.02em;color:var(--ink)}
+#head h1 b{color:var(--accent)}
+/* --- VMware 向导窗口（主视觉：≥55% 面积，第一焦点） --- */
+#vmwin{position:absolute;left:176px;top:120px;width:1488px;height:797px;background:#1c1c20;border:1px solid #3b3b42;
+  border-radius:7px;box-shadow:0 30px 70px rgba(28,28,26,.30),0 0 0 1px rgba(255,255,255,.03) inset;overflow:hidden;
+  opacity:0;transform:translateY(26px) scale(.985);transition:opacity .5s ease,transform .55s cubic-bezier(.16,1,.3,1)}
+#vmwin.in{opacity:1;transform:none}
+#vmInner{position:absolute;left:0;top:0;width:1240px;height:664px;transform:scale(1.2);transform-origin:top left}
+.tbar{height:40px;background:linear-gradient(#3c3c43,#2b2b31);display:flex;align-items:center;padding:0 6px 0 16px;border-bottom:1px solid #141418}
+.tbar .ttl{font-size:15px;font-weight:700;color:#e9e9ee;letter-spacing:.5px}
+.tbar .sp{flex:1}
+.tbar .tb{width:36px;height:28px;display:flex;align-items:center;justify-content:center;color:#b9b9c2;font-size:13px;border-radius:3px}
+.tbar .tb.x{color:#e07b7b}
+.wbody{position:absolute;left:0;right:0;top:40px;bottom:62px;overflow:hidden}
+.wfoot{position:absolute;left:0;right:0;bottom:0;height:62px;display:flex;align-items:center;justify-content:flex-end;
+  gap:12px;padding:0 26px;border-top:1px solid #313138;background:#191a1d}
+.vbtn{min-width:118px;height:35px;border-radius:3px;background:#2c2d33;border:1px solid #47474f;color:#dcdce2;
+  font-family:inherit;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.vbtn.dim{opacity:.45}
+.vbtn.press{background:#4d4aa0;border-color:#8f86ff;color:#fff;transform:translateY(1px)}
+
+.step{position:absolute;left:44px;right:44px;top:26px;opacity:0;transform:translateX(30px);
+  transition:opacity .34s ease,transform .4s cubic-bezier(.16,1,.3,1);pointer-events:none}
+.step.on{opacity:1;transform:none}
+.step h1{font-size:24px;font-weight:700;color:#f0f0f4;letter-spacing:.5px}
+.step .lead{margin-top:8px;font-size:15px;color:#a7a7b2;line-height:1.6}
+.rad,.chk{display:flex;gap:13px;align-items:flex-start;margin-top:16px;padding:9px 12px;border-radius:4px;
+  transition:background .3s,box-shadow .3s;border:1px solid transparent}
+.rad.sm,.chk{margin-top:9px}
+.rad.sel,.chk.sel{background:rgba(124,107,255,.13);box-shadow:inset 0 0 0 1px rgba(124,107,255,.42)}
+.rad.hi,.chk.hi{animation:ringp 1.1s infinite;box-shadow:inset 0 0 0 1px rgba(154,141,255,.9)}
+@keyframes ringp{50%{box-shadow:inset 0 0 0 2px rgba(154,141,255,1)}}
+.rad .rd,.chk .ck{flex:none;width:17px;height:17px;border-radius:50%;border:1.6px solid #86868f;margin-top:2px;position:relative}
+.chk .ck{border-radius:3px}
+.rad.sel .rd{border-color:#9a8dff}
+.rad.sel .rd::after{content:'';position:absolute;left:3px;top:3px;width:9px;height:9px;border-radius:50%;background:#9a8dff}
+.chk.sel .ck{border-color:#9a8dff;background:#9a8dff}
+.chk.sel .ck::after{content:'✓';position:absolute;left:2px;top:-3px;font-size:13px;color:#fff}
+.rad div b,.chk div b{font-size:16px;font-weight:600;color:#eaeaf0;display:block}
+.rad div span,.chk div span{display:block;font-size:13px;color:#9a9aa6;margin-top:3px;line-height:1.5}
+.fldrow{display:flex;gap:10px;align-items:center;margin:9px 0 1px}
+.fld{flex:1;height:33px;background:#131316;border:1px solid #55555f;border-radius:3px;display:flex;align-items:center;
+  padding:0 11px;font-family:'IBM Plex Mono',monospace;font-size:14px;color:#cfcfd6;letter-spacing:.2px;min-width:0}
+.fld.num{flex:none;width:120px}
+.fld .caret{display:inline-block;width:7px;height:16px;background:#9a8dff;margin-left:2px;animation:blk .9s steps(1) infinite}
+@keyframes blk{50%{opacity:0}}
+.vbtn.tiny{min-width:auto;height:33px;padding:0 16px;font-size:13.5px}
+.formrow{display:flex;align-items:center;gap:12px;margin-top:18px}
+.formrow label{width:150px;font-size:15px;color:#b7b7c2;flex:none}
+.hint{margin-top:14px;font-size:13px;color:#8b8b96}
+.hint b{color:#b9aaff}
+.summary{margin-top:16px;display:flex;flex-direction:column;gap:4px}
+.srow{display:flex;gap:16px;font-size:15px;padding:6px 10px;border-radius:3px;transition:background .3s,box-shadow .3s}
+.srow>span{width:112px;color:#8f8f9b;flex:none}
+.srow>b{color:#e9e9f0;font-weight:600}
+.srow.hi{background:rgba(124,107,255,.16);box-shadow:inset 0 0 0 1px rgba(124,107,255,.55)}
+#diskSize::after{content:' GB';color:#8b8b96}
+
+/* 开机提示 */
+#booting{position:absolute;left:calc(50% - 320px);top:624px;width:640px;padding:18px 24px;background:#fff;
+  border:1px solid var(--ink);border-radius:8px;opacity:0;transform:translateY(14px);transition:all .5s ease;z-index:36;text-align:center;
+  box-shadow:0 14px 34px rgba(28,28,26,.22)}
+#booting.in{opacity:1;transform:none}
+#booting .t{font-size:19px;color:var(--ink);letter-spacing:1px;font-weight:500}
+#booting .t b{color:var(--ink);font-weight:800}
+#booting .pb{margin-top:12px;height:6px;background:var(--grid);border-radius:3px;overflow:hidden}
+#booting .pb i{display:block;height:100%;width:0;background:var(--ink);animation:boot 2.6s ease forwards}
+@keyframes boot{to{width:92%}}
+#booting .lamp{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--faint);margin-right:8px;vertical-align:middle;transition:all .4s}
+#booting .lamp.on{background:var(--ink)}
+
+/* 光标演出：白色箭头光标（窗口本地坐标系，随窗口缩放） + 点击涟漪 */
+#vizCur{position:absolute;left:840px;top:720px;width:30px;height:30px;z-index:45;opacity:0;pointer-events:none;
+  transition:left .62s cubic-bezier(.34,1.3,.5,1),top .62s cubic-bezier(.34,.6,.4,1),opacity .3s;
+  filter:drop-shadow(0 4px 10px rgba(0,0,0,.55))}
+#vizCur.in{opacity:1}
+.vrip{position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;border:2.5px solid #F0EFEB;
+  pointer-events:none;z-index:44;animation:vripA .75s cubic-bezier(.2,.7,.3,1) forwards}
+@keyframes vripA{0%{opacity:.95;transform:scale(.35)}100%{opacity:0;transform:scale(3)}}
+
+/* 教学标记层（问号徽章 / 参数浮标） */
+.mark{position:absolute;display:flex;align-items:center;gap:7px;z-index:44;pointer-events:none;
+  font-family:'Noto Sans SC';font-size:14px;font-weight:700;color:var(--ink);background:#fff;
+  border:1px solid var(--ink);border-radius:8px;padding:5px 13px;box-shadow:0 8px 20px rgba(28,28,26,.20);
+  opacity:0;transform:translateY(10px) scale(.7);transition:all .42s cubic-bezier(.34,1.5,.6,1)}
+.mark.on{opacity:1;transform:none}
+.mark b{color:var(--ink)}
+.mark .qm{width:19px;height:19px;border-radius:50%;background:var(--ink);color:#fff;font-weight:900;
+  display:flex;align-items:center;justify-content:center;font-size:13px}
+.mark.warn{border-color:var(--accent);background:#fff}
+.mark.warn b{color:var(--accent)}
+.mark.warn .qm{background:var(--accent)}
+#mkIso{left:660px;top:198px}
+#mkDisk{left:560px;top:150px}
+#mkMem{left:600px;top:326px}
+
+/* diagram-design 引线标注：发丝引线（正交折线 + 目标点），标注牌带遮罩不压线 */
+#leaders{position:absolute;left:0;top:0;width:1240px;height:664px;overflow:visible;pointer-events:none;z-index:43}
+.ld{opacity:0;transition:opacity .35s ease}
+.ld.on{opacity:1}
+.ld polyline{fill:none;stroke:rgba(240,239,235,.85);stroke-width:1;stroke-dasharray:7 5;stroke-linejoin:round}
+.ld circle{fill:#F0EFEB}
+.ld circle.hollow{fill:#1c1c20;stroke:#F0EFEB;stroke-width:1.4}
+
+/* 花字条（参数花字 · 弹跳入场） */
+#cal{position:absolute;left:176px;bottom:66px;max-width:1488px;display:flex;align-items:baseline;gap:20px;
+  opacity:0;transform:translateY(16px);transition:opacity .38s ease,transform .42s cubic-bezier(.16,1,.3,1);z-index:30}
+#cal.in{opacity:1;transform:none}
+#cal .big{font-family:'Inter','Noto Sans SC',sans-serif;font-size:40px;font-weight:800;letter-spacing:0;padding-left:20px;border-left:6px solid var(--accent);color:var(--ink)}
+#cal.go .big{animation:calBounce .5s cubic-bezier(.2,1.6,.4,1)}
+@keyframes calBounce{0%{transform:translateY(20px) scale(.86)}60%{transform:translateY(-3px) scale(1.03)}100%{transform:none}}
+#cal .sub{font-size:19px;color:var(--muted);font-weight:500;letter-spacing:0}
+
+.corner{position:absolute;font-family:'Inter','IBM Plex Mono',sans-serif;font-size:14px;color:var(--muted);letter-spacing:.06em;z-index:41}
+#chap{left:52px;bottom:30px}
+#src{right:52px;bottom:30px}
+
+/* ── 大肥鱼 ── */
+.fish{position:absolute;width:248px;z-index:35;opacity:0;transform:translateY(24px) scale(.7);
+  transition:all .45s cubic-bezier(.34,1.6,.64,1);pointer-events:none;filter:drop-shadow(0 12px 26px rgba(0,0,0,.5))}
+.fish.show{opacity:1;transform:none}
+.fish img{width:100%;display:block}
+.fish .say{position:absolute;right:238px;top:22px;width:250px;background:#fff;border:1px solid var(--ink);border-radius:14px;
+  padding:12px 16px;font-size:19px;font-weight:700;color:var(--ink);line-height:1.45;
+  opacity:0;transform:scale(.6);transition:all .4s cubic-bezier(.34,1.6,.64,1) .15s;box-shadow:0 10px 26px rgba(28,28,26,.20)}
+.fish.show .say{opacity:1;transform:scale(1)}
+.fish .say b{color:var(--accent)}
+.fish .say::after{content:'';position:absolute;right:-16px;top:50%;margin-top:-9px;border:9px solid transparent;border-left:11px solid #fff}
+#fish1{right:30px;top:296px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:var(--grid)}
+#bar{height:100%;width:0;background:var(--ink);box-shadow:none}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(5,8,14,.92);backdrop-filter:blur(4px);color:#aab}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #556;color:#ccc;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(28,28,26,.08)}
+#replay.done{animation:pulse 1.2s infinite;border-color:var(--accent);color:var(--accent)}
+@keyframes pulse{50%{opacity:.5}}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="head">
+    <span class="no">SHOT 0-18</span>
+    <h1>新建虚拟机 · 向导<b>五步</b></h1>
+  </div>
+  <div id="cam">
+    <div id="vmwin">
+      <div id="vmInner">
+      <div class="tbar"><span class="ttl">新建虚拟机向导</span><span class="sp"></span><span class="tb">—</span><span class="tb">▢</span><span class="tb x">✕</span></div>
+      <div class="wbody">
+        <!-- step 1 -->
+        <div class="step on" id="st1">
+          <h1>欢迎使用新建虚拟机向导</h1>
+          <p class="lead">此向导将引导您完成创建新虚拟机所需的步骤。您希望使用哪种配置类型？</p>
+          <div class="rad" id="rTyp"><i class="rd"></i><div><b>典型(推荐)(T)</b><span>通过几个简单的步骤创建一台适合大多数用户的新虚拟机。</span></div></div>
+          <div class="rad" id="rCus"><i class="rd"></i><div><b>自定义(高级)(C)</b><span>创建带有高级配置选项（内存、处理器、网络等）的虚拟机。</span></div></div>
+        </div>
+        <!-- step 2 -->
+        <div class="step" id="st2">
+          <h1>安装客户机操作系统</h1>
+          <p class="lead">您打算如何安装操作系统？</p>
+          <div class="rad" id="rIso"><i class="rd"></i><div><b>安装程序光盘映像文件(iso)(M)</b>
+            <div class="fldrow"><span class="fld" id="isoPath"></span><span class="vbtn tiny">浏览(B)...</span></div>
+            <span>检测到操作系统: Windows Server 2022 · 64 位 · 简体中文</span></div></div>
+          <div class="rad"><i class="rd"></i><div><b>安装程序光盘(D)</b><span>使用物理光驱中的安装光盘。</span></div></div>
+          <div class="rad"><i class="rd"></i><div><b>稍后安装操作系统(S)</b><span>稍后再自行指定安装介质。</span></div></div>
+        </div>
+        <!-- step 3 -->
+        <div class="step" id="st3">
+          <h1>命名虚拟机</h1>
+          <p class="lead">为这台虚拟机取一个名称，并选择它的存放位置。</p>
+          <div class="formrow"><label>虚拟机名称(V):</label><span class="fld" id="vmName"></span></div>
+          <div class="formrow"><label>位置(L):</label><span class="fld" id="vmLoc"></span><span class="vbtn tiny">浏览(B)...</span></div>
+          <p class="hint">虚拟机将存储在以上位置。此虚拟机需要约 <b>60 GB</b> 磁盘空间。</p>
+        </div>
+        <!-- step 4 -->
+        <div class="step" id="st4">
+          <h1>指定磁盘容量</h1>
+          <p class="lead">指定虚拟磁盘的最大大小。</p>
+          <div class="formrow"><label>最大磁盘大小(GB)(S):</label><span class="fld num" id="diskSize"></span></div>
+          <div class="rad sm"><i class="rd"></i><div><b>将虚拟磁盘存储为单个文件(O)</b></div></div>
+          <div class="rad sm sel"><i class="rd"></i><div><b>将虚拟磁盘拆分成多个文件(M)</b><span>便于在磁盘之间移动虚拟机。</span></div></div>
+          <div class="chk" id="aloc"><i class="ck"></i><div><b>立即分配所有磁盘空间(A)</b><span>不勾选 = 动态分配：磁盘文件随实际使用增长，用多少占多少。</span></div></div>
+          <p class="hint">建议磁盘大小: <b>60 GB</b>（Windows Server 2022 · 完整安装）</p>
+        </div>
+        <!-- step 5 -->
+        <div class="step" id="st5">
+          <h1>已准备好创建虚拟机</h1>
+          <p class="lead">点击"完成"以创建这台虚拟机。</p>
+          <div class="summary">
+            <div class="srow"><span>名称</span><b>WinServer2022</b></div>
+            <div class="srow"><span>位置</span><b>D:\VM\WinServer2022</b></div>
+            <div class="srow"><span>版本</span><b>Workstation 17.x 虚拟机</b></div>
+            <div class="srow"><span>操作系统</span><b>Microsoft Windows Server 2022</b></div>
+            <div class="srow" id="sRowDisk"><span>硬盘</span><b>60 GB（动态分配）</b></div>
+            <div class="srow" id="sRowMem"><span>内存</span><b>4096 MB</b></div>
+            <div class="srow" id="sRowCpu"><span>处理器</span><b>2</b></div>
+            <div class="srow"><span>网络适配器</span><b>NAT</b></div>
+            <div class="srow"><span>其他设备</span><b>CD/DVD、USB 控制器、打印机、声卡、显示器</b></div>
+          </div>
+        </div>
+      </div>
+      <div class="wfoot">
+        <span class="vbtn dim" id="btnBack">上一步</span>
+        <span class="vbtn dim" id="btnNext">下一步</span>
+        <span class="vbtn dim" id="btnFin">完成</span>
+        <span class="vbtn" id="btnCancel">取消</span>
+      </div>
+      <!-- 教学标记层（叠加在真界面上） -->
+      <div class="mark" id="mkIso"><span class="qm">?</span>镜像指向 <b>WinServer2022.iso</b></div>
+      <div class="mark warn" id="mkDisk"><span class="qm">!</span>磁盘 <b>60 GB</b> · 动态分配</div>
+      <div class="mark" id="mkMem"><span class="qm">?</span>内存 <b>4 GB 以上</b> · CPU <b>两核起</b></div>
+      <!-- diagram-design 引线标注：三条发丝引线连到对应控件 -->
+      <svg id="leaders" viewBox="0 0 1240 664">
+        <g class="ld" id="ldIso">
+          <polyline points="668,232 470,232 470,156 318,156"/>
+          <circle cx="312" cy="156" r="4"/><circle class="hollow" cx="312" cy="156" r="8"/>
+        </g>
+        <g class="ld" id="ldDisk">
+          <polyline points="568,184 430,184 430,162 279,162"/>
+          <circle cx="273" cy="162" r="4"/><circle class="hollow" cx="273" cy="162" r="8"/>
+        </g>
+        <g class="ld" id="ldMem">
+          <polyline points="604,341 430,341 430,352 182,352"/>
+          <circle cx="176" cy="352" r="4"/><circle class="hollow" cx="176" cy="352" r="8"/>
+        </g>
+      </svg>
+      <!-- 光标（随窗口同缩放：坐标保持窗口本地系） -->
+      <div id="vizCur"><svg width="30" height="30" viewBox="0 0 24 24"><path d="M5 2 L5 19 L9.6 15.2 L12.4 21 L15 19.8 L12.2 14 L18 13.2 Z" fill="#fff" stroke="#1a1a2e" stroke-width="1.4" stroke-linejoin="round"/></svg></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="booting"><div class="t"><span class="lamp" id="bootLamp"></span>正在启动虚拟机 <b>WinServer2022</b> …</div><div class="pb"><i></i></div></div>
+  <div id="cal"><b class="big"></b><span class="sub"></span></div>
+  <div class="fish" id="fish1"><div class="say">参数记好 · 直接<b>开机</b>就行 ~</div><img src="Shark-GIF/026_双手合十微笑请求拜托.gif" alt="大肥鱼"></div>
+  <div class="corner" id="chap">第二章 · 准备工作 · 虚拟机</div>
+  <div class="corner" id="src">口播对齐 timeline.md 7:58–8:18 · 界面为示意仿真，非实拍</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-18 · 新建虚拟机向导 · 20s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=20000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ===== 本页工具 ===== */
+function step(n){for(let i=1;i<=5;i++){const e=$('#st'+i);if(e)e.classList.toggle('on',i===n);}}
+function callout(big,sub){const c=$('#cal');c.querySelector('.big').textContent=big;c.querySelector('.sub').textContent=sub||'';
+  c.classList.remove('in');void c.offsetWidth;c.classList.add('in');
+  c.classList.remove('go');void c.offsetWidth;c.classList.add('go');if(window.__sfx)__sfx.pop(.5);}
+function say(el,full,start,stepMs){el.textContent='';for(let i=0;i<full.length;i++){on(start+i*stepMs,(function(k){return function(){el.textContent=full.slice(0,k+1);if(window.__sfx)__sfx.type(.16);};})(i));}}
+
+/* ============ ⑤ DUR 与 cue 表 ============ */
+on(300,()=>{$('#vmwin').classList.add('in');$('#head').classList.add('in');__sfx.whoosh(.6,.5);});            // 7:58「好那么镜像下好了」
+on(800,()=>{step(1);$('#btnNext').classList.remove('dim');});                 // 7:59「接下来我们开始安装」
+on(2000,()=>{callout('打开 VMware · 新建虚拟机','双击「创建新的虚拟机」');}); // 8:00「打开VMware创建新的虚拟机」
+on(4000,()=>{$('#rTyp').classList.add('sel');$('#rCus').classList.remove('sel');$('#rTyp').classList.add('hi');__sfx.pop(.7);});  // 8:02「然后选择典型」
+on(5000,()=>{step(2);$('#rTyp').classList.remove('hi');camCut(0,0,1);callout('安装介质 · 选 ISO 映像','');__sfx.swipe(.5);});  // 8:03「安装介质这里」
+on(7000,()=>{$('#rIso').classList.add('sel');$('#rIso').classList.add('hi');$('#mkIso').classList.add('on');
+  say($('#isoPath'),'D:\\ISO\\WindowsServer2022_64bit_zh-cn.iso',7000,26);
+  callout('指向 Windows Server 2022 的镜像','');__sfx.pop(.5);});             // 8:05「指向你下好Windows Server 2022的镜像」
+on(7800,()=>{camFocus(560,380,1.12,.5);$('#head').classList.remove('in');});                                    // 8:05 特写 iso 路径
+on(10000,()=>{step(3);camTo(0,0,1,.45);$('#head').classList.add('in');$('#rIso').classList.remove('hi');$('#mkIso').classList.remove('on');
+  say($('#vmName'),'WinServer2022',10000,60);callout('存储位置 · 挑空间大的盘','');__sfx.swipe(.5);});  // 8:08「存储位置选一个剩余空间大一点的盘」
+on(10800,()=>{say($('#vmLoc'),'D:\\VM\\WinServer2022',10800,45);});           // 8:08 位置
+on(12000,()=>{step(4);$('#btnNext').classList.add('dim');$('#mkDisk').classList.add('on');
+  $('#diskSize').textContent='60';callout('磁盘 60 GB','');__sfx.swipe(.5);}); // 8:10「磁盘大小给到60GB选择动态分配」
+on(14000,()=>{$('#aloc').classList.add('hi');callout('动态分配 · 用多少占多少','不勾选「立即分配所有磁盘空间」');__sfx.pop(.6);}); // 8:12「意思就是用多少占多少」
+on(16000,()=>{step(5);$('#head').classList.remove('in');$('#aloc').classList.remove('hi');$('#mkDisk').classList.remove('on');$('#mkMem').classList.add('on');camFocus(920,540,1.12,.5);
+  callout('内存 4 GB 以上','摘要 · 内存 4096 MB');$('#sRowMem').classList.add('hi');__sfx.pop(.7);});       // 8:14「内存给到4GB以上」
+on(17000,()=>{$('#sRowMem').classList.remove('hi');$('#sRowCpu').classList.add('hi');
+  callout('CPU 两核起','摘要 · 处理器 2');__sfx.pop(.7);});                  // 8:15「CPU两核起」
+on(18000,()=>{$('#btnFin').classList.remove('dim');$('#btnFin').classList.add('press');
+  callout('点击「完成」→ 开机','');__sfx.thud(.6);});             // 8:16「点击完成然后开机」
+on(18800,()=>{$('#booting').classList.add('in');$('#mkMem').classList.remove('on');__sfx.whoosh(.9,.5);});       // 8:16-8:18 开机
+on(11600,()=>{$('#fish1').classList.add('show');__sfx.pop(.5);});            // 角色定场（大肥鱼）
+
+/* ── 可视化升级（轻量）：白色箭头光标移动 + 点击涟漪 + 状态灯 ── */
+function curTo(x,y){$('#vizCur').style.left=x+'px';$('#vizCur').style.top=y+'px';}
+function curClick(x,y){const r=document.createElement('div');r.className='vrip';r.style.left=x+'px';r.style.top=y+'px';
+  $('#vmInner').appendChild(r);setTimeout(()=>r.remove(),800);__sfx.pop(.5);}
+on(3200,()=>{$('#vizCur').classList.add('in');curTo(420,452);});                // 光标入场
+on(3600,()=>curTo(140,177));                                                    // 移向「典型」
+on(3950,()=>curClick(140,177));                                                 // 点击 → 选中典型
+on(4600,()=>curTo(895,632));                                                    // 移向「下一步」
+on(4950,()=>curClick(895,632));                                                 // 点击 → 进入安装介质
+on(6500,()=>curTo(140,162));                                                    // 移向 ISO 选项
+on(6950,()=>curClick(140,162));                                                 // 点击 → 选中 ISO
+on(9600,()=>curTo(895,632));
+on(9950,()=>curClick(895,632));                                                 // 点击 → 命名虚拟机
+on(11700,()=>curTo(895,632));
+on(11950,()=>curClick(895,632));                                                // 点击 → 磁盘容量
+on(15600,()=>curTo(895,632));
+on(15950,()=>curClick(895,632));                                                // 点击 → 摘要页
+on(17500,()=>curTo(1025,632));                                                  // 移向「完成」
+on(17950,()=>curClick(1025,632));                                               // 点击完成
+on(19200,()=>{$('#vizCur').classList.remove('in');});                           // 光标退场
+on(19800,()=>{$('#bootLamp').classList.add('on');__sfx.ding(.6);});             // 开机状态灯变绿
+
+/* ── 注入增补节拍：diagram-design 引线标注随各自标注牌同现同隐 ── */
+on(7000,()=>$('#ldIso').classList.add('on'));
+on(10000,()=>$('#ldIso').classList.remove('on'));
+on(12000,()=>$('#ldDisk').classList.add('on'));
+on(16000,()=>{$('#ldDisk').classList.remove('on');$('#ldMem').classList.add('on');});
+on(18800,()=>$('#ldMem').classList.remove('on'));
+
+/* ===== [不动] QA 专用（正常播放不触发） ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

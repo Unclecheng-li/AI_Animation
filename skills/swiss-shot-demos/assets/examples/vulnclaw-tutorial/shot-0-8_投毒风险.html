@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+     镜头 0-8 · 投毒风险（19s）·  [可视化 v4 · 瑞士国际主义]
+     主视觉：diagram-design type-process 供应链四段链 + archify 手递手流线（粒子沿链下行）
+     视觉：纸底 #F0EFEB × 墨 #1C1C1A × 灰阶阶梯 × 唯一强调橙 #F5572F（主角 = 投毒）
+     ============================================================ -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 0-8 · 投毒风险 · 19s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Inter','Noto Sans SC',sans-serif}
+body.paused *{animation-play-state:paused!important}
+:root{--paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;--accent:#F5572F}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#stage::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:1;opacity:.6;
+  background-image:linear-gradient(90deg,rgba(28,28,26,.05) 1px,transparent 1px);background-size:132px 100%}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ── 标题组 ── */
+#head{position:absolute;left:88px;top:52px;width:1280px;opacity:0;transform:translateY(-18px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#head.in{opacity:1;transform:translateY(0)}
+#head .eye{font:600 14px 'IBM Plex Mono';letter-spacing:.18em;color:var(--ink);text-transform:uppercase;
+  border:1px solid var(--ink);border-radius:3px;display:inline-block;padding:4px 12px}
+#head h1{margin-top:14px;font:900 64px/1.08 'Inter','Noto Sans SC';letter-spacing:-.03em;color:var(--ink);white-space:nowrap}
+#head h1 .hl{color:var(--accent)}
+#head .sub{margin-top:10px;font:600 13px 'IBM Plex Mono';letter-spacing:.2em;color:var(--muted)}
+
+/* ── 主视觉：风险链板 ── */
+#riskBoard{position:absolute;left:88px;top:236px;width:1744px;height:664px;z-index:5;opacity:0;
+  transform:translateY(24px);transition:opacity .7s ease,transform .7s cubic-bezier(.16,1,.3,1);
+  border-radius:12px;background:var(--card);border:1.5px solid var(--ink)}
+#riskBoard.in{opacity:1;transform:translateY(0)}
+#riskGrid{position:absolute;inset:0;border-radius:12px;
+  background-image:linear-gradient(rgba(28,28,26,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.035) 1px,transparent 1px);
+  background-size:52px 52px;
+  -webkit-mask-image:radial-gradient(closest-side at 50% 55%,#000 42%,transparent 96%);
+  mask-image:radial-gradient(closest-side at 50% 55%,#000 42%,transparent 96%)}
+/* 前置条：AI 给的代码和命令 */
+#lead{position:absolute;left:16px;top:16px;width:1710px;height:102px;display:flex;align-items:center;gap:18px;padding:0 30px;
+  border:1.5px solid var(--ink);border-radius:10px;background:var(--card);
+  opacity:0;transform:translateY(16px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#lead.in{opacity:1;transform:translateY(0)}
+#lead.dim{opacity:.4}
+#lead .lc{font:900 22px 'Noto Sans SC';color:var(--muted);letter-spacing:.02em;padding-right:24px;
+  border-right:1px solid var(--grid);transition:color .4s}
+#lead .lc.on{color:var(--ink)}
+.lt{font:600 16px 'IBM Plex Mono';letter-spacing:.04em;color:var(--muted);
+  border:1px solid var(--grid);border-radius:4px;padding:8px 20px;background:var(--card);
+  opacity:0;transform:scale(.7);transition:all .34s cubic-bezier(.2,1.6,.4,1)}
+.lt.in{opacity:1;transform:scale(1)}
+.lt.warn{color:var(--accent);border-color:var(--accent);background:#FDF1ED}
+
+/* ── 后果链：四段节点 ── */
+#chainTitle{position:absolute;left:20px;top:136px;font:600 12px 'IBM Plex Mono';letter-spacing:.16em;color:var(--muted);opacity:0;transition:opacity .45s}
+#chainTitle.in{opacity:1}
+#riskTrack{position:absolute;left:16px;top:176px;width:1710px;height:1px;
+  background:var(--ink);
+  transform:scaleX(0);transform-origin:0 50%;transition:transform .8s cubic-bezier(.16,1,.3,1)}
+#riskTrack.go{transform:scaleX(1)}
+.rp{position:absolute;top:170px;width:11px;height:11px;margin-left:-5px;border-radius:50%;background:var(--ink);opacity:0}
+.node{position:absolute;top:194px;width:390px;height:436px;border:1.5px solid var(--faint);border-radius:10px;
+  background:var(--card);padding:42px 28px 26px;
+  opacity:0;transform:translateY(34px) scale(.96);
+  transition:all .48s cubic-bezier(.2,1.4,.4,1),border-color .5s,background .5s}
+.node.in{opacity:1;transform:translateY(0) scale(1)}
+.node.ghost{opacity:.28}
+.node.hot{border-color:var(--ink);border-width:2px}
+.node .ntag{position:absolute;right:-2px;top:-15px;font:700 12px 'IBM Plex Mono';letter-spacing:.1em;color:var(--muted);
+  background:var(--card);border:1px solid var(--grid);border-radius:3px;padding:4px 14px;transition:all .45s}
+.node.hot .ntag{color:var(--ink);border-color:var(--ink)}
+.node .nico{height:60px;display:flex;align-items:center;opacity:.6;transition:opacity .45s}
+.node.hot .nico{opacity:1}
+.node .nico .mono{font:700 30px 'IBM Plex Mono';color:var(--ink);letter-spacing:.02em}
+.node .nbig{margin-top:10px;font:900 32px 'Noto Sans SC';color:var(--muted);letter-spacing:.02em;line-height:1.34;transition:color .45s}
+.node.hot .nbig{color:var(--ink)}
+.node .nbig i{font-style:normal;font-size:22px;color:var(--faint);transition:color .45s}
+.node.hot .nbig i{color:var(--muted)}
+.node .ns{position:absolute;left:28px;bottom:44px;font:600 12px 'IBM Plex Mono';letter-spacing:.16em;color:var(--faint);transition:color .45s}
+.node.hot .ns{color:var(--muted)}
+
+/* diagram-design · type-process：步骤号 chip + 角色 lane key chip + IN/OUT 载荷 chip */
+.stepChip{position:absolute;top:152px;width:22px;height:22px;margin-left:-11px;border-radius:50%;z-index:12;
+  background:var(--card);border:1.5px solid var(--ink);color:var(--ink);
+  font:700 13px 'IBM Plex Mono';display:flex;align-items:center;justify-content:center;opacity:0;transform:scale(.5);
+  transition:all .34s cubic-bezier(.2,1.6,.4,1)}
+.stepChip.in{opacity:1;transform:scale(1)}
+.stepChip.focal{background:var(--accent);border-color:var(--accent);color:#fff}
+#sc1{left:201px}#sc2{left:643px}#sc3{left:1085px}#sc4{left:1527px}
+.roleChip{position:absolute;left:14px;top:12px;font:700 11px 'IBM Plex Mono';letter-spacing:.1em;color:var(--muted);
+  background:#F4F3EF;border:1px solid var(--grid);border-radius:3px;padding:2px 8px;opacity:0;transition:opacity .4s}
+.node.in:not(.ghost) .roleChip{opacity:1}
+.node.hot .roleChip{color:var(--accent);background:#FDF1ED;border-color:var(--accent)}
+.pay{position:absolute;bottom:14px;font:700 11px 'IBM Plex Mono';letter-spacing:.06em;color:var(--card);background:var(--ink);
+  border-radius:3px;padding:2px 9px;opacity:0;transform:scale(.7);transition:all .32s cubic-bezier(.2,1.6,.4,1)}
+.pay.on{opacity:1;transform:scale(1)}
+.pay.l{left:14px}
+.pay.r{right:14px}
+.pay.out{background:var(--muted)}
+#chainLegend{position:absolute;left:20px;top:638px;display:flex;align-items:center;gap:20px;opacity:0;transition:opacity .5s;z-index:12}
+#chainLegend.in{opacity:1}
+#chainLegend .lgi{display:flex;align-items:center;gap:7px;font:600 11px 'IBM Plex Mono';letter-spacing:.06em;color:var(--muted);white-space:nowrap}
+#chainLegend .sw{width:11px;height:11px;border-radius:2px;flex:none}
+#chainLegend .lgt{font:600 11px 'IBM Plex Mono';letter-spacing:.16em;color:var(--ink);padding-right:18px;border-right:1px solid var(--grid)}
+/* archify · Flowing Animation：手递手流线 */
+@keyframes flowDash{to{stroke-dashoffset:-36}}
+#chainFlow path{fill:none;stroke:var(--ink);stroke-width:2.6;stroke-linecap:round;stroke-dasharray:7 11;opacity:0;transition:opacity .3s}
+#chainFlow path.a-emphasis{stroke:var(--accent)}
+#chainFlow path.go{opacity:.95}
+.hop{position:absolute;width:11px;height:11px;border-radius:50%;background:var(--ink);z-index:16;pointer-events:none;opacity:0}
+#n1{left:6px}
+#nE{left:448px}
+#n2{left:890px}
+#n3{left:1332px}
+#n2.hot{border-style:dashed;border-color:var(--accent)}
+#n2 .nbig b{color:var(--accent)}
+#n3 .chips{display:flex;gap:10px;margin-top:14px}
+.chip{font:700 21px 'Noto Sans SC';letter-spacing:.04em;color:var(--muted);
+  border:1px solid var(--grid);border-radius:4px;padding:7px 16px;background:#F4F3EF;
+  opacity:0;transform:translateY(12px) scale(.8);transition:all .36s cubic-bezier(.2,1.5,.4,1)}
+.chip.in{opacity:1;transform:translateY(0) scale(1)}
+#chainSvg{position:absolute;inset:0;z-index:15;pointer-events:none;overflow:visible}
+.arw{stroke-dasharray:200;stroke-dashoffset:200;transition:stroke-dashoffset .34s cubic-bezier(.2,.9,.3,1)}
+.arw.go{stroke-dashoffset:0}
+.arh{opacity:0;transition:opacity .2s ease .22s}
+.arh.go{opacity:1}
+
+/* ── 下载弹窗（示意图） ── */
+#vdl{position:absolute;left:1080px;top:60px;width:480px;z-index:16;border-radius:10px;overflow:hidden;
+  border:1.5px solid var(--ink);background:var(--card);
+  opacity:0;transform:scale(1.9);transition:all .34s cubic-bezier(.2,1.6,.4,1)}
+#vdl.in{opacity:1;transform:scale(1)}
+#vdl.go{opacity:0;transform:translate(-1011px,521px) scale(.42);transition:all .55s cubic-bezier(.55,0,.8,.4)}
+.vdl-bar{height:38px;display:flex;align-items:center;gap:8px;padding:0 14px;background:#F4F3EF;border-bottom:1px solid var(--grid)}
+.vdl-bar i{width:9px;height:9px;border-radius:50%;background:var(--faint)}
+.vdl-bar .vt{margin-left:8px;font:600 14px 'IBM Plex Mono';letter-spacing:.2em;color:var(--ink)}
+.vdl-body{display:flex;align-items:center;gap:14px;padding:16px 20px 10px}
+.vdl-nm{font:700 16px 'IBM Plex Mono';color:var(--ink);letter-spacing:.02em}
+.vdl-pb{flex:1;height:12px;border-radius:6px;background:#E7E6E0;overflow:hidden}
+.vdl-pf{height:100%;width:0;background:var(--ink)}
+#vdlBtn{font:700 14px 'IBM Plex Mono';letter-spacing:.1em;color:var(--card);background:var(--ink);border:none;border-radius:5px;padding:7px 18px;cursor:pointer;transition:all .25s}
+#vdlBtn.press{background:var(--accent)}
+.vdl-note{display:block;text-align:right;padding:0 12px 7px;font-size:10px;color:var(--muted);letter-spacing:.06em}
+/* 毒滴 + 「投毒」印章 */
+#pdrop{position:absolute;left:1130px;top:424px;z-index:17;opacity:0;transform:translateY(-70px);
+  transition:transform .5s cubic-bezier(.55,0,.9,.55),opacity .2s}
+#pdrop.in{opacity:1;transform:translateY(150px)}
+#pdrop.splat{opacity:0;transform:translateY(150px) scale(1.6,.3);transition:all .22s ease-out}
+#pdrop svg path{fill:var(--accent)}
+#pdrop svg circle{fill:rgba(255,255,255,.45)}
+#poisonStamp{position:absolute;left:1030px;top:620px;z-index:17;opacity:0;transform:rotate(-8deg) scale(2.4);
+  transition:all .26s cubic-bezier(.2,1.7,.4,1)}
+#poisonStamp.in{opacity:1;transform:rotate(-8deg) scale(1)}
+#poisonStamp span{display:block;border:3px solid var(--accent);border-radius:10px;padding:7px 26px 9px;
+  font:900 40px 'Noto Sans SC';letter-spacing:.2em;text-indent:.2em;color:var(--accent);background:var(--card)}
+/* 挖矿/肉鸡 图标链 */
+.n3ic{display:flex;align-items:center;gap:9px;margin-top:14px}
+.n3ic .nic{width:46px;height:46px;border-radius:8px;border:1.5px solid var(--faint);background:#F4F3EF;
+  display:flex;align-items:center;justify-content:center;opacity:.35;transform:scale(.8);
+  transition:all .4s cubic-bezier(.2,1.6,.4,1)}
+.n3ic .nic svg path,.n3ic .nic svg rect,.n3ic .nic svg circle{stroke:var(--muted)}
+.n3ic .nic.lit{opacity:1;transform:scale(1);border-color:var(--accent);background:#FDF1ED}
+.n3ic .nic.lit svg path,.n3ic .nic.lit svg rect,.n3ic .nic.lit svg circle{stroke:var(--accent)}
+.n3ic .lk{width:16px;height:3px;border-radius:2px;background:var(--accent);opacity:0;transition:opacity .3s}
+.n3ic .lk.lit{opacity:1}
+
+/* ── 尾注 ── */
+#outro{position:absolute;left:88px;top:916px;width:1120px}
+#outro .rule{width:220px;height:3px;background:var(--accent);transform:scaleX(0);transform-origin:0 50%;transition:transform .5s cubic-bezier(.2,.9,.3,1)}
+#outro.in .rule{transform:scaleX(1)}
+#outro .oT{margin-top:18px;font:900 32px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em;opacity:0;transform:translateY(16px);transition:all .5s cubic-bezier(.16,1,.3,1) .06s}
+#outro.in .oT{opacity:1;transform:translateY(0)}
+#outro .oT b{color:var(--accent)}
+#outro .oS{margin-top:9px;font:600 14px 'IBM Plex Mono';letter-spacing:.18em;color:var(--muted);opacity:0;transition:opacity .45s ease .28s}
+#outro.in .oS{opacity:1}
+
+/* ── 大肥鱼 ── */
+#fish{position:absolute;left:1500px;top:906px;width:160px;opacity:0;transform:translateY(26px) scale(.7);
+  transition:all .45s cubic-bezier(.34,1.6,.64,1);pointer-events:none}
+#fish.in{opacity:1;transform:translateY(0) scale(1)}
+#fish img{width:100%;display:block}
+#fish .say{position:absolute;left:-306px;top:14px;width:290px;background:var(--card);border:1.5px solid var(--ink);
+  border-radius:12px;padding:12px 20px;font:700 22px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em;line-height:1.4;
+  opacity:0;transform:scale(.5);transition:all .34s cubic-bezier(.2,1.6,.4,1)}
+#fish.bub .say{opacity:1;transform:scale(1)}
+#fish .say b{color:var(--accent)}
+#fish .say::after{content:'';position:absolute;right:-9px;top:48px;width:14px;height:14px;background:var(--card);
+  border-right:1.5px solid var(--ink);border-top:1.5px solid var(--ink);transform:rotate(45deg)}
+
+.corner{position:absolute;font:500 14px 'IBM Plex Mono','Noto Sans SC';color:var(--muted);letter-spacing:.08em;z-index:41}
+#chap{left:52px;bottom:30px}
+#src{right:52px;bottom:30px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono';pointer-events:none}
+#track{height:5px;background:rgba(255,255,255,.1)}
+#bar{height:100%;width:0;background:var(--accent)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(28,28,26,.94);color:#C6C5BF}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #555;color:#ccc;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(255,255,255,.12)}
+#replay.done{border-color:var(--accent);color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="cam">
+
+    <!-- 标题 -->
+    <div id="head">
+      <div class="eye">SHOT 0-8 · SUPPLY CHAIN</div>
+      <h1>装的东西，可能<span class="hl">本身就不可信</span></h1>
+      <div class="sub">UNTRUSTED SOURCE</div>
+    </div>
+
+    <!-- 主视觉：风险链板 -->
+    <div id="riskBoard">
+      <div id="riskGrid"></div>
+
+      <div id="lead">
+        <span class="lc" id="lcT">AI 给的代码和命令</span>
+        <span class="lt" id="lt1">看不懂</span>
+        <span class="lt" id="lt2">可能写错</span>
+        <span class="lt warn" id="lt3">可能包含漏洞</span>
+      </div>
+
+      <div id="chainTitle">后果链 / CONSEQUENCE CHAIN</div>
+      <div id="riskTrack"></div>
+      <span class="stepChip" id="sc1">1</span><span class="stepChip" id="sc2">2</span>
+      <span class="stepChip" id="sc3">3</span><span class="stepChip" id="sc4">4</span>
+      <span class="rp" id="rp1"></span><span class="rp" id="rp2"></span><span class="rp" id="rp3"></span>
+      <span class="rp" id="rp4"></span><span class="rp" id="rp5"></span>
+
+      <div class="node" id="n1">
+        <span class="roleChip">SRC</span>
+        <div class="ntag">来源</div>
+        <div class="nico"><span class="mono">&gt;_</span></div>
+        <div class="nbig">网上查的脚本<br>安装命令</div>
+        <div class="ns">SCRIPT · INSTALL COMMAND</div>
+        <span class="pay r out" id="pay1">FL</span>
+      </div>
+      <div class="node" id="nE">
+        <span class="roleChip">LOC</span>
+        <div class="ntag">执行</div>
+        <div class="nico"><svg width="52" height="52" viewBox="0 0 24 24" fill="none"><rect x="2.6" y="4" width="18.8" height="15.6" rx="2.6" stroke="#1C1C1A" stroke-width="1.8"/><path d="M2.6 8.6 H21.4" stroke="#1C1C1A" stroke-width="1.6"/><path d="M6.4 12.6 L9 15 L6.4 17.4" stroke="#1C1C1A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 17.6 H17.4" stroke="#1C1C1A" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+        <div class="nbig">复制粘贴<br>直接跑起来</div>
+        <div class="ns">RUN IT AS-IS</div>
+        <span class="pay l" id="pay2">FL</span><span class="pay r out" id="pay3">LS</span>
+      </div>
+      <div class="node" id="n2">
+        <span class="roleChip">SRC</span>
+        <div class="ntag">极端情况</div>
+        <div class="nico"><svg width="52" height="52" viewBox="0 0 24 24"><path d="M12 3.2 L21.4 20.4 H2.6 Z" fill="none" stroke="#F5572F" stroke-width="1.8" stroke-linejoin="round"/><line x1="12" y1="9.4" x2="12" y2="14.6" stroke="#F5572F" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17.6" r="1.25" fill="#F5572F"/></svg></div>
+        <div class="nbig"><i>可能</i><b>被投毒</b></div>
+        <div class="ns">POISONED ON DELIVERY</div>
+        <span class="pay l" id="pay4">LS</span><span class="pay r out" id="pay5">LS</span>
+      </div>
+      <div class="node" id="n3">
+        <span class="roleChip">NET</span>
+        <div class="ntag">结果</div>
+        <div class="nico"><svg width="52" height="52" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="3.4" fill="none" stroke="#1C1C1A" stroke-width="1.8"/><circle cx="9" cy="12.5" r="1.7" fill="#1C1C1A"/><circle cx="15" cy="12.5" r="1.7" fill="#1C1C1A"/><line x1="12" y1="6" x2="12" y2="2.6" stroke="#1C1C1A" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+        <div class="nbig">机器被拿去</div>
+        <div class="chips"><span class="chip" id="ch1">挖矿</span><span class="chip" id="ch2">当肉鸡</span></div>
+        <div class="n3ic">
+          <span class="nic" id="icPick"><svg width="30" height="30" viewBox="0 0 40 40" fill="none"><path d="M8 34 L28 14" stroke-width="3" stroke-linecap="round"/><path d="M16 6 C24 3 33 7 36 16" stroke-width="3" stroke-linecap="round"/><path d="M36 16 L30 13 M36 16 L33 22" stroke-width="2.6" stroke-linecap="round"/></svg></span>
+          <span class="lk" id="lk1"></span>
+          <span class="nic" id="icBot"><svg width="30" height="30" viewBox="0 0 40 40" fill="none"><rect x="8" y="12" width="24" height="19" rx="4" stroke-width="2.6"/><path d="M20 12 V6 M16 6 H24" stroke-width="2.6" stroke-linecap="round"/><path d="M14 20 L18 24 M18 20 L14 24" stroke-width="2.2" stroke-linecap="round"/><path d="M23 20 L27 24 M27 20 L23 24" stroke-width="2.2" stroke-linecap="round"/><path d="M15 28 H25" stroke-width="2.2" stroke-linecap="round"/></svg></span>
+        </div>
+        <div class="ns">MINED · BOTNET</div>
+        <span class="pay l" id="pay6">LS</span>
+      </div>
+
+      <div id="chainLegend">
+        <span class="lgt">PROCESS LEGEND</span>
+        <span class="lgi"><span class="sw" style="background:#F0EFEB;border:1px solid #1C1C1A"></span>SRC · 上游脚本</span>
+        <span class="lgi"><span class="sw" style="background:#F0EFEB;border:1px solid #1C1C1A"></span>LOC · 本机执行</span>
+        <span class="lgi"><span class="sw" style="background:#FDF1ED;border:1px solid #F5572F"></span>NET · 攻击者网络</span>
+        <span class="lgi"><span class="sw" style="background:#1C1C1A"></span>FL · 脚本文件（入）</span>
+        <span class="lgi"><span class="sw" style="background:#8F8E88"></span>LS · 载荷任务（出）</span>
+      </div>
+    </div>
+
+    <!-- 下载弹窗（示意图） -->
+    <div id="vdl">
+      <div class="vdl-bar"><i></i><i></i><i></i><span class="vt">DOWNLOAD</span></div>
+      <div class="vdl-body">
+        <span class="vdl-nm">install.sh</span>
+        <div class="vdl-pb"><div class="vdl-pf" id="vdlFill"></div></div>
+        <button id="vdlBtn" type="button">运行</button>
+      </div>
+      <span class="vdl-note">示意图 · 非实拍</span>
+    </div>
+    <div id="pdrop">
+      <svg width="34" height="46" viewBox="0 0 34 46"><path d="M17 2 C17 2 5 19 5 29 a12 12 0 0 0 24 0 C29 19 17 2 17 2 Z" fill="#F5572F"/><circle cx="13" cy="28" r="3" fill="rgba(255,255,255,.45)"/></svg>
+    </div>
+    <div id="poisonStamp"><span>投 毒</span></div>
+    <svg id="chainSvg" viewBox="0 0 1920 1080">
+      <path class="arw" id="a1" d="M496,414 L540,414" fill="none" stroke="#1C1C1A" stroke-width="2.6" stroke-linecap="round"/>
+      <polygon class="arh" id="h1" points="546,414 524,404 524,424" fill="#1C1C1A"/>
+      <path class="arw" id="a2" d="M938,414 L982,414" fill="none" stroke="#F5572F" stroke-width="2.6" stroke-linecap="round"/>
+      <polygon class="arh" id="h2" points="988,414 966,404 966,424" fill="#F5572F"/>
+      <path class="arw" id="a3" d="M1380,414 L1424,414" fill="none" stroke="#1C1C1A" stroke-width="2.6" stroke-linecap="round"/>
+      <polygon class="arh" id="h3" points="1430,414 1408,404 1408,424" fill="#1C1C1A"/>
+      <g id="chainFlow">
+        <path class="a-default" id="f1" d="M496,414 L540,414"/>
+        <path class="a-emphasis" id="f2" d="M938,414 L982,414"/>
+        <path class="a-default" id="f3" d="M1380,414 L1424,414"/>
+      </g>
+    </svg>
+
+    <!-- 尾注 -->
+    <div id="outro">
+      <div class="rule"></div>
+      <div class="oT">安全圈 · <b>供应链投毒这几年就没消停过</b></div>
+      <div class="oS">IT KEEPS HAPPENING</div>
+    </div>
+
+    <!-- 大肥鱼 -->
+    <div id="fish">
+      <div class="say">谁敢动我的<b>机器</b>！</div>
+      <img src="Shark-GIF/005_对电脑愤怒符号暴怒抓狂.gif" alt="大肥鱼">
+    </div>
+  </div>
+
+  <div class="corner" id="chap">02 / 准备一 · 虚拟机（翻车能回档）</div>
+  <div class="corner" id="src">示意画面 · 不含真实终端回显与第三方截图</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-8 · 投毒风险 · 19s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=19000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ───────── 本页小工具 ───────── */
+function riskFlow(sel,start,total,loops,phase){
+  const el=$(sel);if(!el)return;
+  tws.push({t:start,d:total,f:p=>{
+    const s=p*loops+phase,k=s%1;
+    el.style.left=(26+1680*k).toFixed(1)+'px';
+    el.style.opacity=(k<.06?k/.06:(k>.94?(1-k)/.06:1)).toFixed(2);
+  },done:()=>{el.style.opacity='0';}});
+}
+function hopFlow(start,total,loops,x0,x1,phase){
+  const host=$('#cam');
+  for(let i=0;i<2;i++){
+    const el=document.createElement('span');el.className='hop';host.appendChild(el);
+    tws.push({t:start,d:total,f:p=>{
+      const s=p*loops+(phase+i*.5),k=s%1;
+      el.style.left=(x0+(x1-x0)*k-5.5).toFixed(1)+'px';
+      el.style.top=(414-5.5-Math.sin(k*Math.PI)*9).toFixed(1)+'px';
+      el.style.opacity=(k<.14?k/.14:(k>.86?(1-k)/.14:1)).toFixed(2);
+    },done:()=>{el.remove();}});
+  }
+}
+
+/* ───────── 镜头 0-8 叙事 cue（3:10–3:29 · 19s · 12 句） ───────── */
+/* 3:10「再往深一点」 */
+on(200,()=>{$('#head').classList.add('in');__sfx.whoosh(.7,.4);});
+/* 3:11「你装的东西可能本身就不可信」 */
+on(1000,()=>{$('#riskBoard').classList.add('in');$('#lead').classList.add('in');__sfx.pop(.5);
+  ['#n1','#nE','#n2','#n3'].forEach(s=>{$(s).classList.add('in');$(s).classList.add('ghost');});
+});
+/* 3:13「AI给你的代码和命令」 */
+on(3000,()=>{$('#lcT').classList.add('on');__sfx.pop(.5);});
+/* 3:14「你没法一眼看懂他要干什么」 */
+on(4000,()=>{$('#lt1').classList.add('in');__sfx.pop(.5);});
+/* 3:16「他可能会写错」 */
+on(6000,()=>{$('#lt2').classList.add('in');__sfx.pop(.5);});
+/* 3:17「可能包含漏洞」 */
+on(7000,()=>{$('#lt3').classList.add('in');__sfx.pop(.6);});
+/* 3:18「在极端情况下」 */
+on(8000,()=>{$('#lead').classList.add('dim');$('#chainTitle').classList.add('in');__sfx.whoosh(.6,.3);
+  $('#riskTrack').classList.add('go');
+  riskFlow('#rp1',8000,11500,8,0);riskFlow('#rp2',8000,11500,8,.2);
+  riskFlow('#rp3',8000,11500,8,.4);riskFlow('#rp4',8000,11500,8,.6);riskFlow('#rp5',8000,11500,8,.8);
+});
+/* 3:19「你从网上查的脚本和安装命令本身就被投毒」 */
+on(9000,()=>{$('#n1').classList.remove('ghost');$('#n1').classList.add('hot');__sfx.pop(.6);camFocus(760,610,1.04,.5);});
+on(9400,()=>{$('#nE').classList.remove('ghost');$('#nE').classList.add('hot');__sfx.pop(.55);
+  $('#vdl').classList.add('in');__sfx.pop(.5);
+  tws.push({t:9400,d:1100,e:eo,f:p=>{$('#vdlFill').style.width=(p*100).toFixed(1)+'%';},
+    done:()=>{$('#vdlBtn').classList.add('press');}});});
+on(9500,()=>{$('#a1').classList.add('go');$('#h1').classList.add('go');__sfx.swipe(.5);});
+on(10000,()=>{$('#n2').classList.remove('ghost');$('#n2').classList.add('hot');__sfx.thud(.9);});
+on(10400,()=>{$('#a2').classList.add('go');$('#h2').classList.add('go');__sfx.swipe(.5);});
+on(10700,()=>{$('#vdl').classList.add('go');__sfx.swipe(.5);});
+/* 场景：毒滴砸落 → 「投毒」印章 */
+on(11200,()=>{$('#pdrop').classList.add('in');});
+on(11700,()=>{$('#pdrop').classList.add('splat');$('#poisonStamp').classList.add('in');__sfx.thud(.85);});
+/* 3:22「毕竟安全圈」 */
+on(12000,()=>{$('#outro').classList.add('in');__sfx.pop(.4);});
+/* 3:24「这几年来就没有消停过」 */
+on(14000,()=>{camTo(0,0,1,.6);__sfx.ding(.4);});
+/* 3:26「众多的机器最后也会被拿去挖矿或者当肉鸡」 */
+on(16000,()=>{$('#a3').classList.add('go');$('#h3').classList.add('go');__sfx.swipe(.5);
+  $('#n3').classList.remove('ghost');$('#n3').classList.add('hot');$('#ch1').classList.add('in');__sfx.thud(.95);
+  camFocus(1320,600,1.05,.5);});
+on(16400,()=>{$('#icPick').classList.add('lit');$('#lk1').classList.add('lit');__sfx.pop(.4);});
+on(16500,()=>{$('#ch2').classList.add('in');__sfx.thud(.8);});
+on(16700,()=>{$('#icBot').classList.add('lit');__sfx.pop(.4);});
+on(10000,()=>{$('#fish').classList.add('in');__sfx.pop(.6);});   // 大肥鱼提前在场（原 16800 过晚）
+on(10400,()=>{$('#fish').classList.add('bub');__sfx.pop(.4);});
+
+/* ── 增补节拍：type-process 步骤号/载荷 chip/图例 + archify 手递手流线（不动任何既有 cue） ── */
+for(let i=0;i<4;i++)on(1150+i*180,()=>$('#sc'+(i+1)).classList.add('in'));
+['#pay1','#pay2','#pay3','#pay4','#pay5','#pay6'].forEach((s,i)=>on(1520+i*120,()=>$(s).classList.add('on')));
+on(2300,()=>$('#chainLegend').classList.add('in'));
+on(9560,()=>{$('#f1').classList.add('go');hopFlow(9560,10400,9,496,540,0);});
+on(10460,()=>{$('#f2').classList.add('go');hopFlow(10460,5400,9,938,982,0);});
+on(16060,()=>{$('#f3').classList.add('go');hopFlow(16060,2000,9,1380,1424,0);});
+
+/* ===== [不动] QA 专用（正常播放不触发）：hash 带 t=毫秒 → 起播后跳转该时刻并冻结 ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

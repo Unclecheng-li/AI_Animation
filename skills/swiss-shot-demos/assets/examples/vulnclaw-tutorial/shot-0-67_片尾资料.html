@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+     镜头 0-67 · 片尾资料（32:08–32:26 / 18s）
+     风格：瑞士国际主义（纸底 + 墨 + 灰阶阶梯 + 唯一强调橙 #F5572F）
+     技能注入：diagram-design type-pyramid / funnel（三资料汇流收敛成一包）
+     底盘不动：引导 / SFX / 时间轴 / 镜头 / HUD
+     ============================================================ -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 0-67 · 片尾资料 · 18s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;
+  --accent:#F5572F;--dark:#1C1C1A;--darkink:#F0EFEB;--darkgrid:#2E2D29;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:var(--paper);overflow:hidden;color:var(--ink);
+  font-family:'Inter','Noto Sans SC',sans-serif;-webkit-font-smoothing:antialiased}
+body.paused *{animation-play-state:paused!important}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#bg{position:absolute;inset:0;z-index:0;opacity:0;transition:opacity 1.2s ease;
+  background-image:linear-gradient(rgba(28,28,26,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.05) 1px,transparent 1px);
+  background-size:44px 44px}
+#bg.in{opacity:1}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ── 标题 ── */
+#head{position:absolute;left:88px;top:56px;opacity:0;transform:translateY(-16px);transition:all .55s cubic-bezier(.16,1,.3,1);z-index:12}
+#head.in{opacity:1;transform:none}
+#head .eye{font:600 15px Inter,'Noto Sans SC';letter-spacing:.14em;text-transform:uppercase;color:var(--ink);display:inline-flex;gap:12px;align-items:center}
+#head .eye .no{background:var(--ink);color:var(--paper);padding:3px 10px;border-radius:3px;font-weight:700}
+#head h1{margin-top:14px;font:900 62px/1.02 'Inter','Noto Sans SC';color:var(--ink);letter-spacing:-.02em}
+#head .sub{margin-top:10px;font:600 14px Inter;letter-spacing:.18em;color:var(--faint);text-transform:uppercase}
+
+/* ===== 主视觉：漏斗收敛（type-pyramid） ===== */
+#pack{position:absolute;left:88px;top:214px;width:1744px;height:648px;z-index:8}
+#pcsv{position:absolute;left:0;top:0;width:1744px;height:648px;overflow:visible;z-index:5}
+#pcsv .belt{fill:none;stroke:var(--faint);stroke-width:1.6;stroke-dasharray:8 8;stroke-linecap:round;opacity:0;transition:opacity .5s}
+#pcsv .belt.on{opacity:1}
+#pcsv .pt{fill:var(--ink)}
+#pcsv .fnl{fill:#E7E6E1;stroke:var(--ink);stroke-width:1;opacity:0;transition:opacity .6s}
+#pcsv .fnl.in{opacity:1}
+#pcsv .fnl.seal{fill:#DAD9D3}
+#pcsv .fnlNeck{stroke:var(--ink);stroke-width:3;stroke-linecap:round;opacity:0;transition:opacity .5s}
+#pcsv .fnlNeck.in{opacity:.95}
+#pcsv .fnlOut{fill:none;stroke:var(--accent);stroke-width:2.4;stroke-dasharray:5 5;opacity:0;transition:opacity .5s}
+#pcsv .fnlOut.in{opacity:1}
+.fnlCap{font:600 13px Inter,'Noto Sans SC';letter-spacing:.14em;fill:var(--muted);opacity:0;transition:opacity .5s}
+.fnlCap.in{opacity:1}
+#pcsv .axis{font:600 13px Inter,'Noto Sans SC';letter-spacing:.14em;fill:var(--faint)}
+
+/* ── 三件资料卡 ── */
+#res{position:absolute;left:0;top:20px;width:620px;display:flex;flex-direction:column;gap:18px;z-index:9}
+.rs{display:flex;align-items:center;gap:18px;height:172px;padding:0 26px;background:#fff;border:1px solid var(--grid);border-left:6px solid var(--ink);border-radius:12px;
+  opacity:0;transform:translateX(-30px);transition:all .48s cubic-bezier(.16,1,.3,1)}
+.rs.in{opacity:1;transform:none}
+.rs .ico{width:62px;height:62px;flex:none;border-radius:10px;background:#fff;border:1.5px solid var(--ink);color:var(--ink);display:flex;align-items:center;justify-content:center}
+.rs .ico svg{width:34px;height:34px}
+.rs .box{width:28px;height:28px;flex:none;border:2px solid var(--ink);border-radius:7px;position:relative;background:#fff;margin-left:auto}
+.rs .box::after{content:'';position:absolute;left:7px;top:3px;width:9px;height:14px;border-right:3px solid var(--ink);border-bottom:3px solid var(--ink);transform:rotate(42deg) scale(.2);opacity:0;transition:all .35s cubic-bezier(.16,1,.3,1)}
+.rs.in .box::after{opacity:1;transform:rotate(42deg) scale(1)}
+.rs .lb{display:block;font:900 28px 'Noto Sans SC';letter-spacing:.02em;color:var(--ink)}
+.rs .en{display:block;margin-top:6px;font:600 12px Inter;letter-spacing:.14em;color:var(--muted);text-transform:uppercase}
+.rs .tg{flex:none;font:700 13px Inter,'Noto Sans SC';letter-spacing:.06em;color:var(--paper);background:var(--ink);border-radius:999px;padding:6px 14px;opacity:0;transform:scale(.5);transition:all .34s cubic-bezier(.16,1,.3,1)}
+.rs .tg.in{opacity:1;transform:scale(1)}
+
+/* ── 打包盒 ── */
+#vizBox{position:absolute;left:790px;top:96px;width:470px;height:400px;opacity:0;transform:translateX(-40px);transition:all .55s cubic-bezier(.16,1,.3,1);z-index:9}
+#vizBox.in{opacity:1;transform:none}
+.vbx-box{position:relative;width:430px;height:330px;margin:0 auto}
+.vbx-back{position:absolute;left:0;right:0;bottom:0;height:300px;border-radius:12px;background:#fff;border:2px solid var(--ink)}
+.vbx-mark{position:absolute;left:0;right:0;bottom:96px;display:flex;justify-content:center;gap:22px;opacity:0;transition:opacity .45s;z-index:2}
+.vbx-box.closed .vbx-mark{opacity:1}
+.vbx-mark i{width:52px;height:52px;border-radius:10px;border:1.5px solid var(--ink);background:#fff;display:flex;align-items:center;justify-content:center;color:var(--ink)}
+.vbx-mark svg{width:28px;height:28px}
+.vbx-lid{position:absolute;left:-8px;right:-8px;bottom:288px;height:34px;border-radius:8px;background:var(--ink);transform:translateY(-52px);transition:transform .5s cubic-bezier(.16,1,.3,1)}
+.vbx-box.closed .vbx-lid{transform:translateY(0)}
+.vbx-tape{position:absolute;left:50%;bottom:0;width:34px;height:300px;margin-left:-17px;background:var(--accent);opacity:0;transition:opacity .4s}
+.vbx-box.closed .vbx-tape{opacity:1}
+.vbx-lb{position:absolute;left:0;right:0;bottom:8px;text-align:center;font:700 15px 'Noto Sans SC';letter-spacing:.04em;color:var(--muted);opacity:0;transition:opacity .4s}
+.vbx-lb.in{opacity:1}
+.vbx-lb b{color:var(--accent);font-weight:900}
+.vbx-dl{position:absolute;left:50%;bottom:-104px;margin-left:-18px;width:36px;height:80px;opacity:0;transition:opacity .4s}
+.vbx-dl.in{opacity:1}
+.vbx-dl svg{width:100%;height:100%;color:var(--accent)}
+.vbx-dl.in svg{animation:dlBob 1s ease-in-out infinite}
+@keyframes dlBob{0%,100%{transform:translateY(0)}50%{transform:translateY(10px)}}
+.viz-note{position:absolute;right:2px;bottom:-2px;font:600 12px Inter,'Noto Sans SC';letter-spacing:.06em;color:var(--faint)}
+
+/* ── 领取方式 ── */
+#get{position:absolute;left:1290px;top:20px;width:454px;height:452px;background:#fff;border:1px solid var(--grid);border-radius:12px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:0 30px;opacity:0;transform:translateY(18px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#get.in{opacity:1;transform:none}
+#get .g1{font:600 24px 'Noto Sans SC';letter-spacing:.02em;color:var(--muted)}
+#get .kwrow{display:flex;align-items:center;gap:14px}
+#get .kw{display:inline-block;font:900 28px 'Noto Sans SC';letter-spacing:.02em;color:var(--paper);background:var(--ink);border-radius:9px;padding:6px 20px;opacity:0;transform:scale(.4);transition:all .34s cubic-bezier(.16,1,.3,1)}
+#get .kw.in{opacity:1;transform:scale(1)}
+#get .kw.m{background:var(--accent)}
+#get .arw{font:600 36px 'IBM Plex Mono';color:var(--muted);opacity:0;transition:opacity .4s;line-height:1}
+#get .arw.in{opacity:1}
+#get .g2{font:900 28px 'Noto Sans SC';letter-spacing:.02em;color:var(--ink);opacity:0;transition:opacity .4s}
+#get .g2.in{opacity:1}
+#get .gdots{display:flex;gap:10px;margin-top:8px}
+#get .gdots i{width:34px;height:10px;border-radius:5px;background:#fff;border:1px solid var(--grid);transition:all .35s}
+#get .gdots i.on{background:var(--ink);border-color:var(--ink)}
+
+/* ── 大字句 ── */
+#punch{position:absolute;left:0;top:600px;width:1744px;text-align:center;opacity:0;transform:translateY(20px);transition:all .55s cubic-bezier(.16,1,.3,1);z-index:11}
+#punch.in{opacity:1;transform:none}
+#punch .p{font:900 46px 'Noto Sans SC';letter-spacing:.02em;color:var(--ink)}
+#punch .p b{color:var(--ink);box-shadow:inset 0 -16px 0 rgba(245,87,47,.25)}
+
+/* ── 三连 ── */
+#tri{position:absolute;left:0;right:0;top:906px;text-align:center;opacity:0;transition:opacity .45s;z-index:12}
+#tri.in{opacity:1}
+#tri .tb{display:inline-flex;align-items:center;gap:22px}
+.ti{display:flex;align-items:center;gap:10px;padding:9px 20px;border-radius:999px;border:1.5px solid var(--ink);background:#fff;
+  opacity:0;transform:translateY(14px) scale(.7);transition:all .38s cubic-bezier(.16,1,.3,1)}
+.ti.in{opacity:1;transform:none}
+.ti.lit{background:var(--ink)}
+.ti svg{width:24px;height:24px;color:var(--ink);transition:color .3s}
+.ti.lit svg{color:var(--paper)}
+.ti span{font:900 21px 'Noto Sans SC';letter-spacing:.06em;color:var(--ink);transition:color .3s}
+.ti.lit span{color:var(--paper)}
+#tri .thx{margin-left:22px;font:700 22px 'Noto Sans SC';letter-spacing:.06em;color:var(--muted);opacity:0;transition:opacity .45s}
+#tri .thx.in{opacity:1}
+#tri .thx b{color:var(--ink)}
+
+/* ── 再见 ── */
+#bye{position:absolute;left:0;right:0;top:962px;text-align:center;opacity:0;transform:translateY(18px);transition:all .6s cubic-bezier(.16,1,.3,1);z-index:12}
+#bye.in{opacity:1;transform:none}
+#bye .b1{font:900 48px 'Noto Sans SC';letter-spacing:.16em;color:var(--ink)}
+#bye .b2{margin-top:6px;font:600 13px Inter;letter-spacing:.24em;color:var(--faint);text-transform:uppercase}
+
+/* ── 大肥鱼 ── */
+#fish{position:absolute;left:1650px;top:56px;width:150px;opacity:0;transform:translateY(-22px) scale(.64);
+  transition:all .5s cubic-bezier(.34,1.6,.64,1);pointer-events:none;z-index:26}
+#fish.in{opacity:1;transform:none}
+#fish img{width:100%;display:block}
+#fish .say{position:absolute;left:-340px;top:150px;width:330px;background:#fff;border:1.5px solid var(--ink);
+  border-radius:10px;padding:12px 20px;font:700 21px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em;line-height:1.42;
+  opacity:0;transform:scale(.5);transition:all .34s cubic-bezier(.16,1,.3,1)}
+#fish.bub .say{opacity:1;transform:scale(1)}
+#fish .say b{color:var(--accent)}
+
+.corner{position:absolute;font:600 15px Inter,'Noto Sans SC';letter-spacing:.1em;color:var(--faint);z-index:41}
+#chap{left:88px;bottom:30px}
+#src{right:88px;bottom:30px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:var(--grid)}
+#bar{height:100%;width:0;background:var(--ink)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(240,239,235,.94);color:var(--muted)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid var(--faint);color:var(--ink);font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(28,28,26,.06)}
+#replay.done{border-color:var(--ink);color:var(--ink)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="bg"></div>
+  <div id="cam">
+
+    <!-- 标题 -->
+    <div id="head">
+      <div class="eye"><span class="no">67</span>THE END · 片尾资料</div>
+      <h1>本期资料</h1>
+      <div class="sub">DOWNLOAD PACK</div>
+    </div>
+
+    <!-- ===== 主视觉：漏斗收敛 ===== -->
+    <div id="pack">
+      <svg id="pcsv" viewBox="0 0 1744 648">
+        <text class="axis" x="14" y="330" transform="rotate(-90 14 330)">收敛 · 汇成一包</text>
+        <path id="fnl" class="fnl" d="M560 40 L560 500 L820 270 Z"/>
+        <line id="fnlNeck" class="fnlNeck" x1="816" y1="246" x2="816" y2="294"/>
+        <path id="fnlOut" class="fnlOut" d="M820 270 H872"/>
+        <text id="fnlCap" class="fnlCap" x="690" y="538" text-anchor="middle">三资料 · 汇流打包</text>
+        <path class="belt" id="cn1" d="M620 100 C 720 100 772 168 812 262"/>
+        <path class="belt" id="cn2" d="M620 274 C 720 274 772 272 812 270"/>
+        <path class="belt" id="cn3" d="M620 448 C 720 448 772 374 812 278"/>
+        <path class="out" id="outL" d="M900 470 V556" fill="none" stroke="rgba(245,87,47,.6)" stroke-width="2" stroke-dasharray="4 4" opacity="0"/>
+        <g id="ppts"></g>
+      </svg>
+
+      <!-- 三件资料卡 -->
+      <div id="res">
+        <div class="rs" id="rs1">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 7.5L12 3l8 4.5v9L12 21l-8-4.5z"/><path d="M4 7.5L12 12l8-4.5M12 12v9"/></svg></span>
+          <span class="tw"><span class="lb">靶场文件</span><span class="en">DVWA SOURCE</span></span>
+          <span class="tg" id="tg1">已打包</span><span class="box"></span>
+        </div>
+        <div class="rs" id="rs2">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><path d="M7.5 9.5L12 14l4.5-4.5"/><path d="M4 15v3.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V15"/></svg></span>
+          <span class="tw"><span class="lb">软件下载地址</span><span class="en">DOWNLOAD LINKS</span></span>
+          <span class="tg" id="tg2">已打包</span><span class="box"></span>
+        </div>
+        <div class="rs" id="rs3">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3"/><path d="M12.5 15H17"/></svg></span>
+          <span class="tw"><span class="lb">全部命令</span><span class="en">ALL COMMANDS</span></span>
+          <span class="tg" id="tg3">已打包</span><span class="box"></span>
+        </div>
+      </div>
+
+      <!-- 打包盒 -->
+      <div id="vizBox">
+        <div class="vbx-box" id="vbxBox">
+          <div class="vbx-lid"></div>
+          <div class="vbx-back"></div>
+          <div class="vbx-mark">
+            <i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 7.5L12 3l8 4.5v9L12 21l-8-4.5z"/><path d="M4 7.5L12 12l8-4.5M12 12v9"/></svg></i>
+            <i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><path d="M7.5 9.5L12 14l4.5-4.5"/><path d="M4 15v3.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V15"/></svg></i>
+            <i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3"/><path d="M12.5 15H17"/></svg></i>
+          </div>
+          <div class="vbx-tape"></div>
+        </div>
+        <div class="vbx-lb" id="vbxLb">打包完成 · <b>资料就位</b></div>
+        <div class="vbx-dl" id="vbxDl"><svg viewBox="0 0 26 52" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2v36"/><path d="M4 29l9 11 9-11"/></svg></div>
+        <span class="viz-note">示意图 · 非实拍</span>
+      </div>
+
+      <!-- 领取方式 -->
+      <div id="get">
+        <span class="g1">评论区留言</span>
+        <span class="kwrow"><span class="kw" id="kw1">文件</span><span class="g1">或</span><span class="kw m" id="kw2">喵</span></span>
+        <span class="arw" id="arw">&darr;</span>
+        <span class="g2" id="g2">私信发送给你</span>
+        <span class="gdots"><i id="gd1"></i><i id="gd2"></i><i id="gd3"></i></span>
+      </div>
+
+      <!-- 大字句 -->
+      <div id="punch"><div class="p">跟着敲一遍，你也可以亲手 <b>跑通</b></div></div>
+    </div>
+
+    <!-- 三连 -->
+    <div id="tri">
+      <div class="tb">
+        <div class="ti" id="ti1">
+          <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round">
+            <rect x="5" y="17" width="8" height="17" rx="2.4"/>
+            <path d="M14 33V17l7-11 2 1.3v9.7h8.6a3 3 0 0 1 3 3.6l-2 9.4a3 3 0 0 1-3 2.4H14z"/>
+          </svg>
+          <span>点赞</span>
+        </div>
+        <div class="ti" id="ti2">
+          <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round">
+            <circle cx="20" cy="20" r="13"/>
+            <path d="M20 12.5v15M16.6 16h5.6a2.6 2.6 0 0 1 0 5.2h-5.6h5.6a2.6 2.6 0 0 1 0 5.2h-5.6"/>
+          </svg>
+          <span>投币</span>
+        </div>
+        <div class="ti" id="ti3">
+          <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round">
+            <path d="M20 7l4.3 8.8 9.7 1.4-7 6.8 1.7 9.7L20 29.2l-8.7 4.5 1.7-9.7-7-6.8 9.7-1.4z"/>
+          </svg>
+          <span>收藏</span>
+        </div>
+      </div>
+      <span class="thx" id="thx">非常感谢 · <b>三连支持</b></span>
+    </div>
+
+    <!-- 再见 -->
+    <div id="bye">
+      <div class="b1">我们下期视频再见</div>
+      <div class="b2">SEE YOU NEXT TIME</div>
+    </div>
+
+    <!-- 大肥鱼 -->
+    <div id="fish">
+      <div class="say">下期见 ~ <b>记得留言</b>！</div>
+      <img src="Shark-GIF/006_双手身前微笑乖巧期待.gif" alt="大肥鱼">
+    </div>
+
+  </div>
+
+  <div class="corner" id="chap">67 / 第八章 收尾 · 片尾</div>
+  <div class="corner" id="src">口播对齐 timeline.md · 32:08–32:26</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-67 · 片尾资料 · 18s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=18000; /* ←⑤ DUR = 分镜时长 18s */
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ───────── 本页小工具 ───────── */
+/* 连线粒子：沿三条汇流弧线循环流动（灰阶 · 无发光） */
+(function(){
+  const g=$('#ppts'),NS='http://www.w3.org/2000/svg',tracks=[];
+  ['#cn1','#cn2','#cn3'].forEach((sel,ci)=>{
+    const path=$(sel),L=path.getTotalLength();
+    for(let i=0;i<3;i++){
+      const c=document.createElementNS(NS,'circle');
+      c.setAttribute('r',i===0?5:3.5);c.setAttribute('class','pt');
+      g.appendChild(c);tracks.push({el:c,path:path,L:L,off:(ci/3+i/9)%1});
+    }
+  });
+  tws.push({t:0,d:1e9,f:function(){
+    const T=(performance.now()-t0)/2600;
+    for(const o of tracks){
+      const q=(o.off+T)%1,p=o.path.getPointAtLength(o.L*q);
+      o.el.setAttribute('cx',p.x);o.el.setAttribute('cy',p.y);
+    }
+  }});
+})();
+
+/* ───────── 镜头 0-67 叙事 cue（32:08–32:26 · 18s · 11 句） ───────── */
+on(300,()=>{$('#head').classList.add('in');$('#bg').classList.add('in');__sfx.whoosh(.75,.5);}); // 32:08「好那么这期视频用到的靶场文件」
+on(400,()=>{$('#vizBox').classList.add('in');});                                        // viz：打包盒登场
+on(500,()=>{$('#rs1').classList.add('in');__sfx.pop(.5);});
+on(700,()=>{$('#cn1').classList.add('on');__sfx.pop(.4);});                            // viz：资料汇流
+on(3000,()=>{$('#rs2').classList.add('in');__sfx.pop(.5);});                            // 32:11「软件下载地址」
+on(3200,()=>{$('#cn2').classList.add('on');__sfx.pop(.4);});
+on(4000,()=>{$('#rs3').classList.add('in');__sfx.pop(.5);__sfx.type(.4);});             // 32:12「和全部的命令我都会打包好了」
+on(4200,()=>{$('#cn3').classList.add('on');__sfx.pop(.4);});
+on(4700,()=>{$('#tg1').classList.add('in');__sfx.ding(.4);});
+on(4860,()=>{$('#tg2').classList.add('in');__sfx.ding(.4);});
+on(5000,()=>{$('#tg3').classList.add('in');$('#get').classList.add('in');
+  camFocus(880,540,1.06,.7);__sfx.thud(.7);});                                          // 32:13「在评论区留言文件或者喵」
+on(5100,()=>{$('#vbxBox').classList.add('closed');__sfx.thud(.8);});                    // viz：三样入盒 · 合盖打包
+on(5300,()=>{$('#vbxLb').classList.add('in');__sfx.ding(.45);});
+on(5400,()=>{$('#kw1').classList.add('in');__sfx.pop(.5);});
+on(6000,()=>{$('#kw2').classList.add('in');__sfx.pop(.5);});
+on(7000,()=>{$('#arw').classList.add('in');$('#g2').classList.add('in');$('#vbxDl').classList.add('in');
+  $('#outL').style.opacity=1;$('#gd1').classList.add('on');__sfx.ding(.5);});           // 32:15「我会私信发送给你」+ viz：下载箭头
+on(7600,()=>{$('#gd2').classList.add('on');__sfx.type(.4);});
+on(8200,()=>{$('#gd3').classList.add('on');__sfx.type(.4);});
+on(9000,()=>{$('#punch').classList.add('in');camTo(0,0,1,.6);__sfx.ding(.6);}); // 32:17「跟着敲一遍你也可以亲手跑通」
+on(13000,()=>{$('#tri').classList.add('in');__sfx.pop(.45);});                           // 32:21「如果这期视频对你有帮助的话」
+on(14000,()=>{$('#ti1').classList.add('in');__sfx.pop(.55);__sfx.type(.4);});            // 32:22「麻烦点赞投币收藏三连支持一下」
+on(14350,()=>{$('#ti2').classList.add('in');__sfx.pop(.55);__sfx.type(.4);});
+on(14700,()=>{$('#ti3').classList.add('in');__sfx.pop(.55);__sfx.type(.4);});
+on(15000,()=>{$('#ti1').classList.add('lit');__sfx.ding(.4);});                          // viz：三连逐个点亮
+on(15250,()=>{$('#ti2').classList.add('lit');__sfx.ding(.4);});
+on(15500,()=>{$('#ti3').classList.add('lit');__sfx.ding(.5);});
+on(10000,()=>{$('#fish').classList.add('in');__sfx.pop(.5);}); // 鱼提前在场（片尾常驻）
+on(16000,()=>{$('#thx').classList.add('in');__sfx.ding(.6);}); // 32:24「非常感谢」
+on(14500,()=>{$('#fish').classList.add('bub');__sfx.pop(.45);}); // 气泡可见到结尾前
+on(17000,()=>{$('#bye').classList.add('in');camFocus(960,880,1.05,.8);__sfx.ding(.7);}); // 32:25「那么我们下期视频再见」
+
+/* ── 新增节拍（不改既有 cue）：漏斗汇流上屏 / 合盖时封口 ── */
+on(460,()=>{$('#fnl').classList.add('in');$('#fnlNeck').classList.add('in');
+  $('#fnlOut').classList.add('in');$('#fnlCap').classList.add('in');});
+on(5160,()=>{$('#fnl').classList.add('seal');});
+
+/* ===== [不动] QA 专用（正常播放不触发）：hash 带 t=毫秒 → 起播后跳转该时刻并冻结 ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+  ◆ 分镜演示页：镜头 0-2 · 被挡在门外（16s）◆  [可视化 v4 · 瑞士国际主义]
+  主视觉：抽象「门槛/大门」扁平几何 —— AI 沿墨色发丝道路走向 GitHub 项目大门，
+          被门槛（墨块）弹回 ×3；门脸 = 灰阶 Issues 卡列；archify 流光回环
+  底盘：虚拟时钟黑场播放器 / WebAudio 音效 / 1920×1080 舞台 / cam 镜头层
+  视觉：纸底 #F0EFEB × 墨 #1C1C1A × 灰阶阶梯 × 唯一强调橙 #F5572F（主角=被挡在门外）
+============================================================= -->
+<script>
+/* ===== [不动] 播放器引导：劫持 performance.now/rAF 成虚拟时钟 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+
+<script>
+/* ===== [不动] SFX 引擎：pop/whoosh/swipe/type/ding/thud ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 0-2 · 被挡在门外</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Inter','Noto Sans SC',sans-serif}
+body.paused *{animation-play-state:paused!important}
+:root{--paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;--accent:#F5572F;--dark:#1C1C1A;--darkink:#F0EFEB}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#stage::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:1;opacity:.6;
+  background-image:linear-gradient(90deg,rgba(28,28,26,.05) 1px,transparent 1px);background-size:132px 100%}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1.18);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+#world{position:absolute;inset:0}
+#world.quake{animation:quake .45s linear}
+@keyframes quake{20%{transform:translate(-7px,4px)}40%{transform:translate(6px,-5px)}60%{transform:translate(-4px,-3px)}80%{transform:translate(3px,2px)}}
+
+/* ── 标题组 ── */
+#title{position:absolute;left:88px;top:52px;opacity:0;transform:translateY(-16px);transition:all .6s cubic-bezier(.16,1,.3,1);z-index:20}
+#title.show{opacity:1;transform:translateY(0)}
+#title .no{display:inline-block;font:600 15px 'Inter';letter-spacing:.14em;color:var(--paper);background:var(--ink);border-radius:3px;padding:4px 12px;text-transform:uppercase}
+#title h1{margin-top:14px;font:800 56px/1.05 'Inter','Noto Sans SC';letter-spacing:-.02em;color:var(--ink)}
+
+/* ===== 主视觉：拜访循环图（1800×756）===== */
+#scene{position:absolute;left:56px;top:172px;width:1800px;height:756px;z-index:8}
+#rgsvg{position:absolute;left:0;top:0;width:1800px;height:756px;overflow:visible}
+#rgsvg .bed{fill:none;stroke:#E3E2DC;stroke-width:34;stroke-linecap:round}
+#rgsvg .ln{fill:none;stroke:var(--ink);stroke-width:3;stroke-linecap:round}
+#rgsvg .lnD{fill:none;stroke:rgba(28,28,26,.42);stroke-width:1.6;stroke-linecap:round;stroke-dasharray:12 12;animation:dashmove 1s linear infinite}
+@keyframes dashmove{to{stroke-dashoffset:-48}}
+/* ── archify · Flowing Animation：回流线（灰阶虚线流动） ── */
+#rgsvg .loop{fill:none;stroke:rgba(28,28,26,.55);stroke-width:2.2;stroke-linecap:round;stroke-dasharray:12 10}
+#rgsvg .a-emphasis{animation:flowDash .8s linear infinite}
+#rgsvg .a-default{animation:flowDash 1.2s linear infinite}
+#rgsvg .a-dashed{animation:flowDash 1s linear infinite}
+@keyframes flowDash{to{stroke-dashoffset:-44}}
+#rgsvg .pt{fill:var(--ink)}
+#rgsvg .pt2{fill:var(--muted)}
+#rgsvg .lpdot{fill:var(--ink)}
+#rgsvg .lpdot2{fill:var(--muted)}
+/* ── diagram-design · 发丝标注引线 ── */
+#rgsvg .ldr{opacity:0;transition:opacity .5s}
+#rgsvg .ldr.on{opacity:1}
+#rgsvg .ldr.dim{opacity:.25}
+#rgsvg .hair{fill:none;stroke:rgba(28,28,26,.5);stroke-width:1;stroke-dasharray:4 3}
+#rgsvg .hairdot{fill:var(--ink)}
+#rgsvg .nring{fill:none;stroke:rgba(28,28,26,.35);stroke-width:1.6;stroke-dasharray:8 8;animation:rnp 2.4s ease-in-out infinite}
+@keyframes rnp{50%{stroke-opacity:.3}}
+#rgp{opacity:0;transition:opacity .6s}
+#rgp.on{opacity:1}
+#loopG{opacity:0;transition:opacity .6s}
+#loopG.on{opacity:1}
+
+/* ── AI 人设（墨线机器人，沿道路行走） ── */
+#ai{position:absolute;left:84px;top:494px;width:112px;height:126px;z-index:17;opacity:0;transform:scale(.4);
+  transition:opacity .5s,transform .5s cubic-bezier(.2,1.5,.4,1)}
+#ai.in{opacity:1;transform:scale(1)}
+#ai svg{display:block;animation:bob .8s ease-in-out infinite alternate}
+@keyframes bob{to{transform:translateY(-5px)}}
+#ai .halo{position:absolute;left:50%;top:56%;width:150px;height:150px;transform:translate(-50%,-50%);border-radius:50%;
+  border:1px dashed rgba(28,28,26,.25);animation:halo 2.4s ease-in-out infinite}
+@keyframes halo{50%{transform:translate(-50%,-50%) scale(1.12);opacity:.6}}
+
+/* ── 想学横幅（起点标注 · 墨底反白） ── */
+#ribbon{position:absolute;left:20px;top:472px;background:var(--ink);color:var(--paper);z-index:14;
+  font:700 30px 'Noto Sans SC';letter-spacing:7px;padding:10px 26px;border-radius:6px;
+  transform:rotate(-2deg) translateX(-130%);transition:transform .55s cubic-bezier(.2,1.3,.4,1),opacity .8s;opacity:1}
+#ribbon.in{transform:rotate(-2deg) translateX(0)}
+#ribbon.dim{opacity:.25}
+
+/* ── 门外人群（灰阶抽象指示符号） ── */
+#crowd{position:absolute;left:24px;top:628px;width:660px;height:124px;z-index:11}
+.person{position:absolute;bottom:0;opacity:0;transform:translateY(50px);transition:all .55s cubic-bezier(.2,1.3,.4,1)}
+.person.in{opacity:1;transform:translateY(0)}
+.person svg{display:block;transform-origin:50% 100%;animation:sway 2.6s ease-in-out infinite alternate}
+@keyframes sway{from{transform:rotate(-2deg)}to{transform:rotate(2.2deg)}}
+.person .tag{position:absolute;left:50%;top:-32px;transform:translateX(-50%) scale(0);background:var(--ink);color:var(--paper);
+  font:700 13px 'Inter';letter-spacing:.08em;border-radius:3px;padding:3px 11px;white-space:nowrap;
+  transition:transform .4s cubic-bezier(.2,1.6,.4,1) .15s}
+.person.in .tag{transform:translateX(-50%) scale(1)}
+
+/* ── 门槛（墨块 · 垂直于道路砸落） ── */
+.bar{position:absolute;width:16px;background:var(--ink);border-radius:2px;z-index:15;overflow:visible;
+  opacity:0;transform:translateY(-160%);transition:transform .5s cubic-bezier(.7,0,.3,1),opacity .3s,filter .8s}
+.bar.in{opacity:1;transform:translateY(0)}
+.bar.dim{opacity:.22}
+.bar .hatch{position:absolute;inset:0;border-radius:2px;overflow:hidden}
+.bar .hatch::after{content:'';position:absolute;inset:-40%;
+  background:repeating-linear-gradient(-45deg,rgba(240,239,235,.5) 0 6px,transparent 6px 16px)}
+.bar .tag{position:absolute;left:50%;transform:translateX(-50%);white-space:nowrap;
+  font:700 15px 'Noto Sans SC';letter-spacing:.1em;color:var(--ink);background:var(--card);border:1px solid var(--ink);border-radius:3px;padding:4px 13px}
+.bar .tag::before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);margin-right:8px;vertical-align:middle}
+#bar1{left:640px;top:240px;height:380px}
+#bar1 .tag{top:-195px;left:-120px;transform:none}
+#bar2{left:1000px;top:150px;height:340px}
+#bar2 .tag{top:-115px;left:-160px;transform:none}
+
+/* ── 入门要求核对板（门后清单） ── */
+#check{position:absolute;left:690px;top:428px;width:314px;background:var(--card);border:1.5px solid var(--ink);border-radius:10px;
+  padding:16px 20px 14px;z-index:16;opacity:0;transform:translateY(-26px);
+  transition:opacity .5s,transform .5s cubic-bezier(.2,1.3,.4,1),filter .8s}
+#check.in{opacity:1;transform:translateY(0)}
+#check.dim{opacity:.25}
+#check .ct{display:inline-block;font:700 19px 'Noto Sans SC';letter-spacing:.06em;color:var(--accent);
+  border:1.5px solid var(--accent);border-radius:6px;padding:3px 12px;background:var(--card);
+  transform:rotate(-2deg) scale(0);transition:transform .45s cubic-bezier(.2,1.7,.4,1)}
+#check .ct.stampIn{transform:rotate(-2deg) scale(1)}
+#check .row{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--grid);margin-top:12px}
+#check .box{width:26px;height:26px;flex:none;border:1.5px solid var(--ink);border-radius:6px;display:flex;align-items:center;justify-content:center;transition:background .3s}
+#check .box svg{width:18px;height:18px}
+#check .box path{stroke:var(--paper);stroke-width:4;fill:none;stroke-linecap:round;stroke-linejoin:round;
+  stroke-dasharray:30;stroke-dashoffset:30;transition:stroke-dashoffset .4s ease}
+#check .row.tick .box{background:var(--ink)}
+#check .row.tick .box path{stroke-dashoffset:0}
+#check .mono{font:500 21px 'IBM Plex Mono';color:var(--ink);letter-spacing:.04em}
+
+/* ── GitHub 项目大门（门脸 = Issue 区） ── */
+#gate{position:absolute;left:1150px;top:20px;width:590px;height:700px;background:var(--card);border:1.5px solid var(--ink);
+  border-radius:12px;z-index:14;opacity:0;transform:translateX(90px);transition:opacity .7s cubic-bezier(.16,1,.3,1),transform .7s cubic-bezier(.16,1,.3,1),filter .8s}
+#gate.in{opacity:1;transform:translateX(0)}
+#gate.pushed{filter:brightness(.96)}
+#gate.dim{opacity:.25}
+#gate::after{content:'';position:absolute;left:0;right:0;bottom:0;height:16px;
+  background:repeating-linear-gradient(-45deg,var(--ink) 0 12px,var(--card) 12px 24px)}
+#gate .lintel{position:absolute;left:-1.5px;right:-1.5px;top:-1.5px;height:56px;background:var(--ink);
+  border-radius:11px 11px 0 0;display:flex;align-items:center;padding:0 22px;gap:12px;
+  font:600 17px 'IBM Plex Mono';letter-spacing:.06em;color:var(--darkink);
+  transform:translateY(-130%);opacity:0;transition:transform .5s cubic-bezier(.2,1.3,.4,1),opacity .4s}
+#gate .lintel.in{transform:translateY(0);opacity:1}
+#gate .lintel i{width:11px;height:11px;border-radius:50%;background:var(--accent);flex:none}
+#gate .rows{position:absolute;left:20px;top:92px;width:550px;display:flex;flex-direction:column;gap:12px}
+.irow{display:flex;align-items:center;gap:14px;background:#F4F3EF;border:1px solid var(--grid);border-radius:10px;
+  padding:14px 16px;opacity:0;transform:translateX(-40px);transition:all .45s cubic-bezier(.2,1.4,.4,1);position:relative}
+.irow.in{opacity:1;transform:translateX(0)}
+.irow .ico{width:20px;height:20px;flex:none;border-radius:50%;border:1.6px solid var(--muted);position:relative}
+.irow .ico::after{content:'';position:absolute;left:4px;top:4px;width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.irow .it{font:500 18px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em}
+.irow .bars{flex:1;display:flex;flex-direction:column;gap:7px}
+.irow .bars i{display:block;height:8px;border-radius:4px;background:#E3E2DC}
+.irow .bars i:last-child{width:62%}
+.irow .ib{margin-left:auto;font:600 11px 'IBM Plex Mono';color:var(--muted);
+  border:1px solid var(--grid);border-radius:999px;padding:2px 9px;letter-spacing:.06em}
+.irow .want{position:absolute;right:-10px;top:-10px;background:var(--ink);color:var(--paper);font:700 13px 'Noto Sans SC';
+  border-radius:3px;padding:4px 12px;letter-spacing:.06em;
+  opacity:0;transform:scale(.3) rotate(8deg);transition:all .4s cubic-bezier(.2,1.6,.4,1)}
+.irow .want.in{opacity:1;transform:scale(1) rotate(-3deg)}
+#gate .seam{position:absolute;left:50%;top:70px;width:2px;height:600px;margin-left:-1px;
+  background:var(--grid);opacity:0;transition:opacity .5s}
+#gate .handle{position:absolute;top:400px;width:10px;height:110px;border-radius:5px;
+  background:var(--ink);opacity:0;transform:scaleY(0);transition:all .5s cubic-bezier(.2,1.4,.4,1)}
+#gate .handle.h1{left:270px}
+#gate .handle.h2{left:290px}
+#closedSign{position:absolute;left:1300px;top:556px;z-index:19;opacity:0;transform-origin:50% 0;
+  transform:rotate(-14deg) translateY(-44px) scale(1.5);
+  transition:opacity .3s,transform .5s cubic-bezier(.2,1.5,.4,1)}
+#closedSign.in{opacity:1;transform:rotate(2deg) translateY(0) scale(1)}
+#closedSign .rope{width:2px;height:46px;margin:0 auto;background:var(--muted)}
+#closedSign .board{background:var(--card);border:2px solid var(--ink);border-radius:8px;padding:12px 28px;text-align:center;
+  transform:rotate(-1deg);position:relative}
+#closedSign .board::before{content:'';position:absolute;left:0;top:0;width:100%;height:5px;background:var(--accent)}
+#closedSign .b1{font:800 40px 'Inter';color:var(--ink);letter-spacing:.06em;line-height:1}
+#closedSign .b2{font:700 18px 'Noto Sans SC';color:var(--accent);letter-spacing:.14em;margin-top:2px}
+#floorGlow{position:absolute;left:1150px;top:726px;width:590px;height:3px;
+  background:var(--accent);opacity:0;transition:opacity .8s;z-index:12}
+#floorGlow.on{opacity:1}
+
+/* ── 环境报错弹窗群（抽象对话框 · 灰阶） ── */
+.err{position:absolute;width:210px;background:var(--card);border:1px solid var(--ink);border-radius:10px;z-index:14;
+  opacity:0;transform:scale(.4);transition:all .4s cubic-bezier(.2,1.5,.4,1)}
+.err.in{opacity:1;transform:scale(1)}
+.err.dim{opacity:.22}
+.err .eh{height:30px;background:#F4F3EF;border-bottom:1px solid var(--grid);display:flex;align-items:center;padding:0 12px}
+.err .eh .x{margin-left:auto;color:var(--muted);font-size:14px;line-height:1;font-family:'IBM Plex Mono'}
+.err .eb{display:flex;align-items:center;gap:12px;padding:14px}
+.err .eb .bars{flex:1;display:flex;flex-direction:column;gap:7px}
+.err .eb .bars i{display:block;height:8px;border-radius:4px;background:#E3E2DC}
+.err .eb .bars i:last-child{width:58%}
+.err .eb svg path,.err .eb svg line,.err .eb svg circle{stroke:var(--muted);fill:none}
+.err .eb svg circle[fill]{fill:var(--muted)}
+.err.jit{animation:jit 1.6s steps(2) infinite}
+@keyframes jit{50%{transform:scale(1) translate(1px,-1px)}}
+#e1{left:24px;top:30px;rotate:-5deg}
+#e2{left:256px;top:24px;rotate:4deg}
+#e3{left:24px;top:152px;rotate:3deg}
+#e4{left:256px;top:146px;rotate:-4deg}
+#e5{left:24px;top:274px;rotate:2deg}
+
+/* ── 冲击环与尘粒（tws 驱动 · 扁平墨色） ── */
+.fxring{position:absolute;width:120px;height:120px;border-radius:50%;border:2px solid var(--ink);z-index:13;pointer-events:none;
+  transform:translate(-50%,-50%) scale(.2);opacity:0}
+.fxdust{position:absolute;width:10px;height:10px;background:var(--ink);z-index:13;pointer-events:none;opacity:0}
+
+/* ── 终幕：结论巨字（唯一强调橙主角） ── */
+#final{position:absolute;left:764px;top:330px;transform:translate(-50%,-130%);opacity:0;text-align:center;z-index:25;
+  transition:transform .6s cubic-bezier(.2,1.35,.4,1),opacity .35s}
+#final.in{transform:translate(-50%,-50%);opacity:1}
+#final .f1{font:600 30px 'Noto Sans SC';color:var(--muted);letter-spacing:.14em}
+#final .f2{font:900 96px/1.14 'Inter','Noto Sans SC';color:var(--accent);letter-spacing:.02em}
+#final .brush{width:520px;height:8px;margin:14px auto 0;display:block}
+#final .brush path{stroke:var(--ink);stroke-width:4;stroke-linecap:round;stroke-dasharray:600;stroke-dashoffset:600;transition:stroke-dashoffset .9s ease .3s;fill:none}
+#final.in .brush path{stroke-dashoffset:0}
+
+/* ── 大肥鱼反应层 ── */
+.fish{position:absolute;width:280px;z-index:35;opacity:0;transform:translateY(30px) scale(.6);
+  transition:all .45s cubic-bezier(.34,1.6,.64,1);pointer-events:none}
+.fish.show{opacity:1;transform:translateY(0) scale(1)}
+.fish img{width:100%;display:block}
+.fish .say{position:absolute;width:236px;background:var(--card);border:1.5px solid var(--ink);border-radius:12px;padding:13px 17px;
+  font:700 22px 'Noto Sans SC';color:var(--ink);line-height:1.42;opacity:0;transform:scale(.6);
+  transition:all .4s cubic-bezier(.34,1.6,.64,1) .18s}
+.fish.show .say{opacity:1;transform:scale(1)}
+.fish .say b{color:var(--accent)}
+#fish1{left:70px;top:690px}
+#fish1 .say{left:256px;top:96px}
+#fish1 .say::after{content:'';position:absolute;left:-9px;top:60px;width:14px;height:14px;background:var(--card);border-left:1.5px solid var(--ink);border-bottom:1.5px solid var(--ink);transform:rotate(45deg)}
+#fish2{left:70px;top:330px}
+#fish2 .say{left:238px;top:10px}
+#fish2 .say::after{content:'';position:absolute;left:-9px;top:60px;width:14px;height:14px;background:var(--card);border-left:1.5px solid var(--ink);border-bottom:1.5px solid var(--ink);transform:rotate(45deg)}
+
+/* ===== [不动] 底盘区：黑边 / 暗场 / 角注 / HUD ===== */
+#lbT,#lbB{position:absolute;left:0;right:0;height:0;background:var(--ink);z-index:40;transition:height .9s cubic-bezier(.7,0,.3,1)}
+#lbT{top:0}#lbB{bottom:0}
+#stage.letter #lbT,#stage.letter #lbB{height:74px}
+#dim{position:absolute;inset:0;background:rgba(28,28,26,.16);opacity:0;transition:opacity 1s;z-index:30;pointer-events:none}
+#dim.on{opacity:1}
+
+.corner{position:absolute;font:500 14px 'IBM Plex Mono','Noto Sans SC';color:var(--muted);letter-spacing:.08em;z-index:9}
+#chap{left:52px;bottom:34px}
+#src{right:52px;bottom:34px}
+
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono';pointer-events:none}
+#track{height:5px;background:rgba(255,255,255,.1)}
+#bar{height:100%;width:0;background:var(--accent)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(28,28,26,.94);color:#C6C5BF}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #555;color:#ccc;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(255,255,255,.12)}
+#replay.done{border-color:var(--accent);color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <div id="cam">
+  <div id="world">
+    <!-- 标题 -->
+    <div id="title">
+      <span class="no">00 / 门槛 · SHOT 0-2</span>
+      <h1>真心想学，却被拦在门外</h1>
+    </div>
+
+    <!-- ===== 主视觉：拜访循环图 ===== -->
+    <div id="scene">
+      <svg id="rgsvg" viewBox="0 0 1800 756">
+        <g id="rgp">
+          <path class="bed" d="M140 620 C500 620 600 300 1160 300"/>
+          <path id="rD" class="lnD" d="M140 620 C500 620 600 300 1160 300"/>
+          <path id="rL" class="ln" d="M140 620 C500 620 600 300 1160 300"/>
+          <circle class="nring" cx="140" cy="620" r="48"/>
+          <circle class="nring" cx="1152" cy="300" r="56"/>
+          <g id="pts"></g>
+        </g>
+        <g id="loopG">
+          <path class="loop a-dashed" d="M1148 348 C880 720 400 744 170 662"/>
+          <polygon points="0,0 -28,-14 -28,14" fill="#1C1C1A" transform="translate(166,658) rotate(160)"/>
+          <g id="loopDots"></g>
+        </g>
+        <!-- diagram-design 发丝引线注释：门槛标签 → 门体落点 -->
+        <g id="ld1" class="ldr">
+          <path class="hair" d="M688 84 C668 140 656 190 653 234"/>
+          <circle class="hairdot" cx="653" cy="237" r="2.6"/>
+        </g>
+        <g id="ld2" class="ldr">
+          <path class="hair" d="M1005 74 C1010 100 1012 124 1013 145"/>
+          <circle class="hairdot" cx="1013" cy="148" r="2.6"/>
+        </g>
+      </svg>
+
+      <div id="ribbon">他 们 都 想 学</div>
+      <div id="crowd"></div>
+
+      <!-- AI 人设 -->
+      <div id="ai">
+        <div class="halo"></div>
+        <svg viewBox="0 0 112 126" width="112" height="126">
+          <line x1="56" y1="18" x2="56" y2="7" stroke="#1C1C1A" stroke-width="3"/>
+          <circle cx="56" cy="6" r="5" fill="#F5572F"/>
+          <rect x="26" y="18" width="60" height="44" rx="14" fill="#F0EFEB" stroke="#1C1C1A" stroke-width="3"/>
+          <circle cx="44" cy="40" r="5.5" fill="#1C1C1A"/>
+          <circle cx="68" cy="40" r="5.5" fill="#1C1C1A"/>
+          <rect x="30" y="68" width="52" height="34" rx="12" fill="#F0EFEB" stroke="#1C1C1A" stroke-width="3"/>
+          <rect x="12" y="72" width="16" height="10" rx="5" fill="#1C1C1A"/>
+          <rect x="84" y="72" width="16" height="10" rx="5" fill="#1C1C1A"/>
+          <rect x="40" y="102" width="12" height="18" rx="6" fill="#1C1C1A"/>
+          <rect x="60" y="102" width="12" height="18" rx="6" fill="#1C1C1A"/>
+        </svg>
+      </div>
+
+      <!-- 门槛 ×2 -->
+      <div class="bar" id="bar1"><div class="hatch"></div><div class="tag">第一道门槛</div></div>
+      <div class="bar" id="bar2"><div class="hatch"></div><div class="tag">第二道门槛</div></div>
+
+      <!-- 入门要求核对板 -->
+      <div id="check">
+        <div class="ct" id="stamp">教程默认你已会</div>
+        <div class="row" id="ck1"><span class="box"><svg viewBox="0 0 24 24"><path d="M4 13 L10 19 L20 6"/></svg></span><span class="mono">命令行</span></div>
+        <div class="row" id="ck2"><span class="box"><svg viewBox="0 0 24 24"><path d="M4 13 L10 19 L20 6"/></svg></span><span class="mono">git</span></div>
+      </div>
+
+      <!-- GitHub 项目大门（门脸 = Issue 区） -->
+      <div id="gate">
+        <div class="lintel" id="lintel"><i></i>GitHub · 项目大门</div>
+        <div class="rows" id="rows">
+          <div class="irow"><span class="ico"></span><span class="it">装了一下午，跑不起来</span><span class="ib">OPEN</span><span class="want">想学</span></div>
+          <div class="irow"><span class="ico"></span><span class="it">安装这一步卡住了</span><span class="ib">OPEN</span><span class="want">想学</span></div>
+          <div class="irow"><span class="ico"></span><span class="it">一运行就报错</span><span class="ib">OPEN</span><span class="want">想学</span></div>
+          <div class="irow"><span class="ico"></span><span class="bars"><i></i><i></i></span><span class="ib">OPEN</span><span class="want">想学</span></div>
+          <div class="irow"><span class="ico"></span><span class="bars"><i></i></span><span class="ib">OPEN</span><span class="want">想学</span></div>
+        </div>
+        <div class="seam" id="seam"></div>
+        <div class="handle h1" id="hdl1"></div>
+        <div class="handle h2" id="hdl2"></div>
+      </div>
+      <div id="closedSign"><div class="rope"></div><div class="board"><div class="b1">CLOSED</div><div class="b2">暂未开放</div></div></div>
+      <div id="floorGlow"></div>
+
+      <!-- 环境报错弹窗群（抽象） -->
+      <div class="err" id="e1"><div class="eh"><span class="x">✕</span></div><div class="eb"><svg width="26" height="26" viewBox="0 0 24 24"><path d="M12 2 L23 21 H1 Z" stroke-width="2.2" stroke-linejoin="round"/><line x1="12" y1="9" x2="12" y2="14.5" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="17.8" r="1.4" fill="#8F8E88"/></svg><span class="bars"><i></i><i></i></span></div></div>
+      <div class="err" id="e2"><div class="eh"><span class="x">✕</span></div><div class="eb"><svg width="26" height="26" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2.2"/><line x1="8" y1="8" x2="16" y2="16" stroke-width="2.4" stroke-linecap="round"/><line x1="16" y1="8" x2="8" y2="16" stroke-width="2.4" stroke-linecap="round"/></svg><span class="bars"><i></i><i></i></span></div></div>
+      <div class="err" id="e3"><div class="eh"><span class="x">✕</span></div><div class="eb"><svg width="26" height="26" viewBox="0 0 24 24"><path d="M12 2 L23 21 H1 Z" stroke-width="2.2" stroke-linejoin="round"/><line x1="12" y1="9" x2="12" y2="14.5" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="17.8" r="1.4" fill="#8F8E88"/></svg><span class="bars"><i></i><i></i></span></div></div>
+      <div class="err" id="e4"><div class="eh"><span class="x">✕</span></div><div class="eb"><svg width="26" height="26" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2.2"/><line x1="8" y1="8" x2="16" y2="16" stroke-width="2.4" stroke-linecap="round"/><line x1="16" y1="8" x2="8" y2="16" stroke-width="2.4" stroke-linecap="round"/></svg><span class="bars"><i></i><i></i></span></div></div>
+      <div class="err" id="e5"><div class="eh"><span class="x">✕</span></div><div class="eb"><svg width="26" height="26" viewBox="0 0 24 24"><path d="M12 2 L23 21 H1 Z" stroke-width="2.2" stroke-linejoin="round"/><line x1="12" y1="9" x2="12" y2="14.5" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="17.8" r="1.4" fill="#8F8E88"/></svg><span class="bars"><i></i><i></i></span></div></div>
+
+      <!-- 终幕结论 -->
+      <div id="final">
+        <div class="f1">大部分人，</div>
+        <div class="f2">被挡在门外</div>
+        <svg class="brush" viewBox="0 0 520 8"><path d="M4 4 H516"/></svg>
+      </div>
+    </div>
+
+    <!-- 大肥鱼 -->
+    <div class="fish" id="fish1">
+      <div class="say">又双叒<b>报错</b>？！</div>
+      <img src="Shark-GIF/041_趴键盘愤怒符号抓狂打字.gif" alt="大肥鱼">
+    </div>
+    <div class="fish" id="fish2">
+      <div class="say">让我<b>进去学</b>…</div>
+      <img src="Shark-GIF/130_关在笼中泪眼汪汪委屈可怜求助.gif" alt="大肥鱼">
+    </div>
+  </div>
+  </div>
+
+  <div id="dim"></div>
+  <div id="lbT"></div><div id="lbB"></div>
+
+  <div class="corner" id="chap">00 / 开场 · 学习门槛</div>
+  <div class="corner" id="src">VulnClaw Issues · 评论区（示意） · 2026-09</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-2 · 被挡在门外 · 16s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=16000;
+const $=s=>document.querySelector(s);
+const $$=s=>document.querySelectorAll(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function fly(el,x1,y1,x2,y2,dur,arc,ease,done){tws.push({t:performance.now()-t0,d:dur,e:ease||eio,done,f:p=>{el.style.left=(x1+(x2-x1)*p)+'px';el.style.top=(y1+(y2-y1)*p-Math.sin(p*Math.PI)*(arc||0))+'px'}})}
+function cnt(el,from,to,dur){tws.push({t:performance.now()-t0,d:dur,e:eo,f:p=>{el.textContent=Math.round(from+(to-from)*p).toLocaleString('en-US')}})}
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+
+/* ── 主视觉几何：道路三次贝塞尔 ── */
+const RD=[[140,620],[500,620],[600,300],[1160,300]],SX=56,SY=172;
+const QAMODE=/t=\d+/.test(location.hash||''); /* QA 冻结帧只看落点，不看行进过程 */
+function bez(t){const u=1-t,p=RD;
+  return [u*u*u*p[0][0]+3*u*u*t*p[1][0]+3*u*t*t*p[2][0]+t*t*t*p[3][0],
+          u*u*u*p[0][1]+3*u*u*t*p[1][1]+3*u*t*t*p[2][1]+t*t*t*p[3][1]];}
+let AI_END=null; /* QA 冻结帧：只保留最后一段位移的落点 */
+function walkAI(a,b,dur,ease){AI_END=bez(b);tws.push({t:performance.now()-t0,d:dur,e:ease||eio,
+  f:p=>{const c=QAMODE?AI_END:bez(a+(b-a)*p);const el=$('#ai');el.style.left=(c[0]-56)+'px';el.style.top=(c[1]-126)+'px';}});}
+
+/* ── 道路入场 + 路径流动粒子 ── */
+function roadIn(){
+  $('#rgp').classList.add('on');
+  const L=$('#rL').getTotalLength();
+  $('#rL').style.strokeDasharray=L;$('#rL').style.strokeDashoffset=L;
+  tws.push({t:performance.now()-t0,d:1500,e:eo,f:p=>{$('#rL').style.strokeDashoffset=L*(1-p)}});
+}
+(function(){
+  const g=$('#pts'),dots=[];
+  for(let i=0;i<7;i++){
+    const c=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    c.setAttribute('r',i%3===0?5.4:3.6);c.setAttribute('class',i%3===0?'pt':'pt2');g.appendChild(c);
+    dots.push({el:c,off:i/7});
+  }
+  tws.push({t:0,d:1e9,f:function(){
+    const T=(performance.now()-t0)/11000;
+    for(const d of dots){const q=(d.off+T)%1,p=bez(q);d.el.setAttribute('cx',p[0]);d.el.setAttribute('cy',p[1]);}
+  }});
+})();
+
+/* ── archify · 回流线粒子：沿回环路径由「大门」流向「起点」 ── */
+(function(){
+  const lp=document.querySelector('#loopG .loop'),g=$('#loopDots');
+  if(!lp||!g)return;
+  const L=lp.getTotalLength(),dots=[];
+  for(let i=0;i<5;i++){
+    const c=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    c.setAttribute('r',i%2===0?5.2:3.2);c.setAttribute('class',i%2===0?'lpdot':'lpdot2');g.appendChild(c);
+    dots.push({el:c,off:i/5});
+  }
+  tws.push({t:0,d:1e9,f:function(){
+    const T=(performance.now()-t0)/9000;
+    for(const d of dots){const q=(d.off+T)%1,p=lp.getPointAtLength(q*L);d.el.setAttribute('cx',p.x);d.el.setAttribute('cy',p.y);}
+  }});
+})();
+
+/* ── 人群生成（灰阶抽象指示符号） ── */
+(function(){
+  const c=$('#crowd');
+  const fills=['#B0AFA9','#C6C5BF','#8F8E88','#B0AFA9','#1C1C1A','#C6C5BF','#B0AFA9','#8F8E88','#1C1C1A','#C6C5BF'];
+  for(let i=0;i<10;i++){
+    const p=document.createElement('div');p.className='person';
+    const h=74+((i*29)%30);
+    p.style.left=(i*62+((i*37)%18))+'px';
+    p.innerHTML=`<svg width="${h*0.42}" height="${h}" viewBox="0 0 40 76"><circle cx="20" cy="11" r="9.5" fill="${fills[i]}"/><rect x="8.5" y="23" width="23" height="40" rx="11" fill="${fills[i]}"/><rect x="12" y="60" width="6.5" height="16" rx="3" fill="${fills[i]}"/><rect x="21.5" y="60" width="6.5" height="16" rx="3" fill="${fills[i]}"/></svg>`;
+    p.querySelector('svg').style.animationDelay=(i*0.23)+'s';
+    c.appendChild(p);
+  }
+})();
+
+/* ── 回弹爆点（冲击环 + 6 尘粒） ── */
+function boomS(x,y){
+  const w=$('#world');
+  const r=document.createElement('div');r.className='fxring';r.style.left=x+'px';r.style.top=y+'px';w.appendChild(r);
+  tws.push({t:performance.now()-t0,d:700,e:eo,done:()=>r.remove(),
+    f:p=>{const q=QAMODE?.32:p;r.style.transform='translate(-50%,-50%) scale('+(.2+q*2.5)+')';r.style.opacity=String((1-q)*.9)}});
+  for(let i=1;i<=6;i++){
+    const d=document.createElement('div');d.className='fxdust';
+    const ang=(i/6)*Math.PI*2+.4,dx=Math.cos(ang)*(90+i*22),dy=Math.sin(ang)*60-70-i*14;
+    d.style.left=x+'px';d.style.top=y+'px';w.appendChild(d);
+    tws.push({t:performance.now()-t0,d:800,e:eo,done:()=>d.remove(),
+      f:p=>{const q=QAMODE?.32:p;d.style.transform='translate('+(dx*q)+'px,'+(dy*q)+'px) rotate('+(200*q)+'deg)';d.style.opacity=String(1-q)}});
+  }
+}
+function quake(){const w=$('#world');w.classList.remove('quake');void w.offsetWidth;w.classList.add('quake');}
+
+/* ================================================================
+   本镜头叙事 cue（0:33–0:49，16s，8 句口播）—— 主视觉：拜访循环图
+   ================================================================ */
+/* 幕一 · 出发：AI 走向 GitHub 项目大门 */
+on(300,()=>camTo(0,0,1,2.2));                                        // 起手拉出全景
+on(400,()=>$('#title').classList.add('show'));
+on(500,()=>{                                                         // 0:33「翻了翻VulnClaw的issue区和评论区」
+  $('#gate').classList.add('in');$('#ai').classList.add('in');
+  roadIn();__sfx.pop(.6);
+});
+for(let i=0;i<5;i++)on(900+i*270,()=>{$$('#rows .irow')[i].classList.add('in');__sfx.pop(.55)}); // issue 卡片瀑布
+on(3000,()=>{$('#ribbon').classList.add('in');__sfx.ding(.5)});      // 0:36「很多小伙伴是真心想学」
+for(let i=0;i<5;i++)on(3350+i*160,()=>{$$('#rows .want')[i].classList.add('in');__sfx.pop(.4)}); // 「想学」盖章
+
+/* 幕二 · 第一道门槛：门槛砸落 + 弹回 */
+on(4900,()=>{camFocus(700,560,1.16,.75);walkAI(.05,.57,1750,0)});    // 推向墙①
+on(5050,()=>{                                                        // 0:38「但是却被拦在第一步」
+  $('#bar1').classList.add('in');$('#gate').classList.add('pushed');
+  walkAI(.57,.30,900,0);
+  __sfx.thud(1);quake();boomS(716,600);
+});
+const errIn=[[6800,'#e1'],[7250,'#e2'],[7700,'#e3'],[8150,'#e4'],[8600,'#e5']];
+errIn.forEach(([t,id])=>on(t,()=>{$(id).classList.add('in');$(id).classList.add('jit');__sfx.pop(.6);__sfx.type(.35)})); // 0:40「卡在各种各样的环境报错」
+on(7600,()=>$('#fish1').classList.add('show'));                      // 大肥鱼中段快闪：抓狂吐槽
+on(9550,()=>$('#fish1').classList.remove('show'));
+
+/* 幕三 · 第二道门槛：默认你已会 */
+on(9900,()=>{camFocus(1080,500,1.15,.7);walkAI(.30,.88,1150,0)});    // 平移到墙②
+on(10050,()=>{                                                       // 0:43「市面上的教程又默认你已经会命令行」
+  $('#bar2').classList.add('in');$('#check').classList.add('in');
+  walkAI(.88,.52,900,0);
+  __sfx.thud(1);quake();boomS(1066,480);
+});
+on(10900,()=>{$('#stamp').classList.add('stampIn');__sfx.thud(.7)}); // 「默认你已会」印章
+on(12150,()=>{$('#ck1').classList.add('tick');__sfx.type(.7)});      // ✓ 命令行
+on(12950,()=>{$('#ck2').classList.add('tick');__sfx.type(.7)});      // 0:46「听说过git」✓ git
+on(13150,()=>__sfx.ding(.8));
+
+/* 幕四 · 大门关闭 + 循环回环 + 收束 */
+on(13550,()=>camTo(0,0,1,1.15));                                     // 0:48 急速拉远看全貌
+on(13650,()=>{$('#dim').classList.add('on');$('#loopG').classList.add('on')}); // 回环路径补上
+on(13750,()=>{walkAI(.52,.96,1500,0);$('#lintel').classList.add('in');__sfx.thud(.8)}); // 门楣合拢 + AI 走向大门
+on(13900,()=>{$('#seam').style.opacity=1;$('#hdl1').style.opacity=1;$('#hdl2').style.opacity=1;
+  $('#hdl1').style.transform='scaleY(1)';$('#hdl2').style.transform='scaleY(1)';__sfx.pop(.5)});
+on(14050,()=>{$('#closedSign').classList.add('in');__sfx.pop(.7)});  // CLOSED 挂牌荡下
+on(14100,()=>$('#floorGlow').classList.add('on'));
+on(14160,()=>{const s=$('#closedSign');                                     // 挂牌余摆（节拍内摆动）
+  tws.push({t:performance.now()-t0,d:1100,e:eo,f:p=>{s.style.transform='rotate('+(2+Math.sin(p*Math.PI*4)*(1-p)*6)+'deg) scale(1)'}});});
+on(14200,()=>{                                                       // 0:48「大部分人就被挡在门外」
+  camTo(0,0,1,.75);$('#final').classList.add('in');
+  walkAI(.96,.30,900,0);
+  __sfx.thud(1);quake();boomS(1176,472);                              // 第三次回弹（大门左沿爆点）
+});
+on(14200,()=>{$('#bar1').classList.add('dim');$('#bar2').classList.add('dim');$('#gate').classList.add('dim');
+  $('#ribbon').classList.add('dim');$('#check').classList.add('dim')});
+on(14450,()=>__sfx.ding(.9));
+on(14480,()=>{['#e1','#e2','#e3','#e4','#e5'].forEach(id=>$(id).classList.add('dim'))});
+{const ps=$$('#crowd .person');for(let i=0;i<ps.length;i++)on(13850+i*90,()=>ps[i].classList.add('in'));} // 门外人群站起
+on(9600,()=>$('#fish2').classList.add('show'));                      // 大肥鱼定场：笼中泪目（接在鱼1退场后）
+
+/* ── 增补节拍：diagram-design 发丝引线与门槛同步登场 / 收尾同步变暗 ── */
+on(5150,()=>$('#ld1').classList.add('on'));
+on(10150,()=>$('#ld2').classList.add('on'));
+on(14300,()=>{$('#ld1').classList.add('dim');$('#ld2').classList.add('dim')});
+
+/* ===== [不动] QA 专用（正常播放不触发）：hash 带 t=毫秒 → 起播后跳转该时刻并冻结 ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

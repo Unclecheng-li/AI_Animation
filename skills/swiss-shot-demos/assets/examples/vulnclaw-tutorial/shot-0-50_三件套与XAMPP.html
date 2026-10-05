@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+     ◆ 镜头 50 · 三件套与 XAMPP · 22:06–22:40 · DUR 34000 ◆  【v4 瑞士国际主义】
+     主视觉：diagram-design type-layers 三层堆叠（Web服务器 / PHP / 数据库）+ 涂线流
+             · 三件套汇聚 → XAMPP 集成台（白卡 + 橙色标签=唯一主角）
+             · XAMPP 控制面板（扁平白卡 · 示意图 · 非实拍）
+     字体 Inter × Noto Sans SC × IBM Plex Mono · 纸底#F0EFEB 墨#1C1C1A 唯一橙#F5572F
+============================================================= -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 0-50 · 三件套与 XAMPP · 34s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;--accent:#F5572F;}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Noto Sans SC','Inter',sans-serif}
+body.paused *{animation-play-state:paused!important}
+/* ② 舞台：纸灰集成台 */
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#stage::before{content:'';position:absolute;inset:0;z-index:0;pointer-events:none;
+  background-image:linear-gradient(rgba(28,28,26,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.045) 1px,transparent 1px);
+  background-size:48px 48px}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ============ ③ 画面层 CSS ============ */
+/* ── 标题组（紧凑顶栏） ── */
+#head{position:absolute;left:96px;top:30px;z-index:20;opacity:0;transform:translateY(-18px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#head.in{opacity:1;transform:none}
+#head .eye{display:inline-flex;align-items:center;gap:12px;font:600 14px Inter;letter-spacing:.14em;text-transform:uppercase;color:var(--ink)}
+#head .eye .no{background:var(--ink);color:var(--paper);padding:3px 10px;border-radius:3px;font-weight:700}
+#head h1{margin-top:10px;font:900 52px/1.05 'Noto Sans SC',Inter;letter-spacing:-.02em;color:var(--ink)}
+#head h1 .hl{color:var(--ink);border-bottom:5px solid var(--ink);padding-bottom:2px}
+#head .sub{margin-top:22px;font:500 12.5px 'IBM Plex Mono';letter-spacing:.2em;color:var(--muted)}
+
+#plan{position:absolute;left:720px;top:48px;z-index:20;opacity:0;transform:translateY(10px);transition:all .45s cubic-bezier(.2,1.4,.4,1)}
+#plan.in{opacity:1;transform:none}
+#plan span{display:inline-block;font:700 20px 'Noto Sans SC';letter-spacing:.04em;color:var(--ink);
+  border:1px solid var(--ink);border-radius:8px;padding:8px 20px;background:var(--card)}
+#plan b{color:var(--ink);font-weight:900;border-bottom:4px solid var(--ink)}
+
+/* ── 主视觉：分层堆栈大板（≥55%） ── */
+#board{position:absolute;left:96px;top:160px;width:1644px;height:840px;border-radius:18px;z-index:1;
+  background:var(--card);border:1px solid var(--grid);opacity:0;transform:translateY(18px);transition:all .6s cubic-bezier(.16,1,.3,1)}
+#board.in{opacity:1;transform:none}
+
+#railbox{position:absolute;left:1420px;top:50px;z-index:20;opacity:0;transition:opacity .45s}
+#railbox.in{opacity:1}
+#railbox .rl em{font-style:normal;font:600 13px 'IBM Plex Mono';letter-spacing:.2em;
+  color:var(--paper);background:var(--ink);border-radius:8px;padding:8px 18px}
+
+/* ── type-layers：三层柱（索引铭牌 + 交替底纹 + 发丝分隔） ── */
+.cw{position:absolute;left:130px;width:1580px;height:210px;display:flex;align-items:center;gap:34px;
+  padding:0 46px;border-radius:14px;opacity:0;transform:translateY(30px) scale(.96);z-index:2;
+  transition:all .5s cubic-bezier(.2,1.35,.4,1);
+  background:var(--card);border:1px solid var(--ink)}
+.cw.in{opacity:1;transform:none}
+.cw .lid{flex:none;font:700 15px 'IBM Plex Mono';letter-spacing:.08em;color:var(--paper);
+  background:var(--ink);border-radius:6px;padding:8px 14px}
+#c3{top:178px;border-left:9px solid var(--ink)}
+#c2{top:408px;border-left:9px solid var(--muted);background:#F7F6F2}
+#c1{top:638px;border-left:9px solid var(--ink)}
+/* 左缘方向指示（堆栈之外） */
+#layerDir{position:absolute;left:104px;top:250px;height:600px;width:24px;z-index:7;display:flex;flex-direction:column;
+  align-items:center;justify-content:space-between;opacity:0;transform:translateY(10px);transition:opacity .5s ease,transform .5s ease}
+#board.in ~ #layerDir{opacity:1;transform:none}
+#railbox.off ~ #layerDir{opacity:0}
+#layerDir .ar{font-size:13px;color:var(--ink);line-height:1}
+#layerDir .tx{writing-mode:vertical-rl;font:500 12px 'IBM Plex Mono';letter-spacing:.3em;color:var(--muted);transform:translateX(-13px)}
+#layerDir .rl{position:absolute;left:11px;top:26px;bottom:26px;width:1px;background:var(--grid)}
+.cw .ic{width:104px;height:104px;flex:none;color:var(--ink)}
+.cw .ic svg{width:100%;height:100%;display:block}
+.cw .cmeta{display:flex;flex-direction:column;gap:6px}
+.cw .cn{font:900 46px 'Noto Sans SC';letter-spacing:.02em;color:var(--ink);line-height:1}
+.cw .en{font:500 14px 'IBM Plex Mono';letter-spacing:.16em;color:var(--muted)}
+.cw .dln{margin-left:auto;font:600 16px 'IBM Plex Mono';letter-spacing:.04em;color:var(--ink);
+  border:1px solid var(--ink);border-radius:999px;padding:11px 22px;background:var(--card);
+  opacity:0;transform:translateX(14px);transition:all .45s cubic-bezier(.16,1,.3,1)}
+.cw .dln.in{opacity:1;transform:none}
+
+/* 层间连接 + 粒子（物料先到，连接线后到） */
+#links{position:absolute;inset:0;pointer-events:none;z-index:3;opacity:0;transition:opacity .55s ease}
+#links.in{opacity:1}
+#links .arw{fill:none;stroke:var(--grid);stroke-width:2.4;stroke-dasharray:6 5}
+#links .ahead{fill:var(--muted)}
+#links .pdot{fill:var(--ink);opacity:.75;animation:layerDrop 2.6s linear infinite}
+#links .pdot.p2{animation-delay:.85s}#links .pdot.p3{animation-delay:1.7s}
+@keyframes layerDrop{0%{transform:translateY(0);opacity:0}12%{opacity:.85}88%{opacity:.85}100%{transform:translateY(660px);opacity:0}}
+
+/* ── 长流程条（叠加在板上） ── */
+#flow{position:absolute;left:130px;top:864px;width:1580px;height:96px;display:flex;align-items:center;gap:22px;z-index:6;
+  opacity:0;transition:opacity .5s}
+#flow.in{opacity:1}
+#flow .fl,#flow .fr{flex:none;font:600 16px 'IBM Plex Mono';letter-spacing:.04em;color:var(--muted);
+  border:1px solid var(--grid);border-radius:7px;padding:9px 17px;background:var(--card)}
+#flow .fl b,#flow .fr b{color:var(--ink)}
+#zig{flex:1;height:60px}
+#zig polyline{fill:none;stroke:var(--muted);stroke-width:2.4;stroke-dasharray:7 7;stroke-dashoffset:1500;
+  transition:stroke-dashoffset 1.3s linear,stroke .4s}
+#zig.drawn polyline{stroke-dashoffset:0}
+#zig.warn polyline{stroke:var(--ink)}
+#zig circle{fill:var(--ink);opacity:0;transition:opacity .32s}
+#zig.warn circle{opacity:1}
+#flowCap{position:absolute;left:130px;top:966px;z-index:6;opacity:0;transform:translateY(8px);transition:all .45s}
+#flowCap.in{opacity:1;transform:none}
+#flowCap span{font:700 22px 'Noto Sans SC';letter-spacing:.03em;color:var(--ink)}
+#flowCap b{color:var(--muted);transition:color .35s}
+#flowCap b.hot{color:var(--ink)}
+
+/* ── XAMPP 集成台（合体后满板 · 白卡） ── */
+#xw{position:absolute;left:96px;top:160px;width:1644px;height:840px;opacity:0;transform:scale(.9);
+  transition:all .6s cubic-bezier(.2,1.3,.4,1);z-index:4}
+#xw.in{opacity:1;transform:none}
+#xw .plate{position:absolute;inset:0;border-radius:18px;overflow:hidden;text-align:left;padding-left:110px;
+  display:flex;flex-direction:column;justify-content:center;align-items:flex-start;background:var(--card);border:1px solid var(--ink)}
+#xw .plate::before{content:'';position:absolute;inset:0;pointer-events:none;
+  background-image:linear-gradient(rgba(28,28,26,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.04) 1px,transparent 1px);
+  background-size:44px 44px}
+#xampp{position:relative;font:900 136px/1 'Inter';letter-spacing:14px;text-indent:14px;color:var(--ink);
+  transform:scale(1.7);opacity:0;transition:all .44s cubic-bezier(.2,1.5,.4,1)}
+#xampp.in{transform:scale(1);opacity:1}
+#xampp .x{color:var(--ink)}
+#xsub{position:relative;margin-top:22px;font:700 24px 'Noto Sans SC';letter-spacing:.03em;color:var(--muted)}
+#xsub b{color:var(--ink)}
+#xminis{position:relative;margin-top:24px;display:flex;gap:14px}
+#xminis i{font:600 15px 'IBM Plex Mono';font-style:normal;letter-spacing:.1em;color:var(--ink);
+  border:1px solid var(--ink);border-radius:999px;padding:7px 18px;background:var(--card)}
+#xtag{position:relative;margin-top:26px;font:900 21px 'Noto Sans SC';letter-spacing:.08em;
+  color:#fff;background:var(--accent);border-radius:8px;padding:9px 26px;opacity:0;transform:scale(.6);
+  transition:all .36s cubic-bezier(.2,1.5,.4,1)}
+#xtag.in{opacity:1;transform:scale(1)}
+
+/* ── viz：XAMPP 控制面板（扁平白卡 · 示意图） ── */
+#vizX{position:absolute;left:1040px;top:340px;width:660px;border-radius:12px;overflow:hidden;z-index:8;
+  background:var(--card);border:1px solid var(--ink);opacity:0;transform:translateX(60px) scale(.95);
+  transition:all .6s cubic-bezier(.16,1,.3,1);color:var(--ink)}
+#vizX.in{opacity:1;transform:none}
+.vx-title{display:flex;align-items:center;gap:10px;padding:12px 16px;font:600 15px 'IBM Plex Mono';
+  letter-spacing:.04em;color:var(--paper);background:var(--ink)}
+.vx-title .viz-note{position:static;margin-left:auto;font:600 10.5px 'IBM Plex Mono';color:var(--faint);letter-spacing:.06em}
+.vx-row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--grid);transition:background .4s}
+.vx-row .vx-mod{font:700 17px Inter,'Noto Sans SC';width:88px;color:var(--ink)}
+.vx-row .vx-svc{width:13px;height:13px;border-radius:2px;background:var(--faint);flex:none;transition:all .35s}
+.vx-row.run{background:#EDECE8}
+.vx-row.run .vx-svc{background:var(--ink)}
+.vx-row .vx-port{margin-left:auto;font:500 13px 'IBM Plex Mono';color:var(--muted)}
+.vx-btn{border:1px solid var(--ink);background:var(--card);border-radius:4px;padding:4px 15px;font:600 13px 'IBM Plex Mono';
+  color:var(--ink);cursor:pointer;transition:all .2s}
+.vx-btn.start{background:var(--paper)}
+.vx-btn.press{transform:scale(.92);background:var(--grid)}
+.vx-log{background:var(--ink);padding:10px 14px;font:500 13px 'IBM Plex Mono';line-height:1.7;color:var(--faint);overflow:hidden}
+.vx-log div{opacity:0;transform:translateY(6px);transition:all .3s}
+.vx-log div.in{opacity:1;transform:none}
+.vx-log .ok{color:var(--paper)}
+.vx-log .cy{color:var(--paper)}
+
+/* ── 官方引用 ── */
+#quote{position:absolute;left:130px;top:840px;width:1580px;height:112px;z-index:9;opacity:0;transform:translateY(20px);
+  transition:all .55s cubic-bezier(.16,1,.3,1)}
+#quote.in{opacity:1;transform:none}
+#quote .qbox{height:100%;border-radius:14px;border:1px solid var(--ink);background:var(--card);
+  padding:14px 28px;display:flex;align-items:center;gap:22px}
+#quote .mark{flex:none;font:900 74px/0.62 Inter,serif;color:var(--faint)}
+#quote .qt{font:700 25px 'Noto Sans SC';letter-spacing:.02em;color:var(--ink);line-height:1.4}
+#quote .qt b{color:var(--ink);transition:color .35s}
+#quote .qt b.hot{color:var(--ink);border-bottom:5px solid var(--ink);padding-bottom:2px}
+#quote .qsrc{margin-top:6px;font:500 13px 'IBM Plex Mono';letter-spacing:.1em;color:var(--muted)}
+
+/* ── 尾注 + 印章 ── */
+#foot{position:absolute;left:180px;top:748px;width:820px;z-index:9;opacity:0;transition:opacity .5s}
+#foot.in{opacity:1}
+#foot .f1{font:700 21px 'Noto Sans SC';letter-spacing:.02em;color:var(--muted)}
+#foot .f1 b{color:var(--ink)}
+#foot .f2{margin-top:12px;font:700 21px 'Noto Sans SC';letter-spacing:.02em;color:var(--muted);opacity:0;transition:opacity .45s}
+#foot .f2.in{opacity:1}
+#foot .f2 u{text-decoration:none;font:600 18px 'IBM Plex Mono';letter-spacing:.04em;color:var(--ink);
+  border:1px solid var(--ink);border-radius:6px;padding:3px 11px;background:var(--card)}
+#foot .f2 b{color:var(--ink);font-weight:900;transition:color .35s}
+#foot .f2 b.hot{color:var(--ink)}
+#stamp{position:absolute;left:1300px;top:660px;z-index:9;font:900 26px 'Noto Sans SC';letter-spacing:.3em;color:var(--paper);
+  border:3px solid var(--ink);border-radius:10px;padding:9px 20px;background:var(--ink);
+  transform:scale(2.9) rotate(-9deg);opacity:0;transition:all .38s cubic-bezier(.2,1.5,.4,1)}
+#stamp.in{transform:scale(1) rotate(-9deg);opacity:1}
+
+/* ── 大肥鱼（右侧定场） ── */
+#fish{position:absolute;left:1724px;top:640px;width:180px;z-index:35;opacity:0;transform:translateY(26px) scale(.64);
+  transition:all .45s cubic-bezier(.34,1.6,.64,1);pointer-events:none}
+#fish.in{opacity:1;transform:none}
+#fish img{width:100%;display:block}
+#fish .say{position:absolute;left:-420px;top:100px;width:400px;background:var(--card);border:1.5px solid var(--ink);
+  border-radius:14px;padding:12px 20px;font:700 22px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em;line-height:1.4;
+  opacity:0;transform:scale(.5);transition:all .34s cubic-bezier(.2,1.6,.4,1)}
+#fish.bub .say{opacity:1;transform:scale(1)}
+#fish .say b{color:var(--ink);font-weight:900}
+#fish .say::after{content:'';position:absolute;right:-14px;top:60px;border:8px solid transparent;border-left:14px solid var(--card)}
+.off{opacity:0!important}
+
+/* ── 角注 / HUD ── */
+.corner{position:absolute;font:500 15px 'Noto Sans SC';color:var(--muted);letter-spacing:.04em;z-index:41}
+#chap{left:52px;bottom:30px}
+#src{right:52px;bottom:30px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:rgba(28,28,26,.12)}
+#bar{height:100%;width:0;background:var(--ink)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(240,239,235,.94);color:var(--muted)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid var(--grid);color:var(--ink);font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(28,28,26,.06)}
+#replay.done{border-color:var(--accent);color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="cam">
+
+    <!-- 标题 -->
+    <div id="head">
+      <div class="eye"><span class="no">50</span>装环境 · SETUP</div>
+      <h1>装 <span class="hl">DVWA</span></h1>
+      <div class="sub">DVWA IS A PHP WEBSITE</div>
+    </div>
+    <div id="plan"><span>跑起来需要 <b>三样</b> 东西</span></div>
+    <div id="railbox"><div class="rl"><em>三 件 套 / THREE PIECES</em></div></div>
+
+    <!-- 主视觉：分层堆栈大板 -->
+    <div id="board"></div>
+
+    <!-- type-layers：左缘方向指示（堆栈之外） -->
+    <div id="layerDir">
+      <span class="ar">▲</span><span class="rl"></span>
+      <span class="tx">层 叠 LAYERS</span>
+      <span class="ar">▼</span>
+    </div>
+
+    <!-- 三层柱 -->
+    <div class="cw" id="c3">
+      <span class="lid">L3</span>
+      <div class="ic">
+        <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.6">
+          <ellipse cx="32" cy="16" rx="22" ry="8"/>
+          <path d="M10 16v32c0 4.4 9.8 8 22 8s22-3.6 22-8V16"/>
+          <path d="M10 32c0 4.4 9.8 8 22 8s22-3.6 22-8"/>
+        </svg>
+      </div>
+      <div class="cmeta"><div class="cn">数据库</div><div class="en">DATABASE · MySQL</div></div>
+      <span class="dln" id="dln3">↓ 官网下载 → 安装</span>
+    </div>
+    <div class="cw" id="c2">
+      <span class="lid">L2</span>
+      <div class="ic">
+        <svg viewBox="0 0 64 64" fill="none">
+          <rect x="5" y="17" width="54" height="30" rx="15" stroke="currentColor" stroke-width="2.6"/>
+          <text x="32" y="38" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="17" font-weight="700" fill="currentColor">php</text>
+        </svg>
+      </div>
+      <div class="cmeta"><div class="cn">PHP 解释器</div><div class="en">PHP INTERPRETER</div></div>
+      <span class="dln" id="dln2">↓ 官网下载 → 安装</span>
+    </div>
+    <div class="cw" id="c1">
+      <span class="lid">L1</span>
+      <div class="ic">
+        <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round">
+          <rect x="8" y="11" width="48" height="13" rx="3"/><rect x="8" y="26" width="48" height="13" rx="3"/><rect x="8" y="41" width="48" height="13" rx="3"/>
+          <circle cx="49" cy="17.5" r="2.4" fill="currentColor" stroke="none"/><circle cx="49" cy="32.5" r="2.4" fill="currentColor" stroke="none"/><circle cx="49" cy="47.5" r="2.4" fill="currentColor" stroke="none"/>
+        </svg>
+      </div>
+      <div class="cmeta"><div class="cn">Web 服务器</div><div class="en">WEB SERVER · Apache</div></div>
+      <span class="dln" id="dln1">↓ 官网下载 → 安装</span>
+    </div>
+
+    <!-- 层间连接 + 粒子 -->
+    <svg id="links" viewBox="0 0 1920 1080" preserveAspectRatio="none">
+      <line class="arw" x1="300" y1="390" x2="300" y2="399"/><polygon class="ahead" points="300,407 294,398 306,398"/>
+      <line class="arw" x1="860" y1="390" x2="860" y2="399"/><polygon class="ahead" points="860,407 854,398 866,398"/>
+      <line class="arw" x1="1420" y1="390" x2="1420" y2="399"/><polygon class="ahead" points="1420,407 1414,398 1426,398"/>
+      <line class="arw" x1="300" y1="620" x2="300" y2="629"/><polygon class="ahead" points="300,637 294,628 306,628"/>
+      <line class="arw" x1="860" y1="620" x2="860" y2="629"/><polygon class="ahead" points="860,637 854,628 866,628"/>
+      <line class="arw" x1="1420" y1="620" x2="1420" y2="629"/><polygon class="ahead" points="1420,637 1414,628 1426,628"/>
+      <circle class="pdot" cx="300" cy="190" r="5"/>
+      <circle class="pdot p2" cx="860" cy="190" r="5"/>
+      <circle class="pdot p3" cx="1420" cy="190" r="5"/>
+    </svg>
+
+    <!-- 长流程条 -->
+    <div id="flow">
+      <span class="fl">一个一个去<b>官网下载</b></span>
+      <svg id="zig" viewBox="0 0 1100 56" preserveAspectRatio="none">
+        <polyline points="0,28 86,28 122,10 158,46 194,10 230,46 266,28 366,28 402,12 438,44 474,12 510,44 546,28 646,28 682,10 718,46 754,10 790,46 826,28 926,28 962,14 998,42 1034,28 1100,28"/>
+        <circle cx="230" cy="46" r="5"/><circle cx="438" cy="44" r="5"/><circle cx="718" cy="46" r="5"/><circle cx="998" cy="42" r="5"/>
+      </svg>
+      <span class="fr">再 <b>互相配通</b></span>
+    </div>
+    <div id="flowCap"><span>流程非常长 · 中途容易出错的节点 <b id="fcB">还特别多</b></span></div>
+
+    <!-- XAMPP 集成台（合体后） -->
+    <div id="xw">
+      <div class="plate">
+        <div id="xampp"><span class="x">X</span>AMPP</div>
+        <div id="xsub">Web 服务器 + PHP + 数据库 · <b>集成环境</b></div>
+        <div id="xminis"><i>WEB</i><i>PHP</i><i>DB</i></div>
+        <div id="xtag">一次装完就能用</div>
+      </div>
+    </div>
+
+    <!-- viz：XAMPP 控制面板（示意图） -->
+    <div id="vizX">
+      <div class="vx-title">XAMPP Control Panel<span class="viz-note">示意图 · 非实拍</span></div>
+      <div class="vx-row" id="vxA"><span class="vx-mod">Apache</span><span class="vx-svc"></span>
+        <button class="vx-btn start" id="vxBtA" type="button">Start</button><button class="vx-btn" type="button">Config</button>
+        <span class="vx-port">:80</span></div>
+      <div class="vx-row" id="vxM"><span class="vx-mod">MySQL</span><span class="vx-svc"></span>
+        <button class="vx-btn start" id="vxBtM" type="button">Start</button><button class="vx-btn" type="button">Config</button>
+        <span class="vx-port">:3306</span></div>
+      <div class="vx-log" id="vxLog">
+        <div id="vxL1">Starting Apache...</div>
+        <div id="vxL2" class="ok">Apache running · 三件套之一 ✓</div>
+        <div id="vxL3">Starting MySQL...</div>
+        <div id="vxL4" class="ok">MySQL running · 三件套之二 ✓</div>
+        <div id="vxL5" class="cy">PHP loaded · 三件套齐 → 127.0.0.1/dvwa</div>
+      </div>
+    </div>
+
+    <!-- 官方引用 -->
+    <div id="quote">
+      <div class="qbox">
+        <div class="mark">&ldquo;</div>
+        <div>
+          <div class="qt">装 DVWA <b id="qB">最简单的方法</b>，就是装 <b class="hot">XAMPP</b></div>
+          <div class="qsrc">DVWA 官方文档 / OFFICIAL DOCS</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 尾注 + 印章 -->
+    <div id="foot">
+      <div class="f1">全程就在这一台 <b>Windows Server 2022 虚拟机</b> 里做</div>
+      <div class="f2" id="foot2"><u>快照</u> 装坏了也有存档 · <b id="f2b">马上能还原回去</b></div>
+    </div>
+    <div id="stamp">放 心 动 手</div>
+
+    <!-- 大肥鱼 -->
+    <div id="fish">
+      <div class="say">官方都这么说了，<b>稳了</b> ~</div>
+      <img src="Shark-GIF/006_双手身前微笑乖巧期待.gif" alt="大肥鱼">
+    </div>
+
+  </div>
+
+  <div class="corner" id="chap">07 / 十分钟立好 DVWA 靶场</div>
+  <div class="corner" id="src">来源 · DVWA 官方文档推荐 XAMPP（画面示意，非截图）</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-50 · 三件套与 XAMPP · 34s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=34000; /* ←⑤ DUR = 分镜时长 34s */
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ───────── 本页小工具 ───────── */
+/* 三件套汇聚：三层柱向中心收拢 + 缩小淡出（收敛为一件）；t 显式传入以兼容冻结 QA */
+function converge(t){
+  ['c1','c2','c3'].forEach((id,i)=>{
+    const el=document.getElementById(id);
+    el.style.transition='none';
+    const dy=[-380,0,380][i];
+    tws.push({t:t,d:700,e:eo,f:p=>{
+      el.style.transform='translate(0px,'+(dy*p).toFixed(1)+'px) scale('+(1-.8*p).toFixed(3)+')';
+      el.style.opacity=String(1-p);}});
+  });
+}
+
+/* ───────── 镜头 0-50 叙事 cue（22:06–22:40 · 34s · 20 句） ───────── */
+on(200,()=>{$('#head').classList.add('in');__sfx.whoosh(.7,.4);});                     // 22:06「好 接下来我们来看一下DVWA怎么安装」
+on(2000,()=>{$('#plan').classList.add('in');__sfx.pop(.5);});                          // 22:08「先说思路」
+on(5000,()=>{$('#board').classList.add('in');$('#railbox').classList.add('in');__sfx.pop(.45);}); // 22:11「它跑起来需要三个东西」
+on(6000,()=>{$('#c1').classList.add('in');__sfx.thud(.7);});                           // 22:12「分别是Web服务器」
+on(7000,()=>{$('#c2').classList.add('in');$('#c3').classList.add('in');__sfx.thud(.7);});// 22:13「PHP解释器和数据库」
+on(9000,()=>{$('#flow').classList.add('in');$('#zig').classList.add('drawn');$('#links').classList.add('in');
+  ['dln1','dln2','dln3'].forEach(x=>$('#'+x).classList.add('in'));__sfx.swipe(.6);});  // 22:15「这三个东西一个个去官网下载安装」（三样先到，连接线后到）
+on(11000,()=>{$('#flowCap').classList.add('in');__sfx.pop(.45);});                     // 22:17「再互相配通流程非常长」
+on(13000,()=>{$('#zig').classList.add('warn');$('#fcB').classList.add('hot');$('#links').classList.add('off');__sfx.thud(.95);}); // 22:19「中途容易出错的节点还特别多」
+on(15000,()=>{converge(15000);$('#railbox').classList.add('off');
+  $('#flow').classList.add('off');$('#flowCap').classList.add('off');__sfx.whoosh(.95,.7);}); // 22:21「所以我们换一个简单的方法」
+on(17000,()=>{$('#xw').classList.add('in');__sfx.pop(.6);});                           // 22:23「用一个自带这三样的集成环境」
+on(19000,()=>{$('#xampp').classList.add('in');camFocus(720,470,1.06,.6);__sfx.thud(1);});// 22:25「叫做XAMPP」
+on(20000,()=>{$('#xtag').classList.add('in');__sfx.pop(.5);});                         // 22:26「一次性装完就能用了」
+/* —— viz：XAMPP 面板启动（三件套汇入） —— */
+on(20200,()=>{$('#vizX').classList.add('in');camTo(0,0,1,.6);__sfx.swipe(.6);});       // 面板滑入
+on(20900,()=>{$('#vxBtA').classList.add('press');__sfx.pop(.5);});                     // 点击 Start（Apache）
+on(21200,()=>{$('#vxA').classList.add('run');$('#vxBtA').classList.remove('press');
+  $('#vxBtA').textContent='Stop';$('#vxL1').classList.add('in');$('#vxL2').classList.add('in');__sfx.ding(.45);});
+on(21800,()=>{$('#vxBtM').classList.add('press');__sfx.pop(.5);});                     // 点击 Start（MySQL）
+on(22100,()=>{$('#vxM').classList.add('run');$('#vxBtM').classList.remove('press');
+  $('#vxBtM').textContent='Stop';$('#vxL3').classList.add('in');$('#vxL4').classList.add('in');__sfx.ding(.45);});
+on(22700,()=>{$('#vxL5').classList.add('in');__sfx.ding(.55);});                       // PHP 载入 · 三件套齐
+on(22000,()=>{$('#quote').classList.add('in');__sfx.pop(.5);});                        // 22:28「DVWA的官方文档里面也说」
+on(24000,()=>{$('#qB').classList.add('hot');__sfx.ding(.55);});            // 22:30「装DVWA最简单的方法就是装XAMPP」
+on(17000,()=>{$('#fish').classList.add('in');__sfx.pop(.5);});                         // 22:31 引用落地（过渡）（鱼提前在场）
+on(25900,()=>{$('#fish').classList.add('bub');__sfx.pop(.4);});
+on(27000,()=>{$('#foot').classList.add('in');__sfx.pop(.45);});                        // 22:33「全程也就在这一台」
+on(30000,()=>{$('#foot2').classList.add('in');__sfx.pop(.45);});                       // 22:36「装坏了之后也有快照」
+on(32000,()=>{$('#f2b').classList.add('hot');__sfx.swipe(.5);});                       // 22:38「马上能还原回去」
+on(33000,()=>{$('#stamp').classList.add('in');__sfx.thud(1);});                        // 22:39「所以可以放心动手」
+
+/* ===== [不动] QA 专用（正常播放不触发）：hash 带 t=毫秒 → 起播后跳转该时刻并冻结 ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

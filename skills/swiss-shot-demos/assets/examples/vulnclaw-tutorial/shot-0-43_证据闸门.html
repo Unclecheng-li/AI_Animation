@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+     镜头 43 · 证据闸门 · 18:02–18:50 · DUR 48000  【v4 瑞士国际主义】
+     主视觉：① 幻觉还原大卡（编造 flag 巨串 + 真实页面空槽对照 + ✗✗✗✗）
+             ② archify sequence + diagram-design type-sequence：三演员 / 生命线 / ALT 片段
+                （命中 → 放行 · 未命中 → 作废）
+     字体 Inter × IBM Plex Mono × Noto Sans SC · 纸底 #F0EFEB × 墨 #1C1C1A × 唯一橙 #F5572F
+     ============================================================ -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});}
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 0-43 · 证据闸门 · 48s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;
+  --accent:#F5572F;--dark:#1C1C1A;--darkink:#F0EFEB;--darkgrid:#2E2D29;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:var(--paper);overflow:hidden;color:var(--ink);
+  font-family:'Inter','Noto Sans SC',sans-serif;-webkit-font-smoothing:antialiased}
+body.paused *{animation-play-state:paused!important}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#bg{position:absolute;inset:0;z-index:0;
+  background-image:linear-gradient(rgba(28,28,26,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.05) 1px,transparent 1px);
+  background-size:44px 44px}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+.act{position:absolute;inset:0}
+.act.hide{display:none}
+
+.kick{position:absolute;left:126px;top:96px;font:600 15px Inter,'Noto Sans SC';letter-spacing:.14em;text-transform:uppercase;color:var(--ink);
+  display:flex;gap:12px;align-items:center;opacity:0;transform:translateX(-14px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+.kick .no{background:var(--ink);color:var(--paper);padding:3px 10px;border-radius:3px;font-weight:700}
+.kick.in{opacity:1;transform:none}
+.tt{position:absolute;left:122px;font:800 66px/1.05 'Inter','Noto Sans SC';letter-spacing:-.02em;color:var(--ink);
+  opacity:0;transform:translateY(26px);transition:all .6s cubic-bezier(.16,1,.3,1)}
+.tt.in{opacity:1;transform:none}
+.tt b{font-weight:900}
+.en{position:absolute;right:126px;font:600 34px 'IBM Plex Mono';letter-spacing:.2em;color:var(--faint);text-transform:uppercase;
+  opacity:0;transition:opacity .6s ease}
+.en.in{opacity:1}
+
+/* ── 第一幕：幻觉还原大卡 ── */
+#t1{top:126px}
+#en1{top:150px}
+#chips{position:absolute;left:126px;top:204px;display:flex;gap:18px}
+#chips .chip{padding:9px 24px;border-radius:999px;border:1.5px solid var(--ink);color:var(--ink);
+  font:900 19px 'Noto Sans SC';letter-spacing:.06em;opacity:0;transform:translateY(14px) scale(.94);
+  transition:all .45s cubic-bezier(.2,1.5,.4,1)}
+#chips.in .chip{opacity:1;transform:none}
+
+#report{position:absolute;left:120px;top:288px;width:1680px;height:688px;border-radius:12px;
+  background:var(--card);border:1px solid var(--grid);opacity:0;transform:translateY(26px) scale(.99);
+  transition:all .6s cubic-bezier(.16,1,.3,1)}
+#report.in{opacity:1;transform:none}
+#report .rhead{position:absolute;left:44px;right:44px;top:26px;display:flex;align-items:baseline;justify-content:space-between}
+#report .rh1{font:600 18px 'IBM Plex Mono';letter-spacing:.18em;color:var(--ink)}
+#report .rh2{font:600 14px 'IBM Plex Mono';letter-spacing:.1em;color:var(--muted)}
+.rdiv{position:absolute;left:44px;right:44px;height:1px;background:var(--grid)}
+#rd1{top:78px}
+#rd2{top:404px}
+#statRow{position:absolute;left:44px;top:104px;display:flex;align-items:center;gap:22px;
+  opacity:0;transform:translateX(-14px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#statRow.in{opacity:1;transform:none}
+#statRow .rl{font:600 16px 'IBM Plex Mono';letter-spacing:.18em;color:var(--muted)}
+#statRow .rv{font:900 36px 'Noto Sans SC';color:var(--muted);letter-spacing:.02em;transition:all .4s ease}
+#statRow .rv b{color:var(--ink)}
+#statNote{position:absolute;left:44px;top:158px;font:700 20px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em;
+  opacity:0;transform:translateX(-10px);transition:all .5s ease}
+#statNote.in{opacity:1;transform:none}
+
+#fakeBox{position:absolute;left:44px;top:196px;width:1000px;height:150px;border-radius:10px;
+  border:2px dashed var(--accent);background:#FFF4F0;display:flex;align-items:center;padding:0 28px;
+  opacity:0;transform:translateY(14px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#fakeBox.in{opacity:1;transform:none}
+#fakeStr{font:600 60px 'IBM Plex Mono';color:var(--accent);letter-spacing:.02em;white-space:nowrap}
+#fakeTag{position:absolute;right:16px;top:-14px;font:700 13px 'Noto Sans SC';letter-spacing:.08em;color:var(--paper);
+  background:var(--ink);border-radius:3px;padding:4px 12px}
+#realBox{position:absolute;left:1076px;top:196px;width:560px;height:150px;border-radius:10px;display:flex;align-items:center;gap:20px;
+  padding:0 26px;border:2px dashed var(--grid);background:#FAFAF8;
+  opacity:0;transform:translateY(14px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#realBox.in{opacity:1;transform:none}
+#realBox .rbx{font:800 44px Inter;color:var(--ink);line-height:1}
+#realBox .rbt{font:700 24px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em;line-height:1.3}
+#realBox .rbs{font:600 12px 'IBM Plex Mono';letter-spacing:.14em;color:var(--muted);position:absolute;right:20px;bottom:10px}
+#stampA{position:absolute;left:1186px;top:60px;opacity:0;transform:rotate(-11deg) scale(2.4);
+  transition:all .42s cubic-bezier(.2,1.6,.4,1);z-index:6}
+#stampA.in{opacity:1;transform:rotate(-11deg) scale(1)}
+#stampA .sp{display:inline-block;border:2.5px solid var(--ink);border-radius:10px;padding:10px 24px 12px;background:#fff;white-space:nowrap}
+#stampA .st1{display:block;font:900 36px 'Noto Sans SC';color:var(--ink);letter-spacing:.22em;text-indent:.22em;line-height:1.1}
+#stampA .st2{display:block;font:600 12px 'IBM Plex Mono';letter-spacing:.5em;color:var(--muted);margin-top:7px;text-indent:.5em}
+#fakeNote{position:absolute;left:44px;top:366px;font:500 22px 'Noto Sans SC';color:var(--muted);letter-spacing:.02em;opacity:0;transition:opacity .5s}
+#fakeNote.in{opacity:1}
+#fakeNote b{color:var(--ink);font-weight:900}
+#submitRow{position:absolute;left:44px;top:440px;display:flex;align-items:center;gap:24px;
+  opacity:0;transform:translateY(14px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#submitRow.in{opacity:1;transform:none}
+#submitRow .rl{font:700 23px 'Noto Sans SC';color:var(--ink);letter-spacing:.04em}
+#marks{display:flex;gap:16px}
+#marks i{font:800 56px Inter;font-style:normal;line-height:1;color:var(--ink);
+  opacity:0;transform:scale(.4);transition:all .35s cubic-bezier(.2,1.7,.4,1)}
+#marks i.on{opacity:1;transform:none}
+#submitRow .rx{font:900 28px 'Noto Sans SC';color:var(--accent);letter-spacing:.06em;opacity:0;transition:opacity .45s}
+#submitRow .rx.on{opacity:1}
+#verdict{position:absolute;left:44px;top:556px;width:1592px;height:106px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;gap:26px;background:var(--dark);color:var(--paper);
+  opacity:0;transform:translateY(18px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#verdict.in{opacity:1;transform:none}
+#verdict .v1{font:900 34px 'Noto Sans SC';color:var(--paper);letter-spacing:.04em}
+#verdict .v2{font:500 24px 'Noto Sans SC';color:#8F8E88;letter-spacing:.04em}
+
+/* ── 第二幕：证据闸门（type-sequence） ── */
+#gateStage{position:absolute;left:120px;top:208px;width:1680px;height:700px;border-radius:12px;
+  background:var(--card);border:1px solid var(--grid);opacity:0;transform:translateY(22px);
+  transition:all .6s cubic-bezier(.16,1,.3,1)}
+#gateStage.in{opacity:1;transform:none}
+
+#rule1{position:absolute;left:24px;right:24px;top:18px;height:74px;border-radius:10px;display:flex;align-items:center;
+  padding:0 30px;gap:20px;background:#F4F3EF;border:1px solid var(--grid);
+  opacity:0;transform:translateY(16px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#rule1.in{opacity:1;transform:none}
+#rule1 .rk{font:600 13px 'IBM Plex Mono';letter-spacing:.18em;color:var(--paper);background:var(--ink);
+  border-radius:3px;padding:5px 12px;white-space:nowrap}
+#rule1 .rt{font:700 23px 'Noto Sans SC';color:var(--ink);letter-spacing:.01em}
+#rule1 .rt b{color:var(--ink);font-weight:900}
+
+.card{position:absolute;border-radius:10px;background:var(--card);border:1px solid var(--grid);z-index:3;opacity:0;transform:translateY(22px);
+  transition:all .55s cubic-bezier(.16,1,.3,1)}
+.card.in{opacity:1;transform:none}
+.card .hd{position:absolute;left:26px;top:20px;font:600 14px 'IBM Plex Mono';letter-spacing:.16em;color:var(--muted)}
+#inCard{left:24px;top:158px;width:500px;height:250px}
+#inBody{position:absolute;left:26px;top:58px;font:900 29px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em;
+  opacity:0;transform:translateY(12px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#inBody.in{opacity:1;transform:none}
+#inStr{margin-top:16px;font:600 23px 'IBM Plex Mono';font-weight:600;color:var(--muted);
+  letter-spacing:.02em;padding:12px 16px;border-radius:8px;border:1px dashed var(--grid);background:#FAFAF8;transition:all .45s ease}
+#inStr.hot{color:var(--accent);border-color:var(--accent);background:#FFF4F0}
+#inStrTag{margin-top:10px;font:600 13px 'Noto Sans SC';letter-spacing:.08em;color:var(--muted)}
+#voidStamp{position:absolute;right:22px;bottom:20px;opacity:0;transform:rotate(-10deg) scale(2.3);
+  transition:all .42s cubic-bezier(.2,1.6,.4,1)}
+#voidStamp.in{opacity:1;transform:rotate(-10deg) scale(1)}
+#voidStamp span{border:2.5px solid var(--ink);border-radius:8px;padding:8px 18px 10px;background:#fff;
+  font:900 28px 'Noto Sans SC';letter-spacing:.24em;color:var(--ink);display:inline-block;text-indent:.24em}
+
+/* 闸机（放大） */
+#gate{position:absolute;left:560px;top:158px;width:420px;height:250px;z-index:3;opacity:0;transform:translateY(22px);
+  overflow:hidden;border-radius:10px;transition:all .55s cubic-bezier(.16,1,.3,1)}
+#gate.in{opacity:1;transform:none}
+#gate .gf{position:absolute;left:0;right:0;top:0;bottom:0;border:1px solid var(--grid);border-radius:10px;
+  background:repeating-linear-gradient(0deg,rgba(28,28,26,.04) 0 1px,transparent 1px 26px)}
+#gate .post{position:absolute;bottom:30px;width:16px;height:130px;border-radius:4px;background:#E4E3DE;border:1px solid var(--faint)}
+#gate .pL{left:66px}
+#gate .pR{right:66px}
+#gate .arm{position:absolute;left:96px;right:96px;bottom:106px;height:13px;border-radius:3px;
+  background:var(--ink);transform-origin:0 50%;transform:rotate(0deg);transition:transform .55s cubic-bezier(.2,1.3,.4,1)}
+#gate.pass .arm{transform:rotate(-78deg);background:var(--accent)}
+#gate .beam{position:absolute;left:84px;right:84px;top:20px;bottom:150px;overflow:hidden;opacity:0;transition:opacity .4s}
+#gate.scan .beam{opacity:1}
+#gate .beam i{position:absolute;top:0;bottom:0;width:2px;background:var(--ink);animation:sweep 1.5s linear infinite}
+#gate .glbl{position:absolute;left:0;right:0;bottom:14px;text-align:center;font:600 15px 'IBM Plex Mono';letter-spacing:.16em;color:var(--muted)}
+#gate .gstate{position:absolute;left:0;right:0;bottom:52px;text-align:center;font:900 22px 'Noto Sans SC';letter-spacing:.06em;color:var(--muted);transition:color .35s}
+#gate.pass .gstate{color:var(--accent)}
+#gate.fail .gstate{color:var(--ink)}
+@keyframes sweep{0%{transform:translateX(-8px)}100%{transform:translateX(250px)}}
+
+/* 真实页面卡 */
+#pageCard{left:1040px;top:158px;width:616px;height:250px}
+.pgline{position:absolute;left:26px;right:26px;font:500 18px 'IBM Plex Mono';color:var(--muted);letter-spacing:.01em;opacity:0;transition:opacity .45s}
+.pgline.in{opacity:1}
+#pgHit{display:flex;align-items:center;left:18px;right:18px;padding:14px;border-radius:8px;font-size:19px;
+  border:1px solid var(--grid);transition:all .45s ease}
+#pgHit em{font-style:normal;color:var(--ink)}
+#pgHit.hit{border-color:var(--accent);border-width:2px;background:#FFF4F0;color:var(--ink)}
+#pgHit.miss{border-color:var(--grid);background:#FAFAF8;color:var(--muted)}
+#pgHit.miss em{color:var(--muted)}
+#pgCap{position:absolute;left:26px;bottom:8px;font:900 19px 'Noto Sans SC';letter-spacing:.04em;color:var(--muted);transition:color .35s}
+#zeroChip{position:absolute;left:26px;right:26px;top:186px;font:900 18px 'Noto Sans SC';letter-spacing:.04em;
+  color:var(--accent);opacity:0;transition:opacity .45s}
+#zeroChip.on{opacity:1}
+#zeroChip b{color:var(--ink);font-weight:900}
+#pgCap.hit{color:var(--accent)}
+#pgCap.miss{color:var(--ink)}
+
+/* 判定面板 */
+#passPanel{position:absolute;left:830px;top:556px;width:300px;height:44px;border-radius:8px;display:flex;
+  align-items:center;justify-content:center;gap:12px;background:#F4F3EF;border:1px solid var(--grid);opacity:0;transform:translateY(12px);
+  transition:all .45s ease}
+#passPanel.seen{opacity:.3;transform:none}
+#passPanel.on{opacity:1;transform:none;background:var(--dark);border-color:var(--dark)}
+#passPanel .ic{font:800 28px Inter;color:var(--ink);line-height:1}
+#passPanel.on .ic{color:var(--paper)}
+#passPanel .p1{font:900 23px 'Noto Sans SC';color:var(--ink);letter-spacing:.04em}
+#passPanel.on .p1{color:var(--paper)}
+#passPanel .p2{font:600 12px 'IBM Plex Mono';letter-spacing:.14em;color:var(--muted)}
+#passPanel.on .p2{color:#B0AFA9}
+#rejPanel{position:absolute;left:830px;top:636px;width:300px;height:44px;border-radius:8px;display:flex;
+  align-items:center;justify-content:center;gap:12px;background:#F4F3EF;border:1px solid var(--grid);opacity:0;transform:translateY(12px);
+  transition:all .45s ease}
+#rejPanel.seen{opacity:.3;transform:none}
+#rejPanel.on{opacity:1;transform:none;background:var(--accent);border-color:var(--accent)}
+#rejPanel .ic{font:800 28px Inter;color:var(--ink);line-height:1}
+#rejPanel.on .ic{color:#fff}
+#rejPanel .p1{font:900 23px 'Noto Sans SC';color:var(--ink);letter-spacing:.04em}
+#rejPanel.on .p1{color:#fff}
+#rejPanel .p2{font:600 12px 'IBM Plex Mono';letter-spacing:.14em;color:var(--muted)}
+#rejPanel.on .p2{color:#FFD9CE}
+
+/* 回环 */
+#loop{position:absolute;left:0;top:0;width:1920px;height:1080px;z-index:4;pointer-events:none;opacity:0;transition:opacity .4s}
+#loop.on{opacity:1}
+#loop path{stroke:var(--ink);stroke-width:2.5;fill:none;stroke-dasharray:10 9;opacity:.85}
+#loop.on path{animation:flow 1.1s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-38}}
+#loopLbl{position:absolute;left:176px;top:874px;font:900 19px 'Noto Sans SC';letter-spacing:.06em;color:var(--ink);
+  opacity:0;transition:opacity .45s}
+#loopLbl.on{opacity:1}
+#roundChip{position:absolute;left:1440px;top:870px;font:600 15px 'IBM Plex Mono';letter-spacing:.1em;
+  color:var(--paper);background:var(--ink);border-radius:3px;padding:7px 16px;opacity:0;transition:opacity .4s;white-space:nowrap}
+#roundChip.on{opacity:1}
+#roundChip b{font-size:18px}
+
+#foot2{position:absolute;left:120px;top:920px;width:1680px;height:96px;border-radius:10px;display:flex;
+  align-items:center;justify-content:center;gap:22px;background:var(--dark);color:var(--paper);
+  opacity:0;transform:translateY(18px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#foot2.in{opacity:1;transform:none}
+#foot2 .f1{font:900 28px 'Noto Sans SC';color:var(--paper);letter-spacing:.03em}
+#foot2 .f1 b{color:var(--accent);font-weight:900}
+#foot2 .f2{font:500 17px 'Noto Sans SC';color:#8F8E88;letter-spacing:.03em}
+
+/* 流程小箭头 */
+.fa{position:absolute;z-index:5;opacity:0;transition:opacity .45s}
+.fa.in{opacity:1}
+.fa i{display:block;width:18px;height:18px;border-top:3px solid var(--ink);border-right:3px solid var(--ink);transform:rotate(45deg)}
+.fa.back i{transform:rotate(225deg)}
+.fa.flash i{border-color:var(--accent);animation:faBlink .45s ease 3}
+@keyframes faBlink{50%{opacity:.15}}
+
+/* ── viz：逐字比对 ── */
+.cmp{display:inline-flex;flex-wrap:wrap;gap:3px;vertical-align:middle}
+.cmp b{font:600 .9em 'IBM Plex Mono';line-height:1.3;color:inherit;border:1px solid var(--grid);border-radius:4px;padding:1px 4px;background:#fff;transition:all .16s ease}
+#inStr .cmp b{font-size:15px;padding:1px 4px}
+#pgHit .cmp b{font-size:15px;padding:1px 3px}
+#inStr .cmp,#pgHit .cmp{flex-wrap:nowrap;gap:2px}
+.cmp b.ok{color:var(--paper);background:var(--ink);border-color:var(--ink)}
+.cmp b.bad{color:#fff;background:var(--accent);border-color:var(--accent);animation:cmpShake .42s}
+@keyframes cmpShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}50%{transform:translateX(3px)}75%{transform:translateX(-2px)}}
+#cmpChip{position:absolute;left:0;right:0;top:6px;text-align:center;font:600 13px 'IBM Plex Mono';letter-spacing:.1em;color:var(--ink);opacity:0;transition:opacity .35s;z-index:2}
+#cmpChip.on{opacity:1}
+#cmpChip b{color:var(--ink);font-weight:600}
+#cmpChip.bad{color:var(--accent)}
+#cmpChip.bad b{color:var(--accent)}
+#cmpX{position:absolute;left:1320px;top:808px;width:300px;text-align:center;font:900 18px 'Noto Sans SC';letter-spacing:.06em;color:var(--accent);opacity:0;transform:translateY(8px);transition:all .35s}
+#cmpX.on{opacity:1;transform:none}
+#loopDot{position:absolute;left:0;top:0;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:var(--ink);opacity:0;z-index:5;pointer-events:none}
+.viz-note{position:absolute;right:12px;bottom:7px;font:600 11px Inter;letter-spacing:.1em;color:var(--faint);text-transform:uppercase;z-index:3}
+
+/* ── type-sequence：三 actor + 生命线 + 时序消息 + ALT 片段 ── */
+.sq-actor{position:absolute;height:54px;border-radius:8px;display:flex;flex-direction:column;justify-content:center;
+  padding:0 18px;background:#fff;border:1px solid var(--ink);z-index:3;opacity:0;transform:translateY(-10px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+.sq-actor.in{opacity:1;transform:none}
+#gateStage.in .sq-actor{opacity:1;transform:none}
+.sq-actor .an{font:900 20px 'Noto Sans SC';color:var(--ink);letter-spacing:.03em}
+.sq-actor .ae{font:600 10px 'IBM Plex Mono';letter-spacing:.14em;color:var(--muted);margin-top:2px}
+#sqB{border-width:2px}
+#sqLife{position:absolute;left:0;top:0;width:1680px;height:700px;z-index:1;pointer-events:none;opacity:0;transition:opacity .6s}
+#gateStage.in #sqLife{opacity:1}
+#sqLife .ll{stroke:rgba(28,28,26,.22);stroke-width:1;stroke-dasharray:3 3}
+#sqLife .sqact{fill:rgba(28,28,26,.07);stroke:rgba(28,28,26,.35);stroke-width:.8}
+#sqLife .msg{stroke:var(--ink);stroke-width:1.6;fill:none;opacity:.85}
+#sqLife .msg.ret{stroke:var(--muted);stroke-dasharray:5 4}
+#sqLife .msg.coral{stroke:var(--accent);stroke-width:2.2;opacity:1}
+#sqLife .mh{fill:var(--ink)}
+#sqLife .mh.coral{fill:var(--accent)}
+#sqLife .ml{font:600 13px 'IBM Plex Mono';letter-spacing:.02em;fill:var(--ink)}
+#sqLife .ml.dim{fill:var(--muted)}
+#sqLife .ml.coral{fill:var(--accent)}
+#sqLife .frm{fill:rgba(28,28,26,.02);stroke:rgba(28,28,26,.28);stroke-width:1}
+#sqLife .ftab{fill:var(--ink);stroke:var(--ink);stroke-width:1}
+#sqLife .fopt{font:600 10px 'IBM Plex Mono';letter-spacing:.12em;fill:var(--paper);text-anchor:middle}
+#sqLife .grd{font:600 11px 'IBM Plex Mono';letter-spacing:.04em;fill:var(--muted)}
+#sqLife .grd.coral{fill:var(--accent)}
+#sqLife .dv{stroke:rgba(28,28,26,.25);stroke-width:1;stroke-dasharray:4 3}
+#sqLife .fade{opacity:0;transition:opacity .5s ease;transition-delay:calc(var(--i,0)*.1s)}
+#gateStage.in .fade{opacity:1}
+
+/* ── 大肥鱼 ── */
+.fish{position:absolute;width:290px;z-index:35;opacity:0;transform:translateY(30px) scale(.6);
+  transition:all .45s cubic-bezier(.34,1.6,.64,1);pointer-events:none}
+.fish.show{opacity:1;transform:none}
+.fish img{width:100%;display:block}
+.fish .say{position:absolute;width:280px;background:#fff;border:1.5px solid var(--ink);border-radius:10px;padding:12px 16px;
+  font:900 23px 'Noto Sans SC';color:var(--ink);line-height:1.45;opacity:0;transform:scale(.6);
+  transition:all .4s cubic-bezier(.34,1.6,.64,1) .18s}
+.fish.show .say{opacity:1;transform:scale(1)}
+.fish .say b{font-weight:900}
+#fishA{left:36px;top:560px}
+#fishA .say{left:6px;top:-104px}
+#fishA .say::after{content:'';position:absolute;left:74px;bottom:-18px;border:9px solid transparent;border-top:11px solid #fff}
+
+/* 角注 / HUD */
+.corner{position:absolute;font:600 15px Inter,'Noto Sans SC';letter-spacing:.1em;color:var(--faint);z-index:41}
+#chap{left:88px;bottom:30px}
+#src{right:88px;bottom:30px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:rgba(28,28,26,.1)}
+#bar{height:100%;width:0;background:var(--accent)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:var(--ink);color:var(--paper)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #556;color:#ccc;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(245,87,47,.18)}
+#replay.done{border-color:var(--accent);color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="bg"></div>
+  <div id="cam">
+    <!-- 第一幕：幻觉 -->
+    <div class="act" id="actA">
+      <div class="kick" id="k1"><span class="no">SECTION 01</span><span>幻觉</span></div>
+      <div class="tt" id="t1">它会<b>一本正经地编造</b></div>
+      <div class="en" id="en1">Hallucination</div>
+      <div id="chips"><span class="chip">胡扯</span><span class="chip">无中生有</span></div>
+
+      <div id="report">
+        <div class="rhead"><span class="rh1">CTF · 任务报告</span><span class="rh2">VulnClaw · 早期版本</span></div>
+        <div class="rdiv" id="rd1"></div>
+
+        <div id="statRow"><span class="rl">状态</span><span class="rv" id="rv">— — —</span></div>
+        <div id="statNote">实际：它并没有拿到 flag</div>
+
+        <div id="fakeBox"><span id="fakeStr"></span><span id="fakeTag">编造的字符串</span></div>
+        <div id="realBox"><span class="rbx">✗</span><span class="rbt">真实页面里<br>根本没有这一串</span><span class="rbs">EMPTY · NOT FOUND</span></div>
+        <div id="stampA"><span class="sp"><span class="st1">✗ 编 造</span><span class="st2">FAKE</span></span></div>
+        <div id="fakeNote">格式一模一样，<b>看着跟真的好像没什么区别</b></div>
+
+        <div class="rdiv" id="rd2"></div>
+        <div id="submitRow">
+          <span class="rl">提交结果</span>
+          <span id="marks"><i>✗</i><i>✗</i><i>✗</i><i>✗</i></span>
+          <span class="rx" id="rx">次次全错</span>
+        </div>
+
+        <div id="verdict"><span class="v1">工具可以慢</span><span class="v2">但是不能骗人</span></div>
+      </div>
+    </div>
+
+    <!-- 第二幕：证据闸门 -->
+    <div class="act hide" id="actB">
+      <div class="kick" id="k2" style="top:64px"><span class="no">SECTION 02</span><span>我加的一层设计</span></div>
+      <div class="tt" id="t2" style="top:94px"><b>证据闸门</b></div>
+      <div class="en" id="en2" style="top:118px">Evidence Gate</div>
+
+      <div id="gateStage">
+        <!-- type-sequence：三 actor（顶部横排）+ 生命线 + 时序消息 + ALT 片段 -->
+        <div class="sq-actor" id="sqA" style="left:134px;top:92px;width:280px"><span class="an">AI 结论</span><span class="ae">VULNCLAW · CLAIM</span></div>
+        <div class="sq-actor" id="sqB" style="left:630px;top:92px;width:280px"><span class="an">证据闸门</span><span class="ae">EVIDENCE GATE</span></div>
+        <div class="sq-actor" id="sqC" style="left:1208px;top:92px;width:280px"><span class="an">真实页面</span><span class="ae">LIVE PAGE</span></div>
+        <svg id="sqLife" viewBox="0 0 1680 700" preserveAspectRatio="none" aria-hidden="true">
+          <line class="ll" x1="274" y1="146" x2="274" y2="688"/>
+          <line class="ll" x1="770" y1="146" x2="770" y2="688"/>
+          <line class="ll" x1="1348" y1="146" x2="1348" y2="688"/>
+          <rect class="sqact" x="766" y="430" width="8" height="258"/>
+          <rect class="sqact" x="1344" y="466" width="8" height="118"/>
+          <rect class="sqact" x="270" y="596" width="8" height="92"/>
+          <line class="msg fade" style="--i:0" x1="278" y1="446" x2="764" y2="446"/><polygon class="mh fade" style="--i:0" points="768,446 754,440 754,452"/>
+          <line class="msg fade" style="--i:1" x1="774" y1="484" x2="1342" y2="484"/><polygon class="mh fade" style="--i:1" points="1346,484 1332,478 1332,490"/>
+          <line class="msg ret fade" style="--i:2" x1="1352" y1="522" x2="780" y2="522"/><polygon class="mh fade" style="--i:2" points="776,522 790,516 790,528"/>
+          <text class="ml fade" style="--i:0" x="520" y="438" text-anchor="middle">① 提交结论（待验）</text>
+          <text class="ml fade" style="--i:1" x="1059" y="476" text-anchor="middle">② 取证 · 取回页面原文</text>
+          <text class="ml dim fade" style="--i:2" x="1065" y="514" text-anchor="middle">③ 返回页面内容（示意）</text>
+          <rect class="frm fade" style="--i:3" x="236" y="548" width="568" height="140" rx="6"/>
+          <rect class="ftab fade" style="--i:3" x="236" y="548" width="46" height="16" rx="2"/>
+          <text class="fopt fade" style="--i:3" x="259" y="560">ALT</text>
+          <text class="grd fade" style="--i:3" x="250" y="582">[逐字命中]</text>
+          <line class="msg coral fade" style="--i:4" x1="766" y1="606" x2="284" y2="606"/><polygon class="mh coral fade" style="--i:4" points="278,606 292,600 292,612"/>
+          <text class="ml coral fade" style="--i:4" x="520" y="598" text-anchor="middle">④ 放行 · 通过</text>
+          <line class="dv fade" style="--i:4" x1="244" y1="630" x2="796" y2="630"/>
+          <text class="grd fade" style="--i:4" x="250" y="652">[未命中]</text>
+          <line class="msg ret fade" style="--i:5" x1="766" y1="676" x2="284" y2="676"/><polygon class="mh fade" style="--i:5" points="278,676 292,670 292,682"/>
+          <text class="ml dim fade" style="--i:5" x="520" y="668" text-anchor="middle">作废 · 打回</text>
+        </svg>
+
+        <div id="rule1"><span class="rk">规则</span><span class="rt">任何结论 —— 尤其是拿到 flag 这种关键结论，都必须能在<b>真实访问到的页面内容</b>里找到</span></div>
+
+        <div class="card" id="inCard">
+          <div class="hd">AI 给出的结论</div>
+          <div id="inBody">已获取 flag
+            <div id="inStr"><span class="cmp">flag{demo-a1b2c3d4}</span></div>
+            <div id="inStrTag">示意字符串</div>
+          </div>
+          <div id="voidStamp"><span>作 废</span></div>
+        </div>
+
+        <div id="gate">
+          <div class="gf"></div>
+          <div class="beam"><i></i></div>
+          <div class="post pL"></div><div class="post pR"></div>
+          <div class="arm"></div>
+          <div id="cmpChip"><span id="cmpL">MATCH</span> <b id="cmpN">0/19</b></div>
+          <div class="gstate" id="gstate">待 检</div>
+          <div class="glbl">逐字比对</div>
+        </div>
+
+        <div class="card" id="pageCard">
+          <div class="hd">真实访问到的页面内容（示意）</div>
+          <div class="pgline" id="l1" style="top:54px">Welcome to the vulnerable range</div>
+          <div class="pgline" id="l2" style="top:92px">Session token: 8f3c2d · status 200</div>
+          <div class="pgline" id="pgHit" style="top:128px">result: <em><span class="cmp">flag{demo-a1b2c3d4}</span></em></div>
+          <div id="pgCap">等待比对</div>
+          <div id="zeroChip">逐字出现 · 一个字符都<b>不能有偏差</b></div>
+          <span class="viz-note">示意图 · 非实拍</span>
+        </div>
+
+        <div id="passPanel"><span class="ic">✓</span><span class="p1">通过 · 放行</span><span class="p2">MATCHED</span></div>
+        <div id="rejPanel"><span class="ic">✗</span><span class="p1">不通过 · 作废</span><span class="p2">NO MATCH</span></div>
+      </div>
+
+      <div class="fa" id="fa1" style="left:640px;top:644px"><i></i></div>
+      <div class="fa back" id="fa2" style="left:1120px;top:720px"><i></i></div>
+
+      <svg id="loop" viewBox="0 0 1920 1080" preserveAspectRatio="none">
+        <path id="loopPath" d="M890,896 L890,914 L394,914 L394,780"></path>
+        <polygon points="394,766 386,784 402,784" fill="#1C1C1A"></polygon>
+      </svg>
+      <div id="loopLbl">打回 · 继续查</div>
+      <div id="cmpX">✗ 比对中断 · 打回</div>
+      <div id="loopDot"></div>
+      <div id="roundChip">多跑几轮 · 第 <b id="roundN">1</b> 轮</div>
+
+      <div id="foot2"><span class="f1">它宁可<b>多跑几轮</b></span><span class="f2">也不会给你一个编出来的假答案</span></div>
+    </div>
+  </div>
+
+  <!-- 大肥鱼 -->
+  <div class="fish" id="fishA">
+    <div class="say">我人都傻了 · <b>还能这么玩？</b></div>
+    <img src="Shark-GIF/050_大哭眼泪横流悲伤委屈痛哭.gif" alt="大肥鱼">
+  </div>
+
+  <div class="corner" id="chap">第四章 · 幻觉与证据闸门</div>
+  <div class="corner" id="src">口播对齐 timeline.md · 18:02–18:50</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-43 · 证据闸门 · 48s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=48000; /* ←⑤ DUR */
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ===== 补间工具 ===== */
+const show=(sel,cls)=>{const el=$(sel);if(el)el.classList.add(cls||'in')};
+function typeText(el,txt,start,dur){let last=-1;tws.push({t:start,d:dur,e:p=>p,f:p=>{const k=Math.floor(p*txt.length);if(k!==last){last=k;el.textContent=txt.slice(0,k);__sfx.type(.55)}},done:()=>{el.textContent=txt}})}
+/* ===== viz：逐字比对 ===== */
+document.querySelectorAll('.cmp').forEach(sp=>{const t=sp.textContent;sp.textContent='';
+  for(const ch of t){const b=document.createElement('b');b.textContent=ch;sp.appendChild(b)}});
+function cmpRun(sel,n,start,step,cls){let last=-1;tws.push({t:start,d:n*step,e:p=>p,f:p=>{const k=Math.floor(p*n);if(k!==last){last=k;
+  document.querySelectorAll(sel+' b').forEach((b,i)=>{if(i<k)b.classList.add(cls)});
+  if(cls==='ok'&&!$('#cmpChip').classList.contains('bad')){$('#cmpN').textContent=k+'/'+n;if(k%3===0)__sfx.type(.4)}}},
+  done:()=>{document.querySelectorAll(sel+' b').forEach(b=>b.classList.add(cls));
+  if(cls==='ok'&&!$('#cmpChip').classList.contains('bad'))$('#cmpN').textContent=n+'/'+n}})}
+function cmpClear(){document.querySelectorAll('.cmp b').forEach(b=>b.classList.remove('ok','bad'))}
+
+/* ============ ⑤ DUR 与 cue 表 ============ */
+/* 口播区间 18:02–18:50（镜头起点 18:02=1082s） */
+on(300,()=>{show('#k1');__sfx.pop(.4);});                                       // 18:02「经常用AI的人应该都知道」
+on(2100,()=>{show('#t1');show('#en1');camFocus(960,430,1.05,.55);__sfx.pop(.6);}); // 18:04「大模型有时候会一本正经的编造」
+on(4200,()=>{show('#chips');__sfx.pop(.5);});                                   // 18:06「也就是胡扯无中生有」
+on(6100,()=>{show('#report');__sfx.swipe(.7);});                                // 18:08「VulnClaw早期版本我拿它来打CTF」
+on(8100,()=>{show('#statRow');show('#statNote');__sfx.pop(.5);});               // 18:10「它明明没有拿到flag」
+on(10100,()=>{$('#rv').innerHTML='<b>✔ 已获取 flag</b>';__sfx.ding(.5);});        // 18:12「但是报告里却写的已获取」
+on(12100,()=>{show('#fakeBox');typeText($('#fakeStr'),'flag{th1s_1s_f4ke}',12100,900);}); // 18:14「后面跟上一串它自己编出来的字符串」
+on(14100,()=>{show('#stampA');__sfx.thud(.75);});                               // 18:16「格式一模一样」
+on(15300,()=>{show('#fakeNote');__sfx.pop(.45);});                              // 18:17「看着跟真的好像没什么区别」
+on(17200,()=>{show('#submitRow');show('#realBox');__sfx.swipe(.6);});            // 18:19「但是拿去提交」
+[18100,18280,18460,18640].forEach((tt,i)=>{ on(tt,()=>{                                // 18:19–18:20 提交 → 逐个打叉
+  document.querySelectorAll('#marks i')[i].classList.add('on');__sfx.pop(.5);}); });
+on(19000,()=>{show('#rx','on');__sfx.thud(.55);});                              // 18:20「结果次次全错」
+on(19100,()=>{show('#fishA','show');__sfx.pop(.45);});                          // 18:21–18:22「我人都傻了 / 不是还能这么玩吗」
+on(23100,()=>{show('#verdict');camFocus(960,930,1.06,.55);__sfx.thud(.6);});    // 18:25「是非常致命的…工具可以慢，但是不能骗人的」
+/* —— 硬切第二幕 —— */
+on(26400,()=>{$('#actA').classList.add('hide');$('#fishA').classList.remove('show');
+  $('#actB').classList.remove('hide');camCut(0,0,1);__sfx.swipe(.9);});         // 18:28「所以我给它加了一层设计」
+on(26800,()=>{show('#k2');show('#t2');show('#en2');__sfx.pop(.6);});           // 18:29「叫做证据闸门」
+on(29100,()=>{show('#gateStage');show('#rule1');__sfx.swipe(.6);});            // 18:31「规则说起来也很简单」
+on(30100,()=>{show('#inCard');show('#fa1');__sfx.pop(.55);});                   // 18:32「就是AI给出任何结论」
+on(30500,()=>{show('#inBody');__sfx.ding(.45);});
+on(32100,()=>{show('#inStr','hot');__sfx.ding(.5);});                           // 18:34「尤其是拿到flag的这种关键的结论」
+on(34100,()=>{show('#pageCard');show('#fa2');__sfx.swipe(.6);});                // 18:36「都必须在它真实访问到的页面内容里面能找到」
+on(34500,()=>{show('#l1');show('#l2');show('#pgHit');$('#gate').classList.add('in');
+  show('#passPanel','seen');show('#rejPanel','seen');__sfx.pop(.4);});
+on(35100,()=>{$('#gate').classList.add('scan');});
+on(35300,()=>{$('#cmpChip').classList.add('on');                                // viz：闸门两侧逐字比对
+  cmpRun('#inStr .cmp',19,35300,145,'ok');cmpRun('#pgHit .cmp',19,35300,145,'ok');});
+on(38100,()=>{$('#pgHit').classList.add('hit');$('#gate').classList.add('pass');$('#pgCap').classList.add('hit');
+  $('#pgCap').textContent='逐字命中 · 19/19 · 0 偏差';$('#gstate').textContent='通过';
+  show('#passPanel','on');__sfx.ding(.7);});                                    // 18:40「并且逐字出现」
+on(39100,()=>{show('#zeroChip','on');camFocus(1150,520,1.045,.5);__sfx.ding(.5);}); // 18:41「一个字符都不能有偏差」
+on(40200,()=>{$('#pgHit').classList.remove('hit');$('#pgHit').classList.add('miss');
+  $('#gate').classList.remove('pass');$('#gate').classList.add('fail');
+  $('#pgCap').classList.remove('hit');$('#pgCap').classList.add('miss');
+  $('#pgCap').textContent='未找到该字符串 · 命中 0/19';
+  $('#gstate').textContent='不通过';$('#passPanel').classList.remove('on');__sfx.thud(.6);
+  /* viz：mismatch 红闪打回 */
+  cmpClear();const ai=document.querySelectorAll('#inStr .cmp b');
+  ai.forEach((b,i)=>{if(i<5)b.classList.add('ok')});if(ai[5])ai[5].classList.add('bad');
+  $('#cmpChip').classList.add('bad');$('#cmpL').textContent='NO MATCH';$('#cmpN').textContent='0/19';
+  show('#cmpX','on');$('#fa2').classList.add('flash');__sfx.thud(.5);});        // 18:42「如果查不到的话」
+on(41300,()=>{show('#voidStamp');__sfx.thud(.7);});                             // 18:43「结论就要作废」
+on(42300,()=>{$('#rejPanel').classList.add('on');show('#loop','on');show('#loopLbl','on');
+  $('#zeroChip').classList.remove('on');__sfx.swipe(.7);
+  /* viz：折返光点沿打回路径流动 */
+  const pth=$('#loopPath'),dot=$('#loopDot');dot.style.opacity='1';
+  tws.push({t:42300,d:1600,e:eio,f:p=>{const L=pth.getTotalLength(),pt=pth.getPointAtLength(L*p);
+    dot.style.transform='translate('+pt.x+'px,'+pt.y+'px)'},done:()=>{dot.style.opacity='0'}});}); // 18:44「打回去继续查」
+on(44300,()=>{show('#roundChip','on');const el=$('#roundN');let last=1;
+  tws.push({t:44300,d:1500,e:eo,f:p=>{const v=1+Math.round(p*4);if(v!==last){last=v;el.textContent=v;__sfx.type(.6)}}})}); // 18:46「它宁可多跑几轮」
+on(45300,()=>{show('#foot2');camTo(0,0,1,.5);__sfx.swipe(.65);});               // 18:47「也不会给我一个编出来的假答案」
+
+/* ===== [不动] QA 专用（正常播放不触发） ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

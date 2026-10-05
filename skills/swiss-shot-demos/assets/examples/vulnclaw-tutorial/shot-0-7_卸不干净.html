@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+     镜头 0-7 · 卸不干净（29s）·  [可视化 v4 · 瑞士国际主义]
+     主视觉：lieflat F1 粗刻度柱（残留量）+ treemap 目录占比（灰阶，密钥文件 = 橙）
+     视觉：纸底 #F0EFEB × 墨 #1C1C1A × 灰阶阶梯 × 唯一强调橙 #F5572F（主角 = 明文密钥）
+     ============================================================ -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 0-7 · 卸不干净 · 29s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Inter','Noto Sans SC',sans-serif}
+body.paused *{animation-play-state:paused!important}
+:root{--paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;--accent:#F5572F}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#stage::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:1;opacity:.6;
+  background-image:linear-gradient(90deg,rgba(28,28,26,.05) 1px,transparent 1px);background-size:132px 100%}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ── 标题组 ── */
+#head{position:absolute;left:88px;top:52px;width:860px;opacity:0;transform:translateY(-18px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#head.in{opacity:1;transform:translateY(0)}
+#head .eye{font:600 14px 'IBM Plex Mono';letter-spacing:.18em;color:var(--ink);text-transform:uppercase;
+  border:1px solid var(--ink);border-radius:3px;display:inline-block;padding:4px 12px}
+#head h1{margin-top:14px;font:900 68px/1.1 'Inter','Noto Sans SC';letter-spacing:-.03em;color:var(--ink)}
+#head h1 .hl{color:var(--accent)}
+#head .sub{margin-top:10px;font:600 13px 'IBM Plex Mono';letter-spacing:.2em;color:var(--muted)}
+
+/* ── 右上：残留堆头 + 卸载行为标注 ── */
+#pileH{position:absolute;left:1000px;top:50px;width:824px;display:flex;align-items:center;gap:14px;opacity:0;transition:opacity .45s;z-index:5}
+#pileH.in{opacity:1}
+#pileH .ph1{font:900 22px 'Noto Sans SC';color:var(--ink);letter-spacing:.03em}
+#pileH .ph2{font:600 12px 'IBM Plex Mono';letter-spacing:.1em;color:var(--muted)}
+#pileH .tag{margin-left:auto;font:600 12px 'IBM Plex Mono';letter-spacing:.1em;color:var(--ink);
+  border:1px solid var(--ink);border-radius:3px;padding:4px 12px;opacity:0;transform:scale(.7);transition:all .35s cubic-bezier(.2,1.6,.4,1)}
+#pileH .tag.in{opacity:1;transform:scale(1)}
+#panel{position:absolute;left:1000px;top:100px;width:824px;opacity:0;transition:opacity .5s}
+#panel.in{opacity:1}
+#panel .pt{font:600 11.5px 'IBM Plex Mono';letter-spacing:.14em;color:var(--muted);padding-bottom:8px;border-bottom:1px solid var(--grid)}
+.prow{display:flex;align-items:center;gap:14px;padding:9px 2px;border-bottom:1px solid var(--grid);
+  opacity:0;transform:translateX(-26px);transition:all .42s cubic-bezier(.2,1.4,.4,1)}
+.prow.in{opacity:1;transform:translateX(0)}
+.prow .pk{font:600 12.5px 'IBM Plex Mono';color:var(--ink);background:#F4F3EF;border:1px solid var(--grid);
+  border-radius:3px;padding:3px 10px;letter-spacing:.04em;width:112px;text-align:center;flex:none}
+.prow .pv{font:700 18px 'Noto Sans SC';color:#4A4944;letter-spacing:.02em}
+.prow.warn .pk{color:var(--accent);background:#FDF1ED;border-color:var(--accent)}
+.prow.warn .pv{color:var(--ink)}
+
+/* ── 主视觉：磁盘解剖板 ── */
+#diskBoard{position:absolute;left:88px;top:232px;width:1744px;height:664px;z-index:4;opacity:0;
+  transform:translateY(24px);transition:opacity .7s ease,transform .7s cubic-bezier(.16,1,.3,1);
+  border-radius:12px;background:var(--card);border:1.5px solid var(--ink)}
+#diskBoard.in{opacity:1;transform:translateY(0)}
+#diskGrid{position:absolute;inset:0;border-radius:12px;
+  background-image:linear-gradient(rgba(28,28,26,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.035) 1px,transparent 1px);
+  background-size:44px 44px;
+  -webkit-mask-image:radial-gradient(closest-side at 40% 45%,#000 40%,transparent 96%);
+  mask-image:radial-gradient(closest-side at 40% 45%,#000 40%,transparent 96%)}
+#treeT{position:absolute;left:28px;top:18px;font:600 12px 'IBM Plex Mono';letter-spacing:.16em;color:var(--muted)}
+#tree{position:absolute;left:30px;top:52px;width:660px}
+.tnode{position:relative;display:flex;align-items:center;gap:10px;height:36px;font:500 15.5px 'IBM Plex Mono';
+  color:#4A4944;letter-spacing:.02em;opacity:0;transform:translateX(-14px);transition:opacity .4s,transform .45s cubic-bezier(.2,1.4,.4,1)}
+.tnode.in{opacity:1;transform:translateX(0)}
+.tchild{position:relative;padding-left:26px;margin-left:10px;border-left:1px solid var(--grid)}
+.tchild .tnode::before{content:'';position:absolute;left:-26px;top:50%;width:18px;height:1px;background:var(--grid)}
+.tico{width:16px;height:13px;border-radius:2px;flex:none;position:relative;background:var(--card);border:1px solid var(--muted)}
+.tico.fo::before{content:'';position:absolute;left:2px;top:-4px;width:7px;height:4px;border-radius:1px 1px 0 0;background:var(--muted)}
+.tico.fi{background:#F4F3EF;border-color:var(--faint)}
+.tnode .fnote{margin-left:auto;font:600 11.5px 'IBM Plex Mono';color:var(--muted);letter-spacing:.04em}
+.tnode.key{padding:0 10px;margin-left:-10px;border-radius:6px;color:var(--accent);width:fit-content;background:#FDF1ED}
+.tnode.key .fnote{margin-left:16px;color:var(--accent)}
+.tnode.key .tico{background:var(--accent);border-color:var(--accent)}
+.tnode.key .tico::before{background:var(--accent)}
+.tnode.key.lit{background:#FBE4DC}
+.tspark{position:absolute;left:4px;width:7px;height:7px;border-radius:50%;background:var(--ink);opacity:0}
+
+/* ── 资源管理器窗口（示意图 · 非实拍） ── */
+#vfsWin{position:absolute;left:740px;top:24px;width:960px;height:306px;z-index:4;border-radius:10px;overflow:hidden;
+  border:1.5px solid var(--ink);background:var(--card);opacity:0;transform:translateY(18px) scale(.98);
+  transition:all .6s cubic-bezier(.16,1,.3,1)}
+#vfsWin.in{opacity:1;transform:translateY(0) scale(1)}
+.vfs-bar{height:38px;display:flex;align-items:center;gap:8px;padding:0 14px;background:#F4F3EF;border-bottom:1px solid var(--grid)}
+.vfs-bar i{width:9px;height:9px;border-radius:50%;background:var(--faint)}
+.vfs-bar .vfs-t{margin-left:6px;font:600 12px 'IBM Plex Mono';letter-spacing:.04em;color:var(--muted);white-space:nowrap;flex:none}
+.vfs-cap{display:flex;align-items:center;gap:7px;margin-left:10px}
+.vfs-cap .cl{font:600 10.5px 'IBM Plex Mono';letter-spacing:.06em;color:var(--muted)}
+.vfs-cap .cb{width:120px;height:9px;border-radius:5px;background:#E7E6E0;overflow:hidden}
+.vfs-cap .cf{height:100%;width:0;background:var(--ink)}
+.vfs-cap .cv{font:700 14px 'Inter';color:var(--ink);min-width:56px}
+.vfs-cnt{font:500 11px 'IBM Plex Mono';letter-spacing:.04em;color:var(--muted)}
+.vfs-cnt b{font:700 15px 'Inter';color:var(--ink)}
+#vfsKey{margin-left:auto;opacity:.35;transition:opacity .4s}
+#vfsKey.lit{opacity:1}
+.vfs-body{position:relative;height:268px;
+  background-image:linear-gradient(rgba(28,28,26,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.04) 1px,transparent 1px);
+  background-size:46px 46px}
+.vfs-note{position:absolute;right:10px;bottom:6px;font:500 10.5px 'IBM Plex Mono';color:var(--muted);letter-spacing:.04em;z-index:6}
+
+/* ── 容量块（逐条砸入 · F1 粗柱可数刻度） ── */
+#pile{position:absolute;left:740px;top:0;width:960px;height:664px;pointer-events:none;z-index:5}
+.dc{position:absolute;left:0;width:470px;height:88px;display:flex;align-items:center;padding:0 22px 26px;
+  background:var(--card);border:1px solid var(--grid);border-left:4px solid var(--ink);border-radius:8px;opacity:0;
+  transform-origin:50% 100%}
+.dc.settled{}
+.dc .dnum{display:flex;align-items:baseline;color:var(--ink)}
+.dc .dnum b{font:800 42px/1 'Inter';letter-spacing:-.03em}
+.dc .dnum i{font:500 15px 'IBM Plex Mono';font-style:normal;margin-left:8px;color:var(--muted)}
+.dc .dl{margin-left:auto;font:700 16px 'Noto Sans SC';color:#4A4944;letter-spacing:.02em;line-height:1.28;text-align:right;
+  display:flex;flex-direction:column;align-items:flex-end}
+.dc .dl em{font:500 10.5px 'IBM Plex Mono';letter-spacing:.1em;color:var(--muted);margin-top:4px;font-style:normal;white-space:nowrap}
+.dc .rung{position:absolute;left:22px;right:22px;bottom:7px;height:11px;display:flex;gap:3px;align-items:flex-end}
+.dc .rung i{flex:1;height:100%;border-radius:2px;background:rgba(28,28,26,.16);border-top:1px solid rgba(28,28,26,.4)}
+.dc .rung i.big{background:rgba(28,28,26,.6);border-top-color:var(--ink)}
+.dc .rungU{display:block;margin-top:3px;font:500 9.5px 'IBM Plex Mono';letter-spacing:.06em;color:var(--muted);white-space:nowrap}
+/* diagram-design · type-treemap：目录占比（灰阶，焦点 = config / 含明文密钥） */
+#treeMap{position:absolute;inset:0;width:100%;height:100%;z-index:3;opacity:0;transition:opacity .6s;pointer-events:none}
+#treeMap.on{opacity:1}
+#treeMap .tmCell{fill:rgba(28,28,26,.05);stroke:var(--grid);stroke-width:1}
+#treeMap .tmCell.mid{fill:rgba(28,28,26,.10)}
+#treeMap .tmCell.low{fill:rgba(28,28,26,.035)}
+#treeMap .tmCell.focal{fill:#FBE4DC;stroke:var(--accent);stroke-width:1.5}
+#treeMap .tmName{font-family:'Noto Sans SC';font-weight:700;font-size:14px;fill:var(--ink)}
+#treeMap .tmVal{font-family:'IBM Plex Mono';font-size:10px;fill:var(--muted)}
+#treeMap .tmRule{stroke:var(--grid);stroke-width:1}
+#treeMap .tmLg{font-family:'IBM Plex Mono','Noto Sans SC';font-size:10px;letter-spacing:.06em;fill:var(--muted)}
+#treeMap .tmSrc{font-family:'IBM Plex Mono','Noto Sans SC';font-size:9.5px;fill:var(--faint)}
+/* 明文密钥卡：唯一强调橙 */
+.dc.dcr{border-left-color:var(--accent);background:#FDF1ED}
+.dc.dcr .dnum b.dkeyT{font:900 23px 'Noto Sans SC';color:var(--accent);letter-spacing:.02em;white-space:nowrap}
+.dc.dcr .kico{margin-right:10px;flex:none}
+.dc.dcr .kico circle,.dc.dcr .kico path{stroke:var(--accent)}
+.dc.dcr .dl em{color:var(--accent)}
+
+#pileFoot{position:absolute;left:740px;top:626px;display:flex;gap:12px}
+.badge{font:600 12.5px 'IBM Plex Mono';letter-spacing:.1em;padding:6px 16px;border-radius:3px;
+  border:1px dashed var(--ink);color:var(--ink);background:var(--card);opacity:0;transform:scale(.6);transition:all .34s cubic-bezier(.2,1.6,.4,1)}
+.badge.in{opacity:1;transform:scale(1)}
+
+/* ── 左下：尾注 ── */
+#outro{position:absolute;left:88px;top:912px;width:820px}
+#outro .rule{width:200px;height:3px;background:var(--accent);transform:scaleX(0);transform-origin:0 50%;transition:transform .5s cubic-bezier(.2,.9,.3,1)}
+#outro.in .rule{transform:scaleX(1)}
+#outro .oL{margin-top:16px;font:900 44px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em;opacity:0;transform:translateY(22px);transition:all .5s cubic-bezier(.16,1,.3,1) .08s}
+#outro.in .oL{opacity:1;transform:translateY(0)}
+#outro .oL b{color:var(--accent)}
+#outro .oS{margin-top:8px;font:600 14px 'IBM Plex Mono';letter-spacing:.14em;color:var(--muted);opacity:0;transition:opacity .5s ease .3s}
+#outro.in .oS{opacity:1}
+
+/* ── 大肥鱼 ── */
+#fish{position:absolute;left:1642px;top:862px;width:160px;opacity:0;transform:translateY(28px) scale(.7);
+  transition:all .45s cubic-bezier(.34,1.6,.64,1);pointer-events:none}
+#fish.in{opacity:1;transform:translateY(0) scale(1)}
+#fish img{width:100%;display:block}
+#fish .say{position:absolute;right:170px;top:8px;width:320px;background:var(--card);border:1.5px solid var(--ink);
+  border-radius:12px;padding:12px 20px;font:700 21px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em;line-height:1.4;
+  opacity:0;transform:scale(.5);transition:all .34s cubic-bezier(.2,1.6,.4,1)}
+#fish.bub .say{opacity:1;transform:scale(1)}
+#fish .say b{color:var(--accent)}
+#fish .say::after{content:'';position:absolute;right:-9px;top:46px;width:14px;height:14px;background:var(--card);
+  border-right:1.5px solid var(--ink);border-top:1.5px solid var(--ink);transform:rotate(45deg)}
+
+/* ── 装饰层 ── */
+#vig{position:absolute;inset:0;z-index:23;pointer-events:none;background:rgba(28,28,26,.05);opacity:0}
+
+.corner{position:absolute;font:500 14px 'IBM Plex Mono','Noto Sans SC';color:var(--muted);letter-spacing:.08em;z-index:41}
+#chap{left:52px;bottom:30px}
+#src{right:52px;bottom:30px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono';pointer-events:none}
+#track{height:5px;background:rgba(255,255,255,.1)}
+#bar{height:100%;width:0;background:var(--accent)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(28,28,26,.94);color:#C6C5BF}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #555;color:#ccc;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(255,255,255,.12)}
+#replay.done{border-color:var(--accent);color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="cam">
+
+    <!-- 标题 -->
+    <div id="head">
+      <div class="eye">SHOT 0-7 · UNINSTALL LEFTOVERS</div>
+      <h1>卸载，也<span class="hl">卸不干净</span></h1>
+      <div class="sub">WHAT THE UNINSTALLER LEAVES BEHIND</div>
+    </div>
+
+    <!-- 右上：残留堆头 + 卸载行为标注 -->
+    <div id="pileH">
+      <span class="ph1">本机实测残留</span>
+      <span class="ph2">MEASURED LOCALLY</span>
+      <span class="tag" id="phTag">明面上的</span>
+    </div>
+    <div id="panel">
+      <div class="pt">卸载进程的实际行为 / UNINSTALL BEHAVIOUR</div>
+      <div class="prow" id="pr1"><span class="pk">uninstall</span><span class="pv">只删它自己登记过的文件</span></div>
+      <div class="prow" id="pr2"><span class="pk">the rest</span><span class="pv">其余的一概不管</span></div>
+      <div class="prow warn" id="pr3"><span class="pk">below</span><span class="pv">明面之下，还有全局环境</span></div>
+    </div>
+
+    <!-- 主视觉：磁盘解剖板 -->
+    <div id="diskBoard">
+      <div id="diskGrid"></div>
+      <div id="treeT">TREE · ~/.vulnclaw</div>
+      <div id="tree">
+        <span class="tspark" id="ts1"></span><span class="tspark" id="ts2"></span><span class="tspark" id="ts3"></span>
+        <div class="tnode" id="tn0"><span class="tico fo"></span>~/.vulnclaw<span class="fnote">260 MB</span></div>
+        <div class="tchild">
+          <div class="tnode"><span class="tico fo"></span>config</div>
+          <div class="tchild">
+            <div class="tnode"><span class="tico fi"></span>settings.json</div>
+            <div class="tnode"><span class="tico fi"></span>providers.json</div>
+            <div class="tnode key" id="treeKey"><span class="tico fi"></span>model.key<span class="fnote">明文</span></div>
+          </div>
+          <div class="tnode"><span class="tico fo"></span>cache</div>
+          <div class="tchild">
+            <div class="tnode"><span class="tico fi"></span>chunk_01.bin</div>
+            <div class="tnode"><span class="tico fi"></span>chunk_02.bin</div>
+          </div>
+          <div class="tnode"><span class="tico fo"></span>logs</div>
+          <div class="tchild">
+            <div class="tnode"><span class="tico fi"></span>task_0881.log</div>
+          </div>
+          <div class="tnode"><span class="tico fo"></span>sessions</div>
+        </div>
+      </div>
+
+      <!-- 资源管理器窗口 -->
+      <div id="vfsWin">
+        <div class="vfs-bar"><i></i><i></i><i></i>
+          <span class="vfs-t">EXPLORER · .vulnclaw</span>
+          <div class="vfs-cap">
+            <span class="cl">配置目录</span>
+            <div class="cb"><div class="cf" id="vfsFill"></div></div>
+            <span class="cv" id="vfsCap">0 MB</span>
+          </div>
+          <div class="vfs-cnt">文件 <b id="vfsFiles">0</b> · 记录 <b id="vfsLogs">0</b></div>
+          <svg id="vfsKey" width="24" height="24" viewBox="0 0 24 24"><circle cx="8" cy="12" r="4.2" fill="none" stroke="#F5572F" stroke-width="2"/><path d="M11.6 12H21M17.4 12v4M20.6 12v3" fill="none" stroke="#F5572F" stroke-width="2" stroke-linecap="round"/></svg>
+        </div>
+        <div class="vfs-body"></div>
+        <span class="vfs-note">示意图 · 非实拍</span>
+      </div>
+
+      <!-- 容量块 -->
+      <div id="pile">
+        <div class="dc" id="dc1"><span class="dnum"><b>260</b><i>MB</i></span><span class="dl">配置目录残留<em>CONFIG DIR</em><span class="rungU">1 格 = 20 MB</span></span><span class="rung" data-n="13"></span></div>
+        <div class="dc" id="dc2"><span class="dnum"><b>6500</b><i>多个</i></span><span class="dl">文件<em>FILES</em><span class="rungU">1 格 = 500 个</span></span><span class="rung" data-n="13"></span></div>
+        <div class="dc" id="dc3"><span class="dnum"><b>5000</b><i>多个</i></span><span class="dl">任务记录<em>TASK LOGS</em><span class="rungU">1 格 = 500 个</span></span><span class="rung" data-n="10"></span></div>
+        <div class="dc dcr" id="dc4">
+          <span class="dnum"><svg class="kico" width="26" height="26" viewBox="0 0 24 24"><circle cx="8" cy="12" r="4.2" fill="none" stroke="#F5572F" stroke-width="2"/><path d="M11.6 12H21M17.4 12v4M20.6 12v3" fill="none" stroke="#F5572F" stroke-width="2" stroke-linecap="round"/></svg><b class="dkeyT">明文模型密钥</b></span>
+          <span class="dl">写在配置文件里<em>MODEL API KEY</em></span>
+        </div>
+        <div class="dc" id="dc5"><span class="dnum"><b>180</b><i>多个</i></span><span class="dl">全局 Python 包<em>GLOBAL SITE-PACKAGES</em><span class="rungU">1 格 = 20 个</span></span><span class="rung" data-n="9"></span></div>
+        <div class="dc" id="dc6"><span class="dnum"><b>500</b><i>多 MB</i></span><span class="dl">全局环境体积<em>BLOWED UP</em><span class="rungU">1 格 = 50 MB</span></span><span class="rung" data-n="10"></span></div>
+      </div>
+      <div id="pileFoot">
+        <span class="badge" id="bg1">互相叠加</span>
+        <span class="badge" id="bg2">散落各处</span>
+      </div>
+
+      <!-- diagram-design · type-treemap：~/.vulnclaw 目录占比（灰阶，焦点 = config / 含明文密钥） -->
+      <svg id="treeMap" viewBox="0 0 1744 664">
+        <rect class="tmCell focal" x="34" y="452" width="341" height="156" rx="2"/>
+        <rect class="tmCell mid" x="379" y="452" width="341" height="103" rx="2"/>
+        <rect class="tmCell low" x="379" y="559" width="341" height="49" rx="2"/>
+        <text class="tmName" x="50" y="480">config</text>
+        <text class="tmVal" x="50" y="498">占比最大</text>
+        <text class="tmName" x="395" y="480">cache</text>
+        <text class="tmVal" x="395" y="498">占比次之</text>
+        <text class="tmName" x="395" y="581">logs</text>
+        <text class="tmVal" x="395" y="597">占比最小</text>
+        <line class="tmRule" x1="34" y1="620" x2="724" y2="620"/>
+        <text class="tmLg" x="34" y="638">TREE SHARE · ~/.vulnclaw 目录占比</text>
+        <text class="tmLg" x="34" y="652">焦点 = config（含明文密钥） · 对比越强 = 面积越大</text>
+        <text class="tmSrc" x="724" y="652" text-anchor="end">AREA = 树中列出的条目数 · sessions 未列出 · 示意</text>
+      </svg>
+    </div>
+
+    <!-- 左下：尾注 -->
+    <div id="outro">
+      <div class="rule"></div>
+      <div class="oL">系统就这样，<b>一天比一天乱</b></div>
+      <div class="oS">越装越多 · 越堆越散</div>
+    </div>
+
+    <!-- 大肥鱼 -->
+    <div id="fish">
+      <div class="say">别乱动我的<b>环境</b>啊！</div>
+      <img src="Shark-GIF/041_趴键盘愤怒符号抓狂打字.gif" alt="大肥鱼">
+    </div>
+  </div>
+
+  <div id="vig"></div>
+
+  <div class="corner" id="chap">02 / 准备一 · 虚拟机（翻车能回档）</div>
+  <div class="corner" id="src">来源 · 作者本机实测（画面示意，非截图）</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-7 · 卸不干净 · 29s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=29000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ───────── 本页小工具 ───────── */
+const bo=p=>{if(p===1)return 1;const s=1.22;return 1+(s+1)*Math.pow(p-1,3)+s*Math.pow(p-1,2);};
+function dropCard(cfg){
+  const el=document.getElementById(cfg.id);
+  el.style.left=cfg.dx+'px';el.style.top=cfg.top+'px';
+  tws.push({t:cfg.t,d:520,e:bo,
+    f:p=>{el.style.opacity=Math.min(1,p*2.6);
+      el.style.transform='translateY('+(-172*(1-p)).toFixed(1)+'px) rotate('+(cfg.rot*(.3+.7*p)).toFixed(2)+'deg) scale('+(1.05-.05*p).toFixed(3)+')';},
+    done:()=>{el.style.transform='rotate('+cfg.rot+'deg)';el.classList.add('settled');}});
+}
+function flowTree(sel,phase,start,total,loops){
+  const el=$(sel);if(!el)return;
+  tws.push({t:start,d:total,f:p=>{
+    const s=p*loops+phase,k=s%1;
+    el.style.top=(4+388*k).toFixed(1)+'px';
+    el.style.opacity=(k<.12?k/.12:(k>.88?(1-k)/.12:1)).toFixed(2);
+  },done:()=>{el.style.opacity='0';}});
+}
+/* lieflat F1 · Rung Bars：按「1 格 = 1 个诚实单位」生成可数刻度（每 5 格加重） */
+(function(){
+  document.querySelectorAll('.dc .rung').forEach(r=>{
+    const n=+r.dataset.n||0;
+    for(let i=0;i<n;i++){const s=document.createElement('i');if(i%5===4)s.className='big';r.appendChild(s);}
+  });
+})();
+
+/* ───────── 镜头 0-7 叙事 cue（2:41–3:10 · 29s · 15 句） ───────── */
+/* 2:41「就算把VulnClaw卸载掉」 */
+on(300,()=>{$('#head').classList.add('in');__sfx.whoosh(.7,.4);});
+on(1400,()=>{                                                                                     /* 图板 + 目录树序列入场 */
+  $('#panel').classList.add('in');__sfx.pop(.5);
+  $('#diskBoard').classList.add('in');
+  document.querySelectorAll('#tree .tnode').forEach((el,i)=>{el.style.transitionDelay=(i*60)+'ms';el.classList.add('in');});
+  flowTree('#ts1',0,1400,15000,5);flowTree('#ts2',.34,1400,15000,5);flowTree('#ts3',.67,1400,15000,5);
+});
+/* 2:43「卸载进程也只会删他自己登记的那些文件」 */
+on(2000,()=>{$('#pr1').classList.add('in');__sfx.pop(.55);});
+/* 2:45「别的一概不管」 */
+on(4000,()=>{$('#pr2').classList.add('in');__sfx.pop(.55);});
+/* 2:46「我在自己的电脑上就量过一次」 */
+on(5000,()=>{$('#pileH').classList.add('in');$('#vfsWin').classList.add('in');__sfx.ding(.35);camFocus(1400,620,1.05,.6);});
+/* 资源管理器计数与卡片砸落同步（白名单数：260MB / 6500 / 5000） */
+on(7000,()=>{tws.push({t:7000,d:520,e:eo,f:p=>{$('#vfsFill').style.width=(p*100).toFixed(1)+'%';
+  $('#vfsCap').textContent=Math.round(p*260)+' MB';}});});
+on(9000,()=>{tws.push({t:9000,d:520,e:eo,f:p=>{$('#vfsFiles').textContent=Math.round(p*6500);}});});
+on(11000,()=>{tws.push({t:11000,d:520,e:eo,f:p=>{$('#vfsLogs').textContent=Math.round(p*5000);}});});
+on(14000,()=>{                                                                                     /* 明文密钥高亮 */
+  $('#vfsKey').classList.add('lit');$('#treeKey').classList.add('lit');
+  camFocus(960,500,1.1,.5);__sfx.pop(.55);
+});
+/* 2:48「他的配置目录留了260兆」 */
+const PILE=[
+  {id:'dc1',top:348,rot:-1.6,dx:  0,t:7000},
+  {id:'dc2',top:348,rot: 1.2,dx:484,t:9000},
+  {id:'dc3',top:442,rot:-1.0,dx:  0,t:11000},
+  {id:'dc4',top:442,rot: 1.5,dx:484,t:14000},
+  {id:'dc5',top:536,rot:-1.2,dx:  0,t:20000},
+  {id:'dc6',top:536,rot: 0.9,dx:484,t:20700}
+];
+PILE.forEach(c=>{
+  on(c.t,()=>{dropCard(c);__sfx.pop(.32);});
+  on(c.t+330,()=>__sfx.thud(.9));
+});
+/* 2:57「这些还只是明面上看得见的东西」 */
+on(16000,()=>{$('#phTag').classList.add('in');camTo(0,0,1,.7);__sfx.pop(.4);});
+/* 2:59「而我在电脑的全局Python环境」 */
+on(18000,()=>{$('#pr3').classList.add('in');__sfx.pop(.5);});
+/* 3:04「其中一大半都是各种工具互相叠出来的」 */
+on(23000,()=>{$('#bg1').classList.add('in');__sfx.pop(.5);});
+/* 3:07「而且都各自堆在各种地方」 */
+on(26000,()=>{$('#bg2').classList.add('in');__sfx.pop(.5);});
+/* 大肥鱼中段快闪（工具互叠抓狂） */
+on(16000,()=>{$('#fish').classList.add('in');__sfx.pop(.6);});                                       // 大肥鱼提前在场（原 23800 过晚）
+on(16400,()=>{$('#fish').classList.add('bub');__sfx.pop(.35);});
+/* 3:08「系统就这样一天比一天乱」 */
+on(27000,()=>{$('#outro').classList.add('in');__sfx.thud(.85);});
+on(27400,()=>__sfx.ding(.5));
+
+/* ── 增补节拍：type-treemap 目录占比随目录树入场（不动任何既有 cue） ── */
+on(1750,()=>$('#treeMap').classList.add('on'));
+
+/* ===== [不动] QA 专用（正常播放不触发）：hash 带 t=毫秒 → 起播后跳转该时刻并冻结 ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

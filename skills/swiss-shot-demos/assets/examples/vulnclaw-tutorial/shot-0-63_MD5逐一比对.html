@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+     镜头 63 · MD5 逐一比对（29:49–30:23 / 34s · 两幕）
+     风格：瑞士国际主义（纸底 + 墨 + 灰阶阶梯 + 唯一强调橙 #F5572F）
+     技法：逐字符比对（命中=墨、不符=橙抖动）+ lieflat L15 Ballot Tally（计票 5/5）
+     红线：哈希为示意值，非真实回显 → 角注「示意图 · 非实拍」
+     ============================================================ -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜 63 · MD5 逐一比对 · 29:49–30:23</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;
+  --accent:#F5572F;--dark:#1C1C1A;--darkink:#F0EFEB;--darkgrid:#2E2D29;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:var(--paper);overflow:hidden;color:var(--ink);
+  font-family:'Inter','Noto Sans SC',sans-serif;-webkit-font-smoothing:antialiased}
+body.paused *{animation-play-state:paused!important}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#bg{position:absolute;inset:0;z-index:0;opacity:0;transition:opacity 1.2s ease;
+  background-image:linear-gradient(rgba(28,28,26,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.05) 1px,transparent 1px);
+  background-size:44px 44px}
+#bg.in{opacity:1}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+.act{position:absolute;inset:0;transition:opacity .38s ease}
+.act.hide{opacity:0;pointer-events:none}
+
+/* ── 组件 ── */
+.eyebrow{font:600 15px Inter,'Noto Sans SC';letter-spacing:.14em;text-transform:uppercase;color:var(--ink);display:flex;gap:12px;align-items:center;opacity:0;transform:translateY(-12px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+.eyebrow.in{opacity:1;transform:none}
+.eyebrow .no{background:var(--ink);color:var(--paper);padding:3px 10px;border-radius:3px;font-weight:700}
+.h2{font:800 74px/1.02 'Inter','Noto Sans SC';letter-spacing:-.02em;color:var(--ink)}
+.tag-ink{background:var(--ink);color:var(--paper);font:700 15px Inter;letter-spacing:.08em;padding:5px 14px;border-radius:3px}
+.tag-acc{background:var(--accent);color:#fff;font:700 15px Inter;letter-spacing:.08em;padding:5px 14px;border-radius:3px}
+
+#kick{position:absolute;left:88px;top:88px}
+#title{position:absolute;left:86px;top:132px;opacity:0;transform:translateY(26px);transition:all .6s cubic-bezier(.16,1,.3,1)}
+#title.in{opacity:1;transform:none}
+#title b{font-weight:900}
+#badge{position:absolute;left:88px;top:214px;background:var(--ink);color:var(--darkink);font:600 13px Inter,'Noto Sans SC';letter-spacing:.1em;
+  padding:5px 12px;border-radius:3px;opacity:0;transition:opacity .5s;z-index:42}
+#badge.in{opacity:1}
+
+/* ── ACT1 ── */
+#scr{position:absolute;left:88px;top:252px;width:1744px;padding:26px 0 0;border-top:1px solid var(--grid);opacity:0;transform:translateY(16px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#scr.in{opacity:1;transform:none}
+#scr .l1{font:700 30px 'Noto Sans SC';color:var(--muted);letter-spacing:.02em}
+#scr .l1 .st{position:relative;display:inline-block}
+#scr .l1 .st s{text-decoration:none;opacity:.7}
+#strike{position:absolute;left:0;top:52%;height:3px;width:100%;background:var(--ink);transform:scaleX(0);transform-origin:left;transition:transform .5s cubic-bezier(.16,1,.3,1)}
+#strike.in{transform:scaleX(1)}
+#scr .l2{margin-top:16px;font:900 40px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em;opacity:0;transform:translateX(-16px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#scr .l2.in{opacity:1;transform:none}
+
+#chips1{position:absolute;left:88px;top:404px;display:flex;gap:16px;opacity:0;transition:opacity .45s}
+#chips1.in{opacity:1}
+.cchip{font:600 17px 'Noto Sans SC';letter-spacing:.04em;color:var(--ink);border:1px solid var(--grid);background:#fff;border-radius:999px;padding:10px 22px;
+  opacity:0;transform:translateY(10px);transition:all .4s cubic-bezier(.16,1,.3,1)}
+.cchip.in{opacity:1;transform:none}
+
+#cmpStage{position:absolute;left:88px;top:486px;width:1180px;background:#fff;border:1px solid var(--grid);border-radius:12px;padding:26px 30px;opacity:0;transform:translateY(20px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#cmpStage.in{opacity:1;transform:none}
+.rw{margin-bottom:20px;opacity:0;transform:translateY(14px);transition:all .45s cubic-bezier(.16,1,.3,1)}
+.rw.in{opacity:1;transform:none}
+.rw:last-child{margin-bottom:0}
+.rw .lb{font:600 14px Inter,'Noto Sans SC';letter-spacing:.12em;color:var(--muted);text-transform:uppercase;margin-bottom:12px}
+.cmp{display:inline-flex;gap:4px;flex-wrap:wrap}
+.cmp b{font:600 20px 'IBM Plex Mono';line-height:1;color:var(--muted);border:1px solid var(--grid);border-radius:4px;background:#fff;
+  width:30px;height:38px;display:flex;align-items:center;justify-content:center;transition:all .16s ease}
+.cmp b.ok{color:var(--paper);background:var(--ink);border-color:var(--ink)}   /* 命中 = 墨 */
+.cmp b.bad{color:#fff;background:var(--accent);border-color:var(--accent);animation:shk .42s}  /* 不符 = 橙抖动 */
+@keyframes shk{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}50%{transform:translateX(3px)}75%{transform:translateX(-2px)}}
+#cmpVal{margin-top:18px;padding-top:16px;border-top:1px solid var(--grid);font:700 20px 'Noto Sans SC';color:var(--ink);opacity:0;transition:opacity .45s}
+#cmpVal.in{opacity:1}
+
+/* 图例：命中=墨 / 不符=橙 */
+#legend{position:absolute;left:1300px;top:486px;width:532px;background:var(--dark);border-radius:12px;padding:28px 30px;color:var(--darkink);opacity:0;transform:translateY(20px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#legend.in{opacity:1;transform:none}
+#legend h5{font:600 14px Inter;letter-spacing:.14em;color:#8F8E88;text-transform:uppercase}
+#legend .lg{display:flex;align-items:center;gap:14px;margin-top:20px;font:700 19px 'Noto Sans SC'}
+#legend .sw{width:34px;height:34px;border-radius:5px;display:flex;align-items:center;justify-content:center;font:700 16px 'IBM Plex Mono'}
+#legend .sw.ink{background:var(--paper);color:var(--ink)}
+#legend .sw.acc{background:var(--accent);color:#fff;animation:shk 2.4s ease-in-out infinite}
+#legend .note{margin-top:22px;padding-top:16px;border-top:1px solid var(--darkgrid);font:500 16px 'Noto Sans SC';color:#B4B3AD;line-height:1.5}
+
+#cntRow{position:absolute;left:88px;top:860px;display:flex;align-items:baseline;gap:24px;opacity:0;transition:opacity .45s}
+#cntRow.in{opacity:1}
+#cntBig{font:800 72px Inter,'Noto Sans SC';letter-spacing:-.02em;color:var(--ink)}
+#cntTx{font:600 21px 'Noto Sans SC';color:var(--muted)}
+#cntTag{margin-left:auto;align-self:center}
+
+/* ── ACT2 · L15 计票 ── */
+#tally{position:absolute;left:88px;top:250px;width:1744px}
+#tlHead{display:flex;align-items:baseline;gap:20px;opacity:0;transform:translateY(14px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#tlHead.in{opacity:1;transform:none}
+#tlHead h3{font:800 46px 'Inter','Noto Sans SC';letter-spacing:-.01em;color:var(--ink)}
+#tlHead h3 em{font-style:normal}
+#tlHead span{font:600 14px Inter;letter-spacing:.14em;color:var(--muted);text-transform:uppercase}
+.us{display:flex;align-items:center;gap:24px;margin-top:14px;height:64px;padding:0 26px;background:#fff;border:1px solid var(--grid);border-radius:10px;
+  opacity:0;transform:translateX(-28px);transition:all .45s cubic-bezier(.16,1,.3,1)}
+.us.in{opacity:1;transform:none}
+.us .who{font:700 21px 'Noto Sans SC';color:var(--ink);flex:0 0 120px}
+.us .mini{display:flex;gap:3px}
+.us .mini b{width:22px;height:30px;border-radius:3px;background:#fff;border:1px solid var(--grid);transition:all .2s}
+.us .mini b.ok{background:var(--ink);border-color:var(--ink)}
+.us .hit{margin-left:auto;font:700 15px Inter,'Noto Sans SC';letter-spacing:.06em;color:var(--paper);background:var(--ink);border-radius:3px;padding:6px 16px;
+  opacity:0;transform:scale(.7);transition:all .38s cubic-bezier(.16,1,.3,1)}
+.us .hit.in{opacity:1;transform:none}
+#sumRow{position:absolute;left:88px;top:840px;display:flex;align-items:baseline;gap:28px;opacity:0;transition:opacity .45s}
+#sumRow.in{opacity:1}
+#sumBig{font:800 120px Inter;letter-spacing:-.04em;color:var(--accent)}
+#sumTx{font:700 26px 'Noto Sans SC';color:var(--ink)}
+#gateBar{position:absolute;left:88px;top:966px;width:1744px;border-top:1px solid var(--grid);padding-top:16px;display:flex;align-items:center;gap:22px;
+  opacity:0;transform:translateY(14px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#gateBar.in{opacity:1;transform:none}
+#gateBar .t{font:600 19px 'Noto Sans SC';color:var(--muted)}
+#gateBar .x{margin-left:auto;font:700 15px Inter,'Noto Sans SC';letter-spacing:.06em;color:#fff;background:var(--accent);border-radius:3px;padding:6px 16px;opacity:0;transition:opacity .45s}
+#gateBar .x.in{opacity:1}
+
+/* ── 大肥鱼 ── */
+.fish{position:absolute;width:190px;z-index:35;opacity:0;transform:translateY(26px) scale(.62);transition:all .45s cubic-bezier(.34,1.6,.64,1);pointer-events:none}
+.fish.show{opacity:1;transform:none}
+.fish img{width:100%;display:block}
+.fish .say{position:absolute;width:262px;background:#fff;border:1.5px solid var(--ink);border-radius:10px;padding:12px 18px;
+  font:700 22px 'Noto Sans SC';color:var(--ink);line-height:1.42;opacity:0;transform:scale(.6);transition:all .4s cubic-bezier(.34,1.6,.64,1) .14s}
+.fish.show .say{opacity:1;transform:none}
+.fish .say b{font-weight:900;color:var(--accent)}
+#fish63a{left:1608px;top:800px}
+#fish63a .say{left:-268px;top:-4px}
+#fish63b{left:1650px;top:74px}
+#fish63b .say{left:-268px;top:6px}
+
+.corner{position:absolute;font:600 15px Inter,'Noto Sans SC';letter-spacing:.1em;color:var(--faint);z-index:41}
+#chap{left:88px;bottom:30px}
+#src{right:88px;bottom:30px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:var(--grid)}
+#bar{height:100%;width:0;background:var(--ink)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(240,239,235,.94);color:var(--muted)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid var(--faint);color:var(--ink);font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(28,28,26,.06)}
+#replay.done{border-color:var(--ink);color:var(--ink)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="bg"></div>
+  <div id="cam">
+    <div id="kick" class="eyebrow"><span class="no">63</span>VERIFY · 逐字比对</div>
+    <div id="title" class="h2">它又多做了 <b>一步</b></div>
+    <div id="badge">示意图 · 非实拍 · 哈希为示意值</div>
+
+    <!-- ===== ACT 1 ===== -->
+    <div class="act" id="act1">
+      <div id="scr">
+        <div class="l1">按剧本来讲 → 到这里就能<span class="st"><s>直接宣布胜利了</s><span id="strike"></span></span></div>
+        <div class="l2" id="scrL2">但它并没有直接写进结论</div>
+      </div>
+      <div id="chips1">
+        <span class="cchip" id="cch1">默认密码网上到处都是</span>
+        <span class="cchip" id="cch2">VulnClaw 自己也知道</span>
+      </div>
+      <div id="cmpStage">
+        <div class="rw a" id="rwA">
+          <div class="lb">A · 本地计算 · 候选密码的 MD5</div>
+          <div class="cmp" id="strA">b6d767b9b9e1bcb74be9c8a71d3a3ba8</div>
+        </div>
+        <div class="rw" id="rwB">
+          <div class="lb">B · 拖下来的哈希 · 逐一比对</div>
+          <div class="cmp" id="strB">b6d767b9b9e1bcb74be9c8a71d3a3ba8</div>
+        </div>
+        <div id="cmpVal">逐字符全等 · 0 偏差</div>
+      </div>
+      <div id="legend">
+        <h5>CHAR BY CHAR</h5>
+        <div class="lg"><span class="sw ink">a</span>命中 · 落墨</div>
+        <div class="lg"><span class="sw acc">✕</span>不符 · 橙色抖动</div>
+        <div class="note">一个字符一个字符地比 · 只要有一处对不上，这一整条就得作废</div>
+      </div>
+      <div id="cntRow">
+        <span id="cntBig">全部对上</span>
+        <span id="cntTx">候选密码算出来的哈希，跟拖下来的一模一样</span>
+        <span id="cntTag" class="tag-ink">MATCH ✓</span>
+      </div>
+      <div class="fish" id="fish63a"><div class="say">不猜，<b>自己算一遍</b></div><img src="Shark-GIF/130_关在笼中泪眼汪汪委屈可怜求助.gif" alt=""></div>
+    </div>
+
+    <!-- ===== ACT 2 ===== -->
+    <div class="act hide" id="act2">
+      <div id="tally">
+        <div id="tlHead"><h3>五个用户 · <em>全部命中</em></h3><span>LOCAL HASH ⇒ DB HASH</span></div>
+        <div class="us" id="u1"><span class="who">用户 1</span><span class="mini"></span><span class="hit" id="h1">命中 ✓</span></div>
+        <div class="us" id="u2"><span class="who">用户 2</span><span class="mini"></span><span class="hit" id="h2">命中 ✓</span></div>
+        <div class="us" id="u3"><span class="who">用户 3</span><span class="mini"></span><span class="hit" id="h3">命中 ✓</span></div>
+        <div class="us" id="u4"><span class="who">用户 4</span><span class="mini"></span><span class="hit" id="h4">命中 ✓</span></div>
+        <div class="us" id="u5"><span class="who">用户 5</span><span class="mini"></span><span class="hit" id="h5">命中 ✓</span></div>
+      </div>
+      <div id="sumRow"><span id="sumBig">5 / 5</span><span id="sumTx">留下的是一句「非猜测的值」</span></div>
+      <div id="gateBar">
+        <span class="t">AI 的任何结论，都必须在真实拿到的数据里对得上</span>
+        <span class="x" id="gateX">对不上 · 作废</span>
+      </div>
+      <div class="fish" id="fish63b"><div class="say">宁可<b>多跑一步</b></div><img src="Shark-GIF/006_双手身前微笑乖巧期待.gif" alt=""></div>
+    </div>
+  </div>
+
+  <div class="corner" id="chap">63 / 第七章 实战 · 逐个比对</div>
+  <div class="corner" id="src">口播对齐 timeline.md · 29:49–30:23</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-63 · MD5逐一比对 · 34s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=34000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ===== 补间 / 工具 ===== */
+const show=(sel,cls)=>{const el=$(sel);if(el)el.classList.add(cls||'in')};
+/* 逐字符比对（命中=墨 ok / 不符=橙抖动 bad） */
+function build(sel,txt){const sp=$(sel);sp.innerHTML='';for(const ch of txt){const b=document.createElement('b');b.textContent=ch;sp.appendChild(b)}}
+function cmpRun(sel,n,start,step,cls){let last=-1;
+  tws.push({t:start,d:n*step,e:p=>p,f:p=>{const k=Math.floor(p*n);if(k!==last){last=k;
+    document.querySelectorAll(sel+' b').forEach((b,i)=>{if(i<k)b.classList.add(cls)});
+    if(k%3===0)__sfx.type(.35);}},done:()=>{document.querySelectorAll(sel+' b').forEach(b=>b.classList.add(cls))}})}
+/* L15 计票：逐格落墨 + 命中盖章 */
+function rollMini(sel,start,dur){const cells=document.querySelectorAll(sel+' .mini b'),hit=document.querySelector(sel+' .hit');
+  tws.push({t:start,d:dur,e:eo,f:p=>{const k=Math.floor(p*cells.length);cells.forEach((c,i)=>c.classList.toggle('ok',i<k))},
+    done:()=>{cells.forEach(c=>c.classList.add('ok'));if(hit)hit.classList.add('in')}})}
+build('#strA','b6d767b9b9e1bcb74be9c8a71d3a3ba8');
+build('#strB','b6d767b9b9e1bcb74be9c8a71d3a3ba8');
+/* 5 行 mini 计票格 */
+document.querySelectorAll('.us .mini').forEach(m=>{let s='';for(let i=0;i<14;i++)s+='<b></b>';m.innerHTML=s});
+
+/* ============ DUR 与 cue 表 ============ */
+/* 口播区间 29:49–30:23（镜头起点 29:49 = 1789s） */
+on(150,()=>{show('#kick');show('#title');show('#bg');__sfx.pop(.55);});               // 29:49「按剧本来讲」
+on(1000,()=>{show('#scr');__sfx.thud(.55);});                                         // 29:50「到这里就可以直接宣布胜利了」
+on(2400,()=>{show('#strike');show('#scrL2');camFocus(960,330,1.05,.5);__sfx.swipe(.8);}); // 29:51「但是VulnClaw它又多做了一步」
+on(4200,()=>{show('#badge');__sfx.pop(.45);});                                        // 29:53「那么这一步是整个演示我最想让大家看的」
+on(6600,()=>{show('#fish63a','show');__sfx.pop(.45);});                               // 29:56「DVWA它的默认密码在网上到处都是」
+on(9000,()=>{show('#chips1');show('#cch1');__sfx.pop(.5);});                          // 29:58「VulnClaw自己也知道」
+on(11000,()=>{show('#cch2');__sfx.pop(.5);});                                         // 30:00「但是他并没有直接写进结论」
+on(12900,()=>{show('#cmpStage');show('#rwA');show('#legend');$('#fish63a').classList.remove('show');
+  camFocus(960,560,1.06,.55);__sfx.ding(.7);});                                       // 30:02「他在本地把这些候选的密码挨个计算MD5值」
+on(15800,()=>{show('#rwB');__sfx.ding(.5);});                                         // 30:05「然后再跟拖下来的5个哈希逐一比对」
+on(16000,()=>{cmpRun('#strA',32,16000,92,'ok');cmpRun('#strB',32,16000,92,'ok');});
+on(19000,()=>{show('#cmpVal');show('#cntRow');show('#cntTag');camFocus(960,600,1.05,.5);__sfx.ding(.85);}); // 30:08「发现全部对上」
+/* —— 硬切 ACT 2 —— */
+on(19800,()=>{$('#act1').classList.add('hide');$('#act2').classList.remove('hide');camCut(0,0,1);__sfx.swipe(.95);}); // 30:09「然后才在报告里面留下一句非猜测的值」
+on(20100,()=>{show('#tlHead');show('#sumRow');show('#badge');__sfx.pop(.55);});
+on(20400,()=>{show('#u1');rollMini('#u1',20400,420);__sfx.pop(.5);});
+on(21200,()=>{show('#u2');rollMini('#u2',21200,420);__sfx.pop(.5);});
+on(22000,()=>{show('#u3');rollMini('#u3',22000,420);__sfx.pop(.5);});
+on(22800,()=>{show('#u4');rollMini('#u4',22800,420);__sfx.pop(.5);});
+on(23600,()=>{show('#u5');rollMini('#u5',23600,420);show('#fish63b','show');__sfx.ding(.7);}); // 30:14「AI的任何结论都必须在真实拿到数据里对得上」
+on(26200,()=>{show('#gateBar');camFocus(960,640,1.05,.5);__sfx.pop(.6);});            // 30:17
+on(28000,()=>{show('#gateX');__sfx.thud(.6);});                                       // 30:17「如果对不上的话就要作废」
+on(29000,()=>{camFocus(960,560,1.03,.5);__sfx.pop(.45);});                            // 30:18「也就是说VulnClaw宁可多跑一步」
+on(31800,()=>{$('#sumTx').textContent='宁可多跑一步，也不给编出来的胜利';$('#fish63b').classList.remove('show');__sfx.ding(.6);}); // 30:21「他也不会给你一个编出来的胜利」
+
+/* ===== [不动] QA 专用（正常播放不触发） ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

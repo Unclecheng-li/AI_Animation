@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+  ◆ 分镜演示页：镜头 0-55 · 两套账号（23s）◆  【v4 瑞士国际主义】
+  主视觉：双账号流水线 —— 上下两条并行管线（数据库账号线 = 墨底卡 / 网站登录线 = 白卡），
+          各含 账号站 → 表单站 → 用途站；lieflat F1 可数刻度 + diagram-design 发丝引线
+  对比标注：两线之间跨线警示带 + ≠（唯一橙主角：这两组账号不是一回事，不要搞混）
+  字体：Inter × Noto Sans SC × IBM Plex Mono
+  口播区间 25:05–25:28（cue = 口播起点 − 25:05）
+============================================================= -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 0-55 · 两套账号 · 23s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;--accent:#F5572F;}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Noto Sans SC','Inter',sans-serif}
+body.paused *{animation-play-state:paused!important}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#stage::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:1;
+  background-image:linear-gradient(rgba(28,28,26,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.045) 1px,transparent 1px);
+  background-size:48px 48px}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+#world{position:absolute;inset:0}
+
+/* ── 标题组 ── */
+#ttl{position:absolute;left:64px;top:38px;z-index:20;opacity:0;transform:translateY(-14px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#ttl.in{opacity:1;transform:none}
+#ttl .no{display:inline-flex;align-items:center;font:700 15px 'IBM Plex Mono';letter-spacing:.14em;color:var(--paper);background:var(--ink);border-radius:3px;padding:5px 14px}
+#ttl h1{font:900 48px/1.1 'Noto Sans SC',Inter;color:var(--ink);letter-spacing:.02em;margin-top:8px}
+#ttl h1 b{color:var(--ink)}
+#ttl .en{font:500 18px 'IBM Plex Mono';letter-spacing:.06em;color:var(--muted);margin-top:4px}
+
+/* ===== 主视觉：双账号流水线 ===== */
+#flow{position:absolute;left:70px;top:176px;width:1790px;height:764px;z-index:8;border-radius:18px;
+  border:1px solid var(--ink);background:var(--card)}
+#fsvg{position:absolute;left:0;top:0;width:1790px;height:764px;overflow:visible;z-index:6}
+.railBed{fill:none;stroke:#EDECE8;stroke-width:40;stroke-linecap:round}
+.railL{fill:none;stroke:var(--ink);stroke-width:3.6;stroke-linecap:round}
+.railD{fill:none;stroke-width:3;stroke-dasharray:14 13;stroke-linecap:round;animation:dashf 1s linear infinite}
+#rd1{stroke:rgba(28,28,26,.55)}#rd2{stroke:rgba(28,28,26,.4)}
+@keyframes dashf{to{stroke-dashoffset:-54}}
+.ptA{fill:#1C1C1A}.ptB{fill:#6A6963}
+#railA.lit #rd1{stroke:rgba(28,28,26,.95)}
+#railB.lit #rd2{stroke:rgba(28,28,26,.85)}
+#cross{fill:none;stroke:#1C1C1A;stroke-width:3;stroke-dasharray:12 10;opacity:0;transition:opacity .5s}
+#cross.in{opacity:1}
+/* F1 可数刻度 + diagram-design 发丝引线 */
+#fsvg .rung{stroke-width:1.2}
+#fsvg text.cap{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;letter-spacing:.1em}
+.ldr{fill:none;stroke-width:1;stroke-dasharray:4 3;opacity:0;transition:opacity .55s ease}
+.ldr.in{opacity:1}
+.ldrd{opacity:0;transition:opacity .55s ease}
+.ldrd.in{opacity:1}
+
+/* 站点卡 */
+.stn{position:absolute;z-index:8;border-radius:14px;border:2px solid var(--ink);
+  background:var(--card);padding:16px 20px;
+  opacity:0;transform:translateY(16px) scale(.95);transition:all .5s cubic-bezier(.2,1.4,.4,1)}
+.stn.in{opacity:1;transform:none}
+.stn.hi{outline:3px solid var(--ink);outline-offset:2px}
+.stn .k{font:700 19px 'Noto Sans SC';letter-spacing:.02em;color:var(--muted)}
+.stn .v{margin-top:9px;font:700 25px 'IBM Plex Mono';color:var(--ink);letter-spacing:.01em}
+.stn .v b{color:var(--ink);font-weight:700}
+.stn .ic{position:absolute;right:16px;bottom:14px;opacity:1}
+.stn .pin{position:absolute;left:20px;bottom:14px;display:inline-block;font:700 14px 'Noto Sans SC';letter-spacing:.02em;
+  color:var(--paper);background:var(--ink);border-radius:999px;padding:4px 15px;
+  opacity:0;transform:scale(.6);transition:all .4s cubic-bezier(.2,1.6,.4,1)}
+.stn .pin.in{opacity:1;transform:none}
+/* A 线（数据库）= 墨底反白卡 */
+.stn.dark{background:var(--ink);border-color:var(--ink)}
+.stn.dark .k{color:var(--faint)}
+.stn.dark .v{color:var(--paper)}
+.stn.dark .v b{color:var(--paper)}
+#stA1{left:70px;top:176px;width:330px;height:150px}
+#stA3{left:1120px;top:176px;width:430px;height:150px}
+#stB1{left:70px;top:546px;width:330px;height:150px}
+#stB3{left:1120px;top:546px;width:430px;height:150px}
+
+/* 密码拆解（数据库账号 · 挂在账号站上方） */
+#pw{position:absolute;left:470px;top:10px;display:flex;gap:22px;z-index:9}
+.grp{position:relative;display:flex;gap:2px;padding-bottom:32px}
+.grp .ch{font:700 58px/1 'IBM Plex Mono';color:var(--ink);opacity:0;transform:translateY(16px);transition:all .3s cubic-bezier(.2,1.5,.4,1)}
+.grp .ch.on{opacity:1;transform:none}
+.grp .ch.hl{color:var(--ink);background:var(--ink);-webkit-text-fill-color:var(--paper);border-radius:6px;padding:0 6px}
+.grp .ch.ghost{color:var(--faint)}
+.grp .ch.done{color:var(--ink);background:var(--ink);-webkit-text-fill-color:var(--paper);border-radius:6px;padding:0 6px;animation:pwflip .52s cubic-bezier(.2,1.7,.4,1)}
+@keyframes pwflip{0%{transform:rotateY(0deg)}50%{transform:rotateY(88deg) scale(1.3)}100%{transform:rotateY(0deg)}}
+.grp em{position:absolute;left:0;bottom:0;font-style:normal;font:600 13px 'IBM Plex Mono';letter-spacing:.04em;color:var(--ink);
+  border:1px solid var(--ink);border-radius:6px;padding:4px 11px;background:var(--card);white-space:nowrap;
+  opacity:0;transform:translateY(9px);transition:all .4s cubic-bezier(.2,1.5,.4,1)}
+.grp.an em{opacity:1;transform:none}
+/* 线路标题 */
+.rlt{position:absolute;font:800 30px 'Noto Sans SC';letter-spacing:.04em;color:var(--ink);z-index:9;
+  opacity:0;transform:translateX(-16px);transition:all .5s cubic-bezier(.2,1.4,.4,1)}
+.rlt.in{opacity:1;transform:none}
+#rlA-t{left:70px;top:340px}
+#rlB-t{left:70px;top:710px;color:var(--muted)}
+
+/* ── viz：phpMyAdmin 风格表单（数据库线 · 墨底反白 · 示意图） ── */
+#vizPma{position:absolute;left:470px;top:150px;width:330px;padding-bottom:10px;border-radius:10px;overflow:hidden;z-index:8;
+  background:var(--ink);border:1px solid var(--ink);
+  opacity:0;transform:translateY(16px) scale(.96);transition:all .5s cubic-bezier(.2,1.4,.4,1)}
+#vizPma.in{opacity:1;transform:none}
+.vp-hd{display:flex;align-items:baseline;gap:8px;padding:8px 14px 6px;background:#111;border-bottom:1px solid #2E2D29}
+.vp-logo{font:700 16px 'IBM Plex Mono';color:var(--paper)}
+.vp-cap{font:600 11px 'IBM Plex Mono';letter-spacing:.06em;color:var(--faint)}
+.vp-row{display:flex;align-items:center;gap:8px;padding:7px 14px 0}
+.vp-row label{font:500 12.5px 'IBM Plex Mono';color:var(--faint);width:66px}
+.vp-row input{flex:1;background:#0E0E0D;border:1px solid #3A3934;border-radius:4px;padding:6px 9px;
+  font:500 15px 'IBM Plex Mono';color:var(--paper);outline:none}
+.vp-go{margin:9px 14px 8px;background:var(--paper);border:none;border-radius:4px;color:var(--ink);font:700 13px 'IBM Plex Mono';
+  padding:6px 22px;cursor:pointer;transition:all .2s}
+.vp-go.press{transform:scale(.92);background:#fff}
+#vizPma .viz-note{position:absolute;right:8px;bottom:5px;font:600 10px 'IBM Plex Mono';letter-spacing:.06em;color:var(--muted)}
+
+/* ── viz：DVWA 登录框（网站线 · 白卡 · 示意图） ── */
+#vizDvwaLogin{position:absolute;left:470px;top:520px;width:300px;padding-bottom:10px;border-radius:10px;overflow:hidden;z-index:8;
+  background:var(--card);border:1px solid var(--ink);
+  opacity:0;transform:translateY(16px) scale(.96);transition:all .5s cubic-bezier(.2,1.4,.4,1)}
+#vizDvwaLogin.in{opacity:1;transform:none}
+.vl-t{font:700 19px 'IBM Plex Mono';color:var(--ink);letter-spacing:.02em;padding:11px 16px 8px;border-bottom:1px solid var(--grid)}
+.vl-f{display:flex;align-items:center;gap:8px;padding:7px 16px 0}
+.vl-f label{font:500 12.5px 'IBM Plex Mono';color:var(--muted);width:70px}
+.vl-f input{flex:1;background:var(--paper);border:1px solid var(--ink);border-radius:5px;color:var(--ink);
+  font:500 15px 'IBM Plex Mono';padding:6px 10px;outline:none}
+#dvBtn{margin:10px 16px 9px;width:calc(100% - 32px);background:var(--ink);border:none;border-radius:5px;color:var(--paper);
+  font:700 14px 'IBM Plex Mono';padding:7px 0;cursor:pointer;transition:all .2s}
+#dvBtn.press{background:#000;transform:scale(.95)}
+#vizDvwaLogin .viz-note{position:absolute;right:8px;bottom:5px;font:600 10px 'IBM Plex Mono';letter-spacing:.06em;color:var(--muted)}
+
+/* ── 跨线警示带（唯一橙主角 · 两线之间） ── */
+#concl{position:absolute;left:40px;top:396px;width:1710px;height:108px;z-index:10;border-radius:14px;overflow:hidden;
+  border:1.6px solid var(--accent);background:var(--card);
+  display:flex;align-items:center;padding-left:176px;gap:18px;
+  opacity:0;transform:translateY(18px);transition:all .55s cubic-bezier(.2,1.4,.4,1)}
+#concl.in{opacity:1;transform:none}
+#concl .c1{position:relative;font:500 27px 'Noto Sans SC';color:var(--muted);letter-spacing:.06em}
+#concl .hand{position:relative;font:900 56px/1 'Noto Sans SC';color:var(--ink);letter-spacing:.03em}
+#concl .hand b{color:var(--accent)}
+#concl .ne{position:relative;margin-left:auto;margin-right:76px;font:900 74px/1 'Inter';color:var(--accent)}
+#concl.big{animation:conclPulse .55s cubic-bezier(.2,1.6,.4,1)}
+@keyframes conclPulse{0%{transform:scale(1)}45%{transform:scale(1.03)}100%{transform:scale(1)}}
+#xmark{position:absolute;left:86px;top:393px;width:88px;height:88px;z-index:12;opacity:0;transform:scale(.2);
+  transition:all .45s cubic-bezier(.2,1.7,.4,1)}
+#xmark.in{opacity:1;transform:none}
+
+/* ── 大肥鱼 ── */
+#fish{position:absolute;left:1150px;top:34px;width:152px;z-index:26;opacity:0;transform:translateY(20px) scale(.72);
+  transition:all .45s cubic-bezier(.34,1.6,.64,1);pointer-events:none}
+#fish.show{opacity:1;transform:none}
+#fish img{width:100%;display:block}
+#fish .say{position:absolute;left:170px;top:34px;width:300px;background:var(--card);border:1.5px solid var(--ink);border-radius:14px;
+  padding:13px 18px;font:700 22px 'Noto Sans SC';color:var(--ink);line-height:1.4;
+  opacity:0;transform:scale(.6);transition:all .4s cubic-bezier(.34,1.6,.64,1) .16s}
+#fish.show .say{opacity:1;transform:scale(1)}
+#fish .say b{color:var(--ink);font-weight:900}
+#fish .say::after{content:'';position:absolute;left:-13px;top:34px;border:7px solid transparent;border-right:10px solid var(--card)}
+
+/* ── 底盘 ── */
+.corner{position:absolute;font:500 14px 'Noto Sans SC';color:var(--muted);letter-spacing:.04em;z-index:41}
+#chap{left:52px;bottom:30px}
+#src{right:52px;bottom:30px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:rgba(28,28,26,.12)}
+#bar{height:100%;width:0;background:var(--ink)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(240,239,235,.94);color:var(--muted)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid var(--grid);color:var(--ink);font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(28,28,26,.06)}
+#replay.done{border-color:var(--accent);color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="cam">
+  <div id="world">
+
+    <div id="ttl">
+      <span class="no">SHOT 0-55</span>
+      <h1>两套账号，<b>别搞混</b></h1>
+      <div class="en">two pipelines, two credentials</div>
+    </div>
+
+    <!-- ===== 主视觉：双账号流水线 ===== -->
+    <div id="flow">
+      <svg id="fsvg" viewBox="0 0 1790 764">
+        <g id="railA">
+          <path class="railBed" d="M60 251 H1730"/>
+          <path id="rd1" class="railD" d="M60 251 H1730"/>
+          <path id="rl1" class="railL" d="M60 251 H1730"/>
+          <polygon points="0,0 -30,-15 -30,15" fill="#1C1C1A" transform="translate(1748,251)"/>
+          <g id="ptsA"></g>
+        </g>
+        <g id="railB">
+          <path class="railBed" d="M60 621 H1730"/>
+          <path id="rd2" class="railD" d="M60 621 H1730"/>
+          <path id="rl2" class="railL" d="M60 621 H1730"/>
+          <polygon points="0,0 -30,-15 -30,15" fill="#6A6963" transform="translate(1748,621)"/>
+          <g id="ptsB"></g>
+        </g>
+        <g id="scaleA"></g>
+        <g id="scaleB"></g>
+        <text id="capA" class="cap" x="300" y="356" text-anchor="start" fill="rgba(28,28,26,.6)" style="opacity:0" data-op="0.6">刻度 · 一格一段</text>
+        <text id="capB" class="cap" x="300" y="726" text-anchor="start" fill="rgba(28,28,26,.45)" style="opacity:0" data-op="0.45">刻度 · 一格一段</text>
+        <path id="ldA" class="ldr" d="M72 330 Q 52 300 58 256" stroke="rgba(28,28,26,.5)"/>
+        <circle id="ldAd" class="ldrd" cx="58" cy="251" r="2.6" fill="#1C1C1A"/>
+        <path id="ldB" class="ldr" d="M72 700 Q 52 670 58 626" stroke="rgba(28,28,26,.4)"/>
+        <circle id="ldBd" class="ldrd" cx="58" cy="621" r="2.6" fill="#6A6963"/>
+        <path id="cross" d="M130 330 V542"/>
+      </svg>
+
+      <!-- 数据库线（上 · 墨底卡） -->
+      <div class="stn dark" id="stA1">
+        <div class="k">数据库账号 · 连库用</div>
+        <div class="v">dvwa / <b>p@ssw0rd</b></div>
+        <div class="ic">
+          <svg width="62" height="62" viewBox="0 0 64 64" fill="none">
+            <ellipse cx="32" cy="16" rx="20" ry="8" stroke="#F0EFEB" stroke-width="3.4"/>
+            <path d="M12 16v32c0 4.4 9 8 20 8s20-3.6 20-8V16" stroke="#F0EFEB" stroke-width="3.4"/>
+            <path d="M12 32c0 4.4 9 8 20 8s20-3.6 20-8" stroke="#F0EFEB" stroke-width="3.4"/>
+          </svg>
+        </div>
+      </div>
+      <div id="pw">
+        <span class="grp" id="g1"><span class="ch" id="c0">p</span><span class="ch" id="c1">@</span><em>p 加 @ 加两个 s</em></span>
+        <span class="grp" id="g2"><span class="ch" id="c2">s</span><span class="ch" id="c3">s</span></span>
+        <span class="grp" id="g3"><span class="ch" id="c4">w</span><span class="ch ghost" id="c5">o</span><span class="ch" id="c6">r</span><span class="ch" id="c7">d</span><em>word 的 o 换成 0</em></span>
+      </div>
+      <div id="vizPma">
+        <div class="vp-hd"><span class="vp-logo">phpMyAdmin</span><span class="vp-cap">数据库登录 · 示意</span></div>
+        <div class="vp-row"><label>用户名</label><input id="vpU" readonly value=""></div>
+        <div class="vp-row"><label>密码</label><input id="vpP" readonly value="" type="password"></div>
+        <button class="vp-go" id="vpGo" type="button">执行 / Go</button>
+        <span class="viz-note">示意图 · 非实拍</span>
+      </div>
+      <div class="stn dark" id="stA3">
+        <div class="k">收口：连上数据库</div>
+        <div class="ic">
+          <svg width="62" height="62" viewBox="0 0 64 64" fill="none">
+            <rect x="10" y="14" width="44" height="36" rx="5" stroke="#F0EFEB" stroke-width="3.2"/>
+            <path d="M10 26h44" stroke="#F0EFEB" stroke-width="3.2"/>
+            <circle cx="18" cy="20" r="2.4" fill="#F0EFEB"/><circle cx="26" cy="20" r="2.4" fill="#F0EFEB"/>
+            <path d="M22 40h20M22 46h12" stroke="#F0EFEB" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <span class="pin" id="pinA">用途：给网站读数据</span>
+      </div>
+      <div class="rlt" id="rlA-t">数据库这条线</div>
+
+      <!-- 网站线（下 · 白卡） -->
+      <div class="stn" id="stB1">
+        <div class="k">网站登录账号 · 进后台</div>
+        <div class="v">admin / password</div>
+        <div class="ic">
+          <svg width="58" height="58" viewBox="0 0 120 120" fill="none">
+            <rect x="18" y="52" width="84" height="54" rx="9" stroke="#1C1C1A" stroke-width="6"/>
+            <path d="M36 52V36a24 24 0 0 1 48 0v16" stroke="#1C1C1A" stroke-width="6" stroke-linecap="round"/>
+            <circle cx="60" cy="76" r="7" fill="#1C1C1A"/>
+            <path d="M60 83v11" stroke="#1C1C1A" stroke-width="6" stroke-linecap="round"/>
+          </svg>
+        </div>
+      </div>
+      <div id="vizDvwaLogin">
+        <div class="vl-t">DVWA :: Login</div>
+        <div class="vl-f"><label>Username</label><input id="dvU" readonly value=""></div>
+        <div class="vl-f"><label>Password</label><input id="dvP" readonly value="" type="password"></div>
+        <button id="dvBtn" type="button">Login</button>
+        <span class="viz-note">示意图 · 非实拍</span>
+      </div>
+      <div class="stn" id="stB3">
+        <div class="k">收口：进到网站里</div>
+        <div class="ic">
+          <svg width="60" height="60" viewBox="0 0 64 64" fill="none">
+            <rect x="8" y="12" width="48" height="40" rx="5" stroke="#1C1C1A" stroke-width="3.2"/>
+            <path d="M8 24h48" stroke="#1C1C1A" stroke-width="3"/>
+            <path d="M26 34l-6 6 6 6M38 34l6 6-6 6" stroke="#1C1C1A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <span class="pin" id="pinB">用途：操作靶场页面</span>
+      </div>
+      <div class="rlt" id="rlB-t">网站登录这条线</div>
+
+      <!-- 跨线警示带（唯一橙主角） -->
+      <div id="concl">
+        <span class="c1">这两组账号</span>
+        <span class="hand">不是一回事，<b>不要搞混</b></span>
+        <span class="ne">≠</span>
+      </div>
+      <div id="xmark">
+        <svg width="88" height="88" viewBox="0 0 88 88" fill="none">
+          <circle cx="44" cy="44" r="35" stroke="#1C1C1A" stroke-width="4" fill="#FFFFFF"/>
+          <path d="M29 29 L59 59 M59 29 L29 59" stroke="#1C1C1A" stroke-width="7" stroke-linecap="round"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- 大肥鱼 -->
+    <div id="fish">
+      <div class="say">两套账号，<b>千万别搞混</b></div>
+      <img src="Shark-GIF/026_双手合十微笑请求拜托.gif" alt="大肥鱼">
+    </div>
+
+  </div>
+  </div>
+
+  <div class="corner" id="chap">第四章 · 实战 / 靶场</div>
+  <div class="corner" id="src">口播对齐 timeline.md · 25:05–25:28</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-55 · 两套账号 · 23s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=23000;
+const $=s=>document.querySelector(s);
+const $$=s=>document.querySelectorAll(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+/* viz：输入框打字 */
+function typeVal(sel,text,start,step){const el=$(sel);let last=-1;
+  tws.push({t:start,d:text.length*step,f:p=>{const k=Math.floor((QAMODE?1:p)*text.length);if(k!==last){last=k;el.value=text.slice(0,k);if(k>0)__sfx.type(.5)}},
+    done:()=>{el.value=text}})}
+/* 线路绘制 + 沿线粒子（tws 驱动，可冻结） */
+const QAMODE=/t=\d+/.test(location.hash||'');
+function railIn(){
+  [['#rl1',1740],['#rl2',1740]].forEach(([sel,L])=>{
+    const p=$(sel);p.style.strokeDasharray=L;p.style.strokeDashoffset=L;
+    tws.push({t:performance.now()-t0,d:1200,e:eo,f:x=>{p.style.strokeDashoffset=L*(1-x)}});
+  });
+}
+(function(){
+  const mk=(gid,cls,n)=>{const g=$(gid);const arr=[];
+    for(let i=0;i<n;i++){
+      const c=document.createElementNS('http://www.w3.org/2000/svg','circle');
+      c.setAttribute('r',i%3===0?6:4);c.setAttribute('class',cls);g.appendChild(c);arr.push({el:c,off:i/n});
+    }return arr;};
+  const all=mk('#ptsA','ptA',6).map(d=>({d,y:251})).concat(mk('#ptsB','ptB',6).map(d=>({d,y:621})));
+  tws.push({t:0,d:1e9,f:function(){
+    const T=(performance.now()-t0)/9000;
+    for(const o of all){const q=(o.d.off+T)%1;o.d.el.setAttribute('cx',60+q*1680);o.d.el.setAttribute('cy',o.y);}
+  }});
+})();
+/* F1 Rung Bars 语法 —— 把两条管线读成"可数刻度" */
+const rungEls=[];
+(function(){
+  const ns='http://www.w3.org/2000/svg';
+  const build=(gid,cy,color)=>{
+    const g=$(gid),x0=60,x1=1730,n=30,st=(x1-x0)/n;
+    for(let i=1;i<n;i++){
+      const x=Math.round(x0+i*st);
+      const ln=document.createElementNS(ns,'line');
+      ln.setAttribute('class','rung');ln.setAttribute('x1',x);ln.setAttribute('y1',cy-13);
+      ln.setAttribute('x2',x);ln.setAttribute('y2',cy+13);ln.setAttribute('stroke',color);
+      ln.style.opacity=0;ln.dataset.op=(i%5===0)?0.95:0.4;g.appendChild(ln);rungEls.push(ln);
+      if(i%5===0){
+        const c=document.createElementNS(ns,'circle');
+        c.setAttribute('cx',x);c.setAttribute('cy',cy-19);c.setAttribute('r',2.2);c.setAttribute('fill',color);
+        c.style.opacity=0;c.dataset.op=0.9;g.appendChild(c);rungEls.push(c);
+      }
+    }
+  };
+  build('#scaleA',251,'#1C1C1A');
+  build('#scaleB',621,'#6A6963');
+  ['#capA','#capB'].forEach(s=>rungEls.push($(s)));
+})();
+function revealScale(t0ms){
+  const N=rungEls.length;
+  tws.push({t:t0ms,d:1100,e:eo,f:p=>{
+    const k=Math.ceil(p*N);
+    for(let i=0;i<N;i++)rungEls[i].style.opacity=(i<k?+rungEls[i].dataset.op:0);
+  }});
+}
+
+/* ────────────────────────────────────────────────
+   本镜头 cue（25:05–25:28，23s）
+   cue 时刻 = 口播句起点(绝对) − 25:05
+   ──────────────────────────────────────────────── */
+on(150,()=>{$('#ttl').classList.add('in');__sfx.pop(.5)});                            // 25:05「好这里我先提一下」
+on(900,()=>{$('#stA1').classList.add('in')});                                          // 25:06「说一下这个密码是干啥的」
+on(1400,()=>{railIn();__sfx.swipe(.7)});                                               // 两条管线铺设（连线绘制）
+on(3000,()=>{$('#railA').classList.add('lit');$('#stA1').classList.add('hi');$('#rlA-t').classList.add('in');
+  camFocus(760,400,1.06,.7);__sfx.thud(.95)});                                         // 25:08「这个p@ssw0rd是password变体写法」
+on(3100,()=>{$('#vizPma').classList.add('in')});                                       // viz：phpMyAdmin 表单登场
+on(3400,()=>typeVal('#vpU','dvwa',3400,150));                                          // viz：用户名打字
+on(4200,()=>typeVal('#vpP','p@ssw0rd',4200,140));                                      // viz：密码打字（与拆字同步）
+on(5400,()=>{$('#vpGo').classList.add('press');__sfx.ding(.5)});                       // viz：点击执行
+for(let i=0;i<8;i++)on(3250+i*150,()=>{$('#c'+i).classList.add('on');__sfx.type(.7)}); // 密码逐字敲出
+on(6000,()=>{['#c0','#c1'].forEach(id=>$(id).classList.add('hl'));$('#g1').classList.add('an');__sfx.pop(.6)});   // 25:11「p加@加两个s」
+on(6600,()=>{['#c2','#c3'].forEach(id=>$(id).classList.add('hl'));$('#g2').classList.add('an');__sfx.pop(.6)});
+on(8000,()=>{const c=$('#c5');c.textContent='0';c.classList.remove('ghost');c.classList.add('done');             // 25:13「然后word的o变成0」
+  $('#g3').classList.add('an');__sfx.thud(.8)});
+on(10000,()=>{$('#railB').classList.add('lit');$('#stB1').classList.add('hi');$('#rlB-t').classList.add('in');
+  camFocus(900,560,1.06,.7);__sfx.thud(.95)});                                         // 25:15「跟登录网站是没有任何关系的」
+on(10200,()=>{$('#vizDvwaLogin').classList.add('in')});                                // viz：DVWA 登录框登场
+on(10600,()=>{$('#stB1').classList.add('named');__sfx.pop(.7)});
+on(10800,()=>typeVal('#dvU','admin',10800,150));                                       // viz：admin 打字
+on(11700,()=>typeVal('#dvP','password',11700,130));                                    // viz：password 打字
+on(12700,()=>{$('#dvBtn').classList.add('press');__sfx.ding(.5)});                     // viz：点击 Login
+on(11200,()=>{$('#cross').classList.add('in');$('#xmark').classList.add('in');$('#stA1').classList.remove('hi');__sfx.pop(.5)});
+on(11600,()=>{$('#concl').classList.add('in');__sfx.thud(1.05)});          // 大字结论：不是一回事，不要搞混
+on(12400,()=>{$('#stB1').classList.add('hi');__sfx.ding(.9)});
+on(13000,()=>{$('#pinA').classList.add('in');__sfx.pop(.5)});                          // 25:17「是留给DVWA网站连接数据库用的」
+on(14800,()=>{$('#stA3').classList.add('in');__sfx.pop(.5)});                          // 25:19「因为网站他要读取数据」
+on(16600,()=>{$('#pinB').classList.add('in');$('#stB3').classList.add('in');camTo(0,0,1,.8);__sfx.swipe(.7)}); // 25:21「得先拿一组数据库账号密码连上数据库」
+on(20000,()=>{$('#stB1').classList.remove('hi');$('#stA1').classList.add('hi');        // 25:25「就是我们刚刚创建的DVWA和p@ssw0rd」
+  camFocus(940,540,1.04,.6);
+  $('#concl').classList.remove('big');void $('#concl').offsetWidth;
+  $('#concl').classList.add('big');__sfx.ding(1.05)});
+on(13000,()=>{$('#fish').classList.add('show');__sfx.pop(.7)});                        // 收尾定场（鱼提前在场）
+
+/* ── v3 注入节拍（新增，不改既有 cue）── */
+on(1460,()=>revealScale(1460));                                                        // F1 可数刻度随管线铺设展开
+on(3060,()=>{$('#ldA').classList.add('in');$('#ldAd').classList.add('in')});           // 数据库线 · 发丝引线标注
+on(10060,()=>{$('#ldB').classList.add('in');$('#ldBd').classList.add('in')});          // 网站线 · 同一发丝引线规则
+
+/* ===== [不动] QA 专用（正常播放不触发）：hash 带 t=毫秒 → 起播后跳转该时刻并冻结 ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+  ◆ 分镜演示页：镜头 0-40 · CTF与靶场（18s）◆  【v4 瑞士国际主义】
+  主视觉：Venn 韦恩图（diagram-design type-venn）—— 左 CTF 夺旗赛 ∩ 右 靶场，
+          交集 = 「合法练手 / 有授权」（重叠即共同点），左右月牙区 = 各自差异；
+          + 底部 L7 双极量表（lieflat）「练手性质：先找到先赢 ←→ 练手·不排名」
+  唯一强调橙 #F5572F 只给「靶场 = 本期落点」（名称 / 落点胶囊 / 连流线 / 量表端点）
+  风格：纸底 #F0EFEB × 墨 #1C1C1A × 灰阶明度编码差异 × 无发光无渐变
+  字体：Inter × Noto Sans SC × IBM Plex Mono
+  口播区间 17:01–17:19（cue = 口播起点 − 17:01）
+  （供剪辑叠加层：画面重要内容止于 stage y≈850，底部 20% 留白）
+============================================================= -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 0-40 · CTF与靶场 · 18s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;
+  --accent:#F5572F;--dark:#1C1C1A;--darkink:#F0EFEB;--darkgrid:#2E2D29;
+  --g1:#4A4944;--g2:#6A6963;--g3:#8F8E88;--g4:#B0AFA9;--g5:#C6C5BF;--g6:#D8D7D1;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:var(--paper);overflow:hidden;color:var(--ink);
+  font-family:'Inter','Noto Sans SC',sans-serif;-webkit-font-smoothing:antialiased}
+body.paused *{animation-play-state:paused!important}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#bg{position:absolute;inset:0;z-index:0;opacity:0;transition:opacity 1.2s ease;
+  background-image:linear-gradient(rgba(28,28,26,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.05) 1px,transparent 1px);
+  background-size:44px 44px}
+#bg.in{opacity:1}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+#world{position:absolute;inset:0}
+
+/* ── 页眉 ── */
+#ttl{position:absolute;left:88px;top:64px;z-index:20;opacity:0;transform:translateY(-14px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#ttl.in{opacity:1;transform:none}
+.eyebrow{font:600 15px Inter,'Noto Sans SC';letter-spacing:.14em;text-transform:uppercase;color:var(--ink);display:flex;gap:12px;align-items:center}
+.eyebrow .no{background:var(--ink);color:var(--paper);padding:3px 10px;border-radius:3px;font-weight:700}
+#ttl h1{margin-top:16px;font:800 78px/1 'Inter','Noto Sans SC';letter-spacing:-.03em;color:var(--ink)}
+#ttl h1 b{font-weight:900}
+#sub{position:absolute;left:88px;top:196px;z-index:20;font:500 25px 'Noto Sans SC';letter-spacing:.02em;color:var(--g2);
+  opacity:0;transform:translateY(12px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#sub.in{opacity:1;transform:none}
+#sub .mono{font:600 14px 'IBM Plex Mono';letter-spacing:.14em;color:var(--muted);margin-left:8px}
+
+/* ── 主视觉图（Venn + 量表，单张图）── */
+#chart{position:absolute;left:88px;top:250px;width:1744px;height:610px;z-index:14}
+#chart svg{width:100%;height:100%;display:block}
+
+/* Venn 圆形 */
+.tint{opacity:0;transition:opacity .9s ease}
+#chart.draw .tint{opacity:1}
+.ell{stroke:#C6C5BF;stroke-width:1.4;stroke-dasharray:1;stroke-dashoffset:1;
+  transition:stroke-dashoffset 1.05s cubic-bezier(.2,1,.3,1),stroke .5s ease,stroke-width .5s ease}
+#chart.draw .ell{stroke-dashoffset:0}
+#chart.ctf .eL{stroke:#1C1C1A;stroke-width:1.7}
+#chart.tgt .eR{stroke:#1C1C1A;stroke-width:1.7}
+#chart.land .eR{stroke:var(--accent);stroke-width:2}
+
+/* 角标组 */
+.setL,.setR{opacity:0;transform:translateY(-14px);transform-box:fill-box;transition:opacity .5s ease,transform .55s cubic-bezier(.16,1,.3,1)}
+#chart.ctf .setL{opacity:1;transform:none}
+#chart.tgt .setR{opacity:1;transform:none}
+.set-mono{font:600 12px 'IBM Plex Mono';letter-spacing:.18em;fill:var(--muted)}
+.set-name{font:900 64px 'Inter','Noto Sans SC';letter-spacing:-.02em;fill:var(--ink)}
+.set-sub{font:700 24px 'Noto Sans SC';fill:var(--g2)}
+.set-name-acc{fill:var(--ink);transition:fill .5s ease}
+#chart.land .set-name-acc{fill:var(--accent)}
+/* CTF 身份胶囊（墨底反白） */
+.modeTag{opacity:0;transform:scale(.7);transform-box:fill-box;transform-origin:center;
+  transition:opacity .35s ease,transform .45s cubic-bezier(.2,1.6,.4,1)}
+#chart.enl .modeTag{opacity:1;transform:none}
+.mode-txt{font:700 15px 'Noto Sans SC';fill:var(--paper);letter-spacing:.08em}
+/* 本期落点胶囊（橙） */
+.landTag{opacity:0;transform:scale(.7);transform-box:fill-box;transform-origin:center;
+  transition:opacity .4s ease,transform .5s cubic-bezier(.2,1.6,.4,1) .08s}
+#chart.land .landTag{opacity:1;transform:none}
+.land-txt{font:700 15px 'Noto Sans SC';fill:#fff;letter-spacing:.08em}
+.landConn{opacity:0;transition:opacity .45s ease .12s}
+#chart.land .landConn{opacity:1}
+
+/* 月牙区差异行 */
+.rgL,.rgR{opacity:0;transition:opacity .5s ease}
+#chart.ctf .rgL{opacity:1}
+#chart.tgt .rgR{opacity:1}
+.row{opacity:0;transform:translateX(-12px);transform-box:fill-box;transition:opacity .45s ease,transform .5s cubic-bezier(.16,1,.3,1)}
+.rowR{transform:translateX(12px)}
+#chart.lf1 .rowL.r1,#chart.lf2 .rowL.r2{opacity:1;transform:none}
+#chart.rf1 .rowR.r1,#chart.rf2 .rowR.r2{opacity:1;transform:none}
+.rt{font:600 19px 'Noto Sans SC';fill:var(--ink)}
+
+/* 交集区（共同点 · 合法练手） */
+.rgO{opacity:0;transition:opacity .55s ease}
+#chart.land .rgO{opacity:1}
+.ov-h{font:900 30px 'Noto Sans SC';fill:var(--ink);letter-spacing:.02em}
+.ov-tag{font:600 11px 'IBM Plex Mono';letter-spacing:.14em;fill:var(--paper)}
+.ov-s{font:500 15px 'Noto Sans SC';fill:var(--g2)}
+
+/* 底部 L7 双极量表 */
+.hrule{stroke:var(--grid);stroke-width:1}
+.scG{opacity:0;transition:opacity .5s ease}
+#chart.scale .scG{opacity:1}
+.scdim{font:600 12px 'IBM Plex Mono';letter-spacing:.16em;fill:var(--muted)}
+.scaxis{stroke:var(--grid);stroke-width:1;stroke-dasharray:1;stroke-dashoffset:1;transition:stroke-dashoffset .9s cubic-bezier(.2,1,.3,1)}
+#chart.scale .scaxis{stroke-dashoffset:0}
+.tick{stroke:var(--faint);stroke-width:1}
+.sc-dot{opacity:0;transform:scale(.3);transform-box:fill-box;transform-origin:center;
+  transition:opacity .35s ease,transform .45s cubic-bezier(.2,1.6,.4,1),fill .45s ease;fill:var(--g3)}
+#chart.scale .sc-dot{opacity:1;transform:none}
+.dR{fill:#ABAAA3}
+#chart.land .dR{fill:var(--accent)}
+.scpole{font:800 20px 'Inter','Noto Sans SC';fill:var(--ink)}
+.scpole-s{font:500 13px 'Noto Sans SC';fill:var(--muted)}
+
+/* 大肥鱼 */
+.fish{position:absolute;left:1618px;top:6px;width:280px;z-index:35;opacity:0;transform:translateY(30px) scale(.6);
+  transition:all .45s cubic-bezier(.34,1.6,.64,1);pointer-events:none}
+.fish.show{opacity:1;transform:none}
+.fish img{width:100%;display:block}
+.fish .say{position:absolute;left:-238px;top:14px;width:250px;background:#fff;border:1.5px solid var(--ink);border-radius:10px;padding:12px 16px;
+  font:900 23px 'Noto Sans SC';color:var(--ink);line-height:1.45;opacity:0;transform:scale(.6);
+  transition:all .4s cubic-bezier(.34,1.6,.64,1) .18s}
+.fish.show .say{opacity:1;transform:scale(1)}
+.fish .say b{font-weight:900}
+.fish .say::after{content:'';position:absolute;right:-16px;top:52px;border:9px solid transparent;border-left:11px solid #fff}
+
+/* 角注 / HUD */
+.corner{position:absolute;font:600 15px Inter,'Noto Sans SC';letter-spacing:.1em;color:var(--faint);z-index:41}
+#chap{left:88px;bottom:30px}
+#src{right:88px;bottom:30px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:rgba(28,28,26,.1)}
+#bar{height:100%;width:0;background:var(--accent)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:var(--ink);color:var(--paper)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #556;color:#ccc;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(245,87,47,.18)}
+#replay.done{border-color:var(--accent);color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="bg"></div>
+  <div id="cam">
+  <div id="world">
+
+    <div id="ttl">
+      <div class="eyebrow"><span class="no">SHOT 0-40</span><span>第四章 · 实战 / 靶场</span></div>
+      <h1>CTF <b>与</b> 靶场</h1>
+    </div>
+    <div id="sub">练渗透测试 · 两个地方<span class="mono">TWO AUTHORIZED PLACES</span></div>
+
+    <!-- ===== 主视觉：Venn 重叠与区别 + L7 双极量表 ===== -->
+    <div id="chart">
+      <svg viewBox="0 0 1744 610" fill="none" role="img" aria-labelledby="c40t c40d">
+        <title id="c40t">CTF 夺旗赛与靶场的重叠与区别</title>
+        <desc id="c40d">两个合法练手的场所：左侧 CTF 夺旗赛与右侧靶场，展示两者共同点（合法授权练手）、各自差异与本期落点靶场。</desc>
+        <defs>
+          <marker id="arr40" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto">
+            <path d="M0 0 L6 3 L0 6 Z" fill="#F5572F"/>
+          </marker>
+        </defs>
+
+        <!-- 两个集合的低透明度填色：交集自然叠加变深 -->
+        <ellipse class="tint" cx="686" cy="236" rx="322" ry="224" fill="#1C1C1A" fill-opacity=".05"/>
+        <ellipse class="tint" cx="1034" cy="236" rx="322" ry="224" fill="#1C1C1A" fill-opacity=".05"/>
+        <!-- 集合描边 -->
+        <ellipse class="ell eL" pathLength="1" cx="686" cy="236" rx="322" ry="224" stroke="#C6C5BF" stroke-width="1.4"/>
+        <ellipse class="ell eR" pathLength="1" cx="1034" cy="236" rx="322" ry="224" stroke="#C6C5BF" stroke-width="1.4"/>
+
+        <!-- 角标：左 CTF -->
+        <g class="setL">
+          <text class="set-mono" x="40" y="106">01 · CAPTURE THE FLAG</text>
+          <text class="set-name" x="40" y="178">CTF</text>
+          <text class="set-sub" x="40" y="218">夺旗赛</text>
+          <g class="modeTag">
+            <rect x="40" y="230" width="88" height="28" rx="3" fill="#1C1C1A"/>
+            <text class="mode-txt" x="84" y="249" text-anchor="middle">比赛</text>
+          </g>
+        </g>
+
+        <!-- 角标：右 靶场（本期落点 · 唯一橙） -->
+        <g class="setR">
+          <text class="set-mono" x="1704" y="106" text-anchor="end">02 · PRACTICE RANGE</text>
+          <text class="set-name set-name-acc" x="1704" y="178" text-anchor="end">靶场</text>
+          <text class="set-sub" x="1704" y="218" text-anchor="end">留漏洞的网站</text>
+          <g class="landTag">
+            <rect x="1560" y="236" width="144" height="28" rx="3" fill="#F5572F"/>
+            <text class="land-txt" x="1632" y="255" text-anchor="middle">本期落点</text>
+          </g>
+        </g>
+        <!-- 落点连流线（archify 式正交引线，指向靶场角标） -->
+        <path class="landConn" d="M1355 250 H1554" stroke="#F5572F" stroke-width="1.6" marker-end="url(#arr40)"/>
+
+        <!-- 左月牙：CTF 差异 -->
+        <g class="rgL">
+          <g class="row rowL r1"><rect x="446" y="196" width="9" height="9" fill="#4A4944"/><text class="rt" x="470" y="205">主办方出题</text></g>
+          <g class="row rowL r2"><rect x="446" y="244" width="9" height="9" fill="#6A6963"/><text class="rt" x="470" y="253">题目里埋漏洞</text></g>
+        </g>
+        <!-- 右月牙：靶场 差异 -->
+        <g class="rgR">
+          <g class="row rowR r1"><rect x="1064" y="196" width="9" height="9" fill="#4A4944"/><text class="rt" x="1088" y="205">网站留漏洞</text></g>
+          <g class="row rowR r2"><rect x="1064" y="244" width="9" height="9" fill="#6A6963"/><text class="rt" x="1088" y="253">随时能打</text></g>
+        </g>
+
+        <!-- 交集：共同点（合法练手） -->
+        <g class="rgO">
+          <text class="ov-h" x="860" y="230" text-anchor="middle">合法练手</text>
+          <rect x="793" y="246" width="134" height="24" rx="3" fill="#1C1C1A"/>
+          <text class="ov-tag" x="860" y="263" text-anchor="middle">AUTHORIZED</text>
+          <text class="ov-s" x="860" y="292" text-anchor="middle">有授权 · 能拿到 flag</text>
+        </g>
+
+        <!-- 底部：L7 双极量表（练手性质）-->
+        <line class="hrule" x1="40" y1="486" x2="1704" y2="486"/>
+        <g class="scG">
+          <text class="scdim" x="40" y="516">练手性质 · PRACTICE MODE</text>
+          <line class="scaxis" pathLength="1" x1="470" y1="545" x2="1374" y2="545" stroke="#DEDDD6"/>
+          <line class="tick" x1="470" y1="539" x2="470" y2="551"/>
+          <line class="tick" x1="922" y1="541" x2="922" y2="549"/>
+          <line class="tick" x1="1374" y1="539" x2="1374" y2="551"/>
+          <circle class="sc-dot dL" cx="620" cy="545" r="7"/>
+          <circle class="sc-dot dR" cx="1224" cy="545" r="7"/>
+          <text class="scpole" x="470" y="580">CTF</text>
+          <text class="scpole-s" x="470" y="600">先找到先赢</text>
+          <text class="scpole" x="1374" y="580" text-anchor="end">靶场</text>
+          <text class="scpole-s" x="1374" y="600" text-anchor="end">练手 · 不排名</text>
+        </g>
+      </svg>
+    </div>
+
+  </div>
+  </div>
+
+  <!-- 大肥鱼 -->
+  <div class="fish" id="fish40">
+    <div class="say">谁先找到 · <b>谁就赢</b></div>
+    <img src="Shark-GIF/006_双手身前微笑乖巧期待.gif" alt="大肥鱼">
+  </div>
+
+  <div class="corner" id="chap">第四章 · 实战 / 靶场</div>
+  <div class="corner" id="src">口播对齐 timeline.md · 17:01–17:19</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-40 · CTF与靶场 · 18s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=18000;
+const $=s=>document.querySelector(s);
+const $$=s=>document.querySelectorAll(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+const $$li=(sel,n)=>$$(sel)[n];
+
+/* ────────────────────────────────────────────────
+   本镜头 cue（17:01–17:19，18s）
+   cue 时刻 = 口播句起点(绝对) − 17:01
+   ──────────────────────────────────────────────── */
+on(150,()=>{$('#bg').classList.add('in');$('#ttl').classList.add('in');__sfx.pop(.5)});      // 17:01「网安圈子里面练习渗透测试有两个地方」
+on(900,()=>{$('#sub').classList.add('in')});
+on(1400,()=>{$('#chart').classList.add('draw');__sfx.swipe(.65)});                          // 场景：两个「地方」的轮廓画出
+on(3000,()=>{$('#chart').classList.add('ctf');__sfx.thud(.9);camFocus(520,600,1.05,.6)});   // 17:04「一个叫做CTF」
+on(3550,()=>{__sfx.pop(.5)});                                                               // 场景：焦点推到左集合
+on(4200,()=>{$('#chart').classList.add('enl');__sfx.pop(.6)});                              // 17:05「Capture The Flag」
+on(5000,()=>{$('#chart').classList.add('lf1');__sfx.pop(.45)});                             // 17:06「夺旗赛主办方出题」
+on(7000,()=>{$('#chart').classList.add('lf2');__sfx.pop(.45)});                             // 17:08「然后在题目里面埋好漏洞」
+on(9000,()=>{$('#chart').classList.add('scale');__sfx.ding(.85)});                          // 17:10「谁先找到谁赢」
+on(9900,()=>{$('#fish40').classList.add('show');__sfx.pop(.45)});                           // 17:10「谁先找到谁赢」大肥鱼出场
+on(10000,()=>{$('#chart').classList.add('tgt');__sfx.thud(.9);camFocus(1400,600,1.05,.6)});// 17:11「另一个叫做靶场」
+on(12000,()=>{$('#chart').classList.add('rf1');__sfx.pop(.45)});                            // 17:12「靶场是专门留了漏洞给大家练手的网站」
+on(13000,()=>{$('#chart').classList.add('rf2');__sfx.swipe(.5)});                           // 场景：靶场差异补齐
+on(14800,()=>{$('#chart').classList.add('land');__sfx.thud(1.0);camFocus(960,600,1.0,.6)});// 17:15「那么这期视频要打的就是一个靶场」
+on(16500,()=>{$('#fish40').classList.remove('show')});                                      // 大肥鱼常驻至结尾前
+
+/* ===== [不动] QA 专用（正常播放不触发）：hash 带 t=毫秒 → 起播后跳转该时刻并冻结 ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

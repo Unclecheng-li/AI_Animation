@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+     镜头 0-6 · 依赖翻三倍 · 2:08–2:41 · 33s   [可视化 v4 · 瑞士国际主义]
+     主视觉：lieflat L2 点阵翻倍（1 点 = 1 包 · 15 → 50+）+ 大字计数 + pydantic 对撞
+     视觉：纸底 #F0EFEB × 墨 #1C1C1A × 灰阶阶梯 × 唯一强调橙 #F5572F（主角 = 翻倍 / ×3+）
+     数字纪律：只用口播报过的数（15 → 50+）
+     ============================================================ -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 0-6 · 依赖翻三倍 · 33s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Inter','Noto Sans SC',sans-serif}
+body.paused *{animation-play-state:paused!important}
+:root{--paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;--accent:#F5572F}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#stage::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:1;opacity:.6;
+  background-image:linear-gradient(90deg,rgba(28,28,26,.05) 1px,transparent 1px);background-size:132px 100%}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ── 背景（保留元素 · 瑞士化：刻度 ruler / 无光带） ── */
+#aura{position:absolute;inset:0;z-index:0;opacity:0;transition:opacity 1.3s}
+#ruler{position:absolute;left:0;right:0;top:0;height:12px;z-index:1;opacity:0;transition:opacity 1.3s;
+  background-image:repeating-linear-gradient(90deg,rgba(28,28,26,.12) 0 1px,transparent 1px 40px),
+    repeating-linear-gradient(90deg,rgba(28,28,26,.28) 0 1px,transparent 1px 200px);
+  -webkit-mask-image:linear-gradient(180deg,#000,transparent);mask-image:linear-gradient(180deg,#000,transparent)}
+#rulerB{position:absolute;left:0;right:0;bottom:0;height:12px;z-index:1;opacity:0;transition:opacity 1.3s;
+  background-image:repeating-linear-gradient(90deg,rgba(28,28,26,.12) 0 1px,transparent 1px 40px),
+    repeating-linear-gradient(90deg,rgba(28,28,26,.28) 0 1px,transparent 1px 200px);
+  -webkit-mask-image:linear-gradient(0deg,#000,transparent);mask-image:linear-gradient(0deg,#000,transparent)}
+#ruler.in,#rulerB.in{opacity:1}
+#beam{position:absolute;inset:0;z-index:1;opacity:0;transition:opacity 1s}
+#beam.in{opacity:1}
+
+/* ── 头部 ── */
+#head{position:absolute;left:88px;top:56px;z-index:5;opacity:0;transform:translateY(30px);transition:all .8s cubic-bezier(.16,1,.3,1)}
+#head.in{opacity:1;transform:translateY(0)}
+#head.mini{opacity:.35;transform:translateY(-10px) scale(.9)}
+#kicker{display:inline-flex;align-items:center;gap:12px;font:600 15px 'IBM Plex Mono';letter-spacing:.2em;color:var(--ink);text-transform:uppercase}
+#kicker .dot{width:9px;height:9px;border-radius:50%;background:var(--accent)}
+#title{margin-top:12px;font:900 66px/1 'Inter','Noto Sans SC';letter-spacing:-.03em;color:var(--ink)}
+#title b{color:var(--accent)}
+
+/* ── 主视觉：依赖爆炸图板 ── */
+#depBoard{position:absolute;left:120px;top:200px;width:1680px;height:680px;z-index:5;opacity:0;
+  transform:translateY(26px);transition:opacity .8s ease,transform .8s cubic-bezier(.16,1,.3,1);
+  border-radius:12px;background:var(--card);border:1.5px solid var(--ink)}
+#depBoard.in{opacity:1;transform:translateY(0)}
+#depGrid{position:absolute;inset:0;border-radius:12px;
+  background-image:linear-gradient(rgba(28,28,26,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.04) 1px,transparent 1px);
+  background-size:56px 56px;
+  -webkit-mask-image:radial-gradient(closest-side at 50% 45%,#000 45%,transparent 96%);
+  mask-image:radial-gradient(closest-side at 50% 45%,#000 45%,transparent 96%)}
+#depSvg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.dedge{fill:none;stroke:rgba(28,28,26,.4);stroke-width:1.6;transition:stroke-dashoffset .8s cubic-bezier(.16,1,.3,1)}
+.dedge.xtra{stroke:rgba(28,28,26,.18);stroke-width:1.1}
+.droot{fill:var(--ink);stroke:var(--ink);stroke-width:2.6}
+.dnode{opacity:0;transform-box:fill-box;transform-origin:center;
+  transform:translate(var(--bx,0px),var(--by,0px)) scale(.2);
+  transition:opacity .4s cubic-bezier(.2,1.5,.4,1),transform .55s cubic-bezier(.2,1.5,.4,1)}
+.dnode.in{opacity:1;transform:translate(0,0) scale(1)}
+.dnode.dd{fill:var(--card);stroke:var(--ink);stroke-width:2}
+.dnode.ex{fill:#F4F3EF;stroke:var(--muted);stroke-width:1.4}
+/* diagram-design · type-dependency：边上的依赖方向箭头 */
+.darr{fill:var(--ink);opacity:0;transition:opacity .35s}
+.darr.in{opacity:.85}
+.darr.xtra{fill:var(--muted);opacity:0;transition:opacity .35s}
+.darr.xtra.in{opacity:.6}
+/* lieflat L2 单位注 + rank 图例 */
+#rankLg{position:absolute;left:372px;top:18px;z-index:6;opacity:0;transition:opacity .5s}
+#rankLg.on{opacity:1}
+#rankLg .u{font:600 12px 'IBM Plex Mono';letter-spacing:.1em;color:var(--ink)}
+#rankLg .r{display:flex;align-items:center;gap:9px;margin-top:8px;font:500 11px 'IBM Plex Mono';letter-spacing:.08em;color:var(--muted)}
+#rankLg .r i{width:9px;height:9px;border-radius:50%;flex:none;margin-left:1px}
+#rankLg .r i.k0{background:var(--ink)}
+#rankLg .r i.k1{background:var(--card);border:1.5px solid var(--ink)}
+#rankLg .r i.k2{background:#F4F3EF;border:1.5px solid var(--muted)}
+.dotBase{position:absolute;height:1px;opacity:0;transition:opacity .5s;z-index:4;
+  background:repeating-linear-gradient(90deg,rgba(28,28,26,.4) 0 3px,transparent 3px 9px)}
+.dotBase.on{opacity:1}
+#dbA{left:432px;top:524px;width:76px}
+#dbB{left:688px;top:524px;width:744px}
+.dlab{font-family:'Noto Sans SC';font-weight:700;font-size:19px;fill:var(--muted);text-anchor:middle;letter-spacing:.04em;opacity:0;transition:opacity .5s}
+.dlab.in{opacity:1}
+
+/* 计数读数 */
+.dblk{position:absolute;top:10px;width:330px;height:118px;border-radius:10px;padding:12px 22px;
+  background:var(--card);border:1.5px solid var(--faint);
+  opacity:0;transform:translateY(-16px);transition:all .6s cubic-bezier(.16,1,.3,1),border-color .5s,opacity .5s}
+.dblk.in{opacity:1;transform:translateY(0)}
+#blkL{left:24px}
+#blkR{right:24px}
+.dblk .dlabel{font:500 18px 'Noto Sans SC';letter-spacing:.04em;color:var(--muted)}
+.dblk .dnum{margin-top:2px;font:800 66px/1 'Inter';letter-spacing:-.03em;color:var(--ink);font-variant-numeric:tabular-nums}
+.dblk .den{position:absolute;right:20px;bottom:12px;font:600 11px 'IBM Plex Mono';letter-spacing:.14em;color:var(--faint)}
+#blkL.hot{border-color:var(--ink)}
+#blkR .dnum{color:var(--accent)}
+#blkR.hot{border-color:var(--accent)}
+#plusR{display:inline-block;font:800 50px/1 'Inter';color:var(--accent);opacity:0;transform:scale(.3);
+  transition:all .4s cubic-bezier(.2,1.8,.4,1);vertical-align:10px}
+#plusR.on{opacity:1;transform:scale(1)}
+.dblk.dim{opacity:.3}
+.dblk.gone{opacity:0;visibility:hidden}
+/* ×3+ 徽标 */
+#xBadge{position:absolute;left:840px;top:26px;width:250px;margin-left:-125px;z-index:6;text-align:center;
+  opacity:0;transform:scale(2.7) rotate(-6deg);transition:all .48s cubic-bezier(.2,1.6,.3,1)}
+#xBadge.on{opacity:1;transform:scale(1) rotate(-4deg)}
+#xBadge.out{opacity:0;transform:scale(.72) rotate(-4deg)}
+#xBadge .xb{display:inline-block;font:900 60px/1 'Inter';letter-spacing:-.02em;color:#fff;background:var(--accent);padding:6px 22px 12px;border-radius:10px}
+#xBadge .xe{display:block;margin-top:8px;font:600 11px 'IBM Plex Mono';letter-spacing:.24em;color:var(--accent)}
+
+/* 依赖包倾泻容器 */
+#pkgScene{position:absolute;left:20px;top:578px;width:1640px;height:92px;z-index:6;border-radius:8px;
+  border:1.5px dashed var(--muted);background:#FAFAF7;opacity:0;transition:opacity .5s}
+#pkgScene.in{opacity:1}
+#pkgScene.out{opacity:0}
+#pkgLab{position:absolute;left:auto;right:250px;top:-16px;font:700 18px 'Noto Sans SC';letter-spacing:.04em;
+  color:var(--ink);background:var(--card);border:1px solid var(--ink);border-radius:4px;padding:1px 14px}
+#pkgCnt{position:absolute;right:20px;top:-19px;font:800 25px/1.2 'Inter';color:var(--accent);background:var(--card);
+  border:1px solid var(--accent);border-radius:4px;padding:1px 14px}
+#pkgNote{position:absolute;right:10px;bottom:2px;font-size:10px;color:var(--muted);letter-spacing:.06em}
+#pipIco{position:absolute;left:50px;top:592px;width:56px;height:56px;z-index:7;opacity:0;transform:scale(.7);transition:all .5s cubic-bezier(.2,1.5,.4,1)}
+#pipIco.in{opacity:1;transform:scale(1)}
+#pipIco.out{opacity:0}
+#pipIco svg rect,#pipIco svg path{stroke:var(--ink)}
+#pipIco svg path:last-child{stroke:var(--accent)}
+.spark{position:absolute;width:9px;height:9px;border-radius:2px;background:var(--ink);opacity:0;z-index:9;pointer-events:none}
+.spark.alt{background:var(--muted)}
+
+/* 包块堆 */
+#pile{position:absolute;left:20px;top:578px;width:1640px;height:92px;z-index:8;opacity:0;transition:opacity .5s}
+#pile.in{opacity:1}
+#pile.out{opacity:0}
+.pchip{position:absolute;width:38px;height:38px;border-radius:6px;background:var(--card);border:1.4px solid var(--ink);
+  opacity:0;transform:scale(.5) rotate(-8deg);
+  transition:left .5s cubic-bezier(.3,.7,.4,1),top .56s cubic-bezier(.34,1.45,.5,1),opacity .28s,transform .46s cubic-bezier(.2,1.5,.4,1)}
+.pchip.in{opacity:1;transform:scale(1) rotate(0deg)}
+.pchip i{position:absolute;left:8px;top:13px;width:20px;height:3px;border-radius:2px;background:var(--muted)}
+.pchip i:nth-child(2){top:21px;width:13px}
+#pileCap{position:absolute;left:0;right:0;top:534px;z-index:6;text-align:center;font:700 24px 'Noto Sans SC';
+  letter-spacing:.1em;color:var(--ink);opacity:0;transform:translateY(14px);transition:all .5s}
+#pileCap.in{opacity:1;transform:translateY(0)}
+#pileCap.out{opacity:0}
+#pileCap b{color:var(--accent)}
+
+/* 结论条 */
+#concl{position:absolute;left:130px;top:906px;width:1660px;height:110px;border-radius:10px;z-index:7;
+  background:var(--card);border:1.5px solid var(--ink);
+  display:flex;align-items:center;justify-content:center;gap:26px;
+  opacity:0;transform:translateY(24px);transition:opacity .5s,transform .55s cubic-bezier(.16,1,.3,1),top .55s cubic-bezier(.16,1,.3,1)}
+#concl.in{opacity:1;transform:translateY(0)}
+#concl.foot{top:906px}
+#concl .cq{font:700 30px 'IBM Plex Mono';color:var(--muted);line-height:1}
+#concl .ct1{font:700 38px 'Noto Sans SC';letter-spacing:.03em;color:var(--muted)}
+#concl .ct1 b{color:var(--ink)}
+#concl .ct2{font:700 38px 'Noto Sans SC';letter-spacing:.03em;color:var(--muted);opacity:0;transition:opacity .45s}
+#concl .ct2 b{color:var(--accent)}
+#concl.two{justify-content:flex-start;padding:0 44px;gap:22px}
+#concl.two .ct1{font-size:32px}
+#concl.two .ct2{opacity:1;font-size:32px}
+#concl.two .divi{width:1.5px;height:48px;background:var(--grid)}
+
+/* pydantic 双球对撞 */
+#pd{position:absolute;inset:0;z-index:8;opacity:0;transition:opacity .5s;background:var(--card);border-radius:12px}
+#pd.in{opacity:1}
+.pdcard{position:absolute;top:160px;width:660px;height:380px;border-radius:10px;padding:26px 30px;
+  background:var(--card);border:1.5px solid var(--faint);
+  opacity:0;transform:translateY(46px) scale(.96);transition:all .65s cubic-bezier(.2,1.35,.4,1),border-color .5s,opacity .5s}
+.pdcard.in{opacity:1;transform:translateY(0) scale(1)}
+#pdcL{left:130px}
+#pdcL.hot{border-color:var(--ink)}
+#pdcR{left:890px}
+#pdcR.hot{border-color:var(--ink)}
+.pdcard.in.clashL{transform:translateX(40px) scale(1)}
+.pdcard.in.clashR{transform:translateX(-40px) scale(1)}
+.pdcard.shakePd{animation:pdShake .3s ease}
+@keyframes pdShake{25%{transform:translateX(34px)}50%{transform:translateX(46px)}75%{transform:translateX(36px)}}
+#pdcR.shakePd{animation:pdShakeR .3s ease}
+@keyframes pdShakeR{25%{transform:translateX(-34px)}50%{transform:translateX(-46px)}75%{transform:translateX(-36px)}}
+.pdcard .pdhead{display:flex;align-items:center;justify-content:space-between}
+.pdcard .pdname{font:700 30px 'IBM Plex Mono';letter-spacing:.02em;color:var(--ink)}
+.pdcard .pdver{font:900 38px 'Inter';color:var(--muted);opacity:.5;transition:all .4s}
+.pdcard .pdver.on{opacity:1;color:var(--ink)}
+#pdcR .pdver.on{color:var(--ink)}
+.pdcard .pdsub{margin-top:10px;font:500 22px 'Noto Sans SC';letter-spacing:.04em;color:var(--muted)}
+.pdcard .pdbox{margin-top:20px;display:flex;flex-direction:column;gap:12px}
+.pdcard .pdrow{height:15px;border-radius:8px;background:#DEDDD6}
+.pdcard .pdrow.alt{background:#B0AFA9;margin-left:auto}
+.pdcard .pdtag{position:absolute;left:30px;bottom:24px;font:600 14px 'IBM Plex Mono';letter-spacing:.2em;color:var(--muted)}
+#pdcR .pdtag{left:auto;right:30px}
+#swapTag{position:absolute;left:840px;top:176px;margin-left:-92px;width:184px;text-align:center;z-index:9;
+  opacity:0;transform:translateY(14px);transition:all .45s cubic-bezier(.16,1,.3,1)}
+#swapTag.on{opacity:1;transform:translateY(0)}
+#swapTag .swz{display:inline-block;font:700 22px 'Noto Sans SC';color:var(--card);background:var(--ink);border-radius:4px;padding:6px 18px;letter-spacing:.04em;line-height:1.5}
+#swapTag .swl{display:block;margin-top:10px;font:600 12px 'IBM Plex Mono';letter-spacing:.24em;color:var(--muted)}
+#crash{position:absolute;left:840px;top:300px;margin-left:-60px;width:120px;height:120px;z-index:10;
+  opacity:0;transform:scale(.3);transition:all .4s cubic-bezier(.2,1.7,.35,1)}
+#crash.on{opacity:1;transform:scale(1)}
+#crashTxt{position:absolute;left:0;right:0;top:556px;z-index:10;text-align:center;
+  font:900 38px 'Noto Sans SC';letter-spacing:.08em;color:var(--ink);opacity:0;transform:translateY(16px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#crashTxt.on{opacity:1;transform:translateY(0)}
+#crashTxt b{color:var(--accent)}
+#regret{position:absolute;left:0;right:0;top:628px;z-index:10;text-align:center;
+  font:900 46px 'Noto Sans SC';letter-spacing:.14em;color:var(--ink);opacity:0;transform:translateY(22px) scale(.92);transition:all .55s cubic-bezier(.2,1.5,.3,1)}
+#regret.on{opacity:1;transform:translateY(0) scale(1)}
+#regret b{color:var(--accent)}
+
+/* 大肥鱼 */
+#fish1{position:absolute;left:1630px;top:686px;width:260px;text-align:center;z-index:11;
+  opacity:0;transform:translateY(26px) scale(.7);transition:all .45s cubic-bezier(.2,1.5,.4,1)}
+#fish1.in{opacity:1;transform:translateY(0) scale(1)}
+#fish1.out{opacity:0;transform:translateY(20px) scale(.86)}
+#fish1 .say{position:relative;display:inline-block;background:var(--card);border:1.5px solid var(--ink);
+  border-radius:12px;padding:9px 20px;font:700 23px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em;
+  margin-bottom:12px;opacity:0;transform:scale(.5);transition:all .3s cubic-bezier(.2,1.6,.4,1);white-space:nowrap}
+#fish1 .say::after{content:'';position:absolute;left:50%;bottom:-9px;width:14px;height:14px;
+  background:var(--card);border-right:1.5px solid var(--ink);border-bottom:1.5px solid var(--ink);
+  transform:translateX(-50%) rotate(45deg)}
+#fish1 .say b{color:var(--accent)}
+#fish1.bub .say{opacity:1;transform:scale(1)}
+#fish1 img{width:216px;display:block;margin:0 auto}
+
+.corner{position:absolute;font:500 14px 'IBM Plex Mono','Noto Sans SC';color:var(--muted);letter-spacing:.08em;z-index:29}
+#chap{left:52px;bottom:30px}
+#src{right:52px;bottom:30px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono';pointer-events:none}
+#track{height:5px;background:rgba(255,255,255,.1)}
+#bar{height:100%;width:0;background:var(--accent)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;color:#C6C5BF;background:rgba(28,28,26,.94)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #555;color:#ccc;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(255,255,255,.12)}
+#replay.done{border-color:var(--accent);color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="cam">
+    <div id="aura"></div>
+    <div id="ruler"></div>
+    <div id="rulerB"></div>
+    <div id="beam"></div>
+
+    <!-- 头部 -->
+    <div id="head">
+      <div id="kicker"><span class="dot"></span>DEPENDENCY BLOWUP</div>
+      <div id="title">装一个，来<b>一串</b></div>
+    </div>
+
+    <!-- 主视觉：依赖爆炸图板 -->
+    <div id="depBoard">
+      <div id="depGrid"></div>
+      <svg id="depSvg" viewBox="0 0 1680 680" preserveAspectRatio="none">
+        <g id="edgeG"></g><g id="cloudG"></g><g id="nodeG"></g>
+      </svg>
+
+      <div class="dblk" id="blkL">
+        <div class="dlabel">代码里声明的直接依赖</div>
+        <div class="dnum" id="numL">0</div>
+        <div class="den">DECLARED · DIRECT</div>
+      </div>
+      <div class="dblk" id="blkR">
+        <div class="dlabel">实测装下来的包</div>
+        <div class="dnum"><span id="numR">0</span><span id="plusR">+</span></div>
+        <div class="den">ACTUALLY INSTALLED</div>
+      </div>
+      <div id="xBadge"><span class="xb">×3+</span><span class="xe">MORE THAN TRIPLE</span></div>
+
+      <div id="rankLg">
+        <div class="u">1 点 = 1 个包 · 点阵翻倍</div>
+        <div class="r"><i class="k0"></i>RANK 0 · 本体</div>
+        <div class="r"><i class="k1"></i>RANK 1 · 直接依赖 15 点</div>
+        <div class="r"><i class="k2"></i>RANK 2 · 间接依赖（炸开）</div>
+      </div>
+      <div class="dotBase" id="dbA"></div>
+      <div class="dotBase" id="dbB"></div>
+
+      <div id="pileCap">多出来的 <b>=</b> 它依赖的包</div>
+      <div id="pkgScene">
+        <span id="pkgLab">全局 Python 环境</span>
+        <span id="pkgCnt">15</span>
+        <span id="pkgNote">示意图 · 非实拍</span>
+      </div>
+      <div id="pipIco">
+        <svg width="56" height="56" viewBox="0 0 76 76" fill="none">
+          <rect x="16" y="10" width="44" height="34" rx="6" stroke-width="3"/>
+          <path d="M16 21 H60 M38 21 V44" stroke-width="2.4"/>
+          <path d="M38 50 V66 M30 59 L38 67 L46 59" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div id="pile"></div>
+
+      <!-- pydantic v1 / v2 对撞 -->
+      <div id="pd">
+        <div class="pdcard" id="pdcL">
+          <div class="pdhead"><span class="pdname">pydantic</span><span class="pdver" id="verL">v1</span></div>
+          <div class="pdsub">老项目还在用这一版</div>
+          <div class="pdbox">
+            <div class="pdrow" style="width:78%"></div>
+            <div class="pdrow" style="width:56%"></div>
+            <div class="pdrow" style="width:68%"></div>
+            <div class="pdrow" style="width:62%"></div>
+            <div class="pdrow" style="width:50%"></div>
+          </div>
+          <div class="pdtag">INTERFACE · A</div>
+        </div>
+        <div class="pdcard" id="pdcR">
+          <div class="pdhead"><span class="pdname">pydantic</span><span class="pdver" id="verR">v2</span></div>
+          <div class="pdsub">新工具要求这一版</div>
+          <div class="pdbox">
+            <div class="pdrow alt" style="width:60%"></div>
+            <div class="pdrow alt" style="width:84%"></div>
+            <div class="pdrow alt" style="width:46%"></div>
+            <div class="pdrow alt" style="width:72%"></div>
+            <div class="pdrow alt" style="width:54%"></div>
+          </div>
+          <div class="pdtag">INTERFACE · B</div>
+        </div>
+        <div id="swapTag"><span class="swz">接口整个替换</span><span class="swl">REPLACED</span></div>
+        <div id="crash">
+          <svg width="120" height="120" viewBox="0 0 120 120" fill="none">
+            <circle cx="60" cy="60" r="52" stroke="#1C1C1A" stroke-width="3" stroke-dasharray="8 7"/>
+            <circle cx="60" cy="60" r="40" fill="#F4F3EF" stroke="#1C1C1A" stroke-width="2.5"/>
+            <path d="M66 22 L42 64 H58 L52 98 L80 52 H62 Z" fill="#F5572F"/>
+          </svg>
+        </div>
+        <div id="crashTxt">两版<b>装到一起</b> · 必崩一个</div>
+        <div id="regret">反悔 <b>·</b> 没那么容易</div>
+      </div>
+    </div>
+
+    <!-- 结论条 -->
+    <div id="concl">
+      <span class="cq">&gt;</span>
+      <span class="ct1">工具默认共用<b>同一个 Python 环境</b></span>
+      <span class="divi" id="cdiv" style="display:none"></span>
+      <span class="ct2">谁都能动<b>别人的依赖</b></span>
+    </div>
+
+    <!-- 大肥鱼 -->
+    <div id="fish1">
+      <div class="say">多出来的，全是<b>依赖</b>！</div>
+      <img src="Shark-GIF/041_趴键盘愤怒符号抓狂打字.gif" alt="大肥鱼">
+    </div>
+  </div>
+
+  <div class="corner" id="chap">章 0 · 准备 ｜ 镜头 6 · 依赖翻三倍 · 2:08–2:41</div>
+  <div class="corner" id="src">数据：VulnClaw 依赖声明与实测安装（口播 2:11–2:17）</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-6 · 依赖翻三倍 · 33s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=33000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ───────── 本镜头专用小工具 ───────── */
+function cnt(el,from,to,dur,start,done){
+  tws.push({t:start,d:dur,e:eo,f:p=>{
+    el.textContent=Math.round(from+(to-from)*p);
+    if(Math.floor(p*20)%2===0)__sfx.type(.14);
+  },done:done||(()=>{el.textContent=to;})});
+}
+function buildPile(){
+  const box=$('#pile'),n=22;
+  for(let i=0;i<n;i++){
+    const d=document.createElement('div');d.className='pchip';
+    d.style.left='58px';d.style.top='42px';
+    d.innerHTML='<i></i><i></i>';
+    box.appendChild(d);
+  }
+}
+function pileIn(at){
+  $('#pkgScene').classList.add('in');$('#pipIco').classList.add('in');$('#pile').classList.add('in');
+  const ch=[...document.querySelectorAll('.pchip')];
+  const tgt=ch.map((_,i)=>({x:110+(i%11)*130,y:i<11?8:48}));
+  tws.push({t:at,d:ch.length*90+620,f:p=>{
+    const k=Math.floor((p*(ch.length*90+620))/90);
+    for(let i=0;i<=k&&i<ch.length;i++){
+      const c=ch[i];
+      if(!c.classList.contains('in')){
+        c.style.left=tgt[i].x+'px';c.style.top=tgt[i].y+'px';
+        c.classList.add('in');if(i%2===0)__sfx.type(.12);
+        $('#pkgCnt').textContent=(15+Math.round((i+1)/ch.length*35))+(i>=ch.length-1?'+':'');
+      }
+    }
+  },done:()=>{$('#pkgCnt').textContent='50+';$('#pileCap').classList.add('in');__sfx.pop(.5);}});
+}
+/* 依赖爆炸图：1 根 + 15 直依赖 + 35 炸开的间接依赖（共 50+ 节点 · 1 点 = 1 个包） */
+const DEPS=[],EXT=[];
+function buildDep(){
+  const NS='http://www.w3.org/2000/svg';
+  const edgeG=document.getElementById('edgeG'),cloudG=document.getElementById('cloudG'),nodeG=document.getElementById('nodeG');
+  const root={x:150,y:325};
+  const rc=document.createElementNS(NS,'circle');
+  rc.setAttribute('cx',root.x);rc.setAttribute('cy',root.y);rc.setAttribute('r',30);rc.setAttribute('class','droot');
+  nodeG.appendChild(rc);
+  const rl=document.createElementNS(NS,'text');
+  rl.setAttribute('id','rootLab');rl.setAttribute('class','dlab');rl.setAttribute('x',root.x);rl.setAttribute('y',root.y+58);rl.textContent='AI 工具本体';
+  nodeG.appendChild(rl);
+  const arrow=(x1,y1,x2,y2,t,cls)=>{
+    const px=x1+(x2-x1)*t,py=y1+(y2-y1)*t,deg=Math.atan2(y2-y1,x2-x1)*180/Math.PI;
+    const a=document.createElementNS(NS,'polygon');
+    a.setAttribute('class','darr'+(cls?' '+cls:''));
+    a.setAttribute('points','0,0 -11,-5.2 -11,5.2');
+    a.setAttribute('transform','translate('+px.toFixed(1)+','+py.toFixed(1)+') rotate('+deg.toFixed(1)+')');
+    edgeG.appendChild(a);return a;
+  };
+  for(let i=0;i<15;i++){
+    const y=145+i*26;
+    const ln=document.createElementNS(NS,'line');
+    ln.setAttribute('x1',root.x);ln.setAttribute('y1',root.y);ln.setAttribute('x2',470);ln.setAttribute('y2',y);
+    ln.setAttribute('class','dedge');
+    const L=Math.hypot(470-root.x,y-root.y);
+    ln.style.strokeDasharray=L;ln.style.strokeDashoffset=L;ln.style.transitionDelay=(i*55)+'ms';
+    edgeG.appendChild(ln);
+    const ar=arrow(root.x,root.y,470,y,.72);
+    const c=document.createElementNS(NS,'circle');
+    c.setAttribute('cx',470);c.setAttribute('cy',y);c.setAttribute('r',8.5);c.setAttribute('class','dnode dd');
+    c.style.setProperty('--bx',(root.x-470)+'px');c.style.setProperty('--by',(root.y-y)+'px');
+    c.style.transitionDelay=(150+i*60)+'ms';
+    cloudG.appendChild(c);
+    DEPS.push({c:c,l:ln,a:ar});
+  }
+  for(let k=0;k<35;k++){
+    const x=700+(k%5)*180,y=145+Math.floor(k/5)*60;
+    const p=DEPS[k%15];
+    const ln=document.createElementNS(NS,'line');
+    ln.setAttribute('x1',p.c.getAttribute('cx'));ln.setAttribute('y1',p.c.getAttribute('cy'));
+    ln.setAttribute('x2',x);ln.setAttribute('y2',y);
+    ln.setAttribute('class','dedge xtra');
+    const L=Math.hypot(x-p.c.getAttribute('cx'),y-p.c.getAttribute('cy'));
+    ln.style.strokeDasharray=L;ln.style.strokeDashoffset=L;ln.style.transitionDelay=(k*22)+'ms';
+    edgeG.appendChild(ln);
+    const ar=arrow(+p.c.getAttribute('cx'),+p.c.getAttribute('cy'),x,y,.62,'xtra');
+    const c=document.createElementNS(NS,'circle');
+    c.setAttribute('cx',x);c.setAttribute('cy',y);c.setAttribute('r',8.5);c.setAttribute('class','dnode ex');
+    c.style.setProperty('--bx',(p.c.getAttribute('cx')-x)+'px');
+    c.style.setProperty('--by',(p.c.getAttribute('cy')-y)+'px');
+    c.style.transitionDelay=(120+k*26)+'ms';
+    nodeG.appendChild(c);
+    EXT.push({c:c,l:ln,a:ar});
+  }
+}
+function reveal(list){
+  list.forEach(d=>{d.l.style.strokeDashoffset='0';d.c.classList.add('in');if(d.a)d.a.classList.add('in');});
+}
+function sparkBurst(cx,cy,at){
+  const host=$('#cam');
+  for(let i=0;i<14;i++){
+    const s=document.createElement('span');s.className='spark'+(i%3===0?' alt':'');
+    s.style.left=cx+'px';s.style.top=cy+'px';host.appendChild(s);
+    const a=i/14*Math.PI*2,r=46+Math.random()*54;
+    tws.push({t:at+i*14,d:520,e:eo,f:p=>{
+      s.style.opacity=String(p<.2?p/.2:1-(p-.2)/.8);
+      s.style.transform='translate('+(Math.cos(a)*r*p).toFixed(1)+'px,'+(Math.sin(a)*r*p-14*p).toFixed(1)+'px) rotate('+(p*220).toFixed(0)+'deg) scale('+(1-p*.5).toFixed(2)+')';
+    },done:()=>{s.remove();}});
+  }
+}
+
+/* ───────── 镜头 6 叙事 cue（33s · 依赖翻三倍） ───────── */
+on(150,()=>{$('#aura').classList.add('in');$('#ruler').classList.add('in');$('#rulerB').classList.add('in');$('#beam').classList.add('in');__sfx.swipe(.3);}); // 黑场渐显
+on(300,()=>{$('#head').classList.add('in');__sfx.whoosh(.9,.45);});                                  // 2:08「而且不止这一个层面」
+on(1000,()=>{                                                                                        // 2:09「我们拿VulnClaw这个工具来当例子」
+  $('#depBoard').classList.add('in');
+  $('#rootLab').classList.add('in');
+  $('#blkL').classList.add('in');$('#blkR').classList.add('in');
+  $('#blkL').classList.add('hot');__sfx.pop(.7);
+});
+on(5000,()=>{                                                                                        // 2:13「直接依赖是15个」
+  reveal(DEPS);__sfx.pop(.6);
+  cnt($('#numL'),0,15,900,5000,()=>{$('#numL').textContent='15';__sfx.ding(.5);});
+});
+on(6000,()=>{                                                                                        // 2:14「然后实测装下来是一共有50多个包」
+  $('#blkL').classList.remove('hot');$('#blkR').classList.add('hot');
+  reveal(EXT);__sfx.pop(.7);
+  cnt($('#numR'),0,50,1200,6000,()=>{$('#numR').textContent='50';$('#plusR').classList.add('on');__sfx.ding(.55);});
+});
+on(9000,()=>{$('#xBadge').classList.add('on');__sfx.thud(.6);});                                      // 2:17「翻了三倍还不止」
+on(10000,()=>{pileIn(10000);});                                                                       // 2:18「多出来的这些是他依赖的包」
+on(10500,()=>{$('#fish1').classList.add('in');__sfx.pop(.5);});                                       // 大肥鱼快闪
+on(11100,()=>{$('#fish1').classList.add('bub');__sfx.pop(.35);});
+on(14200,()=>{                                                                                        // 收：堆与鱼退场
+  $('#pile').classList.add('out');$('#pileCap').classList.add('out');$('#fish1').classList.add('out');
+  $('#pkgScene').classList.add('out');$('#pipIco').classList.add('out');
+  $('#blkL').classList.add('dim');$('#blkR').classList.add('dim');$('#head').classList.add('mini');
+  $('#xBadge').classList.add('out');camTo(0,0,1,.5);
+});
+on(15000,()=>{                                                                                        // 2:23「电脑上的工具默认是共用同一个Python环境的」
+  $('#concl').classList.add('in');__sfx.pop(.72);__sfx.ding(.4);
+});
+on(19000,()=>{                                                                                        // 2:27「那么谁都能动别人的依赖」
+  $('#cdiv').style.display='block';
+  $('#concl').classList.add('two');$('#concl').classList.add('in');__sfx.pop(.7);
+});
+on(20000,()=>{                                                                                        // 2:28「最典型的例子就是数据校验库pydantic」
+  $('#concl').classList.add('foot');
+  $('#blkL').classList.add('gone');$('#blkR').classList.add('gone');
+  $('#pd').classList.add('in');$('#pdcL').classList.add('in');$('#pdcR').classList.add('in');
+  camCut(0,0,1);__sfx.whoosh(.9,.45);
+});
+on(23000,()=>{                                                                                        // 2:31「他从一版升级到二版的时候」
+  $('#verL').classList.add('on');$('#verR').classList.add('on');__sfx.pop(.65);
+  $('#pdcL').classList.add('hot');$('#pdcR').classList.add('hot');
+});
+on(25000,()=>{$('#swapTag').classList.add('on');__sfx.pop(.6);});                                     // 2:33「接口会被整个替换掉」
+on(26000,()=>{                                                                                        // 2:34「那么这个时候机器上要是还有老项目在用的第一版」
+  $('#pdcL').classList.add('hot');$('#pdcR').classList.add('hot');__sfx.pop(.55);
+  $('#pdcL').classList.add('clashL');$('#pdcR').classList.add('clashR');
+});
+on(27200,()=>{                                                                                        // 相撞：迸粒子 + 抖动
+  $('#pdcL').classList.add('shakePd');$('#pdcR').classList.add('shakePd');
+  sparkBurst(960,560,27200);__sfx.thud(.8);});
+on(29000,()=>{                                                                                        // 2:37「这两个装到一起必然会崩一个」
+  $('#crash').classList.add('on');$('#crashTxt').classList.add('on');
+  $('#swapTag').classList.remove('on');__sfx.thud(.7);
+});
+on(31000,()=>{$('#regret').classList.add('on');__sfx.ding(.55);});                                    // 2:39「想反悔？没这么容易」
+on(32500,()=>__sfx.ding(.4));                                                                         // 收束定音
+
+/* ── 增补节拍：L2 单位注 / rank 图例 / 点阵地板随图板登场（不动任何既有 cue） ── */
+on(1150,()=>{$('#rankLg').classList.add('on');$('#dbA').classList.add('on');$('#dbB').classList.add('on');});
+
+/* ── 预建依赖堆与依赖爆炸图 ── */
+buildPile();
+buildDep();
+
+/* ===== [不动] QA 专用（正常播放不触发）：hash 带 t=毫秒 → 起播后跳转该时刻并冻结 ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

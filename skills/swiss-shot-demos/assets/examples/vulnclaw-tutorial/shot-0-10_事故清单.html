@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+     镜头演示动画 · 0-10 · 事故清单（31s）｜v4 瑞士国际主义
+     主视觉：灰阶事件卡列（叠卡叙事保留）+ 时间戳发丝刻度（lieflat F2）
+     纸底 #F0EFEB × 墨 #1C1C1A × 灰阶阶梯 × 唯一橙 #F5572F（共同点：永久删除）
+     字体：Inter × Noto Sans SC × IBM Plex Mono
+     纪律：只用口播事实；不配真实截图、不上人名头像；不写终端回显
+     ============================================================ -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- ① 页面标题 -->
+<title>镜头 0-10 · 事故清单 · 31s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<!-- ② 字体 -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;
+  --grid:#DEDDD6;--accent:#F5572F;--dark:#1C1C1A;--darkink:#F0EFEB;--darkgrid:#2E2D29;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Inter','Noto Sans SC',sans-serif;color:var(--ink)}
+body.paused *{animation-play-state:paused!important}
+/* ② 舞台：纸底 + 12 列发丝网格 */
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#stage::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:1;
+  background-image:linear-gradient(rgba(28,28,26,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.05) 1px,transparent 1px);
+  background-size:132px 132px}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1.04);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ============ ③ 画面层 CSS ============ */
+/* ── eyebrow + 大标题 ── */
+#hd{position:absolute;left:88px;top:64px;opacity:0;transform:translateY(-14px);transition:all .6s cubic-bezier(.16,1,.3,1)}
+#hd.in{opacity:1;transform:translateY(0)}
+.eyebrow{display:flex;gap:12px;align-items:center;font:600 15px 'Inter';letter-spacing:.14em;text-transform:uppercase;color:var(--ink)}
+.eyebrow .no{background:var(--ink);color:var(--paper);padding:3px 10px;border-radius:3px;font-weight:700}
+.eyebrow .cn{font-family:'Noto Sans SC';letter-spacing:.04em}
+#hd h1{margin-top:18px;font:800 84px/1 'Inter','Noto Sans SC';letter-spacing:-.03em;color:var(--ink)}
+#hd h1 b{font-family:'Noto Sans SC';font-weight:900}
+#hd .en{margin-top:12px;font:600 14px 'IBM Plex Mono';letter-spacing:.32em;color:var(--muted);text-transform:uppercase}
+#hd .acc-bar{width:56px;height:5px;background:var(--ink);border-radius:2px;margin-top:16px}
+
+/* ── 事件卡堆（主视觉 · 叠卡叙事保留） ── */
+#deck{position:absolute;inset:0;z-index:12}
+.dcard{position:absolute;left:1070px;top:530px;width:1120px;height:560px;
+  background:var(--card);border:1px solid var(--grid);border-radius:12px;overflow:hidden;
+  transform:translate(-50%,calc(-50% + 600px)) scale(.86);opacity:0;z-index:4;
+  transition:transform .9s cubic-bezier(.16,1,.3,1),opacity .6s ease}
+.dcard.active{transform:translate(-50%,-50%) scale(1);opacity:1;z-index:20}
+.dcard.stack0{transform:translate(calc(-50% - 430px),-50%) scale(.70) rotate(-5deg);opacity:.5;z-index:11}
+.dcard.stack1{transform:translate(calc(-50% - 300px),-50%) scale(.78) rotate(-2.5deg);opacity:.62;z-index:13}
+.dcard .bar{position:absolute;left:0;top:0;bottom:0;width:8px;background:var(--ink)}
+.dcard .dnum{position:absolute;right:44px;top:-14px;font:800 190px/1 'Inter';color:var(--grid);letter-spacing:-.05em;font-variant-numeric:tabular-nums}
+.dcard#c1 .dnum{color:#D8D7D1}.dcard#c2 .dnum{color:#C6C5BF}.dcard#c3 .dnum{color:#B0AFA9}
+.dcard .dhead{position:absolute;left:60px;top:50px;display:flex;align-items:center;gap:22px;
+  opacity:0;transform:translateY(14px);transition:all .55s cubic-bezier(.16,1,.3,1) .12s}
+.dcard.active .dhead{opacity:1;transform:none}
+.dcard .dvic{width:78px;height:78px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex:none;
+  border:1.5px solid var(--ink);background:var(--paper);transform:scale(.76);transition:transform .5s cubic-bezier(.2,1.4,.4,1) .18s}
+.dcard.active .dvic{transform:scale(1)}
+.dcard .dsrc{font:700 36px/1.1 'Inter','Noto Sans SC';letter-spacing:-.01em;color:var(--ink)}
+.dcard .dsrc .m{display:block;margin-top:9px;font:500 15px 'IBM Plex Mono';letter-spacing:.14em;color:var(--muted);text-transform:uppercase}
+.dcard .dstamp{position:absolute;right:56px;top:236px;font:600 15px 'IBM Plex Mono';letter-spacing:.16em;
+  color:var(--paper);background:var(--ink);border-radius:4px;padding:9px 18px 8px;opacity:0;transform:scale(.72) rotate(-6deg);
+  transition:all .45s cubic-bezier(.2,1.4,.4,1) .32s}
+.dcard.active .dstamp{opacity:1;transform:scale(1) rotate(-6deg)}
+.dcard .dfact{position:absolute;left:60px;top:286px;width:940px;font:900 46px/1.36 'Noto Sans SC';letter-spacing:0;color:var(--ink);
+  opacity:0;transform:translateY(20px);transition:all .6s cubic-bezier(.16,1,.3,1) .24s}
+.dcard.active .dfact{opacity:1;transform:none}
+.dcard .dfact b{font-weight:900;text-decoration:underline;text-decoration-thickness:4px;text-underline-offset:6px;text-decoration-color:var(--ink)}
+.dcard.only .dfact{top:300px;width:1000px;font-size:54px;line-height:1.32}
+.dcard .dchips{position:absolute;left:60px;bottom:88px;display:flex;gap:16px}
+.dchip{display:flex;align-items:center;gap:12px;font:700 20px 'Noto Sans SC';color:var(--ink);
+  border:1px solid var(--grid);border-radius:10px;padding:14px 22px;background:var(--paper);
+  opacity:0;transform:translateY(14px);transition:all .45s cubic-bezier(.16,1,.3,1)}
+.dchip.in{opacity:1;transform:none}
+.dcard.stack0 .dchip,.dcard.stack1 .dchip,
+.dcard.stack0 .dhead,.dcard.stack1 .dhead,
+.dcard.stack0 .dfact,.dcard.stack1 .dfact,
+.dcard.stack0 .daxis,.dcard.stack1 .daxis{opacity:0}
+.dchip .cdot{width:11px;height:11px;border-radius:50%;background:var(--ink)}
+.dchip.bad{border-color:var(--ink);border-width:1.5px;background:#E9E8E2}
+.dchip.bad .cdot{background:var(--ink);border-radius:2px}
+/* 卡内发丝刻度尺 */
+.dcard .daxis{position:absolute;left:60px;right:60px;bottom:26px;height:14px;
+  background:
+    repeating-linear-gradient(90deg,var(--faint) 0 1px,transparent 1px 26px) left bottom/100% 7px no-repeat,
+    var(--grid) left bottom/100% 1px no-repeat}
+.dcard .daxis::after{content:'';position:absolute;left:var(--axp,20%);bottom:-2px;width:9px;height:9px;border-radius:50%;background:var(--ink);transform:translate(-50%,0)}
+
+/* 时间轴（lieflat F2 发丝线语法：发丝基线 + 刻度尺 + 逐事件点） */
+#axis{position:absolute;left:360px;top:836px;width:1280px;height:42px;z-index:26;opacity:0;transition:opacity .6s .4s}
+#axis.in{opacity:1}
+#axis .cap{position:absolute;left:0;top:-14px;font:600 12px 'IBM Plex Mono';letter-spacing:.22em;color:var(--muted);text-transform:uppercase}
+#axis .rule{position:absolute;left:0;top:18px;width:100%;height:1px;background:var(--ink)}
+#axis .ticks{position:absolute;left:0;top:12px;width:100%;height:12px;
+  background-image:repeating-linear-gradient(90deg,var(--faint) 0 1px,transparent 1px 32px)}
+#axis .maj{position:absolute;top:4px;width:1.5px;height:15px;background:var(--ink);transform:translateX(-50%)}
+#axis .fill{position:absolute;left:0;top:17px;width:0;height:3px;background:var(--ink);transition:width .7s cubic-bezier(.16,1,.3,1)}
+#axis .pt{position:absolute;top:18px;width:15px;height:15px;border-radius:50%;border:1.5px solid var(--ink);background:var(--paper);transform:translate(-50%,-50%);transition:all .45s cubic-bezier(.2,1.4,.4,1)}
+#axis .pt.on{background:var(--ink);box-shadow:0 0 0 5px var(--paper),0 0 0 6px var(--ink)}
+#ax1{left:8%}#ax2{left:50%}#ax3{left:92%}
+#axis .mlab{position:absolute;top:30px;font:700 12px 'IBM Plex Mono';letter-spacing:.1em;color:var(--ink);transform:translateX(-50%)}
+#axis .spark{position:absolute;top:15px;width:7px;height:7px;border-radius:50%;background:var(--ink);transform:translateX(-50%);animation:sflow 4.2s linear infinite}
+@keyframes sflow{0%{left:2%;opacity:0}12%{opacity:1}88%{opacity:1}100%{left:98%;opacity:0}}
+
+/* ── 共同点标签带（唯一橙主角：绕过回收站的永久删除） ── */
+#band{position:absolute;left:360px;top:894px;width:1280px;height:82px;display:flex;align-items:center;gap:20px;padding:0 28px;
+  border:1px solid var(--grid);border-radius:12px;background:var(--card);z-index:26;
+  opacity:0;transform:translateY(18px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#band.in{opacity:1;transform:none}
+#band .lab{flex:none;font:700 14px 'Inter','Noto Sans SC';letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+#band .sep{width:1px;height:38px;background:var(--grid);flex:none}
+#band .tags{display:flex;gap:12px;flex-wrap:wrap}
+.tg{font:700 19px 'Noto Sans SC';color:var(--ink);border:1px solid var(--grid);border-radius:999px;padding:9px 18px 8px;background:var(--paper);
+  opacity:0;transform:scale(.78);transition:all .42s cubic-bezier(.2,1.4,.4,1)}
+.tg.in{opacity:1;transform:scale(1)}
+.tg.acc{border:none;background:var(--accent);color:#fff}
+
+/* ── 收束小注 ── */
+#close{position:absolute;left:360px;top:992px;width:1280px;text-align:center;font:700 21px 'Noto Sans SC';
+  letter-spacing:.02em;color:var(--muted);opacity:0;transform:translateY(12px);transition:all .5s cubic-bezier(.16,1,.3,1);z-index:26}
+#close.in{opacity:1;transform:none}
+#close b{color:var(--ink);font-weight:900}
+
+/* ── 右上记录指示 ── */
+#rec{position:absolute;right:88px;top:70px;text-align:right;opacity:0;transform:translateY(-10px);transition:all .6s cubic-bezier(.16,1,.3,1)}
+#rec.in{opacity:1;transform:none}
+#rec .rt{display:inline-flex;align-items:center;gap:10px;font:600 14px 'IBM Plex Mono';letter-spacing:.22em;color:var(--ink);text-transform:uppercase}
+#rec .dot{width:10px;height:10px;background:var(--ink);border-radius:2px;animation:blink 1.6s steps(1) infinite}
+@keyframes blink{50%{opacity:.2}}
+#rec .dots{margin-top:12px;display:flex;justify-content:flex-end;gap:10px}
+#rec .dots i{width:12px;height:12px;border-radius:3px;border:1.5px solid var(--faint);background:transparent;transition:all .4s cubic-bezier(.2,1.4,.4,1)}
+#rec .dots i.on{background:var(--ink);border-color:var(--ink)}
+
+/* ── 大肥鱼 ── */
+.fish{position:absolute;width:230px;z-index:35;opacity:0;transform:translateY(24px) scale(.66);
+  transition:all .45s cubic-bezier(.34,1.5,.64,1);pointer-events:none}
+.fish.show{opacity:1;transform:none}
+.fish img{width:100%;display:block}
+.fish .say{position:absolute;left:-30px;top:-128px;width:284px;background:var(--card);border:1px solid var(--ink);border-radius:12px;
+  padding:14px 18px;font:900 24px/1.42 'Noto Sans SC';color:var(--ink);opacity:0;transform:scale(.7);
+  transition:all .4s cubic-bezier(.34,1.5,.64,1) .16s}
+.fish.show .say{opacity:1;transform:scale(1)}
+.fish .say::after{content:'';position:absolute;left:60px;bottom:-13px;width:14px;height:14px;background:var(--card);border-right:1px solid var(--ink);border-bottom:1px solid var(--ink);transform:rotate(45deg)}
+#fish1{left:1640px;top:600px}
+
+/* ============ ③ 结束 ============ */
+
+/* ----- 角注 / HUD ----- */
+.corner{position:absolute;font:500 13px 'IBM Plex Mono';letter-spacing:.14em;color:var(--muted);z-index:41;text-transform:uppercase}
+#chap{left:88px;bottom:34px}
+#src{right:88px;bottom:34px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:rgba(28,28,26,.12)}
+#bar{height:100%;width:0;background:var(--ink)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(240,239,235,.95);backdrop-filter:blur(4px);color:#555}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #999;color:#333;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(28,28,26,.08)}
+#replay.done{border-color:var(--accent);color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- ============ ④ 画面层 HTML ============ -->
+  <div id="cam">
+    <div id="hd">
+      <div class="eyebrow"><span class="no">SHOT 0-10</span><span class="cn">风险篇 · 三个准备工作</span></div>
+      <h1>AI <b>删档</b>事故清单</h1>
+      <div class="en">INCIDENT LOG · RECENT MONTHS</div>
+      <div class="acc-bar"></div>
+    </div>
+
+    <!-- 右上记录指示 -->
+    <div id="rec">
+      <div class="rt"><span class="dot"></span>REC · 记录中</div>
+      <div class="dots"><i id="p1"></i><i id="p2"></i><i id="p3"></i></div>
+    </div>
+
+    <!-- ===== 事件卡堆（主视觉 · 三张事件卡依次弹入叠堆） ===== -->
+    <div id="deck">
+
+      <!-- 卡 01 · Claude Code -->
+      <div class="dcard up" id="c1">
+        <div class="bar"></div><div class="dnum">01</div>
+        <div class="dhead">
+          <div class="dvic" id="vic1"><svg width="44" height="44" viewBox="0 0 46 46" fill="none"><rect x="5" y="8" width="36" height="30" rx="4" stroke="#1C1C1A" stroke-width="2.6"/><path d="M12 18 L18 23 L12 28" stroke="#1C1C1A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 28 H32" stroke="#1C1C1A" stroke-width="2.6" stroke-linecap="round"/></svg></div>
+          <div class="dsrc">Claude Code<span class="m">承接上镜 · 终端里动手</span></div>
+        </div>
+        <div class="dstamp">最近</div>
+        <div class="dfact">清理旧项目，一条命令<b>删空</b>用户主目录</div>
+        <div class="dchips">
+          <div class="dchip" id="d1"><span class="cdot"></span>密钥环一并删除</div>
+          <div class="dchip" id="d2"><span class="cdot"></span>固态硬盘恢复失败</div>
+        </div>
+        <div class="daxis" style="--axp:22%"></div>
+      </div>
+
+      <!-- 卡 02 · 谷歌 Antigravity -->
+      <div class="dcard up only" id="c2">
+        <div class="bar"></div><div class="dnum">02</div>
+        <div class="dhead">
+          <div class="dvic" id="vic2"><svg width="44" height="44" viewBox="0 0 46 46" fill="none"><ellipse cx="23" cy="12" rx="15" ry="6" stroke="#1C1C1A" stroke-width="2.6"/><path d="M8 12 V34 C8 37.3 14.7 40 23 40 C31.3 40 38 37.3 38 34 V12" stroke="#1C1C1A" stroke-width="2.6"/><path d="M8 23 C8 26.3 14.7 29 23 29 C31.3 29 38 26.3 38 23" stroke="#1C1C1A" stroke-width="2.2"/><path d="M16 10 L28 32" stroke="#1C1C1A" stroke-width="2.6" stroke-linecap="round" opacity=".55"/></svg></div>
+          <div class="dsrc">谷歌 Antigravity<span class="m">AI 编程环境 · 整盘事故</span></div>
+        </div>
+        <div class="dstamp">永久删除</div>
+        <div class="dfact">删过摄影师<b>一个盘</b></div>
+        <div class="daxis" style="--axp:52%"></div>
+      </div>
+
+      <!-- 卡 03 · Claude 桌面助手 -->
+      <div class="dcard up only" id="c3">
+        <div class="bar"></div><div class="dnum">03</div>
+        <div class="dhead">
+          <div class="dvic" id="vic3"><svg width="44" height="44" viewBox="0 0 46 46" fill="none"><rect x="6" y="9" width="34" height="28" rx="4" stroke="#1C1C1A" stroke-width="2.6"/><circle cx="16" cy="19" r="3.4" stroke="#1C1C1A" stroke-width="2.4"/><path d="M8 33 L18 24 L25 31 L31 26 L38 33" stroke="#1C1C1A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="dsrc">Claude 桌面助手<span class="m">桌面端 · 照片事故</span></div>
+        </div>
+        <div class="dstamp">永久删除</div>
+        <div class="dfact">删掉投资人 <b>15 年</b>的家庭照片</div>
+        <div class="daxis" style="--axp:86%"></div>
+      </div>
+
+    </div>
+
+    <!-- 事故时间轴（lieflat F2 发丝线 + 刻度尺） -->
+    <div id="axis">
+      <div class="cap">时间轴 · 近几个月</div>
+      <div class="rule"></div>
+      <div class="ticks"><i class="maj" style="left:8%"></i><i class="maj" style="left:50%"></i><i class="maj" style="left:92%"></i></div>
+      <div class="fill" id="axisfill"></div>
+      <div class="pt" id="ax1"></div><div class="pt" id="ax2"></div><div class="pt" id="ax3"></div>
+      <div class="mlab" style="left:8%">01</div>
+      <div class="mlab" style="left:50%">02</div>
+      <div class="mlab" style="left:92%">03</div>
+      <div class="spark"></div>
+    </div>
+
+    <!-- 共同点标签带 -->
+    <div id="band">
+      <div class="lab">共同点</div>
+      <div class="sep"></div>
+      <div class="tags">
+        <div class="tg acc" id="t1">绕过回收站的永久删除</div>
+        <div class="tg" id="t2">都有原帖、有记录</div>
+        <div class="tg" id="t3">就发生在过去几个月</div>
+      </div>
+    </div>
+
+    <!-- 收束小注 -->
+    <div id="close">AI 能动手的事越来越多 · 这类事故只会<b>更频繁</b></div>
+
+    <!-- 大肥鱼 -->
+    <div class="fish" id="fish1">
+      <div class="say">删了，就<b>找不回来</b>！</div>
+      <img src="Shark-GIF/041_趴键盘愤怒符号抓狂打字.gif" alt="大肥鱼">
+    </div>
+
+  </div>
+
+  <!-- 角注 -->
+  <div class="corner" id="chap">01 / 三个准备工作 · 风险篇</div>
+  <div class="corner" id="src">事件均来自当事人原帖（示意） · 口播对齐 timeline.md</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-10 · 事故清单 · 31s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=31000; /* ←⑤ DUR=分镜时长(ms) */
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+
+/* ── 本镜头专用小工具 ── */
+function kick(el){const e=$(el);e.classList.remove('in');void e.offsetWidth;e.classList.add('in');}
+/* 事件卡堆：新卡弹入居中，旧卡向左叠成牌堆 */
+function deckGo(i){
+  ['#c1','#c2','#c3'].forEach(function(s,k){
+    var el=$(s);el.classList.remove('up','active','stack0','stack1');
+    if(k===i)el.classList.add('active');
+    else if(k<i)el.classList.add(k===0?'stack0':'stack1');
+    else el.classList.add('up');
+  });
+}
+
+/* ============ ⑤ DUR 与 cue 表 ============
+   镜头起点 4:02(绝对) → cue = 口播起点 − 4:02
+*/
+on(200,()=>camTo(0,0,1,1.5));                                          // 起手：微推拉出档案卡堆
+on(320,()=>{$('#hd').classList.add('in');$('#rec').classList.add('in');__sfx.pop(.5)});
+on(520,()=>$('#axis').classList.add('in'));
+on(680,()=>{deckGo(0);$('#p1').classList.add('on');$('#ax1').classList.add('on');$('#axisfill').style.width='8%';__sfx.thud(.7);}); // 4:02「连带着系统密钥环一并删除」
+on(2000,()=>{kick('#d1');__sfx.pop(.4)});                              // 4:04「所有的应用都要重新登录」
+on(4000,()=>{kick('#d2');__sfx.pop(.4)});                              // 4:06「接下来他在固态硬盘上尝试恢复」
+on(6000,()=>{$('#d2').classList.add('bad');__sfx.thud(.5)});           // 4:08「但是删掉的数据基本都找不回来」
+on(9000,()=>{camFocus(1000,500,1.05,.5);deckGo(1);$('#p2').classList.add('on');$('#ax2').classList.add('on');$('#axisfill').style.width='50%';__sfx.thud(.75);}); // 4:11「谷歌的Antigravity删过摄影师的一个盘」
+on(11000,()=>{deckGo(2);$('#p3').classList.add('on');$('#ax3').classList.add('on');$('#axisfill').style.width='92%';__sfx.thud(.75);}); // 4:13「Claude的桌面助手删掉过一个投资人15年的家庭照片」
+on(13000,()=>camTo(0,0,1,.6));
+on(15000,()=>{$('#band').classList.add('in');__sfx.pop(.6)});           // 4:17「这些都是绕过回收站的永久删除」
+on(15150,()=>{kick('#t1');__sfx.thud(.5)});
+on(17800,()=>{$('#fish1').classList.add('show');__sfx.pop(.6)});        // 4:21「AI一旦拿到了执行的权限」（提前进场）
+on(22000,()=>{kick('#t2');__sfx.pop(.5)});                              // 4:24「这几起事故都是有原帖有记录」
+on(29500,()=>$('#fish1').classList.remove('show'));
+on(24000,()=>{kick('#t3');__sfx.ding(.5)});                             // 4:26「而且就发生在过去几个月的时间」
+on(27000,()=>{$('#close').classList.add('in');__sfx.ding(.55)});        // 4:29「随着AI工具能动手做的事情越来越多」
+on(29000,()=>{camFocus(900,540,1.03,.6);__sfx.pop(.35)});               // 4:31「这类事情也只会多不少」
+
+/* ===== [不动] QA 专用（正常播放不触发）：hash 带 t=毫秒 → 起播后跳转该时刻并冻结 ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

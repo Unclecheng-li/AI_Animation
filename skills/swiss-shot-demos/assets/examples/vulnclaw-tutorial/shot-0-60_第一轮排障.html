@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+     镜头 60 · 第一轮排障（27:54–28:50 / 56s · 四幕长页）
+     v4：瑞士国际主义 · 纸灰舞台（终端为墨底平面 · 无光）
+     技能注入：diagram-design type-timeline（发丝基线/刻度/事件圆点/发丝引线）
+              + diagram-design type-state（状态圆角矩形 + 带标签转移）
+     红线：终端为抽象行块，不伪造真实回显 → 「示意图 · 非实拍」
+     ============================================================ -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜 60 · 第一轮排障 · 27:54–28:50</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;--accent:#F5572F;--dark:#1C1C1A;--darkink:#F0EFEB;--darkgrid:#2E2D29}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:var(--paper);overflow:hidden;color:var(--ink);font-family:'Inter','Noto Sans SC',sans-serif;-webkit-font-smoothing:antialiased}
+body.paused *{animation-play-state:paused!important}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#grid{position:absolute;inset:0;pointer-events:none;
+  background-image:linear-gradient(rgba(28,28,26,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.04) 1px,transparent 1px);
+  background-size:44px 44px}
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* 页头 */
+#kick{position:absolute;left:88px;top:78px;font:600 15px 'IBM Plex Mono';letter-spacing:.2em;text-transform:uppercase;color:var(--muted);
+  opacity:0;transform:translateY(-10px);transition:all .5s}
+#kick i{display:inline-block;width:32px;height:2px;background:var(--accent);vertical-align:middle;margin-right:12px}
+#kick.in{opacity:1;transform:none}
+#title{position:absolute;left:86px;top:110px;font:800 52px/1.05 'Inter','Noto Sans SC';letter-spacing:-.03em;color:var(--ink);
+  opacity:0;transform:translateY(22px);transition:all .6s cubic-bezier(.16,1,.3,1)}
+#title.in{opacity:1;transform:none}
+#title b{color:var(--accent)}
+.act{position:absolute;inset:0;transition:opacity .38s ease}
+.act.hide{opacity:0;pointer-events:none}
+.actk{position:absolute;left:88px;top:200px;font:700 17px 'IBM Plex Mono','Noto Sans SC';letter-spacing:.14em;color:var(--muted)}
+.actk em{font-style:normal;color:var(--ink)}
+
+/* —— ACT 1：报错 —— */
+#termA{position:absolute;left:88px;top:272px;width:900px;height:560px;border-radius:14px;background:var(--dark);
+  border:1px solid var(--ink);opacity:0;transform:translateY(26px);transition:all .6s cubic-bezier(.16,1,.3,1)}
+#termA.in{opacity:1;transform:none}
+#tbarA{height:42px;display:flex;align-items:center;gap:8px;padding:0 16px;border-bottom:1px solid var(--darkgrid)}
+#tbarA i{width:11px;height:11px;border-radius:50%;background:#4A4944}
+#tbarA span{margin-left:12px;font:500 13px 'IBM Plex Mono';letter-spacing:.14em;color:#8F8E88}
+#tbodyA{padding:24px 26px 0;font-family:'IBM Plex Mono','Noto Sans SC'}
+.rq{font:400 18px/2.05 'IBM Plex Mono','Noto Sans SC';color:#C6C5BF;opacity:0;transform:translateX(-12px);transition:all .4s}
+.rq.in{opacity:1;transform:none}
+.rq .m{color:var(--darkink)}
+.rq .bad{color:var(--accent);font-weight:700}
+.blk{display:inline-block;height:9px;border-radius:3px;background:rgba(240,239,235,.16);margin:0 0 0 10px;vertical-align:1px}
+#err502{position:absolute;left:1080px;top:266px;font:800 190px/1 'Inter';letter-spacing:-.02em;color:var(--accent);
+  opacity:0;transform:scale(1.4);transition:all .5s cubic-bezier(.2,1.6,.4,1)}
+#err502.in{opacity:1;transform:none}
+#errSub{position:absolute;left:1086px;top:494px;font:800 24px 'Noto Sans SC';color:var(--ink);letter-spacing:.04em;opacity:0;transition:opacity .45s}
+#errSub.in{opacity:1}
+#retryRow{position:absolute;left:1080px;top:566px;display:flex;gap:16px;opacity:0;transition:opacity .5s}
+#retryRow.in{opacity:1}
+.rchip{font:600 20px 'IBM Plex Mono','Noto Sans SC';letter-spacing:.03em;color:var(--ink);
+  border:1px solid var(--ink);background:#fff;border-radius:8px;padding:9px 18px;opacity:0;transform:translateY(12px);transition:all .4s cubic-bezier(.2,1.5,.4,1)}
+.rchip.in{opacity:1;transform:none}
+#retryNote{position:absolute;left:1086px;top:664px;font:500 16px 'IBM Plex Mono','Noto Sans SC';letter-spacing:.04em;color:var(--muted);opacity:0;transition:opacity .45s}
+#retryNote.in{opacity:1}
+#human{position:absolute;left:1080px;top:730px;width:660px;padding:18px 22px;border-radius:12px;background:rgba(28,28,26,.03);
+  border:1.5px dashed var(--ink);font:700 20px 'Noto Sans SC';color:var(--ink);opacity:0;transform:translateY(14px);transition:all .45s}
+#human.in{opacity:1;transform:none}
+#human s{color:var(--muted);font-weight:400}
+#humanNote{position:absolute;left:1086px;top:852px;font:600 17px 'IBM Plex Mono','Noto Sans SC';letter-spacing:.04em;color:var(--ink);opacity:0;transition:opacity .45s}
+#humanNote.in{opacity:1}
+
+/* —— ACT 2：排查（timeline + state） —— */
+#tlWrap{position:absolute;left:0;top:0;width:1920px;height:1080px}
+#tlWrap line.base{stroke:rgba(28,28,26,.5);stroke-width:1.4}
+#ticks line{stroke:rgba(28,28,26,.28);stroke-width:1.1}
+#tlWrap line.drop{stroke:rgba(28,28,26,.45);stroke-width:1}
+.tlab{position:absolute;width:330px;opacity:0;transition:all .45s cubic-bezier(.16,1,.3,1)}
+.tlab.in{opacity:1}
+.tlab b{display:block;font:800 26px 'Noto Sans SC';letter-spacing:.02em;color:var(--ink)}
+.tlab span{display:block;font:400 17px 'Noto Sans SC';color:var(--muted);line-height:1.6;margin-top:6px}
+.tlab .stg{font:600 13px 'IBM Plex Mono';letter-spacing:.18em;color:var(--muted);margin-bottom:6px}
+.tlab.hot b{color:var(--accent)}
+#ev1{left:250px;top:404px}
+#ev2{left:790px;top:626px}
+#ev3{left:1330px;top:404px}
+.tev{fill:#fff;stroke:var(--ink);stroke-width:2.4;opacity:0}
+.tev.on{opacity:1}
+.tev.hot{fill:var(--accent);stroke:var(--accent)}
+/* 状态机 */
+#smWrap{position:absolute;left:88px;top:806px;display:flex;align-items:center;gap:0}
+.st{position:relative;font:700 19px 'IBM Plex Mono';letter-spacing:.06em;color:var(--muted);
+  border:1.5px solid var(--faint);border-radius:10px;padding:12px 22px;background:#fff;
+  opacity:0;transform:translateY(14px);transition:all .45s cubic-bezier(.2,1.5,.4,1)}
+.st.in{opacity:1;transform:none}
+.st.hot{color:var(--accent);border-color:var(--accent);background:rgba(245,87,47,.06)}
+.st#s6{color:var(--paper);border-color:var(--ink);background:var(--ink)}
+.arw{width:0;height:0;border-left:12px solid var(--faint);border-top:9px solid transparent;border-bottom:9px solid transparent;margin:0 16px;
+  opacity:0;transition:opacity .4s}
+.arw.in{opacity:1}
+.tl-note{position:absolute;left:88px;top:936px;font:500 16px 'IBM Plex Mono','Noto Sans SC';letter-spacing:.04em;color:var(--muted);opacity:0;transition:opacity .45s}
+.tl-note.in{opacity:1}
+
+/* —— ACT 3：重跑 —— */
+#runBox{position:absolute;left:88px;top:280px;width:900px;height:470px;border-radius:14px;background:var(--dark);
+  border:1px solid var(--ink);opacity:0;transform:translateY(24px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#runBox.in{opacity:1;transform:none}
+#runBar{height:42px;display:flex;align-items:center;gap:8px;padding:0 16px;border-bottom:1px solid var(--darkgrid)}
+#runBar i{width:11px;height:11px;border-radius:50%;background:#4A4944}
+#runBar span{margin-left:12px;font:500 13px 'IBM Plex Mono';letter-spacing:.14em;color:#8F8E88}
+#runBody{padding:24px 26px 0;font-family:'IBM Plex Mono','Noto Sans SC'}
+#stem{position:absolute;left:1040px;top:290px;width:792px;opacity:0;transition:opacity .5s}
+#stem.in{opacity:1}
+.step{display:flex;align-items:flex-start;gap:16px;padding:16px 20px;border-radius:12px;margin-bottom:16px;
+  background:#fff;border:1px solid var(--grid);opacity:0;transform:translateX(20px);transition:all .45s cubic-bezier(.16,1,.3,1)}
+.step.in{opacity:1;transform:none}
+.step.fail{border-color:var(--accent)}
+.step.win{border-color:var(--ink)}
+.step u{text-decoration:none;flex:0 0 40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font:700 20px 'IBM Plex Mono';border:1.5px solid var(--faint);color:var(--muted)}
+.step.fail u{border-color:var(--accent);color:var(--accent)}
+.step.win u{border-color:var(--ink);color:var(--paper);background:var(--ink)}
+.step b{display:block;font:800 20px 'Noto Sans SC';color:var(--ink)}
+.step span{display:block;font:400 15px 'IBM Plex Mono','Noto Sans SC';color:var(--muted);margin-top:5px;letter-spacing:.02em}
+.step.fail b{color:var(--accent)}
+.step.win b{color:var(--ink)}
+#prog{position:absolute;left:88px;top:800px;width:900px;height:10px;border-radius:6px;background:var(--grid);opacity:0;transition:opacity .4s}
+#prog.in{opacity:1}
+#progFill{height:100%;width:0;border-radius:6px;background:var(--ink)}
+#progTx{position:absolute;left:88px;top:826px;font:500 15px 'IBM Plex Mono','Noto Sans SC';letter-spacing:.04em;color:var(--muted);opacity:0;transition:opacity .4s}
+#progTx.in{opacity:1}
+
+/* —— ACT 4：通过 —— */
+#passWrap{position:absolute;left:0;top:300px;width:1920px;text-align:center}
+#passBig{display:inline-block;font:900 140px/1 'Inter';letter-spacing:.1em;color:var(--paper);
+  background:var(--ink);border-radius:20px;padding:14px 64px 20px;opacity:0;transform:scale(1.6) rotate(-4deg);transition:all .55s cubic-bezier(.2,1.6,.4,1)}
+#passBig.in{opacity:1;transform:none}
+#passSub{margin-top:28px;font:800 28px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em;opacity:0;transition:opacity .5s}
+#passSub.in{opacity:1}
+#passChips{margin-top:44px;display:flex;justify-content:center;gap:20px;opacity:0;transition:opacity .5s}
+#passChips.in{opacity:1}
+.pchip{font:600 19px 'IBM Plex Mono','Noto Sans SC';letter-spacing:.02em;color:var(--paper);
+  background:var(--ink);border-radius:10px;padding:12px 26px}
+#passNote{position:absolute;left:0;right:0;top:824px;text-align:center;font:500 17px 'IBM Plex Mono','Noto Sans SC';
+  letter-spacing:.1em;color:var(--muted);opacity:0;transition:opacity .5s}
+#passNote.in{opacity:1}
+
+/* —— 大肥鱼 —— */
+.fish{position:absolute;width:236px;z-index:35;opacity:0;transform:translateY(26px) scale(.86);transition:all .45s cubic-bezier(.34,1.4,.64,1);pointer-events:none}
+.fish.show{opacity:1;transform:none}
+.fish img{width:100%;display:block}
+.fish .say{position:absolute;width:272px;background:#fff;border:1.5px solid var(--ink);border-radius:14px;padding:11px 15px;
+  font:700 21px 'Noto Sans SC';color:var(--ink);line-height:1.45;opacity:0;transform:scale(.7);transition:all .4s cubic-bezier(.34,1.4,.64,1) .14s}
+.fish.show .say{opacity:1;transform:none}
+.fish .say b{color:var(--accent)}
+#fish60a{left:1652px;top:300px}
+#fish60a .say{left:-190px;top:-96px}
+#fish60a .say::after{content:'';position:absolute;left:150px;bottom:-16px;border:9px solid transparent;border-top:11px solid var(--ink)}
+#fish60b{left:1580px;top:800px;width:200px}
+#fish60b .say{left:-150px;top:-100px}
+#fish60b .say::after{content:'';position:absolute;left:150px;bottom:-16px;border:9px solid transparent;border-top:11px solid var(--ink)}
+
+#badge{position:absolute;left:960px;top:238px;font:600 13px 'IBM Plex Mono','Noto Sans SC';letter-spacing:.06em;
+  color:var(--paper);background:var(--ink);border-radius:4px;padding:3px 10px;opacity:0;transition:opacity .5s;z-index:42}
+#badge.in{opacity:1}
+
+/* 角注 / HUD */
+.corner{position:absolute;font:500 15px 'Inter','Noto Sans SC';letter-spacing:.06em;color:var(--faint);z-index:41}
+#chap{left:88px;bottom:30px}
+#src{right:88px;bottom:30px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:var(--grid)}
+#bar{height:100%;width:0;background:var(--ink)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(240,239,235,.94);color:var(--muted)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid var(--faint);color:var(--ink);font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(28,28,26,.06)}
+#replay.done{border-color:var(--ink);color:var(--ink)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="grid"></div>
+  <div id="cam">
+    <div id="kick"><i></i>镜 60 · 第一轮排障</div>
+    <div id="title">第一步就出问题 · <b>502</b></div>
+
+    <!-- ===== ACT 1 报错 ===== -->
+    <div class="act" id="act1">
+      <div class="actk">ACT 01 — <em>它去抓登录页</em></div>
+      <div id="termA">
+        <div id="tbarA"><i></i><i></i><i></i><span>AGENT LOG · 抽象示意</span></div>
+        <div id="tbodyA">
+          <div class="rq" id="q1">▸ GET <span class="m">/login</span> …</div>
+          <div class="rq" id="q2">← <span class="bad">502</span> Bad Gateway<span class="blk" style="width:180px"></span></div>
+          <div class="rq" id="q3">▸ 换地址重试 … <span class="bad">502</span></div>
+          <div class="rq" id="q4">▸ 第三次 … <span class="bad">502</span></div>
+          <div class="rq" id="q5">← 连接被断开 · 响应体为空<span class="blk" style="width:120px"></span></div>
+          <div class="rq" id="q6">▸ 结论：<span class="m">疑似中间层拦截</span></div>
+        </div>
+      </div>
+      <div id="err502">502</div>
+      <div id="errSub">服务器没有响应</div>
+      <div id="retryRow"><span class="rchip" id="rc1">换地址 · 502</span><span class="rchip" id="rc2">再试 · 502</span><span class="rchip" id="rc3">第三次 · 502</span></div>
+      <div id="retryNote">连续三次 · 全是 502</div>
+      <div id="human">换作人的话 → <s>以为靶场崩了，回头重装一下</s></div>
+      <div id="humanNote">但它并没有</div>
+      <div class="fish" id="fish60a"><div class="say">报错先别慌，<b>先看特征</b></div><img src="Shark-GIF/041_趴键盘愤怒符号抓狂打字.gif" alt=""></div>
+    </div>
+
+    <!-- ===== ACT 2 排查 ===== -->
+    <div class="act hide" id="act2">
+      <div class="actk">ACT 02 — <em>它注意到一个细节</em></div>
+      <svg id="tlWrap" viewBox="0 0 1920 1080">
+        <line class="base" x1="200" y1="560" x2="1720" y2="560"/>
+        <g id="ticks"></g>
+        <line class="drop" id="drop1" x1="415" y1="560" x2="415" y2="500"/>
+        <line class="drop" id="drop2" x1="955" y1="560" x2="955" y2="620"/>
+        <line class="drop" id="drop3" x1="1495" y1="560" x2="1495" y2="500"/>
+        <circle class="tev" id="c1" cx="415" cy="560" r="8"/>
+        <circle class="tev" id="c2" cx="955" cy="560" r="8"/>
+        <circle class="tev hot" id="c3" cx="1495" cy="560" r="11"/>
+      </svg>
+      <div class="tlab" id="ev1"><div class="stg">LOCATE</div><b>定位 · 异常特征</b><span>连接每次都被直接断开<br>响应体里是空的</span></div>
+      <div class="tlab" id="ev2"><div class="stg">ANALYZE</div><b>分析 · 不像挂了</b><span>不像服务器宕机<br>更像中间有东西在拦</span></div>
+      <div class="tlab hot" id="ev3"><div class="stg">FIX</div><b>修复 · 判断代理</b><span>代理软件开着<br>请求被它拦下了</span></div>
+      <div id="smWrap">
+        <span class="st" id="s1">PROBE</span><span class="arw" id="a1"></span>
+        <span class="st hot" id="s2">FAILED 502</span><span class="arw" id="a2"></span>
+        <span class="st" id="s3">DIAGNOSE</span><span class="arw" id="a3"></span>
+        <span class="st" id="s4">BYPASS PROXY</span><span class="arw" id="a4"></span>
+        <span class="st" id="s5">RETRY</span><span class="arw" id="a5"></span>
+        <span class="st" id="s6">PASS</span>
+      </div>
+      <div class="tl-note" id="tlNote">时间线只记三步：定位 → 分析 → 修复</div>
+    </div>
+
+    <!-- ===== ACT 3 重跑 ===== -->
+    <div class="act hide" id="act3">
+      <div class="actk">ACT 03 — <em>直接请求</em></div>
+      <div id="runBox">
+        <div id="runBar"><i></i><i></i><i></i><span>AGENT LOG · 抽象示意</span></div>
+        <div id="runBody">
+          <div class="rq" id="w1">▸ 调用 <span class="bad">curl</span> —— 报错，不是真的 curl</div>
+          <div class="rq" id="w2">▸ <span class="bad">curl</span> 在 PowerShell 里只是个别名<span class="blk" style="width:150px"></span></div>
+          <div class="rq" id="w3">▸ 改为显式调用 <span class="m">curl.exe</span> + 绕开代理参数</div>
+          <div class="rq" id="w4">← <span class="m">200 OK</span> · 登录页完整拿到</div>
+        </div>
+      </div>
+      <div id="stem">
+        <div class="step fail" id="sp1"><u>1</u><div><b>curl —— 假货</b><span>PowerShell 里只是别名，直接报错</span></div></div>
+        <div class="step" id="sp2"><u>2</u><div><b>马上反应过来</b><span>不再依赖别名，改写调用方式</span></div></div>
+        <div class="step win" id="sp3"><u>3</u><div><b>curl.exe + 绕开代理</b><span>显式调用 · 加上绕开代理的参数</span></div></div>
+        <div class="step win" id="sp4"><u>✓</u><div><b>200 OK</b><span>登录页完整拿到</span></div></div>
+      </div>
+      <div id="prog"><div id="progFill"></div></div>
+      <div id="progTx">重跑进度 · 修复生效</div>
+    </div>
+
+    <div class="fish" id="fish60b"><div class="say">踩了坑，<b>马上自己爬出来</b></div><img src="Shark-GIF/130_关在笼中泪眼汪汪委屈可怜求助.gif" alt=""></div>
+
+    <!-- ===== ACT 4 通过 ===== -->
+    <div class="act hide" id="act4">
+      <div class="actk" style="left:0;right:0;text-align:center">ACT 04 — <em>修复生效</em></div>
+      <div id="passWrap">
+        <div id="passBig">PASS</div>
+        <div id="passSub">代理问题定位准确 · 请求绕开后返回 200</div>
+        <div id="passChips">
+          <span class="pchip" id="pc1">登录页完整拿到</span>
+          <span class="pchip" id="pc2">服务器探了一下</span>
+          <span class="pchip" id="pc3">Apache + PHP 版本</span>
+        </div>
+      </div>
+      <div id="passNote">第一轮排障 · 结束</div>
+    </div>
+
+    <div id="badge">示意图 · 非实拍</div>
+  </div>
+
+  <div class="corner" id="chap">镜 60 · 实战开打</div>
+  <div class="corner" id="src">口播对齐 timeline.md · 27:54–28:50</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-60 · 第一轮排障 · 56s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=56000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ===== 补间 / 工具 ===== */
+const show=(sel,cls)=>{const el=$(sel);if(el)el.classList.add(cls||'in')};
+/* 时间线刻度（diagram-design timeline：发丝基线 + 刻度） */
+(function(){var g=$('#ticks'),s='';for(var i=0;i<=12;i++){var x=200+i*(1520/12);s+='<line x1="'+x+'" y1="560" x2="'+x+'" y2="'+(i%3===0?542:550)+'"/>';}g.innerHTML=s;})();
+function progTo(v,dur,start){tws.push({t:start,d:dur,e:eo,f:p=>{$('#progFill').style.width=(v*p*100).toFixed(1)+'%'}})}
+
+/* ============ ⑤ DUR 与 cue 表 ============ */
+/* 口播区间 27:54–28:50（镜头起点 27:54 = 1674s） */
+on(200,()=>{show('#kick');show('#title');__sfx.pop(.55);});                       // 27:54「回车」
+on(300,()=>{show('#act1');});                                                      // 27:54「从这一刻开始我不碰键盘」
+on(2000,()=>{show('#termA');show('#badge');show('#q1');__sfx.swipe(.7);});         // 27:56「屏幕上的每一步都是VulnClaw自己跑的」
+on(4000,()=>{show('#q1');__sfx.pop(.45);});                                        // 27:58「那么VulnClaw它的计划非常清楚」
+on(6000,()=>{show('#s1');show('#a1');__sfx.pop(.5);});                             // 28:00「先登录再找注入点」
+on(8000,()=>{show('#q2');show('#err502');__sfx.thud(.8);});                        // 28:02「结果第一步就出问题了」
+on(9500,()=>{show('#q2');__sfx.pop(.4);});                                         // 28:03「它去抓登录页」
+on(10500,()=>{show('#errSub');show('#fish60a','show');__sfx.pop(.45);});           // 28:04「结果页面返回502」
+on(12000,()=>{show('#q3');__sfx.pop(.45);});                                       // 28:06「换个地址再试」
+on(13000,()=>{show('#retryRow');show('#rc1');show('#rc2');show('#rc3');show('#q4');__sfx.thud(.6);}); // 28:07「还是502连续三次了」
+on(14000,()=>{show('#retryNote');});                                               // 28:07
+on(15200,()=>{show('#q5');show('#human');$('#fish60a').classList.remove('show');__sfx.pop(.5);}); // 28:09「换作人的话」
+on(18000,()=>{__sfx.pop(.4);});                                                    // 28:12「可能想回头就去重装一下」
+on(19000,()=>{show('#humanNote');__sfx.ding(.45);});                                // 28:13「但是它并没有」
+/* —— 硬切 ACT 2 —— */
+on(20500,()=>{$('#act1').classList.add('hide');$('#act2').classList.remove('hide');camCut(0,0,1);__sfx.swipe(.9);}); // 28:14「它注意到一个细节」
+on(21000,()=>{show('#c1');show('#ev1');__sfx.pop(.55);});                          // 28:15「就是每次报错连接」
+on(22000,()=>{__sfx.pop(.4);});                                                    // 28:16「都是直接被断开」
+on(24000,()=>{show('#q6');__sfx.pop(.4);});                                        // 28:18「页面的内容里面是空的」
+on(25500,()=>{show('#c2');show('#ev2');show('#a2');show('#s2');show('#s3');__sfx.pop(.55);}); // 28:19「那么这个特征其实不像服务器挂掉了」
+on(27000,()=>{camFocus(960,520,1.04,.5);__sfx.whoosh(.5,.5);});                    // 28:21「更像中间有东西在拦截它」
+on(29000,()=>{show('#c3');show('#ev3');show('#a3');show('#s4');__sfx.thud(.55);}); // 28:23「所以它判断是代理的问题」
+on(31000,()=>{show('#tlNote');__sfx.pop(.4);});                                    // 28:25「后面一看果然」
+on(32000,()=>{show('#s5');show('#a4');__sfx.pop(.5);});                            // 28:26「我这台电脑上是开着代理软件的」
+on(34000,()=>{show('#a5');show('#s6');__sfx.pop(.5);});                            // 28:28「它的请求被代理拦下了」
+/* —— 硬切 ACT 3 —— */
+on(38600,()=>{$('#act2').classList.add('hide');$('#act3').classList.remove('hide');camCut(0,0,1);__sfx.swipe(.95);}); // 28:33「直接请求」
+on(39000,()=>{show('#runBox');show('#stem');show('#w1');__sfx.swipe(.7);});        // 28:33「直接请求」
+on(40000,()=>{show('#sp1');__sfx.thud(.6);});                                      // 28:34「第一次还踩了个坑」
+on(41000,()=>{show('#w2');__sfx.pop(.45);});                                       // 28:35「就是Windows的PowerShell的curl」
+on(43000,()=>{show('#sp2');__sfx.pop(.5);});                                       // 28:37「它只是个别名」
+on(44000,()=>{__sfx.pop(.4);});                                                    // 28:38「不是真的curl」
+on(45000,()=>{show('#sp3');show('#w3');__sfx.ding(.5);});                           // 28:39「所以直接报错了」→ 28:41「显式调用curl.exe」
+on(48000,()=>{show('#prog');show('#progTx');progTo(1,1800,48000);__sfx.type(.4);}); // 28:42「再加上一个绕开代理的参数」
+on(30000,()=>{show('#fish60b','show');__sfx.pop(.5);}); // 鱼提前在场（末鱼）
+on(50000,()=>{show('#sp4');show('#w4');show('#prog','in');$('#progFill').style.width='100%';__sfx.ding(.7);}); // 28:44「再看一下返回200」
+/* —— 硬切 ACT 4 —— */
+on(51100,()=>{$('#act3').classList.add('hide');
+  $('#act4').classList.remove('hide');camCut(0,0,1);__sfx.swipe(.9);}); // 28:45「登录页完整拿到了」
+on(54500,()=>{$('#fish60b').classList.remove('show');}); // 退场顺延到 DUR-1500
+on(51500,()=>{show('#passBig');__sfx.thud(.9);});
+on(52800,()=>{show('#passSub');__sfx.ding(.55);});
+on(53800,()=>{show('#passChips');show('#pc1');__sfx.pop(.5);});                    // 28:47「还顺手把服务器探了一下」
+on(54500,()=>{show('#pc2');show('#pc3');__sfx.pop(.55);});                          // 28:48「发现Apache和PHP的版本」
+on(55400,()=>{show('#passNote');__sfx.ding(.5);});                                  // 28:50「接下来它登录进去」
+
+/* ===== [不动] QA 专用（正常播放不触发） ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

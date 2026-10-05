@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+     镜头演示动画 · 镜19 写实仿真 W2「BIOS 虚拟化」
+     ============================================================ -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80);
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 0-19 · BIOS 虚拟化 · 24s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;--accent:#F5572F;--dark:#1C1C1A}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Noto Sans SC',sans-serif}
+body.paused *{animation-play-state:paused!important}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;
+  background:var(--paper)}
+#stage::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:1;opacity:.55;
+  background-image:linear-gradient(rgba(28,28,26,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.045) 1px,transparent 1px);
+  background-size:64px 64px}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ============ ③ 画面层 CSS ============ */
+/* ── 页头（v4） ── */
+#head{position:absolute;left:56px;top:40px;z-index:20;display:flex;align-items:center;gap:16px;opacity:0;transform:translateY(-10px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#head.in{opacity:1;transform:none}
+#head .no{display:inline-block;font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:13px;letter-spacing:3px;
+  color:var(--paper);background:var(--ink);border-radius:4px;padding:4px 13px}
+#head h1{font-family:'Inter','Noto Sans SC',sans-serif;font-weight:800;font-size:30px;line-height:1;letter-spacing:-.02em;color:var(--ink)}
+#head h1 b{color:var(--accent)}
+/* --- A：VMware 主窗口 + 报错弹窗 --- */
+#vmA{position:absolute;inset:0;opacity:0;transition:opacity .45s ease}
+#vmA.in{opacity:1}
+.vmw{position:absolute;left:120px;top:96px;width:1680px;height:840px;background:#191a1e;border:1px solid #35353c;border-radius:7px;
+  box-shadow:0 40px 100px rgba(0,0,0,.75);overflow:hidden}
+.vmw .tb{height:42px;background:linear-gradient(#3c3c44,#2a2a30);display:flex;align-items:center;padding:0 8px 0 16px;border-bottom:1px solid #101014}
+.vmw .tb .ttl{font-size:15px;font-weight:700;color:#e9e9ee}
+.vmw .tb .sp{flex:1}
+.vmw .tb .x{width:36px;height:28px;display:flex;align-items:center;justify-content:center;color:#e07b7b;font-size:13px}
+.mbar{height:30px;background:#26262c;display:flex;align-items:center;gap:4px;padding:0 10px;border-bottom:1px solid #131317;font-size:14px;color:#c7c7cf}
+.mbar span{padding:4px 11px;border-radius:3px}
+.vtab{height:36px;background:#1e1e23;display:flex;align-items:flex-end;padding:0 12px;gap:6px;border-bottom:1px solid #131317}
+.vtab i{font-style:normal;font-size:13.5px;color:#e6e6ee;background:#2c2c33;border:1px solid #3d3d46;border-bottom:none;padding:7px 22px;border-radius:5px 5px 0 0}
+.guest{position:absolute;left:14px;top:110px;right:14px;bottom:34px;background:#050608;border:1px solid #2b2b33;border-radius:4px;overflow:hidden}
+.guest .bbar{height:30px;background:#101014;display:flex;align-items:center;gap:14px;padding:0 14px;color:#8b8b96;font-size:12.5px;font-family:'Inconsolata',monospace}
+.evbox{margin:60px auto 0;width:760px;text-align:center}
+.evbox .vt{font-family:'Inconsolata',monospace;font-size:22px;color:#d8d8e0;line-height:2}
+.evbox .vt b{color:#ff8f6b}
+.vstatus{position:absolute;left:0;right:0;bottom:0;height:34px;background:#1c1c22;border-top:1px solid #303038;display:flex;align-items:center;padding:0 18px;color:#9a9aa6;font-size:12.5px}
+
+#errDlg{position:absolute;left:660px;top:400px;width:600px;background:#1d1d22;border:1px solid #4a4a54;border-radius:7px;
+  box-shadow:0 30px 70px rgba(0,0,0,.8);opacity:0;transform:translateY(-96px) scale(1.05);
+  transition:opacity .16s ease,transform .34s cubic-bezier(.2,1.5,.35,1);z-index:20}
+#errDlg.in{opacity:1;transform:none}
+#errDlg .etb{height:36px;background:linear-gradient(#3a3a42,#2b2b31);display:flex;align-items:center;padding:0 16px;border-radius:7px 7px 0 0;border-bottom:1px solid #141418}
+#errDlg .etb b{font-size:14px;color:#e6e6ee;font-weight:700}
+#errDlg .eb{display:flex;gap:18px;padding:26px 26px 20px}
+#errDlg .ico{flex:none;width:44px;height:44px;border-radius:50%;background:#e0a030;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:900;color:#1a1a1e}
+#errDlg .etx{font-size:16px;color:#e2e2ea;line-height:1.72}
+#errDlg .etx b{color:#ffb454}
+#errDlg .etx .hlt{background:rgba(255,180,84,.16);box-shadow:inset 0 0 0 1px rgba(255,180,84,.55);border-radius:3px;padding:0 6px}
+#errDlg .efoot{display:flex;justify-content:flex-end;padding:0 24px 22px}
+.evbtn{min-width:112px;height:34px;border-radius:3px;background:#2c2d33;border:1px solid #47474f;color:#dcdce2;font-size:14px;display:flex;align-items:center;justify-content:center}
+
+/* --- B：开机自检 --- */
+#post{position:absolute;inset:0;background:#000;opacity:0;transition:opacity .3s ease;display:flex;align-items:center;justify-content:center;flex-direction:column}
+#post.in{opacity:1}
+#post .logo{font-family:'Inconsolata',monospace;font-size:26px;color:#c8c8d2;letter-spacing:3px}
+#post .logo b{color:#7fa6ff}
+#post .ln{margin-top:26px;font-family:'Inconsolata',monospace;font-size:23px;color:#dcdce4;letter-spacing:1.5px}
+#post .ln b{color:#ffe08a}
+#post .keys{margin-top:34px;display:flex;gap:22px}
+#post .key{font-family:'Inconsolata',monospace;border:2px solid #6a6a78;border-radius:6px;padding:12px 24px;color:#e8e8f0;font-size:20px;letter-spacing:2px}
+#post .key.press{animation:kp .45s infinite;background:#2b2b36;border-color:#ffe08a;color:#ffe08a}
+@keyframes kp{50%{transform:translateY(3px)}}
+
+/* --- C：BIOS 蓝底界面 --- */
+#bios{position:absolute;left:0;top:0;width:1920px;height:1080px;background:#0a2a63;opacity:0;transition:opacity .28s ease;
+  font-family:'Inconsolata','Noto Sans SC',monospace;color:#dbe7ff;opacity:0}
+#bios.in{opacity:1}
+#bios::before{content:'';position:absolute;inset:0;background:linear-gradient(180deg,#0e3477 0%,#0a2a63 42%,#07204e 100%)}
+.btop{position:absolute;left:0;top:0;right:0;height:56px;background:rgba(255,255,255,.09);border-bottom:2px solid rgba(255,255,255,.28);
+  display:flex;align-items:center;padding:0 28px;font-size:22px;letter-spacing:.5px;color:#f2f6ff;z-index:2}
+.btop .cpr{flex:1;text-align:right;font-size:16px;color:#b9cdf2}
+.bwrap{position:absolute;left:0;top:56px;right:0;bottom:128px;display:flex;z-index:2}
+.bmenu{width:360px;border-right:2px solid rgba(255,255,255,.22);padding:18px 0}
+.bmenu div{font-size:23px;padding:11px 40px;color:#cfe0ff;letter-spacing:1px}
+.bmenu div.sel{background:#f2f6ff;color:#0a2a63;font-weight:700}
+.bmenu div.arrow::after{content:'▶';float:right;font-size:15px}
+.bpanel{flex:1;padding:20px 44px}
+.bptitle{font-size:22px;color:#ffffff;letter-spacing:1px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,.2);margin-bottom:6px}
+.brow{display:flex;justify-content:space-between;align-items:center;font-size:21px;padding:11px 16px;color:#d7e6ff;letter-spacing:.3px}
+.brow span{color:#bcd2f7}
+.brow b{font-weight:400;color:#d7e6ff}
+.brow.sel{background:#f2f6ff;color:#0a2a63;font-weight:700}
+.brow.sel span,.brow.sel b{color:#0a2a63;font-weight:700}
+.brow.en{background:rgba(80,255,170,.14);box-shadow:inset 0 0 0 2px rgba(80,255,170,.55)}
+.brow.en b{color:#66ffb0;font-weight:700}
+.brow.ok2 b{color:#66ffb0}
+
+/* 蓝底高亮扫光（v4：移除光效） */
+#bios .sweep{display:none}
+
+/* 开关切换动画 + 问号徽章教学标记 */
+.vtend{display:inline-flex;align-items:center;gap:12px}
+.sw{position:relative;display:inline-block;width:58px;height:27px;border-radius:999px;background:#3a4a6e;
+  box-shadow:inset 0 0 0 2px rgba(255,255,255,.3);transition:background .35s,box-shadow .35s}
+.sw u{position:absolute;left:3px;top:3px;width:21px;height:21px;border-radius:50%;background:#dfe7ff;
+  transition:left .35s cubic-bezier(.3,1.6,.4,1),background .35s}
+.sw.on{background:#25c06a;box-shadow:inset 0 0 0 2px rgba(150,255,195,.95)}
+.sw.on u{left:34px;background:#fff}
+.mark{position:absolute;display:flex;align-items:center;gap:8px;z-index:40;pointer-events:none;
+  font-family:'Noto Sans SC';font-size:16px;font-weight:700;color:var(--ink);background:#fff;
+  border:1px solid var(--ink);border-radius:8px;padding:6px 16px;box-shadow:0 10px 24px rgba(28,28,26,.22);
+  opacity:0;transform:translateY(10px) scale(.7);transition:all .42s cubic-bezier(.34,1.5,.6,1)}
+.mark.on{opacity:1;transform:none}
+.mark b{color:var(--accent)}
+.mark .qm{width:20px;height:20px;border-radius:50%;background:var(--ink);color:#fff;font-weight:900;display:flex;align-items:center;justify-content:center;font-size:13px}
+#mkVt{right:150px;top:14px}
+/* diagram-design 标注规则：发丝引线（1px 虚线 leader + 落点 dot），随标注同时出场 */
+.lead{position:absolute;overflow:visible;pointer-events:none}
+.lead path{fill:none;stroke:rgba(240,239,235,.75);stroke-width:1;stroke-dasharray:4,3}
+.lead circle{fill:#F0EFEB}
+#mkVt .lead{left:100%;top:0;opacity:0;transition:opacity .35s ease}
+#mkVt.on .lead{opacity:1}
+.mkanno{position:absolute;left:100%;top:24px;width:300px;opacity:0;transition:opacity .35s ease;pointer-events:none}
+.mkanno svg{position:absolute;right:100%;top:0;overflow:visible}
+.mkanno svg path{fill:none;stroke:#F0EFEB;stroke-width:1}
+.mkanno .tx{font-family:'Inter','Noto Sans SC',sans-serif;font-style:normal;font-size:15px;line-height:1.5;color:#F0EFEB}
+#errDlg.in .mkanno{opacity:1}
+
+/* 可视化升级：白色箭头光标 + 点击涟漪（viz-） */
+#vizCur{position:absolute;left:1100px;top:880px;width:34px;height:34px;z-index:45;opacity:0;pointer-events:none;
+  transition:left .7s cubic-bezier(.3,.8,.4,1),top .7s cubic-bezier(.3,.8,.4,1),opacity .3s;
+  filter:drop-shadow(0 4px 10px rgba(0,0,0,.55))}
+#vizCur.in{opacity:1}
+.vrip{position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;border:2.5px solid #F0EFEB;
+  pointer-events:none;z-index:44;animation:vripA .75s cubic-bezier(.2,.7,.3,1) forwards}
+@keyframes vripA{0%{opacity:.95;transform:scale(.35)}100%{opacity:0;transform:scale(3)}}
+.tag{display:inline-block;margin-left:14px;font-size:14px;padding:2px 10px;border-radius:3px;background:rgba(124,107,255,.35);
+  border:1px solid rgba(160,150,255,.7);color:#dcd6ff;font-family:'Noto Sans SC',sans-serif;letter-spacing:1px}
+.bfoot{position:absolute;left:0;right:0;bottom:44px;height:74px;background:rgba(0,0,0,.28);border-top:2px solid rgba(255,255,255,.24);
+  display:flex;align-items:center;justify-content:space-between;padding:0 30px;font-size:18px;color:#c3d6f7;letter-spacing:.4px;z-index:2}
+.bfoot .kk b{background:#f2f6ff;color:#0a2a63;border-radius:3px;padding:1px 8px;font-weight:700;margin-right:6px}
+#saveDlg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(.9);width:720px;background:#0d2f6d;border:3px solid #f2f6ff;
+  box-shadow:0 20px 60px rgba(0,0,0,.6);padding:30px 34px;opacity:0;transition:all .25s ease;z-index:30}
+#saveDlg.in{opacity:1;transform:translate(-50%,-50%) scale(1)}
+#saveDlg .t{font-size:24px;color:#fff;letter-spacing:1px}
+#saveDlg .o{margin-top:22px;display:flex;gap:26px;font-size:22px}
+#saveDlg .o i{font-style:normal;background:#f2f6ff;color:#0a2a63;font-weight:700;padding:6px 34px;border-radius:4px}
+#saveDlg .o em{font-style:normal;border:1px solid rgba(255,255,255,.5);padding:6px 34px;border-radius:4px;color:#dbe7ff}
+
+/* 花字条（已删除 #cal：本页不再上屏字幕） */
+
+#fish{position:absolute;right:24px;bottom:200px;width:148px;opacity:0;transform:translateY(24px) scale(.9);
+  transition:all .5s cubic-bezier(.2,1.4,.4,1);z-index:32}
+#fish.in{opacity:1;transform:none}
+#fish img{width:100%;display:block;filter:drop-shadow(0 8px 18px rgba(0,0,0,.6))}
+#fish .bub{position:absolute;left:-272px;top:-4px;width:300px;background:#fff;border:1px solid var(--ink);border-radius:12px;
+  padding:12px 16px;font-size:15px;line-height:1.6;color:var(--ink);opacity:0;transform:scale(.86);transition:all .3s cubic-bezier(.2,1.4,.4,1);
+  white-space:normal;word-break:break-word;box-shadow:0 10px 26px rgba(28,28,26,.22)}
+#fish.bub .bub{opacity:1;transform:none}
+#fish .bub::after{content:'';position:absolute;right:-9px;top:22px;width:0;height:0;border-left:10px solid #fff;border-top:8px solid transparent;border-bottom:8px solid transparent}
+#fish .bub b{color:var(--accent)}
+
+.corner{position:absolute;font-family:'Inter','IBM Plex Mono',sans-serif;font-size:13px;color:var(--paper);letter-spacing:.06em;z-index:41;
+  background:var(--ink);padding:4px 11px;border-radius:4px}
+#chap{left:52px;bottom:30px}
+#src{right:52px;bottom:30px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:var(--grid)}
+#bar{height:100%;width:0;background:var(--ink);box-shadow:none}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(5,8,14,.92);backdrop-filter:blur(4px);color:#aab}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #556;color:#ccc;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(28,28,26,.08)}
+#replay.done{animation:pulse 1.2s infinite;border-color:var(--accent);color:var(--accent)}
+@keyframes pulse{50%{opacity:.5}}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="head">
+    <span class="no">SHOT 0-19</span>
+    <h1>开机就报错 · BIOS 里开<b>虚拟化</b></h1>
+  </div>
+  <div id="cam">
+    <!-- A：VMware 主窗口 + 报错弹窗 -->
+    <div id="vmA" class="in">
+      <div class="vmw">
+        <div class="tb"><span class="ttl">VMware Workstation</span><span class="sp"></span><span class="x">✕</span></div>
+        <div class="mbar"><span>文件(F)</span><span>编辑(E)</span><span>查看(V)</span><span>虚拟机(M)</span><span>选项卡(T)</span><span>帮助(H)</span></div>
+        <div class="vtab"><i>WinServer2022</i></div>
+        <div class="guest">
+          <div class="bbar"><span>▣ 电源开启</span><span>WinServer2022</span></div>
+          <div class="evbox">
+            <div class="vt">即将开机 —— 加载虚拟机固件…<br><b>此主机支持 Intel VT-x，但 Intel VT-x 处于禁用状态。</b></div>
+          </div>
+        </div>
+        <div class="vstatus">已连接 · 未安装 VMware Tools · 内存 4096 MB · 硬盘 60 GB</div>
+      </div>
+      <div id="errDlg">
+        <div class="etb"><b>VMware Workstation</b></div>
+        <div class="eb">
+          <div class="ico">!</div>
+          <div class="etx" id="errTx">此主机支持 <b>Intel VT-x</b>，但 Intel VT-x 处于禁用状态。<br>
+            请确认已在电脑 BIOS 中启用虚拟化功能；若为 AMD 平台，则对应提示为 <b>AMD-V</b> 未开启。</div>
+        </div>
+        <div class="efoot"><span class="evbtn">确定</span></div>
+        <div class="mkanno"><svg width="420" height="70" viewBox="0 0 420 70" aria-hidden="true"><path d="M418 16 Q 240 30 25 48"/><circle cx="25" cy="48" r="2.4"/></svg><span class="tx">虚拟化被 BIOS 关掉了</span></div>
+      </div>
+    </div>
+
+    <!-- B：开机自检 -->
+    <div id="post">
+      <div class="logo">Aptio Setup — American Megatrends</div>
+      <div class="ln">Press <b>&lt;DEL&gt;</b> to enter SETUP, <b>&lt;F2&gt;</b> to enter Setup</div>
+      <div class="keys"><span class="key press" id="kDel">DEL</span><span class="key" id="kF2">F2</span></div>
+    </div>
+
+    <!-- C：BIOS 界面 -->
+    <div id="bios">
+      <div class="sweep"></div>
+      <div class="btop"><span>Aptio Setup Utility &nbsp;-&nbsp; Setup</span><span class="cpr">Copyright (C) 2022 American Megatrends, Inc.</span></div>
+      <div class="bwrap">
+        <div class="bmenu" id="bMenu">
+          <div id="mnMain">主菜单</div>
+          <div id="mnAdv">高级 (Advanced)</div>
+          <div id="mnChip">芯片组 (Chipset)</div>
+          <div id="mnSec">安全 (Security)</div>
+          <div id="mnBoot">启动 (Boot)</div>
+          <div id="mnExit">保存并退出 (Save &amp; Exit)</div>
+        </div>
+        <div class="bpanel">
+          <div id="bPanelMain">
+            <div class="bptitle">主菜单 · 系统信息</div>
+            <div class="brow"><span>BIOS 厂商</span><b>American Megatrends Inc.</b></div>
+            <div class="brow"><span>BIOS 版本</span><b>2.20.1276</b></div>
+            <div class="brow"><span>处理器</span><b>Intel(R) Core(TM) · 2 Cores</b></div>
+            <div class="brow"><span>内存</span><b>4096 MB</b></div>
+            <div class="brow"><span>虚拟化支持</span><b>已禁用</b></div>
+            <div class="brow"><span>系统语言</span><b>[简体中文]</b></div>
+          </div>
+          <div id="bPanelAdv" style="display:none">
+            <div class="bptitle">高级 · CPU 配置 (Advanced ▸ CPU Configuration)</div>
+            <div class="brow" id="vtRow" style="margin-top:6px">
+              <span>Intel (VMX) Virtualization Technology<span class="tag">Intel VT-x / AMD-V</span></span>
+              <span class="vtend"><b id="vtVal">[Disabled]</b><i class="sw" id="vtSw"><u></u></i></span></div>
+            <div class="mark" id="mkVt"><span class="qm">?</span>就是这一项 · 改成 <b>Enabled</b><svg class="lead" width="92" height="92" viewBox="0 0 92 92" aria-hidden="true"><path d="M2 26 Q 30 42 61 74"/><circle cx="61" cy="74" r="2.4"/></svg></div>
+            <div class="brow"><span>Hyper-Threading Technology</span><b>[Enabled]</b></div>
+            <div class="brow"><span>Active Processor Cores</span><b>[All]</b></div>
+            <div class="brow"><span>Intel(R) SpeedStep(tm)</span><b>[Enabled]</b></div>
+            <div class="brow"><span>VT-d</span><b>[Enabled]</b></div>
+          </div>
+        </div>
+      </div>
+      <div class="bfoot">
+        <div class="kk"><b>→ ←</b>选择菜单 &nbsp;&nbsp; <b>↑ ↓</b>选择项目 &nbsp;&nbsp; <b>Enter</b>进入/修改</div>
+        <div class="kk"><b>F10</b>保存并退出 &nbsp;&nbsp; <b>ESC</b>退出</div>
+      </div>
+      <div id="saveDlg">
+        <div class="t">保存配置并退出 (Save configuration and exit)?</div>
+        <div class="o"><i>是 (Yes)</i><em>否 (No)</em></div>
+      </div>
+    </div>
+    <!-- 可视化升级：白色箭头光标（随镜头层同变换，坐标保持舞台系） -->
+    <div id="vizCur"><svg width="34" height="34" viewBox="0 0 24 24"><path d="M5 2 L5 19 L9.6 15.2 L12.4 21 L15 19.8 L12.2 14 L18 13.2 Z" fill="#fff" stroke="#1a1a2e" stroke-width="1.4" stroke-linejoin="round"/></svg></div>
+  </div>
+
+  <div id="fish"><div class="bub">每台电脑的 BIOS 入口都不一样，认准 <b>Virtualization / VT-x / AMD-V</b> 就行 ~</div><img src="Shark-GIF/006_双手身前微笑乖巧期待.gif" alt="大肥鱼"></div>
+  <div class="corner" id="chap">第二章 · 准备工作 · 虚拟机</div>
+  <div class="corner" id="src">口播对齐 timeline.md 8:18–8:42 · 界面为示意仿真，非实拍</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-19 · BIOS 虚拟化 · 24s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=24000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ===== 本页工具（#cal 字幕已删除：callout 保留空实现，既有节拍不再引用已移除元素） ===== */
+function callout(){}
+
+/* ============ ⑤ DUR 与 cue 表 ============ */
+on(300,()=>{__sfx.pop(.4);});                  // 8:18「对了」
+on(1000,()=>{$('#vmA').classList.add('in');$('#head').classList.add('in');});                                // 8:19「这里插一句新手容易踩的坑」
+on(3000,()=>{$('#errDlg').classList.add('in');camFocus(960,470,1.06,.5);__sfx.thud(.65);});  // 8:21「开机的时候如果直接报错」
+on(4000,()=>{$('#errTx').innerHTML='此主机支持 <b class="hlt">Intel VT-x</b>，但 <b class="hlt">Intel VT-x</b> 处于禁用状态。<br>请确认已在电脑 BIOS 中启用虚拟化；若为 AMD 平台，对应提示为 <b class="hlt">AMD-V</b> 未开启。';__sfx.pop(.6);});                       // 8:22「提示什么VT-x或者AMD-V没有开启」
+on(7000,()=>{__sfx.pop(.4);});        // 8:25「那么这个情况不是你装错了」
+on(9000,()=>{__sfx.pop(.4);}); // 8:27「而是这个是电脑的虚拟化功能被关闭了」
+on(11000,()=>{__sfx.pop(.5);});           // 8:29「那么这个功能要进入BIOS里面来打开」
+on(13000,()=>{$('#vmA').classList.remove('in');$('#post').classList.add('in');$('#head').classList.remove('in');camTo(0,0,1,.4);__sfx.whoosh(.7,.5);}); // 8:31「我们重启电脑在开机的时候」
+on(14000,()=>{$('#kDel').classList.remove('press');$('#kF2').classList.add('press');
+  $('#post').classList.remove('in');$('#bios').classList.add('in');biosMain();
+__sfx.thud(.5);});                                              // 8:32「狂按Delete或者F2来进入BIOS」
+on(17000,()=>{biosAdv();camFocus(1150,160,1.07,.5);$('#bios').classList.add('sweep');$('#mkVt').classList.add('on');__sfx.swipe(.5);}); // 8:35「然后找到Intel VT-x或者AMD-V这个选项」
+on(20000,()=>{$('#vtRow').classList.remove('sel');$('#vtRow').classList.add('en');$('#vtVal').textContent='[Enabled]';$('#vtSw').classList.add('on');
+  $('#bios').classList.remove('sweep');void $('#bios').offsetWidth;$('#bios').classList.add('sweep');
+  __sfx.ding(.55);});                        // 8:38「改成开启」
+on(21200,()=>{$('#saveDlg').classList.add('in');camFocus(960,540,1.05,.4);__sfx.pop(.55);}); // 8:39「然后再保存退出就可以」
+on(22400,()=>{$('#saveDlg').classList.remove('in');camTo(0,0,1,.5);$('#mkVt').classList.remove('on');__sfx.pop(.6);}); // 8:40「那么不同的电脑它入口是不一样的」
+/* 大肥鱼：进场 ≤60%×DUR（24s → ≤14.4s），无退场（保持到片尾） */
+on(14000,()=>{$('#fish').classList.add('in');__sfx.pop(.6);});
+on(14300,()=>{$('#fish').classList.add('bub');__sfx.pop(.35);});
+function biosMain(){$('#bPanelMain').style.display='';$('#bPanelAdv').style.display='none';
+  $('#mnMain').classList.add('sel');$('#mnAdv').classList.remove('sel');}
+function biosAdv(){$('#bPanelMain').style.display='none';$('#bPanelAdv').style.display='';
+  $('#mnAdv').classList.add('sel');$('#mnMain').classList.remove('sel');$('#vtRow').classList.add('sel');}
+
+/* ── 可视化升级（轻量）：白色箭头光标 + 点击涟漪 ── */
+function curTo(x,y){$('#vizCur').style.left=x+'px';$('#vizCur').style.top=y+'px';}
+function curClick(x,y){const r=document.createElement('div');r.className='vrip';r.style.left=x+'px';r.style.top=y+'px';
+  $('#cam').appendChild(r);setTimeout(()=>r.remove(),800);__sfx.pop(.5);}
+on(3300,()=>{$('#vizCur').classList.add('in');curTo(1150,565);});            // 光标移向报错弹窗「确定」
+on(3800,()=>curClick(1150,565));                                             // 点击确定
+on(4200,()=>{$('#errDlg').classList.remove('in');});                         // 弹窗关闭
+on(14800,()=>curTo(180,141));                                                // 移向「高级」菜单
+on(16400,()=>curClick(180,141));                                             // 点击进入高级
+on(19200,()=>curTo(1150,170));                                               // 移向 VT-x 选项
+on(19800,()=>curClick(1150,170));                                            // 点击改成 Enabled
+on(21500,()=>curTo(694,563));                                                // 移向保存对话框「是」
+on(21900,()=>curClick(694,563));                                             // 点击保存退出
+on(22300,()=>{$('#vizCur').classList.remove('in');});                        // 光标退场
+
+/* ===== [不动] QA 专用（正常播放不触发） ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

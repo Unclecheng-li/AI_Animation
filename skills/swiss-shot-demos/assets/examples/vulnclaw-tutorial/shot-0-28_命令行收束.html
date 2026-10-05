@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+     镜头演示动画 · 0-28 · 命令行收束（20s）｜瑞士国际主义 v4
+     主视觉（一图为纲）：左 = 墨底平面「命令提示符」＋扁平键帽（§0.7 .key 语汇）；
+       右 = lieflat L15 计票清单（逐格发丝刻度 · 明度=已掌握）白卡。
+     主色：纸灰 #F0EFEB × 墨 #1C1C1A × 灰阶阶梯；唯一强调橙 #F5572F = ↑ 键帽。
+     字体：Inter × Noto Sans SC × IBM Plex Mono。
+     QA：URL 加 #auto,t=毫秒 → 起播后冻结在该时刻（无头截图用，必须保留钩子）
+     ============================================================ -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- ① 页面标题 -->
+<title>镜头 0-28 · 命令行收束 · 20s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<!-- ② 字体（v4 系统） -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Inter','Noto Sans SC',sans-serif}
+body.paused *{animation-play-state:paused!important}
+:root{--paper:#F0EFEB;--card:#FFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;--accent:#F5572F;--dark:#1C1C1A;--darkink:#F0EFEB;--darkgrid:#2E2D29}
+
+/* ② 舞台：纸灰底 + 细网格 */
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#stage::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:1;
+  background-image:linear-gradient(rgba(28,28,26,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.05) 1px,transparent 1px);
+  background-size:48px 48px}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ============ ③ 画面层 CSS ============ */
+.eyebrow{font:600 15px 'Inter';letter-spacing:.14em;text-transform:uppercase;color:var(--ink);display:flex;gap:12px;align-items:center}
+.eyebrow .no{background:var(--ink);color:var(--paper);padding:3px 10px;border-radius:3px;font-weight:700}
+#head{position:absolute;left:96px;top:44px;z-index:30;opacity:0;transform:translateY(-12px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#head.in{opacity:1;transform:none}
+#head h1{margin-top:14px;font:800 58px/1.02 'Inter','Noto Sans SC';letter-spacing:-.03em;color:var(--ink)}
+#head h1 b{color:var(--ink);font-weight:900;background:var(--ink);color:var(--paper);padding:0 12px;border-radius:4px}
+
+/* ── 左卡：墨底命令提示符 ── */
+#hist{position:absolute;left:96px;top:212px;width:864px;height:632px;z-index:12;border-radius:12px;overflow:hidden;
+  background:var(--dark);border:1px solid var(--darkgrid);
+  opacity:0;transform:translateY(30px) scale(.98);transition:all .65s cubic-bezier(.16,1,.3,1)}
+#hist.in{opacity:1;transform:none}
+.hbar{height:44px;display:flex;align-items:center;gap:11px;padding:0 16px;background:#242320;border-bottom:1px solid var(--darkgrid)}
+.hbar .ic{width:14px;height:14px;border:1.6px solid #8F8E88;border-radius:3px}
+.hbar .nm{font-family:'IBM Plex Mono';font-size:13px;color:#B0AFA9;letter-spacing:.1em}
+.hbar .tg{margin-left:auto;font:700 13px 'Noto Sans SC';letter-spacing:.14em;color:var(--ink);background:var(--paper);border-radius:999px;padding:3px 14px}
+.hbody{position:absolute;inset:44px 0 0 0;padding:26px 34px;font-family:'IBM Plex Mono';font-size:18px;line-height:2.5}
+.hline{display:flex;align-items:center;gap:12px;height:44px;transition:opacity .4s}
+.hline .ps1{color:#8F8E88;font-weight:700}
+.hline .blk{height:13px;border-radius:3px;background:#4A4944}
+#ghosts{position:absolute;left:34px;top:26px;width:760px;transition:opacity .4s}
+.ghost{height:44px;display:flex;align-items:center;gap:12px;opacity:0;transition:opacity .35s}
+.ghost .ps1{color:#4A4944;font-weight:700}
+.ghost .cmd{font-family:'IBM Plex Mono';font-weight:500;font-size:17px;color:#B0AFA9;letter-spacing:.3px;white-space:pre}
+#curLine{position:absolute;left:34px;top:206px;display:flex;align-items:center;gap:12px;height:44px}
+#curLine .ps1{color:#8F8E88;font-weight:700}
+#curLine .cmd{font-family:'IBM Plex Mono';font-weight:500;font-size:18px;color:#D8D7D1;letter-spacing:.3px;white-space:pre}
+#curLine .caret2{width:11px;height:22px;background:#F0EFEB;animation:blink2 1.05s steps(1) infinite;margin-left:2px}
+@keyframes blink2{50%{opacity:0}}
+#editRing{position:absolute;left:24px;top:196px;width:0;height:64px;border:1.6px dashed #F0EFEB;border-radius:10px;opacity:0;
+  transition:all .45s cubic-bezier(.2,1.3,.4,1)}
+#editRing.in{opacity:1;width:790px}
+#editTag{position:absolute;left:24px;top:158px;font:700 15px 'Noto Sans SC';letter-spacing:.12em;color:var(--ink);
+  background:var(--paper);border-radius:999px;padding:3px 14px;opacity:0;transform:scale(.6);transition:all .35s cubic-bezier(.2,1.6,.4,1)}
+#editTag.in{opacity:1;transform:none}
+/* ↑ 键帽（§0.7 .key 语汇 · 唯一橙） */
+#arrKey{position:absolute;left:34px;bottom:30px;display:flex;align-items:center;gap:18px;
+  opacity:0;transform:translateY(18px);transition:all .45s cubic-bezier(.2,1.4,.4,1)}
+#arrKey.in{opacity:1;transform:none}
+#arrKey .kk{width:104px;height:96px;border-radius:12px;background:var(--accent);border-bottom:8px solid #C43F1F;
+  display:flex;align-items:center;justify-content:center;transition:all .12s}
+#arrKey .kk.hit{transform:translateY(5px);border-bottom-width:3px}
+#arrKey .kk svg path{stroke:#fff}
+#arrKey .tx{font:700 26px 'Noto Sans SC';letter-spacing:.06em;color:#F0EFEB}
+#arrKey .tx b{color:var(--paper);font-weight:900}
+
+/* ── 右卡：计票清单（lieflat L15 · 白卡纸感） ── */
+#tally{position:absolute;left:1000px;top:212px;width:840px;height:632px;z-index:12;border-radius:12px;overflow:hidden;
+  background:var(--card);border:1px solid var(--grid);
+  opacity:0;transform:translateY(30px) scale(.98);transition:all .65s cubic-bezier(.16,1,.3,1) .1s}
+#tally.in{opacity:1;transform:none}
+.tHead{display:flex;align-items:baseline;justify-content:space-between;padding:34px 40px 6px}
+.tHead .a{font:900 34px 'Noto Sans SC';letter-spacing:.06em;color:var(--ink)}
+.tHead .b{font:600 12px 'IBM Plex Mono';letter-spacing:.2em;color:var(--muted)}
+#tallySvg{position:absolute;left:0;top:96px;width:840px;height:536px}
+.tfoot{position:absolute;left:0;right:0;bottom:22px;text-align:center;font:600 12px 'IBM Plex Mono';letter-spacing:.14em;color:var(--faint)}
+
+/* ── 底部收束条（墨底反白） ── */
+#foot{position:absolute;left:96px;top:872px;width:1744px;height:96px;z-index:14;display:flex;align-items:center;justify-content:center;gap:20px;
+  border-radius:12px;background:var(--ink);opacity:0;transform:translateY(16px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#foot.in{opacity:1;transform:none}
+#foot .a{font:900 30px 'Noto Sans SC';letter-spacing:.08em;color:var(--paper)}
+#foot .a b{color:var(--ink);font-weight:900;background:var(--paper);padding:2px 12px;border-radius:4px}
+
+/* ── 大肥鱼 ── */
+.fish{position:absolute;width:196px;z-index:35;opacity:0;transform:translateY(24px) scale(.68);transition:all .45s cubic-bezier(.34,1.6,.64,1);pointer-events:none}
+.fish.show{opacity:1;transform:none}
+.fish img{width:100%;display:block}
+.fish .say{position:absolute;width:212px;background:#fff;border:2px solid var(--ink);border-radius:14px;
+  padding:11px 14px;font:500 18px/1.45 'Noto Sans SC';color:var(--ink);
+  opacity:0;transform:scale(.6);transition:all .4s cubic-bezier(.34,1.6,.64,1) .15s}
+.fish.show .say{opacity:1;transform:none}
+.fish .say b{color:var(--ink);font-weight:900}
+#fish1{left:600px;top:496px;width:176px}
+#fish1 .say{left:-224px;top:2px}
+#fish1 .say::after{content:'';position:absolute;right:-13px;top:44px;border:7px solid transparent;border-left:12px solid #fff}
+
+/* ── 角注 / HUD（一般不动） ── */
+.corner{position:absolute;font:500 13px 'IBM Plex Mono';color:var(--muted);letter-spacing:.08em;z-index:41}
+#chap{left:56px;bottom:28px}
+#src{right:56px;bottom:28px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:rgba(28,28,26,.12)}
+#bar{height:100%;width:0;background:var(--ink)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(240,239,235,.94);color:#6A6963}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #B0AFA9;color:#4A4944;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(28,28,26,.08)}
+#replay.done{border-color:#1C1C1A;color:#1C1C1A}
+/* ============ ③ 结束 ============ */
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- ============ ④ 画面层 HTML ============ -->
+  <div id="cam">
+
+    <!-- 左卡：↑ 调历史命令（墨底平面） -->
+    <div id="hist">
+      <div class="hbar"><span class="ic"></span><span class="nm">命令提示符</span><span class="tg">小技巧</span></div>
+      <div class="hbody">
+        <div id="ghosts">
+          <div class="ghost" id="g1"><span class="ps1">C:\&gt;</span><span class="cmd">ipconfig</span></div>
+          <div class="ghost" id="g2"><span class="ps1">C:\&gt;</span><span class="cmd">ping 127.0.0.1</span></div>
+          <div class="ghost" id="g3"><span class="ps1">C:\&gt;</span><span class="cmd">ping 127.0.0.1 -t</span></div>
+        </div>
+      </div>
+      <div id="editRing"></div>
+      <div id="editTag">调出来的 · 还能改</div>
+      <div id="curLine"><span class="ps1">C:\&gt;</span><span class="cmd" id="curText"></span><span class="caret2"></span></div>
+      <div id="arrKey">
+        <span class="kk" id="kkUp"><svg width="42" height="42" viewBox="0 0 42 42"><path d="M21 34 L21 10 M10 20 L21 9 L32 20" fill="none" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="tx">按一下 · 调出<b>上一条</b></span>
+      </div>
+    </div>
+
+    <!-- 右卡：计票清单 -->
+    <div id="tally">
+      <div class="tHead"><span class="a">只学这几个动作</span><span class="b">ENOUGH TO GO</span></div>
+      <svg id="tallySvg" viewBox="0 0 840 536" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="tfoot">一条命令都不用背 · 记住这几个动作就够</div>
+    </div>
+
+    <!-- 底部收束条 -->
+    <div id="foot"><span class="a">就这么简单 · 够你走完<b>后面全程</b></span></div>
+
+    <!-- 大肥鱼 -->
+    <div class="fish" id="fish1">
+      <div class="say">就这几个，<b>真不用背</b></div>
+      <img src="Shark-GIF/006_双手身前微笑乖巧期待.gif" alt="大肥鱼">
+    </div>
+
+  </div>
+
+  <!-- 固定 UI 层 -->
+  <div id="head">
+    <div class="eyebrow"><span class="no">SHOT 0-28</span>第二章 · 命令行 · 收束</div>
+    <h1>命令行这一套 · <b>就齐了</b></h1>
+  </div>
+  <div class="corner" id="chap">第二章 · 命令行 / 收束</div>
+  <div class="corner" id="src">计票手法参考 lieflat L15 · 一行 = 一个动作</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-28 · 命令行收束 · 20s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=20000; /* ←⑤ DUR = 分镜时长(ms) */
+const $=s=>document.querySelector(s);
+const $$=s=>document.querySelectorAll(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ── 计票清单（lieflat L15 手法：一行 = 一个动作，一格一根发丝刻度，明度=已掌握） ── */
+const CMD28='ping 127.0.0.1 -t';   // ↑ 调出的上一条真实命令
+const NS='http://www.w3.org/2000/svg';
+const INK='#1C1C1A', MUTED='#C6C5BF', GRID='#DEDDD6';
+function mk(tag,attrs,parent){const n=document.createElementNS(NS,tag);for(const k in attrs)n.setAttribute(k,attrs[k]);parent.appendChild(n);return n;}
+function mktxt(attrs,s,parent){const n=mk('text',attrs,parent);n.textContent=s;return n;}
+const TICKS=[];
+(function(){
+  const svg=$('#tallySvg');
+  const ITEMS=[['打开','OPEN'],['复制粘贴','COPY / PASTE'],['中断','CTRL+C'],['报错丢给 AI','ERROR → AI']];
+  const N=10, X0=64, XW=560, BASE0=104, GAP=104;
+  ITEMS.forEach((it,i)=>{
+    const base=BASE0+i*GAP;
+    mktxt({x:X0-10,y:base-66,'font-size':19,'font-weight':900,fill:INK,'text-anchor':'start',
+      'font-family':'"Noto Sans SC"',class:'tf',style:`animation-delay:${i*.08}s`},it[0],svg);
+    mktxt({x:X0-8,y:base-48,'font-size':9.5,'font-weight':600,fill:'#B0AFA9','letter-spacing':'.14em',
+      'font-family':'"IBM Plex Mono"',class:'tf',style:`animation-delay:${i*.08}s`},it[1],svg);
+    mk('line',{x1:X0,y1:base,x2:X0+XW,y2:base,stroke:GRID,'stroke-width':.8,class:'tf',style:`animation-delay:${i*.08}s`},svg);
+    const row=[];
+    for(let k=0;k<N;k++){
+      const x=X0+k*(XW/N);
+      const t=mk('line',{x1:x,y1:base,x2:x,y2:base-34,stroke:MUTED,'stroke-width':1.3,'stroke-linecap':'round',
+        class:'tk',style:`animation-delay:${(i*N+k)*0.035+0.2}s`},svg);
+      row.push(t);
+      if(k%5===0)mk('circle',{cx:x,cy:base+5,r:1,fill:'#D2D1CA',class:'tf',style:`animation-delay:${(i*N+k)*0.035+0.2}s`},svg);
+    }
+    const chip=mk('g',{class:'tf',style:`animation-delay:${1.1+i*.12}s`},svg);
+    const chipRect=mk('rect',{x:X0+XW+26,y:base-27,width:112,height:30,rx:15,fill:'none',stroke:INK,'stroke-width':1.6},chip);
+    const chipTxt=mktxt({x:X0+XW+82,y:base-7,'font-size':13,'font-weight':700,fill:INK,'text-anchor':'middle','font-family':'"Noto Sans SC"'},'已记住',chip);
+    const tick=mk('path',{d:`M${X0+XW+38} ${base-12} l7 7 l13 -16`,fill:'none',stroke:'#F0EFEB','stroke-width':3,
+      'stroke-linecap':'round','stroke-linejoin':'round',opacity:0},chip);
+    TICKS.push({row:row,chip:chip,chipRect:chipRect,chipTxt:chipTxt,tick:tick,base:base});
+  });
+})();
+function inkRow(i,start){
+  const R=TICKS[i];
+  R.row.forEach((t,k)=>tws.push({t:start+k*70,d:1,f:()=>{t.setAttribute('stroke',INK);t.setAttribute('stroke-width','2.2')}}));
+  tws.push({t:start,d:1,f:()=>{R.tick.setAttribute('opacity',1);R.chipRect.setAttribute('fill',INK);R.chipTxt.setAttribute('fill','#F0EFEB')}});
+  setTimeout(function(){if(window.__sfx)__sfx.type(.55)},0);
+}
+
+/* ============ ⑤ DUR 与 cue 表 ============
+   镜头起点 12:03 · cue = 口播句起点 − 12:03
+*/
+on(120,()=>{$('#head').classList.add('in');camTo(-12,-6,1.02,1.5);__sfx.pop(.6)}); // 12:03「后面装VulnClaw的时候要是报错了就这么处理」
+on(300,()=>{$('#hist').classList.add('in');__sfx.thud(.9)});
+on(900,()=>{['#g1','#g2','#g3'].forEach((id,i)=>setTimeout(()=>$(id).style.opacity='0.85',i*120))});
+on(3000,()=>{                                                          // 12:06「顺带再提一个小技巧」
+  $('#tally').classList.add('in');__sfx.thud(.8);__sfx.ding(.6);
+});
+on(4000,()=>{                                                          // 12:07「就是在终端里面按这个向上的箭头」
+  $('#arrKey').classList.add('in');__sfx.pop(.75);
+});
+on(4600,()=>{$('#kkUp').classList.add('hit');__sfx.thud(.8)});
+on(5000,()=>{$('#kkUp').classList.remove('hit')});
+on(6000,()=>{                                                          // 12:09「可以调出你上一条敲过的命令」
+  $('#g3').style.opacity='0';
+  const el=$('#curText'),n=CMD28.length;let last=0;
+  tws.push({t:6000,d:n*70,e:p=>p,f:p=>{
+    const k=Math.ceil(p*n);if(k!==last){last=k;el.textContent=CMD28.slice(0,k);__sfx.type(.6);}
+  }});
+  $('#arrKey').classList.add('in');__sfx.swipe(.8);
+});
+on(8000,()=>{camTo(-26,-10,1.03,0.7);__sfx.pop(.6)});                // 12:11「如果敲错了想改一下再重跑的话」
+on(10000,()=>{                                                         // 12:13「也就不用整个重新打一遍了」
+  $('#editRing').classList.add('in');$('#editTag').classList.add('in');__sfx.ding(.75);
+});
+on(12000,()=>{                                                         // 12:15「命令行这一整套基础操作就齐了」
+  camTo(-12,-6,1.02,0.7);
+  $('#fish1').classList.add('show');
+});
+on(13000,()=>{inkRow(0,13000)});
+on(15000,()=>{                                                         // 12:18「对的就这么简单」
+  inkRow(1,15000);
+});
+on(16500,()=>{inkRow(2,16500)});                                      // 12:19-12:20「打开 复制粘贴 中断」
+on(17500,()=>{inkRow(3,17500)});                                      // 12:20「报错丢给AI」
+on(18200,()=>{$('#fish1').classList.remove('show')});
+on(18500,()=>{                                                         // 12:21「这样的话就够你走完后面的全程了」
+  camTo(0,0,1,0.7);
+  $('#foot').classList.add('in');__sfx.thud(.9);__sfx.ding(.8);
+});
+
+/* ===== [不动] QA 专用（正常播放不触发）：hash 带 t=毫秒 → 起播后跳转该时刻并冻结 ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}*{animation-delay:0s!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

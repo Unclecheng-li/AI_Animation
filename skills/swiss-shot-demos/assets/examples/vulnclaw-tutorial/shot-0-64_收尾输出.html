@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+     镜头 64 · 收尾输出（30:23–30:50 / 27s · 两幕）
+     风格：瑞士国际主义（纸底 + 墨 + 灰阶阶梯 + 唯一强调橙 #F5572F）
+     技能注入：报告装配（纸页叠装 + 逐块落页）+ 橙 flag 铭牌 + 三点总结
+     红线：证据/报告均为示意，不伪造终端真实回显 → 角注
+     数字白名单：10 条证据 / 两轮 / 10 次工具调用 / 约两分钟
+     ============================================================ -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜 64 · 收尾输出 · 30:23–30:50</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;
+  --accent:#F5572F;--dark:#1C1C1A;--darkink:#F0EFEB;--darkgrid:#2E2D29;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:var(--paper);overflow:hidden;color:var(--ink);
+  font-family:'Inter','Noto Sans SC',sans-serif;-webkit-font-smoothing:antialiased}
+body.paused *{animation-play-state:paused!important}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#bg{position:absolute;inset:0;z-index:0;opacity:0;transition:opacity 1.2s ease;
+  background-image:linear-gradient(rgba(28,28,26,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.05) 1px,transparent 1px);
+  background-size:44px 44px}
+#bg.in{opacity:1}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+.act{position:absolute;inset:0;transition:opacity .38s ease}
+.act.hide{opacity:0;pointer-events:none}
+
+/* ── 组件 ── */
+.eyebrow{font:600 15px Inter,'Noto Sans SC';letter-spacing:.14em;text-transform:uppercase;color:var(--ink);display:flex;gap:12px;align-items:center;opacity:0;transform:translateY(-12px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+.eyebrow.in{opacity:1;transform:none}
+.eyebrow .no{background:var(--ink);color:var(--paper);padding:3px 10px;border-radius:3px;font-weight:700}
+.h2{font:800 74px/1.02 'Inter','Noto Sans SC';letter-spacing:-.02em;color:var(--ink)}
+
+#kick{position:absolute;left:88px;top:88px}
+#title{position:absolute;left:86px;top:132px;opacity:0;transform:translateY(26px);transition:all .6s cubic-bezier(.16,1,.3,1)}
+#title.in{opacity:1;transform:none}
+#title b{font-weight:900}
+#badge{position:absolute;left:120px;top:816px;background:var(--ink);color:var(--darkink);font:600 12px Inter,'Noto Sans SC';letter-spacing:.1em;
+  padding:4px 10px;border-radius:3px;opacity:0;transition:opacity .5s;z-index:42}
+#badge.in{opacity:1}
+
+/* ── ACT1 · FINAL + 证据 ── */
+#stamp{position:absolute;left:88px;top:252px;width:360px;height:164px;background:var(--ink);color:var(--darkink);border-radius:12px;
+  display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:0 36px;
+  opacity:0;transform:scale(1.6);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#stamp.in{opacity:1;transform:none}
+#stamp .f{font:900 84px Inter;letter-spacing:.02em;line-height:1}
+#stamp .s{margin-top:10px;font:700 15px Inter;letter-spacing:.18em;color:#9A9992}
+#evHead{position:absolute;left:500px;top:268px;width:1332px;opacity:0;transform:translateX(24px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#evHead.in{opacity:1;transform:none}
+#evHead h3{font:900 46px 'Noto Sans SC';color:var(--ink);letter-spacing:.01em}
+#evHead h3 em{font-style:normal}
+#evHead p{margin-top:14px;font:500 21px 'Noto Sans SC';color:var(--muted)}
+#evGrid{position:absolute;left:88px;top:472px;width:1744px;display:flex;flex-wrap:wrap;gap:20px}
+.ev{width:332px;height:96px;background:#fff;border:1px solid var(--grid);border-radius:10px;padding:0 22px;display:flex;align-items:center;gap:18px;
+  opacity:0;transform:translateY(18px);transition:all .42s cubic-bezier(.16,1,.3,1)}
+.ev.in{opacity:1;transform:none}
+.ev u{text-decoration:none;font:800 30px Inter;color:var(--faint);min-width:46px;letter-spacing:-.02em}
+.ev b{font:700 20px 'Noto Sans SC';color:var(--ink)}
+#evNote{position:absolute;left:88px;top:872px;display:flex;align-items:baseline;gap:22px;opacity:0;transition:opacity .45s}
+#evNote.in{opacity:1}
+#evNote .n{font:800 76px Inter;letter-spacing:-.03em;color:var(--ink)}
+#evNote .t{font:600 20px 'Noto Sans SC';color:var(--muted)}
+
+/* ── ACT2 · 报告纸页叠装 ── */
+#doc{position:absolute;left:120px;top:238px;width:720px;height:566px}
+.sheet{position:absolute;inset:0;background:#fff;border:1px solid var(--grid);border-radius:12px}
+.sheet.b2{transform:translate(-30px,-30px)}
+.sheet.b1{transform:translate(-15px,-15px)}
+.sheet.main{padding:30px 34px}
+.sheet.main .dh{display:flex;align-items:center;justify-content:space-between;padding-bottom:20px;border-bottom:1px solid var(--grid)}
+.sheet.main .dh b{font:600 15px Inter;letter-spacing:.16em;color:var(--muted)}
+.sheet.main .dh .tg{background:var(--ink);color:var(--paper);font:700 14px 'Noto Sans SC';letter-spacing:.06em;padding:5px 14px;border-radius:3px}
+.blk{margin-top:14px;padding:13px 18px;background:var(--paper);border-radius:8px;border-left:4px solid var(--ink);
+  opacity:0;transform:translateY(20px);transition:all .48s cubic-bezier(.16,1,.3,1)}
+.blk.in{opacity:1;transform:none}
+.blk h5{font:800 20px 'Noto Sans SC';color:var(--ink)}
+.blk p{margin-top:4px;font:500 16px 'Noto Sans SC';color:var(--muted)}
+.blk.chain{border-left-color:var(--accent)}
+.blk.chain p{color:var(--ink);font-weight:700}
+#docRep{margin-top:16px;padding-top:14px;border-top:1px solid var(--grid);font:700 18px 'Noto Sans SC';color:var(--ink);opacity:0;transition:opacity .45s}
+#docRep.in{opacity:1}
+#doc.in .sheet{opacity:1}
+
+/* flag 铭牌（橙 · 唯一主角） */
+#flag{position:absolute;left:960px;top:256px;width:872px;height:158px;background:var(--accent);border-radius:12px;
+  display:flex;align-items:center;gap:28px;padding:0 38px;opacity:0;transform:translateY(40px);transition:all .6s cubic-bezier(.16,1,.3,1)}
+#flag.in{opacity:1;transform:none}
+#flag .ic{width:66px;height:66px;flex:none;border:2.5px solid #fff;border-radius:10px;display:flex;align-items:center;justify-content:center}
+#flag .ic svg{width:38px;height:38px}
+#flag .tx b{display:block;font:900 46px Inter;letter-spacing:.03em;color:#fff;line-height:1}
+#flag .tx span{display:block;margin-top:8px;font:700 19px 'Noto Sans SC';color:rgba(255,255,255,.94)}
+
+#sumCards{position:absolute;left:960px;top:456px;width:872px}
+.sc{display:flex;align-items:center;gap:20px;height:100px;padding:0 26px;margin-bottom:18px;background:#fff;border:1px solid var(--grid);border-radius:10px;
+  opacity:0;transform:translateX(26px);transition:all .48s cubic-bezier(.16,1,.3,1)}
+.sc.in{opacity:1;transform:none}
+.sc .no{font:800 44px Inter;letter-spacing:-.02em;color:var(--faint);min-width:70px}
+.sc b{display:block;font:800 23px 'Noto Sans SC';color:var(--ink)}
+.sc span{display:block;margin-top:4px;font:500 18px 'Noto Sans SC';color:var(--muted)}
+#finLine{position:absolute;left:960px;top:876px;font:900 34px 'Noto Sans SC';color:var(--ink);letter-spacing:.01em;opacity:0;transform:translateY(14px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#finLine.in{opacity:1;transform:none}
+#finLine em{font-style:normal;box-shadow:inset 0 -14px 0 rgba(245,87,47,.22)}
+
+/* ── 大肥鱼 ── */
+.fish{position:absolute;width:190px;z-index:35;opacity:0;transform:translateY(26px) scale(.62);transition:all .45s cubic-bezier(.34,1.6,.64,1);pointer-events:none}
+.fish.show{opacity:1;transform:none}
+.fish img{width:100%;display:block}
+.fish .say{position:absolute;width:262px;background:#fff;border:1.5px solid var(--ink);border-radius:10px;padding:12px 18px;
+  font:700 22px 'Noto Sans SC';color:var(--ink);line-height:1.42;opacity:0;transform:scale(.6);transition:all .4s cubic-bezier(.34,1.6,.64,1) .14s}
+.fish.show .say{opacity:1;transform:none}
+.fish .say b{font-weight:900;color:var(--accent)}
+#fish64a{left:1650px;top:74px}
+#fish64a .say{left:-268px;top:6px}
+#fish64b{left:120px;top:868px}
+#fish64b .say{left:186px;top:6px}
+
+.corner{position:absolute;font:600 15px Inter,'Noto Sans SC';letter-spacing:.1em;color:var(--faint);z-index:41}
+#chap{left:88px;bottom:30px}
+#src{right:88px;bottom:30px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:var(--grid)}
+#bar{height:100%;width:0;background:var(--ink)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(240,239,235,.94);color:var(--muted)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid var(--faint);color:var(--ink);font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(28,28,26,.06)}
+#replay.done{border-color:var(--ink);color:var(--ink)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="bg"></div>
+  <div id="cam">
+    <div id="kick" class="eyebrow"><span class="no">64</span>OUTPUT · 收尾输出</div>
+    <div id="title" class="h2">它交出的 <b>这份作业</b></div>
+    <div id="badge">示意图 · 非实拍</div>
+
+    <!-- ===== ACT 1 ===== -->
+    <div class="act" id="act1">
+      <div id="stamp"><div class="f">FINAL</div><div class="s">任务完成标记</div></div>
+      <div id="evHead">
+        <h3>结论旁边挂着 <em>10 条证据</em></h3>
+        <p>每一条都编了号 · 可以自己回翻核对</p>
+      </div>
+      <div id="evGrid">
+        <div class="ev" id="e1"><u>01</u><b>登录跳转记录</b></div>
+        <div class="ev" id="e2"><u>02</u><b>302 响应</b></div>
+        <div class="ev" id="e3"><u>03</u><b>注入报错回显</b></div>
+        <div class="ev" id="e4"><u>04</u><b>正常响应基线</b></div>
+        <div class="ev" id="e5"><u>05</u><b>UNION 回显</b></div>
+        <div class="ev" id="e6"><u>06</u><b>用户表回显</b></div>
+        <div class="ev" id="e7"><u>07</u><b>本地哈希计算</b></div>
+        <div class="ev" id="e8"><u>08</u><b>逐字符比对</b></div>
+        <div class="ev" id="e9"><u>09</u><b>模块页可访问</b></div>
+        <div class="ev" id="e10"><u>10</u><b>复现命令</b></div>
+      </div>
+      <div id="evNote"><span class="n">10 / 10</span><span class="t">编号齐全 · 每条都能回翻</span></div>
+      <div class="fish" id="fish64a"><div class="say">结论<b>必须挂证据</b></div><img src="Shark-GIF/006_双手身前微笑乖巧期待.gif" alt=""></div>
+    </div>
+
+    <!-- ===== ACT 2 ===== -->
+    <div class="act hide" id="act2">
+      <div id="doc">
+        <div class="sheet b2"></div>
+        <div class="sheet b1"></div>
+        <div class="sheet main">
+          <div class="dh"><b>REPORT · 复盘报告</b><span class="tg">本地生成</span></div>
+          <div class="blk" id="b1"><h5>复盘报告 · 全流程</h5><p>整条攻击链是怎么走的</p></div>
+          <div class="blk chain" id="b2"><h5>攻击链</h5><p>登录 → 注入 → 拖表 → 哈希比对</p></div>
+          <div class="blk" id="b3"><h5>每一步发了什么请求</h5><p>请求逐条记录在案</p></div>
+          <div class="blk" id="b4"><h5>怎么去复现</h5><p>照着步骤能重跑一遍</p></div>
+          <div id="docRep">全都写在里面，清清楚楚</div>
+        </div>
+      </div>
+
+      <div id="flag">
+        <div class="ic"><svg viewBox="0 0 24 24"><path d="M6 2 L6 22 M6 3 L19 3 L15.5 8 L19 13 L6 13" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="tx"><b>FINISHED</b><span>两轮自主决策 · 任务完成</span></div>
+      </div>
+
+      <div id="sumCards">
+        <div class="sc" id="sc1"><span class="no">01</span><div><b>两轮自主决策</b><span>排障一轮 · 开打一轮</span></div></div>
+        <div class="sc" id="sc2"><span class="no">02</span><div><b>10 次工具调用</b><span>每一步都是它自己调的</span></div></div>
+        <div class="sc" id="sc3"><span class="no">03</span><div><b>约两分钟</b><span>从回车到拿到报告</span></div></div>
+      </div>
+      <div id="finLine">没有一行是<em>人手写</em>的攻击代码</div>
+
+      <div class="fish" id="fish64b"><div class="say">这次的字，<b>不是我打的</b></div><img src="Shark-GIF/041_趴键盘愤怒符号抓狂打字.gif" alt=""></div>
+    </div>
+  </div>
+
+  <div class="corner" id="chap">64 / 第七章 实战 · 收尾输出</div>
+  <div class="corner" id="src">口播对齐 timeline.md · 30:23–30:50</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-64 · 收尾输出 · 27s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=27000;
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ===== 补间 / 工具 ===== */
+const show=(sel,cls)=>{const el=$(sel);if(el)el.classList.add(cls||'in')};
+
+/* ============ DUR 与 cue 表 ============ */
+/* 口播区间 30:23–30:50（镜头起点 30:23 = 1823s） */
+on(150,()=>{show('#kick');show('#title');show('#bg');__sfx.pop(.55);});               // 30:23
+on(200,()=>{show('#badge');show('#stamp');__sfx.thud(.95);});                         // 30:23「最后VulnClaw打出了FINAL标记」
+on(2200,()=>{show('#evHead');camFocus(960,300,1.05,.5);__sfx.swipe(.8);});            // 30:25「任务完成结论旁边挂着10条证据」
+on(4200,()=>{show('#e1');__sfx.pop(.42);});                                           // 30:27「从登录成功的跳转记录到注入爆出的原始回显」
+on(4400,()=>{show('#e2');__sfx.pop(.42);});
+on(4600,()=>{show('#e3');__sfx.pop(.42);});
+on(4800,()=>{show('#e4');__sfx.pop(.42);});
+on(6200,()=>{show('#fish64a','show');__sfx.pop(.45);});
+on(8200,()=>{show('#e5');__sfx.pop(.42);});                                           // 30:31「每一条都编了号」
+on(8400,()=>{show('#e6');__sfx.pop(.42);});
+on(8600,()=>{show('#e7');__sfx.pop(.42);});
+on(8800,()=>{show('#e8');__sfx.pop(.42);});
+on(9600,()=>{show('#e9');show('#e10');show('#evNote');camFocus(960,560,1.04,.5);__sfx.ding(.7);}); // 30:32「我可以自己回翻核对」
+/* —— 硬切 ACT 2 —— */
+on(10300,()=>{$('#act1').classList.add('hide');$('#act2').classList.remove('hide');
+  $('#fish64a').classList.remove('show');camCut(0,0,1);__sfx.swipe(.95);});           // 30:33「他还自动生成了一份复盘的报告存在本地」
+on(10500,()=>{show('#doc');show('#b1');__sfx.pop(.6);});
+on(13000,()=>{show('#b2');camFocus(560,500,1.06,.5);__sfx.pop(.55);});                // 30:36「就是整条攻击链是怎么走的」
+on(15000,()=>{show('#b3');__sfx.pop(.55);});                                          // 30:38「每一步发了什么请求」
+on(16000,()=>{show('#b4');__sfx.pop(.55);});                                          // 30:39「怎么去复现」
+on(17200,()=>{show('#docRep');camFocus(960,480,1.03,.5);__sfx.ding(.55);});           // 30:40「全都写在里面清清楚楚」
+on(19000,()=>{show('#flag');__sfx.thud(.9);});                                        // 30:42「那么VulnClaw全程这两轮自主决策」
+on(21000,()=>{show('#sc1');__sfx.pop(.6);});                                          // 30:44「有了10次工具调用」
+on(22000,()=>{show('#sc2');camFocus(1240,640,1.04,.5);__sfx.pop(.6);});               // 30:45「从回车到拿到报告差不多两分钟」
+on(23500,()=>{show('#sc3');__sfx.pop(.6);});
+on(14500,()=>{show('#fish64b','show');__sfx.pop(.5);}); // 鱼提前在场
+on(24400,()=>{show('#finLine');camFocus(1180,720,1.02,.5);__sfx.ding(.75);}); // 30:47「没有一行是人手写的攻击代码」
+on(26200,()=>{$('#fish64b').classList.remove('show');});
+
+/* ===== [不动] QA 专用（正常播放不触发） ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

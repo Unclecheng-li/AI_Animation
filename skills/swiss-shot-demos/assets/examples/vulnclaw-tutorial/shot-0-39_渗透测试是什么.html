@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+     镜头 0-39 · 渗透测试是什么 · 16:37–17:01 · 24s
+     主视觉（一图为纲）：diagram-design type-swimlane —— 甲方 / 白帽 / 修复 三方泳道，
+       泳道内流程步骤卡（请安全团队 / 授权书盖章 / 攻击者思路 / 报告）＋跨道移交箭头
+     字体：Inter × Noto Sans SC × IBM Plex Mono（v4 系统）
+     强调橙 #F5572F 唯一主角 = 「授权」（印章 + 授权红线）
+     角注：口播对齐 timeline.md
+     ============================================================ -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- ① 页面标题 -->
+<title>镜头 0-39 · 渗透测试是什么 · 24s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<!-- ② 字体：Inter × Noto Sans SC × IBM Plex Mono -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;
+  --accent:#F5572F;--dark:#1C1C1A;--darkink:#F0EFEB;--darkgrid:#2E2D29;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:var(--paper);overflow:hidden;color:var(--ink);
+  font-family:'Inter','Noto Sans SC',sans-serif;-webkit-font-smoothing:antialiased}
+body.paused *{animation-play-state:paused!important}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#bgGrid{position:absolute;inset:0;z-index:0;opacity:.55;
+  background-image:linear-gradient(rgba(28,28,26,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.05) 1px,transparent 1px);
+  background-size:44px 44px}
+#wm{position:absolute;right:64px;top:150px;z-index:0;font:900 110px 'Inter';letter-spacing:.08em;color:rgba(28,28,26,.04);white-space:nowrap;line-height:1}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ============ ③ 画面层 CSS ============ */
+#kicker{position:absolute;left:108px;top:58px;font:600 15px 'IBM Plex Mono';letter-spacing:.3em;
+  color:var(--muted);opacity:0;transform:translateX(-16px);transition:all .5s ease}
+#kicker.in{opacity:1;transform:none}
+#kicker::before{content:'';display:inline-block;width:38px;height:1px;background:var(--ink);vertical-align:middle;margin-right:16px}
+
+#title{position:absolute;left:104px;top:92px;font:900 82px/1 'Noto Sans SC';color:var(--ink);letter-spacing:.1em;
+  opacity:0;transform:translateY(26px);transition:all .62s cubic-bezier(.16,1,.3,1)}
+#title.in{opacity:1;transform:none}
+#subtitle{position:absolute;left:110px;top:194px;font:900 32px 'Noto Sans SC';color:var(--ink);letter-spacing:.06em;
+  opacity:0;transform:translateY(18px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#subtitle.in{opacity:1;transform:none}
+#subtitle b{color:var(--ink);padding-bottom:3px;border-bottom:5px solid var(--accent)}
+
+#chips{position:absolute;left:110px;top:264px;display:flex;gap:14px;z-index:12}
+#chips .chip{font:600 18px 'IBM Plex Mono';letter-spacing:.1em;color:var(--ink);
+  padding:8px 24px;border:1.5px solid var(--ink);border-radius:999px;background:#fff;
+  opacity:0;transform:translateY(14px) scale(.9);transition:all .45s cubic-bezier(.16,1,.3,1)}
+#chips.in .chip{opacity:1;transform:none}
+
+/* ── 主视觉：三方泳道 ── */
+#flow{position:absolute;left:80px;top:312px;width:1760px;height:664px;z-index:11;border-radius:12px;
+  background:#fff;border:1px solid var(--grid);
+  opacity:0;transform:translateY(26px);transition:all .7s cubic-bezier(.16,1,.3,1)}
+#flow.in{opacity:1;transform:none}
+/* diagram-design type-swimlane：甲方 / 白帽 / 修复 */
+.lane{position:absolute;left:190px;right:24px;z-index:1;opacity:0;transition:opacity .7s ease;
+  border-top:1px solid var(--grid);background:rgba(28,28,26,.015)}
+#flow.in .lane{opacity:1}
+.lane[data-l="fix"]{background:rgba(245,87,47,.03)}
+.lanelab{position:absolute;left:28px;font:600 14px 'IBM Plex Mono';letter-spacing:.1em;color:var(--muted);z-index:2;
+  opacity:0;transform:translateX(-14px);transition:all .6s ease}
+#flow.in .lanelab{opacity:1;transform:none}
+.lanelab .cn{display:block;margin-top:6px;font:900 20px 'Noto Sans SC';letter-spacing:.04em;color:var(--ink)}
+.lanelab[data-l="fix"] .cn{color:var(--accent)}
+
+#fixstep{position:absolute;left:1240px;top:502px;width:470px;height:52px;border-radius:10px;z-index:4;
+  display:flex;align-items:center;justify-content:center;gap:12px;
+  background:#fff;border:1.5px solid var(--ink);
+  font:700 21px 'Noto Sans SC';letter-spacing:.04em;color:var(--ink);
+  opacity:0;transform:translateY(12px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#n4.hot ~ #fixstep{opacity:1;transform:none}
+#fixstep::before{content:'';position:absolute;left:50%;top:-52px;width:1.5px;height:50px;background:var(--ink)}
+#fixstep::after{content:'';position:absolute;left:50%;top:-14px;margin-left:-6px;border:6px solid transparent;border-top:9px solid var(--ink)}
+
+#linkSvg{position:absolute;left:0;top:0;width:1760px;height:664px;z-index:3;pointer-events:none}
+#linkSvg .ck{fill:none;stroke:var(--ink);stroke-width:2;stroke-linecap:round}
+#linkSvg .ck.draw{stroke-dasharray:1;stroke-dashoffset:1;transition:stroke-dashoffset .6s cubic-bezier(.16,1,.3,1)}
+#linkSvg .ck.drawn{stroke-dashoffset:0}
+#linkSvg .ar{opacity:0;transition:opacity .3s}
+#linkSvg .ar.on{opacity:1}
+#linkSvg .pt{opacity:0;transition:opacity .45s ease}
+#linkSvg .pt.on{opacity:1}
+
+.fnode{position:absolute;width:470px;border-radius:12px;padding:14px 20px;z-index:4;
+  background:#fff;border:1.5px solid var(--grid);
+  opacity:0;transform:translateY(28px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+.fnode.in{opacity:1;transform:none}
+.fnode.hot{border:2.5px solid var(--ink)}
+#n1{left:220px;top:34px;height:170px}
+#n2{left:220px;top:234px;height:240px}
+#n3{left:730px;top:234px;height:240px}
+#n4{left:1240px;top:234px;height:240px}
+.fnode .idx{position:absolute;right:16px;top:12px;font:800 22px 'IBM Plex Mono';color:var(--faint);line-height:1}
+.fnode .ft{margin-top:4px;font:900 24px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em;line-height:1.3}
+.fnode .fico{position:absolute;left:20px;right:20px;top:52px;bottom:10px}
+.fnode .fico svg{width:100%;height:100%;display:block}
+.bld{fill:#fff;stroke:var(--ink);stroke-width:2;stroke-linejoin:round}
+.win{fill:var(--faint)}
+.lab{font-family:'IBM Plex Mono';font-size:12px;letter-spacing:.12em;fill:var(--muted)}
+#vizSky{opacity:0;transform:translateY(20px);transition:all .65s cubic-bezier(.16,1,.3,1)}
+#vizSky.in{opacity:1;transform:none}
+#ic3,#ic4{opacity:0;transform:scale(.9);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#ic3.in,#ic4.in{opacity:1;transform:none}
+
+/* 授权书 + 印章（唯一橙主角） */
+#doc{position:absolute;left:20px;right:20px;top:60px;height:148px;border-radius:10px;
+  background:#fff;border:1.5px solid var(--ink);padding:12px 16px;
+  opacity:0;transform:translateY(-22px) rotate(-2deg);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#doc.in{opacity:1;transform:translateY(0) rotate(-2deg)}
+#doc .dh{font:900 19px 'Noto Sans SC';letter-spacing:.24em;color:var(--ink);text-align:center;
+  border-bottom:1px solid var(--grid);padding-bottom:7px}
+#doc .dl{height:6px;border-radius:3px;background:var(--grid);margin-top:9px}
+#doc .viz-note{position:absolute;right:8px;bottom:6px;font:500 9px 'IBM Plex Mono';letter-spacing:.1em;color:var(--faint)}
+#seal{position:absolute;left:50%;bottom:22px;margin-left:-44px;width:88px;height:88px;border-radius:50%;
+  border:3px double var(--accent);display:flex;align-items:center;justify-content:center;
+  font:900 25px 'Noto Sans SC';letter-spacing:.12em;color:var(--accent);background:#fff;
+  opacity:0;transform:scale(2.7) rotate(-12deg);transition:all .42s cubic-bezier(.16,1,.3,1)}
+#seal.in{opacity:1;transform:scale(1) rotate(-12deg)}
+#sealBig{position:absolute;left:355px;top:544px;width:360px;height:200px;z-index:6;display:flex;align-items:center;justify-content:center;
+  opacity:0;transform:scale(2.2) rotate(-10deg);transition:all .4s cubic-bezier(.16,1,.3,1);pointer-events:none}
+#sealBig.in{opacity:1;transform:scale(1) rotate(-10deg)}
+
+/* 报告文档（飞回甲方） */
+#vizRep{position:absolute;left:1560px;top:560px;width:44px;height:54px;z-index:14;opacity:0;pointer-events:none}
+#vizGot{position:absolute;left:344px;top:484px;font:600 12px 'IBM Plex Mono';letter-spacing:.1em;
+  color:var(--paper);background:var(--ink);border-radius:5px;padding:4px 10px;opacity:0;transform:scale(.5);
+  transition:all .4s cubic-bezier(.16,1,.3,1);z-index:14}
+#vizGot.in{opacity:1;transform:scale(1)}
+
+/* ── 授权红线 ── */
+#rule{position:absolute;left:50px;right:50px;top:566px;border-radius:10px;padding:16px 30px 16px 36px;z-index:5;
+  background:#fff;border:1px solid var(--grid);opacity:0;transform:translateY(18px);
+  transition:all .55s cubic-bezier(.16,1,.3,1)}
+#rule.in{opacity:1;transform:none}
+#rule .rline{position:absolute;left:0;top:0;bottom:0;width:7px;background:var(--accent);border-radius:10px 0 0 10px;
+  transform:scaleY(0);transform-origin:50% 0;transition:transform .55s cubic-bezier(.16,1,.3,1) .12s}
+#rule.in .rline{transform:scaleY(1)}
+#rule .rtxt{font:700 29px 'Noto Sans SC';color:var(--ink);letter-spacing:.03em;line-height:1.35}
+#rule .rtxt b{font-weight:900;border-bottom:5px solid var(--ink)}
+#rule .rtxt i{display:block;font-style:normal;font:700 21px 'Noto Sans SC';
+  color:var(--accent);letter-spacing:.04em;margin-top:8px;opacity:0;transform:translateX(-10px);transition:all .5s ease .1s}
+#rule.mark .rtxt i{opacity:1;transform:none}
+
+/* ── 大肥鱼 ── */
+.fish{position:absolute;width:240px;z-index:35;opacity:0;transform:translateY(30px);transition:all .45s cubic-bezier(.16,1,.3,1);pointer-events:none}
+.fish.show{opacity:1;transform:none}
+.fish img{width:100%;display:block}
+.fish .say{position:absolute;width:250px;background:#fff;border:1.5px solid var(--ink);border-radius:10px;
+  padding:13px 17px;font:900 24px 'Noto Sans SC';color:var(--ink);line-height:1.45;opacity:0;transform:scale(.85);
+  transition:all .4s cubic-bezier(.16,1,.3,1) .18s}
+.fish.show .say{opacity:1;transform:scale(1)}
+.fish .say b{font-weight:900;border-bottom:4px solid var(--ink)}
+#fish1{left:1620px;top:52px;width:230px}
+#fish1 .say{left:-226px;top:8px}
+
+/* ----- 角注 / HUD ----- */
+.corner{position:absolute;font:500 14px Inter,'Noto Sans SC';letter-spacing:.08em;color:var(--faint);z-index:41}
+#chap{left:88px;bottom:26px}
+#src{right:88px;bottom:26px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:var(--grid)}
+#bar{height:100%;width:0;background:var(--ink)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(240,239,235,.94);color:var(--muted)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid var(--faint);color:var(--ink);font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(28,28,26,.06)}
+#replay.done{border-color:var(--ink);color:var(--ink)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="bgGrid"></div>
+  <div id="wm">PENTEST</div>
+  <div id="cam">
+    <div id="kicker">CHAPTER 04 · 主角登场</div>
+    <div id="title">渗透测试</div>
+    <div id="subtitle">是一份<b>正经的工作</b></div>
+    <div id="chips"><span class="chip">银行</span><span class="chip">政府</span><span class="chip">大厂</span></div>
+
+    <!-- 主视觉：三方泳道 -->
+    <div id="flow">
+      <div class="lane" data-l="client" style="top:18px;height:200px"></div>
+      <div class="lane" data-l="white" style="top:218px;height:272px"></div>
+      <div class="lane" data-l="fix" style="top:490px;height:70px"></div>
+      <div class="lanelab" data-l="client" style="top:66px">CLIENT 甲方<span class="cn">请人来做</span></div>
+      <div class="lanelab" data-l="white" style="top:322px">WHITE HAT 白帽<span class="cn">安全团队</span></div>
+      <div class="lanelab" data-l="fix" style="top:506px">FIX 修复<span class="cn">按报告修补</span></div>
+      <svg id="linkSvg" viewBox="0 0 1760 664">
+        <path class="ck draw" id="c1" pathLength="1" d="M455,206 V232"/>
+        <path class="ck draw" id="c2" pathLength="1" d="M692,354 H728"/>
+        <path class="ck draw" id="c3" pathLength="1" d="M1202,354 H1238"/>
+        <g class="ar" id="ar1"><polygon points="455,234 443,214 467,214" fill="#1C1C1A"/></g>
+        <g class="ar" id="ar2"><polygon points="732,354 712,342 712,366" fill="#1C1C1A"/></g>
+        <g class="ar" id="ar3"><polygon points="1242,354 1222,342 1222,366" fill="#1C1C1A"/></g>
+        <g class="pt" id="pt1">
+          <circle r="5" fill="#1C1C1A"><animateMotion dur="2.4s" repeatCount="indefinite" begin="0s"><mpath href="#c1"/></animateMotion></circle>
+          <circle r="4" fill="#8F8E88"><animateMotion dur="2.4s" repeatCount="indefinite" begin="-1.2s"><mpath href="#c1"/></animateMotion></circle>
+        </g>
+        <g class="pt" id="pt2">
+          <circle r="5" fill="#1C1C1A"><animateMotion dur="2.4s" repeatCount="indefinite" begin="-0.5s"><mpath href="#c2"/></animateMotion></circle>
+          <circle r="4" fill="#8F8E88"><animateMotion dur="2.4s" repeatCount="indefinite" begin="-1.7s"><mpath href="#c2"/></animateMotion></circle>
+        </g>
+        <g class="pt" id="pt3">
+          <circle r="5" fill="#1C1C1A"><animateMotion dur="2.4s" repeatCount="indefinite" begin="-1s"><mpath href="#c3"/></animateMotion></circle>
+          <circle r="4" fill="#8F8E88"><animateMotion dur="2.4s" repeatCount="indefinite" begin="-2.1s"><mpath href="#c3"/></animateMotion></circle>
+        </g>
+      </svg>
+
+      <!-- ① 甲方请安全团队 -->
+      <div class="fnode" id="n1">
+        <span class="idx">01</span>
+        <div class="ft">甲方请安全团队</div>
+        <div class="fico">
+          <svg id="vizSky" viewBox="0 0 300 250">
+            <path class="bld" d="M24 96 L104 96 L104 226 L24 226 Z"/>
+            <path class="bld" d="M16 96 L64 56 L112 96 Z"/>
+            <line x1="42" y1="112" x2="42" y2="212" stroke="#8F8E88" stroke-width="4"/>
+            <line x1="64" y1="112" x2="64" y2="212" stroke="#8F8E88" stroke-width="4"/>
+            <line x1="86" y1="112" x2="86" y2="212" stroke="#8F8E88" stroke-width="4"/>
+            <text class="lab" x="64" y="246" text-anchor="middle">银行</text>
+            <path class="bld" d="M132 120 L212 120 L212 226 L132 226 Z"/>
+            <path class="bld" d="M146 120 L146 96 A28 22 0 0 1 198 96 L198 120"/>
+            <rect class="win" x="146" y="136" width="14" height="12"/><rect class="win" x="172" y="136" width="14" height="12"/><rect class="win" x="198" y="136" width="14" height="12"/>
+            <text class="lab" x="172" y="246" text-anchor="middle">政府</text>
+            <path class="bld" d="M234 74 L290 74 L290 226 L234 226 Z"/>
+            <rect class="win" x="244" y="88" width="12" height="10"/><rect class="win" x="262" y="88" width="12" height="10"/>
+            <rect class="win" x="244" y="108" width="12" height="10"/><rect class="win" x="262" y="108" width="12" height="10"/>
+            <text class="lab" x="262" y="246" text-anchor="middle">大厂</text>
+          </svg>
+        </div>
+      </div>
+
+      <!-- ② 授权书盖章 -->
+      <div class="fnode" id="n2">
+        <span class="idx">02</span>
+        <div class="ft">拿到书面授权</div>
+        <div id="doc">
+          <div class="dh">授 权 书</div>
+          <div class="dl" style="width:88%"></div>
+          <div class="dl" style="width:70%"></div>
+          <div class="dl" style="width:82%"></div>
+          <div class="dl" style="width:56%"></div>
+          <div class="dl" style="width:74%"></div>
+          <span class="viz-note">示意图 · 非实拍</span>
+        </div>
+        <div id="seal">授 权</div>
+      </div>
+
+      <!-- ③ 攻击者思路 -->
+      <div class="fnode" id="n3">
+        <span class="idx">03</span>
+        <div class="ft">用攻击者的思路</div>
+        <div class="fico" id="ic3">
+          <svg viewBox="0 0 300 250">
+            <circle cx="128" cy="112" r="66" fill="#fff" stroke="#1C1C1A" stroke-width="6"/>
+            <circle cx="128" cy="112" r="40" fill="none" stroke="#8F8E88" stroke-width="3" stroke-dasharray="7 7"/>
+            <line x1="176" y1="160" x2="228" y2="212" stroke="#1C1C1A" stroke-width="16" stroke-linecap="round"/>
+            <circle cx="128" cy="112" r="13" fill="none" stroke="#F5572F" stroke-width="4"/>
+            <line x1="120" y1="104" x2="136" y2="120" stroke="#F5572F" stroke-width="4" stroke-linecap="round"/>
+            <line x1="136" y1="104" x2="120" y2="120" stroke="#F5572F" stroke-width="4" stroke-linecap="round"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- ④ 报告文档 -->
+      <div class="fnode" id="n4">
+        <span class="idx">04</span>
+        <div class="ft">写报告交甲方修</div>
+        <div class="fico" id="ic4">
+          <svg viewBox="0 0 300 250">
+            <path class="bld" d="M84 26 H196 L232 62 V226 H84 Z"/>
+            <path d="M196 26 V62 H232" fill="none" stroke="#1C1C1A" stroke-width="2.4" stroke-linejoin="round"/>
+            <line x1="110" y1="104" x2="206" y2="104" stroke="#8F8E88" stroke-width="6" stroke-linecap="round"/>
+            <line x1="110" y1="134" x2="188" y2="134" stroke="#8F8E88" stroke-width="6" stroke-linecap="round"/>
+            <line x1="110" y1="164" x2="206" y2="164" stroke="#8F8E88" stroke-width="6" stroke-linecap="round"/>
+            <circle cx="158" cy="200" r="20" fill="#1C1C1A" stroke="#1C1C1A" stroke-width="4"/>
+            <path d="M148 200 L155 208 L170 190" fill="none" stroke="#F0EFEB" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </div>
+
+      <div id="fixstep">按报告修补漏洞 · 完成闭环</div>
+
+      <div id="rule">
+        <span class="rline"></span>
+        <div class="rtxt">这些攻击都发生在<b>授权的范围以内</b><i>这是它跟黑客行为的根本区别</i></div>
+      </div>
+    </div>
+
+    <div id="sealBig">
+      <svg width="300" height="220" viewBox="0 0 300 220">
+        <circle cx="150" cy="110" r="96" fill="#fff" stroke="#F5572F" stroke-width="6"/>
+        <circle cx="150" cy="110" r="80" fill="none" stroke="#F5572F" stroke-width="3"/>
+        <text x="150" y="130" text-anchor="middle" font-family="Noto Sans SC" font-weight="900" font-size="52" fill="#F5572F">授权</text>
+      </svg>
+    </div>
+
+    <div id="vizRep">
+      <svg width="44" height="54" viewBox="0 0 44 54">
+        <path d="M4 2 H30 L40 12 V52 H4 Z" fill="#fff" stroke="#1C1C1A" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M30 2 V12 H40" fill="none" stroke="#1C1C1A" stroke-width="2" stroke-linejoin="round"/>
+        <line x1="11" y1="24" x2="33" y2="24" stroke="#8F8E88" stroke-width="2.4" stroke-linecap="round"/>
+        <line x1="11" y1="32" x2="29" y2="32" stroke="#8F8E88" stroke-width="2.4" stroke-linecap="round"/>
+        <line x1="11" y1="40" x2="33" y2="40" stroke="#8F8E88" stroke-width="2.4" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div id="vizGot">甲方已收到 ✓</div>
+  </div>
+
+  <!-- 大肥鱼 -->
+  <div class="fish" id="fish1">
+    <div class="say">这算<b>正经职业</b>啊</div>
+    <img src="Shark-GIF/006_双手身前微笑乖巧期待.gif" alt="大肥鱼">
+  </div>
+
+  <!-- 角注 -->
+  <div class="corner" id="chap">章 0 · 认识渗透测试 ｜ 镜头 39 · 渗透测试是什么 · 16:37–17:01</div>
+  <div class="corner" id="src">diagram-design type-swimlane 三方泳道 ｜ 口播对齐 timeline.md</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-39 · 渗透测试是什么 · 24s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=24000; /* ←⑤ DUR */
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ===== 补间工具 ===== */
+const show=(sel,cls)=>{const el=$(sel);if(el)el.classList.add(cls||'in')};
+function typeText(el,txt,start,dur){let last=-1;tws.push({t:start,d:dur,f:p=>{const k=Math.floor(p*txt.length);if(k!==last){last=k;el.textContent=txt.slice(0,k);__sfx.type(.5)}},done:()=>{el.textContent=txt}})}
+const nowMs=()=>performance.now()-t0;
+
+/* ============ ⑤ DUR 与 cue 表 ============ */
+on(300,()=>{show('#kicker');__sfx.pop(.4);});                                  // 16:37「好那么接下来我们进入正题」
+on(2900,()=>{show('#title');show('#flow');__sfx.thud(.5);});                    // 16:40「我们来认一下这期的主角渗透测试」
+on(5200,()=>{show('#subtitle');__sfx.ding(.5);});                              // 16:43「渗透测试它是一份正经的工作」
+/* ① 框「甲方请安全团队」完整出现：框体 + 框内大楼剪影 同帧到位 */
+on(8000,()=>{show('#chips');show('#n1');show('#vizSky');__sfx.ding(.5);});      // 16:45「在银行政府大厂等等」 · 场景：银行/政府/大厂大楼剪影升起
+/* 连接线①：n1 → n2（描线生长 + 流线粒子） */
+on(10000,()=>{show('#n1','hot');$('#c1').classList.add('drawn');show('#ar1','on');show('#pt1','on');__sfx.pop(.5);}); // 16:47「每年都要请安全团队来攻击自己的系统」
+on(12500,()=>{show('#fish1','show');__sfx.pop(.45);});                         // 大肥鱼定场
+/* ② 框「拿到书面授权」完整出现：框体 + 授权书 + 印章 同帧到位 */
+on(13000,()=>{show('#n2');show('#doc');show('#seal');$('#n2').classList.add('hot');$('#n1').classList.remove('hot');__sfx.thud(.55);}); // 16:50「在拿到书面授权的情形下」 · 场景：授权书文档滑入
+/* 连接线②：n2 → n3 */
+on(13700,()=>{$('#c2').classList.add('drawn');show('#ar2','on');show('#pt2','on');__sfx.swipe(.5);}); // 场景：连接线 n2→n3
+on(13900,()=>{show('#sealBig');__sfx.thud(.8);});                              // 场景：授权印章砸下
+/* ③ 框「用攻击者的思路」完整出现：框体 + 放大镜图标 同帧到位 */
+on(14400,()=>{show('#n3');show('#ic3');$('#n2').classList.remove('hot');$('#n3').classList.add('hot');show('#vizGot');__sfx.pop(.5);}); // 16:51「用攻击者思路去挖掘漏洞」
+/* 连接线③：n3 → n4 */
+on(16700,()=>{$('#c3').classList.add('drawn');show('#ar3','on');show('#pt3','on');__sfx.swipe(.5);}); // 场景：连接线 n3→n4
+/* ④ 框「写报告交甲方修」完整出现：框体 + 报告图标 同帧到位 */
+on(17000,()=>{show('#n4');show('#ic4');$('#n3').classList.remove('hot');$('#n4').classList.add('hot');__sfx.pop(.5);}); // 16:54「找到之后就可以写报告给甲方去修」
+on(17400,()=>{                                                                 // 场景：报告文档从 n4 飞向 n1（甲方）
+  const r=$('#vizRep');
+  $('#sealBig').classList.remove('in');
+  tws.push({t:nowMs(),d:1500,e:eio,f:p=>{
+    r.style.opacity=p<.1?p/.1:(p>.9?(1-p)/.1:1);
+    r.style.left=(1560-1060*p)+'px';
+    r.style.top=(560-160*p-40*Math.sin(Math.PI*p))+'px';
+    r.style.transform='rotate('+(14*Math.sin(Math.PI*p*2))+'deg) scale('+(1-.15*p)+')';
+  },done:()=>{r.style.opacity=0;show('#vizGot');__sfx.ding(.55)}});
+});
+on(19000,()=>{show('#rule');__sfx.swipe(.7);});                                // 16:56「这些攻击都是发生在授权的范围以内的」
+on(21400,()=>{$('#rule').classList.add('mark');camFocus(960,780,1.06,.55);__sfx.ding(.6);}); // 16:59「这是它跟黑客行为的根本区别」
+
+/* ===== [不动] QA 专用（正常播放不触发） ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

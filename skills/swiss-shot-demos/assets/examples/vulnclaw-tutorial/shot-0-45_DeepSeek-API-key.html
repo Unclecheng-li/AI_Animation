@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+     镜头 0-45 · DeepSeek API Key · 19:29–19:50 · DUR 21000  【v4 瑞士国际主义】
+     架构重画：① 概念链（VulnClaw 不是 AI → 大模型 · DeepSeek）
+              ② 技能图式叙事 = diagram-design type-sequence（生命线/消息/激活条）
+                 + archify 流线粒子 + lieflat 4 步发丝刻度 + 扁平控制台示意卡
+              ③ 脱敏密钥大号呈现（sk-••••）+ 反白安全警示卡（橙规则条）
+     字体 Inter × IBM Plex Mono × Noto Sans SC · 纸底 #F0EFEB × 墨 #1C1C1A × 唯一橙 #F5572F
+     ============================================================ -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});}
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 0-45 · DeepSeek API Key · 21s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;
+  --accent:#F5572F;--dark:#1C1C1A;--darkink:#F0EFEB;--darkgrid:#2E2D29;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:var(--paper);overflow:hidden;color:var(--ink);
+  font-family:'Inter','Noto Sans SC',sans-serif;-webkit-font-smoothing:antialiased}
+body.paused *{animation-play-state:paused!important}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#bg{position:absolute;inset:0;z-index:0;
+  background-image:linear-gradient(rgba(28,28,26,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.05) 1px,transparent 1px);
+  background-size:44px 44px}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+.act{position:absolute;inset:0}
+.hide{display:none}
+
+/* ── v4 页头（外围） ── */
+#hd{position:absolute;left:88px;top:56px;z-index:40}
+#hd .eyebrow{font:600 15px Inter,'Noto Sans SC';letter-spacing:.14em;text-transform:uppercase;color:var(--ink);display:flex;gap:12px;align-items:center}
+#hd .eyebrow .no{background:var(--ink);color:var(--paper);padding:3px 10px;border-radius:3px;font-weight:700}
+#hd h1{margin-top:16px;font:800 50px/1 'Inter','Noto Sans SC';letter-spacing:-.02em;color:var(--ink);opacity:0;transform:translateY(18px);transition:all .6s cubic-bezier(.16,1,.3,1)}
+#hd h1.in{opacity:1;transform:translateY(0)}
+#hd h1 span{font-weight:900}
+#hd .en{margin-top:8px;font:600 14px 'IBM Plex Mono';letter-spacing:.18em;color:var(--muted);text-transform:uppercase;opacity:0;transition:opacity .5s .3s}
+#hd .en.in{opacity:1}
+
+/* ── 第一幕：概念链 ── */
+#kickA{position:absolute;left:88px;top:214px;z-index:12;font:600 15px Inter,'Noto Sans SC';letter-spacing:.14em;text-transform:uppercase;color:var(--ink);display:flex;gap:12px;align-items:center;opacity:0;transform:translateX(-14px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#kickA.in{opacity:1;transform:none}
+#kickA .no{background:var(--ink);color:var(--paper);padding:3px 10px;border-radius:3px;font-weight:700}
+
+.node{position:absolute;height:184px;border-radius:12px;padding:26px 30px;display:flex;flex-direction:column;justify-content:center;
+  opacity:0;transform:translateY(24px);transition:all .58s cubic-bezier(.16,1,.3,1);z-index:12}
+.node.in{opacity:1;transform:none}
+#nTool{left:440px;top:328px;width:400px;background:#fff;border:1px solid var(--grid)}
+#nBrain{left:1020px;top:328px;width:460px;background:var(--ink);border:1px solid var(--ink)}
+.node .nt{font:600 12px 'IBM Plex Mono';letter-spacing:.18em;color:var(--muted);text-transform:uppercase}
+.node .nn{margin-top:12px;font:900 34px 'Noto Sans SC';color:var(--ink);letter-spacing:.01em}
+.node .nd{margin-top:12px;font:500 17px 'Noto Sans SC';color:var(--muted);letter-spacing:.01em}
+.node .nd b{color:var(--ink);font-weight:900}
+#nBrain .nt{color:#8F8E88}
+#nBrain .nn{color:var(--paper)}
+#nBrain .nd{color:#B0AFA9}
+#nBrain .nd b{color:var(--paper);font-weight:900}
+#nArrow{position:absolute;left:840px;top:390px;width:180px;height:60px;z-index:12;opacity:0;transition:opacity .5s}
+#nArrow.in{opacity:1}
+#nArrow .alab{font:700 15px 'Noto Sans SC';fill:var(--muted);letter-spacing:.06em}
+#nArrow line{stroke-dasharray:8 6;animation:ndash 1s linear infinite}
+@keyframes ndash{to{stroke-dashoffset:-28}}
+
+#tagRow{position:absolute;left:1020px;top:540px;z-index:13;display:flex;gap:14px;align-items:center}
+#tagRow .tag-acc{font:700 15px Inter;letter-spacing:.06em;color:#fff;background:var(--accent);border-radius:3px;padding:7px 16px;white-space:nowrap;opacity:0;transform:scale(.7);transition:all .45s cubic-bezier(.2,1.6,.4,1)}
+#tagRow .tag-acc.in{opacity:1;transform:scale(1)}
+.chipW{font:700 15px 'Noto Sans SC';color:var(--ink);background:#fff;border:1px solid var(--grid);border-radius:999px;padding:7px 18px;white-space:nowrap;opacity:0;transform:translateY(12px);transition:all .45s cubic-bezier(.2,1.5,.4,1)}
+.chipW.in{opacity:1;transform:none}
+
+/* ── 第二幕：技能图式 · type-sequence ── */
+#stageCard{position:absolute;left:120px;top:220px;width:1080px;height:620px;border-radius:12px;
+  background:#fff;border:1px solid var(--grid);opacity:0;transform:translateY(24px);transition:all .6s cubic-bezier(.16,1,.3,1)}
+#stageCard.in{opacity:1;transform:none}
+
+/* 4 步发丝刻度（lieflat） */
+#rule{position:absolute;left:20px;top:14px;width:1040px;height:58px;display:flex;align-items:center;gap:16px}
+#rule .rk{font:600 12px 'IBM Plex Mono';letter-spacing:.14em;color:var(--paper);background:var(--ink);border-radius:3px;padding:7px 12px;white-space:nowrap}
+#rail{display:flex;align-items:center;gap:12px;flex:1}
+#rail .st{display:flex;align-items:center;gap:8px;font:600 14px 'Noto Sans SC';color:var(--muted);opacity:.45;transition:all .4s ease;white-space:nowrap}
+#rail .st i{font:800 13px 'IBM Plex Mono';font-style:normal;color:var(--paper);background:var(--faint);border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center}
+#rail .st.done{color:var(--ink);opacity:.72}
+#rail .st.done i{background:var(--ink)}
+#rail .st.on{color:var(--ink);opacity:1}
+#rail .st.on i{background:var(--accent)}
+#rail .tick{flex:1;height:1px;background:var(--grid);min-width:14px}
+
+/* actor */
+.sq-actor{position:absolute;height:62px;border-radius:8px;display:flex;flex-direction:column;justify-content:center;
+  padding:0 18px;background:#fff;border:1.5px solid var(--ink);z-index:3;opacity:0;transform:translateY(-10px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+.sq-actor.in{opacity:1;transform:none}
+.sq-actor .an{font:900 20px 'Noto Sans SC';color:var(--ink);letter-spacing:.03em}
+.sq-actor .ae{font:600 10px 'IBM Plex Mono';letter-spacing:.16em;color:var(--muted);margin-top:3px}
+
+#sqLife{position:absolute;left:0;top:0;width:1080px;height:620px;z-index:1;pointer-events:none;opacity:0;transition:opacity .6s}
+#stageCard.in #sqLife{opacity:1}
+#sqLife .ll{stroke:rgba(28,28,26,.22);stroke-width:1;stroke-dasharray:3 3}
+#sqLife .sqact{fill:rgba(28,28,26,.07);stroke:rgba(28,28,26,.35);stroke-width:.8}
+#sqLife .msg{stroke:var(--ink);stroke-width:1.6;fill:none;opacity:.9}
+#sqLife .msg.ret{stroke:var(--muted);stroke-dasharray:5 4}
+#sqLife .mh{fill:var(--ink)}
+#sqLife .mh.dim{fill:var(--muted)}
+#sqLife .ml{font:600 13px 'IBM Plex Mono';letter-spacing:.02em;fill:var(--ink)}
+#sqLife .ml.dim{fill:var(--muted)}
+#sqLife .fade{opacity:0;transition:opacity .5s ease}
+#sqLife .fade.on{opacity:1}
+
+/* 扁平控制台示意卡 */
+#console{position:absolute;left:40px;top:468px;width:1000px;height:136px;border-radius:10px;background:#fff;border:1px solid var(--grid);
+  opacity:0;transform:translateY(16px);transition:all .5s cubic-bezier(.16,1,.3,1);z-index:3}
+#console.in{opacity:1;transform:none}
+#console .chd{display:flex;justify-content:space-between;align-items:center;height:34px;padding:0 18px;border-bottom:1px solid var(--grid);
+  font:600 12px 'IBM Plex Mono';letter-spacing:.12em;color:var(--muted)}
+#console .chd .note{font:600 11px Inter;letter-spacing:.12em;color:var(--faint);text-transform:uppercase}
+#console .crow{display:flex;align-items:center;gap:20px;padding:0 18px;height:calc(100% - 34px);opacity:0;transform:translateY(-10px);transition:all .5s cubic-bezier(.2,1.4,.4,1)}
+#console .crow.in{opacity:1;transform:none}
+#console .cname{font:700 17px 'Noto Sans SC';color:var(--ink)}
+#console .ckey{font:600 24px 'IBM Plex Mono';color:var(--ink);letter-spacing:.02em}
+#console .ckey .dots{color:var(--muted)}
+#console .cbadge{font:700 12px 'Noto Sans SC';color:var(--ink);background:var(--paper);border-radius:3px;padding:4px 12px}
+#copyb{margin-left:auto;font:700 13px 'Noto Sans SC';color:var(--ink);border:1.5px solid var(--ink);border-radius:6px;padding:8px 18px;transition:all .35s;opacity:0}
+#copyb.in{opacity:1}
+#copyb.hot{color:var(--paper);background:var(--ink);border-color:var(--ink)}
+
+/* 大号脱敏密钥卡 */
+#keyCard{position:absolute;left:1240px;top:220px;width:560px;height:200px;border-radius:12px;background:#fff;border:1px solid var(--grid);
+  padding:26px 30px;opacity:0;transform:translateY(22px);transition:all .55s cubic-bezier(.16,1,.3,1);z-index:12}
+#keyCard.in{opacity:1;transform:none}
+#keyCard .kc-h{display:flex;justify-content:space-between;align-items:center;font:600 13px 'IBM Plex Mono';letter-spacing:.16em;color:var(--muted);text-transform:uppercase}
+#keyCard .kc-tag{font:700 12px 'Noto Sans SC';letter-spacing:.06em;color:#fff;background:var(--accent);border-radius:3px;padding:3px 10px}
+#keyCard .kc-key{margin-top:22px;font:800 48px 'IBM Plex Mono';color:var(--ink);letter-spacing:.02em;white-space:nowrap}
+#keyCard .kc-key .dots2{color:var(--faint)}
+#keyCard .kc-s{margin-top:18px;font:500 16px 'Noto Sans SC';color:var(--muted)}
+#keyCard .kc-s b{color:var(--ink);font-weight:900}
+
+/* 反白安全警示卡（橙规则条） */
+#warn{position:absolute;left:1240px;top:440px;width:560px;height:400px;border-radius:12px;background:var(--ink);color:var(--paper);
+  padding:32px 34px 32px 40px;overflow:hidden;opacity:0;transform:translateY(22px);transition:all .55s cubic-bezier(.16,1,.3,1);z-index:12}
+#warn.in{opacity:1;transform:none}
+#warn::before{content:'';position:absolute;left:0;top:0;bottom:0;width:7px;background:var(--accent)}
+#warn .wt{font:600 14px 'IBM Plex Mono';letter-spacing:.16em;color:var(--accent)}
+#warn .wl{margin-top:22px;font:900 36px 'Noto Sans SC';color:var(--paper);line-height:1.3}
+#warn .wl b{color:var(--accent)}
+#warn .ws{margin-top:24px;display:flex;flex-direction:column;gap:16px;font:500 18px 'Noto Sans SC';color:#B0AFA9;line-height:1.5}
+#warn .ws b{color:var(--paper);font-weight:900}
+
+/* 流线粒子（archify flow） */
+#flowDot{position:absolute;left:0;top:0;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:var(--ink);opacity:0;z-index:6;pointer-events:none}
+
+/* toast */
+#toast{position:absolute;left:874px;top:424px;z-index:16;font:700 15px 'Noto Sans SC';color:#fff;background:var(--ink);border-radius:4px;
+  padding:9px 20px;opacity:0;transform:translateY(10px);transition:all .4s cubic-bezier(.2,1.4,.4,1);white-space:nowrap}
+#toast.in{opacity:1;transform:none}
+
+/* ── 大肥鱼 ── */
+.fish{position:absolute;left:130px;top:596px;width:210px;z-index:35;opacity:0;transform:translateY(26px) scale(.68);
+  transition:all .45s cubic-bezier(.34,1.6,.64,1);pointer-events:none}
+.fish.show{opacity:1;transform:none}
+.fish img{width:100%;display:block}
+.fish .say{position:absolute;width:300px;left:206px;top:6px;background:#fff;border:1.5px solid var(--ink);border-radius:10px;
+  padding:12px 16px;font:900 21px 'Noto Sans SC';color:var(--ink);line-height:1.45;
+  opacity:0;transform:scale(.6);transition:all .4s cubic-bezier(.34,1.6,.64,1) .15s}
+.fish.show .say{opacity:1;transform:scale(1)}
+.fish .say b{font-weight:900}
+.fish .say::after{content:'';position:absolute;left:-16px;top:38px;border:9px solid transparent;border-right:11px solid #fff}
+
+/* 角注 / HUD */
+.corner{position:absolute;font:600 15px Inter,'Noto Sans SC';letter-spacing:.1em;color:var(--faint);z-index:41}
+#chap{left:88px;bottom:30px}
+#src{right:88px;bottom:30px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:rgba(28,28,26,.1)}
+#bar{height:100%;width:0;background:var(--accent)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:var(--ink);color:var(--paper)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #556;color:#ccc;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(245,87,47,.18)}
+#replay.done{border-color:var(--accent);color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="bg"></div>
+  <div id="cam">
+    <!-- 页头 -->
+    <div id="hd">
+      <div class="eyebrow"><span class="no">SHOT 0-45</span><span>第三章 · 环境准备</span></div>
+      <h1 id="h1">给 VulnClaw 装 <span>大脑</span></h1>
+      <div class="en" id="en">api key &nbsp;=&nbsp; the model's decision power</div>
+    </div>
+
+    <!-- 第一幕：概念链 -->
+    <div class="act" id="actA">
+      <div id="kickA"><span class="no">01</span><span>它靠什么思考</span></div>
+      <div class="node" id="nTool">
+        <div class="nt">TOOL · 工具</div>
+        <div class="nn">VulnClaw</div>
+        <div class="nd" id="toolDs">本身 <b>不是 AI</b> · 不带大脑</div>
+      </div>
+      <svg id="nArrow" viewBox="0 0 180 60" aria-hidden="true">
+        <line x1="4" y1="30" x2="150" y2="30" stroke="#1C1C1A" stroke-width="2.5"/>
+        <polygon points="150,21 174,30 150,39" fill="#1C1C1A"></polygon>
+        <text class="alab" x="76" y="17" text-anchor="middle">需要</text>
+      </svg>
+      <div class="node" id="nBrain">
+        <div class="nt">MODEL · 大模型</div>
+        <div class="nn">大模型</div>
+        <div class="nd">决策与推理 <b>全都交给它</b></div>
+      </div>
+      <div id="tagRow">
+        <span class="tag-acc" id="dsTag">本期 · DeepSeek</span>
+        <span class="chipW" id="chipCN">国内可用 ✓</span>
+        <span class="chipW" id="chipCheap">也很便宜</span>
+      </div>
+    </div>
+
+    <!-- 第二幕：技能图式叙事 · 密钥流转 -->
+    <div class="act hide" id="actB">
+      <div id="stageCard">
+        <div id="rule">
+          <span class="rk">密钥流转 · 4 步</span>
+          <div id="rail">
+            <span class="st" id="st1"><i>01</i>打开平台</span><span class="tick"></span>
+            <span class="st" id="st2"><i>02</i>创建 API Key</span><span class="tick"></span>
+            <span class="st" id="st3"><i>03</i>复制保存</span><span class="tick"></span>
+            <span class="st" id="st4"><i>04</i>填入 VulnClaw</span>
+          </div>
+        </div>
+
+        <div class="sq-actor" id="a1" style="left:100px;top:96px;width:240px"><span class="an">你</span><span class="ae">YOU</span></div>
+        <div class="sq-actor" id="a2" style="left:390px;top:96px;width:300px"><span class="an">DeepSeek 开放平台</span><span class="ae">OPEN PLATFORM</span></div>
+        <div class="sq-actor" id="a3" style="left:740px;top:96px;width:240px"><span class="an">VulnClaw</span><span class="ae">TOOL</span></div>
+
+        <svg id="sqLife" viewBox="0 0 1080 620" preserveAspectRatio="none" aria-hidden="true">
+          <line class="ll" x1="220" y1="158" x2="220" y2="445"/>
+          <line class="ll" x1="540" y1="158" x2="540" y2="445"/>
+          <line class="ll" x1="860" y1="158" x2="860" y2="445"/>
+          <rect class="sqact" x="216" y="190" width="8" height="250"/>
+          <rect class="sqact" x="536" y="248" width="8" height="98"/>
+          <rect class="sqact" x="856" y="392" width="8" height="53"/>
+          <line class="msg fade" id="m1" x1="220" y1="210" x2="540" y2="210"/><polygon class="mh fade" id="m1h" points="540,210 526,204 526,216"/>
+          <line class="msg fade" id="m2" x1="220" y1="272" x2="540" y2="272"/><polygon class="mh fade" id="m2h" points="540,272 526,266 526,278"/>
+          <line class="msg ret fade" id="m3" x1="540" y1="334" x2="220" y2="334"/><polygon class="mh dim fade" id="m3h" points="220,334 234,328 234,340"/>
+          <line class="msg fade" id="m4" x1="220" y1="410" x2="860" y2="410"/><polygon class="mh fade" id="m4h" points="860,410 846,404 846,416"/>
+          <text class="ml fade" id="l1" x="380" y="202" text-anchor="middle">① 注册 · 登录开放平台</text>
+          <text class="ml fade" id="l2" x="380" y="264" text-anchor="middle">② 创建 API Key</text>
+          <text class="ml dim fade" id="l3" x="380" y="326" text-anchor="middle">③ 返回密钥</text>
+          <text class="ml fade" id="l4" x="380" y="402" text-anchor="middle">④ 填入配置 · 大脑接通 ✓</text>
+        </svg>
+
+        <div id="console">
+          <div class="chd"><span>DeepSeek 开放平台 · API KEYS</span><span class="note">示意图 · 非实拍</span></div>
+          <div class="crow" id="crow">
+            <span class="cname">vulnclaw</span>
+            <span class="ckey">sk-<span class="dots" id="dots"></span></span>
+            <span class="cbadge">新建</span>
+            <span id="copyb">复制</span>
+          </div>
+        </div>
+
+        <div id="flowDot"></div>
+      </div>
+
+      <div id="keyCard">
+        <div class="kc-h"><span>API KEY · 已复制</span><span class="kc-tag">脱敏示意</span></div>
+        <div class="kc-key">sk-<span class="dots2">••••••••••••</span></div>
+        <div class="kc-s">复制后只存在自己手里 · <b>不要外传</b></div>
+      </div>
+
+      <div id="warn">
+        <div class="wt">⚠ 安全提示</div>
+        <div class="wl">API Key <b>等同密码</b></div>
+        <div class="ws">
+          <span>· 只存在自己手里，<b>别外传</b></span>
+          <span>· 别上传到 GitHub 或聊天群</span>
+          <span>· 泄露了就在控制台撤销重建</span>
+        </div>
+      </div>
+
+      <div id="toast">已复制 · 请保存好</div>
+    </div>
+  </div>
+
+  <!-- 大肥鱼 -->
+  <div class="fish" id="fish">
+    <div class="say">记住就有 <b>大脑</b>，<br>别记错、别外传</div>
+    <img src="Shark-GIF/006_双手身前微笑乖巧期待.gif" alt="大肥鱼">
+  </div>
+
+  <div class="corner" id="chap">控制台界面为演示还原 · 非实拍</div>
+  <div class="corner" id="src">密钥为脱敏示意 · 口播对齐 timeline.md</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-45 · DeepSeek API Key · 21s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=21000; /* ←⑤ DUR */
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ===== 补间工具 ===== */
+const show=(sel,cls)=>{const el=$(sel);if(el)el.classList.add(cls||'in')};
+/* archify 流线粒子：沿消息线段行进 */
+function flowDot(x1,y1,x2,y2,t,d){const dot=$('#flowDot');dot.style.transform='translate('+x1+'px,'+y1+'px)';dot.style.opacity='1';
+  tws.push({t:t,d:d,e:p=>p,f:p=>{dot.style.transform='translate('+(x1+(x2-x1)*p)+'px,'+(y1+(y2-y1)*p)+'px)'},done:()=>{dot.style.opacity='0'}})}
+
+/* ============ ⑤ DUR 与 cue 表 ============ */
+on(200,()=>{show('#h1');show('#en');show('#kickA');show('#nTool');__sfx.pop(.7);}); // 19:29「另一个就是大模型的API key」
+on(2000,()=>{show('#nBrain');show('#nArrow');__sfx.pop(.6);});  // 19:31「毕竟VulnClaw自己本身它不是AI」
+on(4200,()=>{$('#toolDs').innerHTML='本身 <b>不是 AI</b> · 不带大脑';__sfx.thud(.5);}); // 19:33「它是不带大脑的」
+on(5000,()=>{$('#nBrain .nn').style.letterSpacing='.06em';__sfx.ding(.6);});     // 19:34「决策和推理都是要交给大模型来完成的」
+on(8000,()=>{show('#dsTag');__sfx.pop(.7);});                    // 19:37「那么这一期我就交给DeepSeek来演示」
+on(10000,()=>{show('#chipCN');__sfx.pop(.4);});                  // 19:39「因为它首先是国内可以支持的」
+on(11000,()=>{show('#chipCheap');show('#fish','show');__sfx.pop(.5);});        // 19:40「然后也很便宜」／角色定场（大肥鱼）
+on(11800,()=>{camTo(0,0,1,.5);});                                // 复位
+on(12200,()=>{ /* 硬切第二幕：密钥流转 */
+  $('#actA').classList.add('hide');$('#fish').classList.remove('show');
+  $('#actB').classList.remove('hide');camCut(0,0,1);
+  show('#stageCard');show('#a1');show('#a2');show('#a3');__sfx.whoosh(.85,.65);
+  setTimeout(()=>{show('#st1','on');},200);
+  show('#m1','on');$('#m1h').classList.add('on');show('#l1','on');flowDot(220,210,540,210,12400,650);
+  camFocus(680,520,1.02,.6);});                                  // 19:41「我们去DeepSeek开放平台注册」
+on(15000,()=>{ // 19:44「在平台里面创建个API key就可以了」
+  $('#st1').classList.remove('on');$('#st1').classList.add('done');show('#st2','on');
+  show('#m2','on');$('#m2h').classList.add('on');show('#l2','on');flowDot(220,272,540,272,15100,650);
+  show('#console');setTimeout(()=>{show('#crow','in');},260);
+  let n=0;tws.push({t:15360,d:700,e:p=>p,f:p=>{const k=Math.floor(p*12);if(k!==n){n=k;$('#dots').textContent='•'.repeat(k);if(window.__sfx)__sfx.type(.5)}}});
+  __sfx.pop(.6);camFocus(620,540,1.03,.5);});
+on(17200,()=>{ // 19:46「创建好之后」
+  $('#st2').classList.remove('on');$('#st2').classList.add('done');show('#st3','on');
+  show('#m3','on');$('#m3h').classList.add('on');show('#l3','on');flowDot(540,334,220,334,17300,650);__sfx.ding(.5);});
+on(18000,()=>{ // 19:47「把这个API key给记住」
+  show('#keyCard');show('#copyb');setTimeout(()=>{$('#copyb').classList.add('hot');},260);
+  show('#toast');__sfx.ding(.7);camFocus(1380,420,1.04,.5);});
+on(19200,()=>{ // 19:48「等一下会用到」
+  $('#st3').classList.remove('on');$('#st3').classList.add('done');show('#st4','on');
+  show('#m4','on');$('#m4h').classList.add('on');show('#l4','on');flowDot(220,410,860,410,19300,720);
+  show('#warn');__sfx.thud(.75);camTo(0,0,1,.6);});
+on(20500,()=>{__sfx.whoosh(.6,.5);});                             // 19:49「好」
+
+/* ===== [不动] QA 专用（正常播放不触发） ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

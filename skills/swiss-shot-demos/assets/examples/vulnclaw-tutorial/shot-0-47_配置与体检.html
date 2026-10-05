@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+     镜头 47 · 配置与体检 · 20:27–21:04 · DUR 37000  【v4 瑞士国际主义】
+     主视觉：配置台大板（≥55%）
+       A 幕 配置窗白卡（扁平）：命令条打字 → provider 段自动填好 → llm.api_key 掩码填入（两处高亮）
+       B 幕 体检清单（lieflat L15 计票手法）：Python / 依赖 / 网络 / 模型连通性 四项
+            每项一行发丝刻度逐格 ink → 打勾 ✓ → 结论（通过=墨底反白）
+     字体 Inter × IBM Plex Mono × Noto Sans SC · 纸底 #F0EFEB × 墨 #1C1C1A × 唯一橙 #F5572F（api_key）
+     红线：回显抽象（值用掩码/抽象态）；命令可示；数字不编；口播不上屏；角注「示意图 · 非实拍」
+============================================================= -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 0-47 · 配置与体检 · 37s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;
+  --accent:#F5572F;--dark:#1C1C1A;--darkink:#F0EFEB;--darkgrid:#2E2D29;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:var(--paper);overflow:hidden;color:var(--ink);
+  font-family:'Inter','Noto Sans SC',sans-serif;-webkit-font-smoothing:antialiased}
+body.paused *{animation-play-state:paused!important}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#bg{position:absolute;inset:0;z-index:0;
+  background-image:linear-gradient(rgba(28,28,26,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.05) 1px,transparent 1px);
+  background-size:44px 44px}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ── v4 页头（外围） ── */
+#head{position:absolute;left:96px;top:40px;z-index:20;opacity:0;transform:translateY(-18px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#head.in{opacity:1;transform:none}
+#head .eyebrow{font:600 15px Inter,'Noto Sans SC';letter-spacing:.14em;text-transform:uppercase;color:var(--ink);display:flex;gap:12px;align-items:center}
+#head .eyebrow .no{background:var(--ink);color:var(--paper);padding:3px 10px;border-radius:3px;font-weight:700}
+#head h1{margin-top:16px;font:800 52px/1 'Inter','Noto Sans SC';letter-spacing:-.02em;color:var(--ink)}
+#head h1 .hl{font-weight:900}
+#head .sub{margin-top:8px;font:600 13px 'IBM Plex Mono';letter-spacing:.2em;color:var(--muted);text-transform:uppercase}
+
+/* ── 主视觉大板 ── */
+#board{position:absolute;left:96px;top:200px;width:1728px;height:736px;border-radius:12px;z-index:1;
+  background:var(--card);border:1px solid var(--grid);opacity:0;transform:translateY(20px);transition:all .6s cubic-bezier(.16,1,.3,1)}
+#board.in{opacity:1;transform:none}
+
+/* 配置窗（扁平白卡） */
+#cfg{position:absolute;left:52px;top:52px;width:860px;height:632px;border-radius:10px;overflow:hidden;z-index:4;
+  background:#fff;border:1px solid var(--grid);opacity:0;transform:translateY(24px);transition:all .55s cubic-bezier(.2,1.2,.4,1)}
+#cfg.in{opacity:1;transform:none}
+.wtitle{display:flex;align-items:center;gap:10px;padding:12px 18px;border-bottom:1px solid var(--grid);background:#FAFAF8}
+.wtitle .dot{width:10px;height:10px;border-radius:50%;background:var(--ink)}
+.wtitle .t{font:600 14px 'IBM Plex Mono';letter-spacing:.06em;color:var(--ink)}
+.wtitle .note{margin-left:auto;font:600 12px 'Noto Sans SC';letter-spacing:.06em;color:var(--muted)}
+#cmdline{padding:20px 26px 14px;font:500 23px 'IBM Plex Mono';border-bottom:1px solid var(--grid)}
+#cmdline .ps{color:var(--muted)}
+#cmdline .cmd{color:var(--ink)}
+.minicur{display:inline-block;width:11px;height:24px;background:var(--accent);vertical-align:-5px;margin-left:3px;opacity:0;animation:blink 1s steps(1) infinite}
+.minicur.on{opacity:1}
+@keyframes blink{50%{opacity:0}}
+.cfgbody{padding:24px 26px;font:500 21px 'IBM Plex Mono';line-height:1.9}
+.sec{color:var(--muted);font-size:18px;margin-top:6px}
+.fl{display:flex;align-items:center;gap:10px;border-radius:6px;padding:8px 14px;margin:6px 0;border:1px solid transparent;transition:all .4s}
+.fl .k{color:var(--ink)}
+.fl .eq{color:var(--muted)}
+.fl .v{color:var(--ink)}
+.fl.on{border-color:var(--ink);background:#F4F3EF}
+#f2.on{border-color:var(--accent);background:#FFF4F0}
+.fl .v.mask{letter-spacing:.1em;color:var(--accent)}
+.autochip{display:inline-flex;align-items:center;gap:8px;margin-left:auto;font:600 14px 'Noto Sans SC';letter-spacing:.04em;
+  color:var(--paper);background:var(--ink);border-radius:3px;padding:3px 12px;opacity:0;transform:translateX(10px);transition:all .4s}
+.autochip.in{opacity:1;transform:none}
+.subrow{font-size:16px;color:var(--muted);padding-left:14px;opacity:0;transition:opacity .4s}
+.subrow.in{opacity:1}
+.subrow b{color:var(--ink);font-weight:600}
+
+/* 体检清单（L15 计票） */
+#check{position:absolute;left:952px;top:52px;width:724px;height:632px;border-radius:10px;overflow:hidden;z-index:4;
+  background:#fff;border:1px solid var(--grid);opacity:0;transform:translateX(26px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#check.in{opacity:1;transform:none}
+#check:not(.live){filter:grayscale(.2);opacity:.62}
+#pending{position:absolute;left:0;right:0;top:210px;text-align:center;font:700 19px 'Noto Sans SC';
+  letter-spacing:.1em;color:var(--muted);transition:opacity .4s}
+#pending.off{opacity:0}
+#check .wtitle .dot{background:var(--ink)}
+#dcmdline{padding:18px 24px 12px;font:500 22px 'IBM Plex Mono';border-bottom:1px solid var(--grid)}
+#dcmdline .ps{color:var(--muted)}
+#dcmdline .cmd{color:var(--ink)}
+.crow{padding:14px 24px;border-bottom:1px solid var(--grid);opacity:0;transform:translateY(8px);transition:all .4s}
+.crow.in{opacity:1;transform:none}
+.crow .ch{display:flex;align-items:center;gap:12px}
+.crow .nm{font:700 20px 'Noto Sans SC';letter-spacing:.02em;color:var(--ink);width:190px}
+.crow .nm em{font:600 13px 'IBM Plex Mono';font-style:normal;color:var(--muted);margin-left:8px;letter-spacing:.08em}
+.crow .ok{margin-left:auto;font:800 21px Inter;color:var(--ink);opacity:0;transform:scale(.4);transition:all .34s cubic-bezier(.2,1.6,.4,1)}
+.crow.done .ok{opacity:1;transform:none}
+.tally{display:flex;gap:3px;margin-top:10px;height:16px;align-items:flex-end}
+.tk{width:5px;border-radius:1px;background:var(--grid);transition:background .25s}
+.tk.p{background:var(--ink)}
+#checkfoot{padding:14px 24px;font:900 20px 'Noto Sans SC';letter-spacing:.04em;color:var(--ink);opacity:0;transition:opacity .4s}
+#checkfoot.in{opacity:1}
+#checkfoot b{font-weight:900}
+
+/* 结论印章（墨底反白） */
+#stamp{position:absolute;left:200px;top:722px;z-index:14;font:900 28px 'Noto Sans SC';
+  letter-spacing:.14em;color:var(--paper);background:var(--ink);border-radius:8px;padding:12px 26px;
+  transform:scale(2.4) rotate(-6deg);opacity:0;transition:all .4s cubic-bezier(.2,1.5,.4,1)}
+#stamp.in{transform:scale(1) rotate(-6deg);opacity:1}
+
+/* 大肥鱼 */
+#fish{position:absolute;left:1698px;top:756px;width:160px;z-index:35;opacity:0;transform:translateY(26px) scale(.66);
+  transition:all .45s cubic-bezier(.34,1.6,.64,1);pointer-events:none}
+#fish.in{opacity:1;transform:none}
+#fish img{width:100%;display:block}
+#fish .say{position:absolute;left:-428px;top:-10px;width:404px;background:#fff;border:1.5px solid var(--ink);border-radius:10px;
+  padding:12px 20px;font:900 22px 'Noto Sans SC';color:var(--ink);letter-spacing:.01em;line-height:1.4;
+  opacity:0;transform:scale(.5);transition:all .34s cubic-bezier(.2,1.6,.4,1)}
+#fish.bub .say{opacity:1;transform:scale(1)}
+#fish .say b{font-weight:900}
+#fish .say::after{content:'';position:absolute;right:-14px;bottom:24px;border:8px solid transparent;border-left:14px solid #fff}
+
+/* 角注 / HUD */
+.corner{position:absolute;font:600 15px Inter,'Noto Sans SC';letter-spacing:.1em;color:var(--faint);z-index:41}
+#chap{left:88px;bottom:30px}
+#src{right:88px;bottom:30px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:rgba(28,28,26,.1)}
+#bar{height:100%;width:0;background:var(--accent)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:var(--ink);color:var(--paper)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #556;color:#ccc;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(245,87,47,.18)}
+#replay.done{border-color:var(--accent);color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="bg"></div>
+  <div id="cam">
+
+    <div id="head">
+      <div class="eyebrow"><span class="no">SHOT 0-47</span><span>06 · 配置模型并做一次体检</span></div>
+      <h1>填两处，<span class="hl">检查一遍</span></h1>
+      <div class="sub">CONFIG × DOCTOR</div>
+    </div>
+
+    <div id="board">
+      <!-- A 幕：配置文件窗 -->
+      <div id="cfg">
+        <div class="wtitle"><span class="dot"></span><span class="t">vulnclaw 配置</span><span class="note">画面示意 · 非实拍</span></div>
+        <div id="cmdline"><span class="ps">C:\&gt;</span> <span class="cmd" id="cmd1"></span><span class="minicur" id="cur1"></span></div>
+        <div class="cfgbody">
+          <div class="sec">[provider]</div>
+          <div class="fl" id="f1"><span class="k">provider</span><span class="eq">=</span><span class="v" id="v1"></span><span class="autochip" id="ac1">自动填好 ✓</span></div>
+          <div class="subrow" id="s1">接口地址 · 默认模型名 · 已自动写好</div>
+          <div class="sec">[llm]</div>
+          <div class="fl" id="f2"><span class="k">api_key</span><span class="eq">=</span><span class="v mask" id="v2"></span><span class="autochip" id="ac2">已填入 ✓</span></div>
+          <div class="subrow" id="s2">填入你拿到的 key · 只存本机配置</div>
+        </div>
+      </div>
+
+      <!-- B 幕：体检清单 -->
+      <div id="check">
+        <div class="wtitle"><span class="dot"></span><span class="t">vulnclaw doctor · 逐项体检</span><span class="note">画面示意 · 非实拍</span></div>
+        <div id="dcmdline"><span class="ps">C:\&gt;</span> <span class="cmd" id="dcmd"></span><span class="minicur" id="dcur"></span></div>
+        <div id="pending">待运行 · 配置完成后体检</div>
+        <div class="crow" id="r0"><div class="ch"><span class="nm">Python<em>RUNTIME</em></span><span class="ok">✓</span></div><div class="tally"></div></div>
+        <div class="crow" id="r1"><div class="ch"><span class="nm">依赖<em>PACKAGES</em></span><span class="ok">✓</span></div><div class="tally"></div></div>
+        <div class="crow" id="r2"><div class="ch"><span class="nm">网络<em>NETWORK</em></span><span class="ok">✓</span></div><div class="tally"></div></div>
+        <div class="crow" id="r3"><div class="ch"><span class="nm">模型连通性<em>MODEL</em></span><span class="ok">✓</span></div><div class="tally"></div></div>
+        <div id="checkfoot"><b>全绿</b> · 没有问题</div>
+      </div>
+    </div>
+
+    <div id="stamp">准 备 开 打</div>
+
+    <div id="fish">
+      <div class="say">全绿啦 ~ <b>可以开打了</b></div>
+      <img src="Shark-GIF/006_双手身前微笑乖巧期待.gif" alt="大肥鱼">
+    </div>
+
+  </div>
+
+  <div class="corner" id="chap">06 / 配置模型并做一次体检</div>
+  <div class="corner" id="src">命令可示，配置值为掩码/抽象示意 · 非实拍</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-47 · 配置与体检 · 37s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=37000; /* ←⑤ DUR = 分镜时长 37s */
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ───────── 本页小工具 ───────── */
+function typewrite(el,str,start,dur){
+  tws.push({t:start,d:dur,e:p=>p,f:p=>{el.textContent=str.slice(0,Math.round(str.length*p))},
+    done:()=>{el.textContent=str;}});
+  for(let k=0;k<str.length;k++){
+    if(str[k]===' ')continue;
+    tws.push({t:start+dur*k/str.length,d:1,f:()=>{if(window.__sfx)__sfx.type(.5)}});
+  }
+}
+/* 计票：生成刻度 + 逐格上色（cue 驱动的 tws，冻结态正确） */
+var TALLY=[];
+(function(){
+  document.querySelectorAll('.tally').forEach(function(t,i){
+    var arr=[];for(var k=0;k<26;k++){var s=document.createElement('span');s.className='tk';
+      s.style.height=(9+(k%5)*2.4)+'px';t.appendChild(s);arr.push(s);}
+    TALLY[i]=arr;
+  });
+})();
+function tallyRun(i,start,dur){
+  var arr=TALLY[i];
+  arr.forEach(function(s,k){
+    tws.push({t:start+dur*k/arr.length,d:1,f:function(){s.classList.add('p')}});
+  });
+  tws.push({t:start+dur+120,d:1,f:function(){document.getElementById('r'+i).classList.add('done');if(window.__sfx)__sfx.ding(.5)}});
+}
+
+/* ───────── 镜头 0-47 叙事 cue（20:27–21:04 · 37s） ───────── */
+on(200,()=>{$('#head').classList.add('in');__sfx.whoosh(.7,.4);});                 // 20:27「接下来我们来配置模型」
+on(700,()=>{$('#board').classList.add('in');$('#cfg').classList.add('in');$('#check').classList.add('in');__sfx.pop(.55);}); // 20:27 配置窗 + 待体检面板入位
+on(1000,()=>{$('#cur1').classList.add('on');camFocus(470,470,1.05,.5);__sfx.pop(.45);}); // 20:28「第一步我们先切到DeepSeek这一家」
+on(3000,()=>{__sfx.pop(.4);});                                                      // 20:30「输入一下命令」
+on(4000,()=>{typewrite($('#cmd1'),'vulnclaw config provider DeepSeek',4000,1600);});// 20:31「vulnclaw config provider DeepSeek」
+on(7000,()=>{$('#f1').classList.add('on');$('#v1').textContent='"DeepSeek"';__sfx.pop(.5);}); // 20:34「provider是提供商的意思」
+on(8000,()=>{$('#s1').classList.add('in');$('#ac1').classList.add('in');__sfx.ding(.45);}); // 20:35「把DeepSeek的接口地址」
+on(11000,()=>{$('#s1').innerHTML='接口地址 · 默认模型名 · 已自动写好';__sfx.ding(.45);});// 20:38「和默认的模型名都会自动填好」
+on(13000,()=>{__sfx.pop(.4);});                                        // 20:40「不用你来手动写」
+on(14000,()=>{$('#f2').classList.add('on');$('#cur1').classList.remove('on');__sfx.pop(.45);}); // 20:41「第二步就是把你注册拿到的key填进去」
+on(17000,()=>{$('#cmd1').textContent='';$('#cur1').classList.add('on');__sfx.swipe(.4);}); // 20:44「输入以下这条命令」
+on(18000,()=>{typewrite($('#cmd1'),'vulnclaw config set llm.api_key',18000,1600);});// 20:45「vulnclaw config set llm.api_key」
+on(21000,()=>{var s='sk-••••••••••••';typewrite($('#v2'),s,21000,1400);__sfx.pop(.4);}); // 20:48「后面输入你之前获取的API key」
+on(23000,()=>{__sfx.type(.4);});                                                    // 20:50「后面那一串」
+on(24000,()=>{$('#ac2').classList.add('in');$('#s2').classList.add('in');__sfx.ding(.5);}); // 20:51「换成你之前从DeepSeek那里拿的API key」
+on(27000,()=>{$('#check').classList.add('live');$('#pending').classList.add('off');camTo(0,0,1,.55);__sfx.swipe(.6);}); // 20:54「配置完毕之后再检查一次」
+on(28000,()=>{$('#dcur').classList.add('on');camFocus(1230,600,1.03,.5);__sfx.pop(.4);}); // 20:55「我们输入这样命令」
+on(29000,()=>{typewrite($('#dcmd'),'vulnclaw doctor',29000,1300);});                // 20:56「vulnclaw doctor」
+on(30000,()=>{$('#r0').classList.add('in');tallyRun(0,30200,700);});                // 20:57「它会逐项检查Python」
+on(32000,()=>{$('#r1').classList.add('in');$('#r2').classList.add('in');tallyRun(1,32200,600);tallyRun(2,33000,600);}); // 20:59「依赖网络模型联通性这些」
+on(33600,()=>{$('#r3').classList.add('in');tallyRun(3,33800,700);});
+on(34800,()=>{$('#checkfoot').classList.add('in');$('#dcur').classList.remove('on');camTo(0,0,1,.5);__sfx.ding(.6);}); // 21:01「如果全绿的话就没有问题了」
+on(36000,()=>{$('#stamp').classList.add('in');__sfx.thud(1);});         // 21:03「就可以准备开打」
+on(21000,()=>{$('#fish').classList.add('in');__sfx.pop(.5);
+  tws.push({t:34500,d:1,f:()=>{$('#fish').classList.add('bub');__sfx.pop(.4);}});}); // 鱼提前在场 · 气泡留到结尾前
+
+/* ===== [不动] QA 专用 ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+  ◆ 瑞士风格分镜演示页模板（复制后只改"画面层"与 cue）◆
+  底盘：虚拟时钟黑场播放器（带 QA 冻结钩子）/ WebAudio 音效
+        1920×1080 舞台 / 镜头层 camTo·camFocus·camCut / 时间轴引擎
+  预装：瑞士国际主义设计系统（纸底/墨字/发丝线/唯一强调橙）+
+        组件库（eyebrow/h1/bignum/card/dark/node/keycap/表格）
+  QA：URL 加 #auto,t=毫秒 → 起播后冻结在该时刻（无头截图用，勿删）
+  设计正本与图表词汇见 references/，此处只标"改这里"。
+============================================================= -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动（含 QA 自动起播钩子） ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：pop whoosh swipe type ding thud ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){if(!ok())return;vol=vol||1;var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';var f=330+Math.random()*90;o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);}
+  function whoosh(durS,vol){if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);}
+  function swipe(vol){if(!ok())return;vol=vol||1;var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);}
+  function type(vol){if(!ok())return;vol=vol||1;var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();o.type='square';o.frequency.value=1400+Math.random()*900;var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;env(g,t,0.004,0.1*vol,0.05);o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);}
+  function ding(vol){if(!ok())return;vol=vol||1;var t=ctx.currentTime;[[660,0.2],[990,0.09]].forEach(function(p){var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);});}
+  function thud(vol){if(!ok())return;vol=vol||1;var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);}
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- [改这里] 页面标题 -->
+<title>镜头 X-X · 【镜头标题】 · 00s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<!-- [不动] 瑞士系统字体三件套：Inter(西文/数字) + Noto Sans SC(中文) + IBM Plex Mono(代码/终端) -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ===== [不动] 瑞士设计系统 Tokens（唯一正本，配色禁改） ===== */
+:root{
+  --paper:#F0EFEB;   /* 页面底 = 纸灰 */
+  --card:#FFFFFF;    /* 面板/卡片底 */
+  --ink:#1C1C1A;     /* 墨：标题/主数据 */
+  --muted:#8F8E88;   /* 次级文字 */
+  --faint:#C6C5BF;   /* 来源行/辅助刻度 */
+  --grid:#DEDDD6;    /* 网格线/发丝线 */
+  --accent:#F5572F;  /* 唯一强调橙（每页只给一个主角） */
+  --dark:#1C1C1A;    /* 暗卡底（终端/焦点/结论反白） */
+  --darkink:#F0EFEB; --darkgrid:#2E2D29;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#101216;overflow:hidden;
+  font-family:'Inter','Noto Sans SC',sans-serif;color:var(--ink)}
+body.paused *{animation-play-state:paused!important}
+/* 舞台：纸灰底 + 88px 页边距 + 细网格（12 列参考：列宽 132 / 槽 32） */
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#stage::before{content:'';position:absolute;inset:88px;pointer-events:none;opacity:.55;
+  background-image:linear-gradient(rgba(28,28,26,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.05) 1px,transparent 1px);
+  background-size:164px 164px}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ===== [不动] 瑞士组件库（直接取用；禁加 glow/渐变/大阴影） ===== */
+.eyebrow{font:600 15px Inter,'Noto Sans SC';letter-spacing:.14em;text-transform:uppercase;color:var(--ink);display:flex;gap:12px;align-items:center}
+.eyebrow .no{background:var(--ink);color:var(--paper);padding:3px 10px;border-radius:3px;font-weight:700}
+.h1{font:800 clamp(64px,8vw,120px)/1.02 Inter,'Noto Sans SC';letter-spacing:-.03em;color:var(--ink)}
+.h2{font:800 clamp(40px,5vw,88px)/1.04 Inter,'Noto Sans SC';letter-spacing:-.02em;color:var(--ink)}
+.bignum{font:800 clamp(120px,14vw,220px)/1 Inter;font-variant-numeric:tabular-nums;letter-spacing:-.04em;color:var(--ink)}
+.hair{border-top:1px solid var(--grid)}
+.card{background:var(--card);border:1px solid var(--grid);border-radius:12px}
+.dark{background:var(--dark);color:var(--darkink);border-radius:12px}
+.dark .dim{color:var(--muted)}
+.acc-bar{width:56px;height:5px;background:var(--accent);border-radius:2px}
+.tag-acc{background:var(--accent);color:#fff;font:700 14px Inter;letter-spacing:.08em;padding:4px 12px;border-radius:3px}
+.node{background:#fff;border:1.5px solid var(--ink);border-radius:10px;color:var(--ink);font-weight:700}
+.node-num{width:30px;height:30px;border-radius:50%;background:var(--ink);color:var(--paper);font:800 15px Inter;display:flex;align-items:center;justify-content:center}
+.key{display:inline-block;min-width:38px;text-align:center;background:#fff;border:1.5px solid var(--ink);border-bottom-width:3px;border-radius:6px;font:700 15px 'IBM Plex Mono';padding:4px 10px}
+.trow{border-bottom:1px solid var(--grid)} .thead{background:var(--ink);color:var(--paper);font-weight:700}
+/* 入场三式：pop 缩放 / fade 淡入 / draw 描线（快进快停，禁弹跳） */
+.fx-pop{opacity:0;transform:translateY(18px) scale(.97);transition:all .5s cubic-bezier(.16,1,.3,1)}
+.fx-pop.in{opacity:1;transform:none}
+.fx-fade{opacity:0;transition:opacity .45s ease}
+.fx-fade.in{opacity:1}
+.fx-draw{stroke-dasharray:1;stroke-dashoffset:1}
+.fx-draw.in{transition:stroke-dashoffset .9s cubic-bezier(.16,1,.3,1);stroke-dashoffset:0}
+
+/* ────────────────────────────────────────────────
+   [改这里] 画面层 CSS：以下到「底盘区」为止全部重写
+   （结构三件套：eyebrow 编号 → 大标题 → 主体图形区 ≥55% 面积）
+   ──────────────────────────────────────────────── */
+#head{position:absolute;left:88px;top:88px}
+#hero{position:absolute;left:88px;top:300px;width:900px}
+#chart{position:absolute;right:88px;top:250px;width:720px;height:560px}
+/* 示例主视觉：发丝轴 + 灰阶柱 + 唯一橙焦点柱（替换为本镜头匹配的图表词汇） */
+.bar{position:absolute;bottom:70px;width:88px;background:#B0AFA9;border-radius:6px 6px 0 0;
+  transform-origin:bottom;transform:scaleY(0);transition:transform .7s cubic-bezier(.16,1,.3,1)}
+.bar.in{transform:scaleY(1)}
+.bar.hero{background:var(--accent)}
+.blab{position:absolute;bottom:38px;width:88px;text-align:center;font:600 14px Inter;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
+.bval{position:absolute;width:88px;text-align:center;font:800 26px Inter;color:var(--ink);opacity:0;transition:opacity .4s}
+.bval.in{opacity:1}
+.axis{position:absolute;left:0;right:0;bottom:70px;border-top:1px solid var(--grid)}
+
+/* [改这里] 角色位：大肥鱼 GIF（素材先 cp 进输出目录；纸底气泡） */
+.fish{position:absolute;right:64px;bottom:80px;width:280px;z-index:29;opacity:0;transform:translateY(26px) scale(.8);transition:all .5s cubic-bezier(.16,1,.3,1);pointer-events:none}
+.fish.show{opacity:1;transform:none}
+.fish img{width:100%;display:block;filter:grayscale(.15)}
+.fish .say{position:absolute;left:-190px;top:52px;width:220px;background:#fff;border:1px solid var(--ink);border-radius:10px;padding:11px 14px;
+  font-size:19px;font-weight:700;color:var(--ink);line-height:1.45;opacity:0;transform:scale(.8);transition:all .35s cubic-bezier(.16,1,.3,1);box-shadow:0 2px 0 rgba(28,28,26,.12)}
+.fish .say b{color:var(--accent)}
+.fish.show .say{opacity:1;transform:scale(1);transition-delay:.3s}
+
+/* ────────────────────────────────────────────────
+   [不动] 底盘区：角注 / HUD（进度条用墨色，禁霓虹光）
+   ──────────────────────────────────────────────── */
+.corner{position:absolute;font:500 14px Inter,'Noto Sans SC';color:var(--muted);letter-spacing:.08em;z-index:41;text-transform:uppercase}
+#chap{left:52px;bottom:30px}
+#src{right:52px;bottom:30px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:rgba(28,28,26,.12)}
+#bar{height:100%;width:0;background:var(--ink)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(16,18,22,.92);color:#aaa}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #666;color:#ccc;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(255,255,255,.1)}
+#replay.done{animation:pulse 1.2s infinite;border-color:var(--accent);color:var(--accent)}
+@keyframes pulse{50%{box-shadow:0 0 10px rgba(245,87,47,.5)}}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="cam">
+    <!-- [改这里] 画面层：结构三件套（eyebrow → 大标题 → 主体图形区 ≥55%） -->
+    <div id="head">
+      <div class="eyebrow"><span class="no">SHOT X-X</span><span>章节名 · SECTION</span></div>
+      <div class="h1" style="margin-top:22px">【主标题一句话】</div>
+      <div class="acc-bar" style="margin-top:24px"></div>
+    </div>
+
+    <div id="hero">
+      <div class="bignum" id="heroNum">0</div>
+      <div class="eyebrow" style="margin-top:10px"><span style="color:var(--muted)">★ GITHUB STARS · 数据出处</span></div>
+    </div>
+
+    <!-- 示例图表（替换为本镜头匹配的图表词汇，见 references/chart-vocabulary.md） -->
+    <div id="chart">
+      <div class="axis"></div>
+      <div class="bar" style="left:40px;height:180px"></div><div class="blab" style="left:40px">标签 A</div><div class="bval" style="bottom:260px;left:40px">15</div>
+      <div class="bar" style="left:180px;height:340px"></div><div class="blab" style="left:180px">标签 B</div><div class="bval" style="bottom:420px;left:180px">30</div>
+      <div class="bar hero" style="left:320px;height:500px"></div><div class="blab" style="left:320px">标签 C</div><div class="bval" style="bottom:580px;left:320px;color:var(--accent)">50+</div>
+    </div>
+
+    <!-- [改这里] 角色位：按情绪锚点 1-2 次（GIF 先 cp 进输出目录） -->
+    <div class="fish">
+      <div class="say">吐槽台词，<b>关键词</b>高亮</div>
+      <img src="Shark-GIF/006_双手身前微笑乖巧期待.gif" alt="">
+    </div>
+  </div>
+
+  <div class="corner" id="chap">章 X · 环节名</div>
+  <div class="corner" id="src">数据出处 · 日期</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 X-X · 【标题】 · 12s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=12000;                       /* [改这里] = 分镜时长(ms) */
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+const after=(ms,f)=>on(performance.now()-t0+ms,f);
+/* 补间对象必须 e+f 双字段；计数示例 cnt */
+function cnt(el,from,to,dur,start){tws.push({t:start??(performance.now()-t0),d:dur,e:eo,f:p=>{el.textContent=Math.round(from+(to-from)*p).toLocaleString('en-US')}})}
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度（含硬切） ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ────────────────────────────────────────────────
+   [改这里] 本镜头 cue 表（注释=口播原句+时间戳；口播不上屏）
+   cue 时刻 = 口播句起点(绝对) − 镜头起点(绝对)
+   ──────────────────────────────────────────────── */
+on(300,()=>{$('#head').classList.add('in');__sfx.pop(.5)});          // (0:00)「开场句示例」
+on(1200,()=>cnt($('#heroNum'),0,3300,1600,1200));                     // (0:01) 主数字滚动
+for(let i=0;i<16;i++)on(1200+i*100,()=>__sfx.type(.35));              // 计数连击键音
+on(2000,()=>document.querySelectorAll('.bar').forEach((b,i)=>setTimeout(()=>b.classList.add('in'),i*180)));
+on(2600,()=>document.querySelectorAll('.bval').forEach(v=>v.classList.add('in')));
+on(3200,()=>$('.fish').classList.add('show'));                        // (0:03) 大肥鱼情绪锚点
+on(5000,()=>{camFocus(1400,500,1.08,.8)});                            // 推近焦点柱
+on(10000,()=>{camTo(0,0,1,1.0)});                                     // 收尾拉回
+
+/* ===== [不动] QA 专用（正常播放不触发）：hash 带 t=毫秒 → 起播后冻结 ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

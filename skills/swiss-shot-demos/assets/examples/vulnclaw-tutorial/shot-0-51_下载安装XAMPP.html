@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+     ◆ 镜头 51 · 下载安装 XAMPP · 22:40–23:22 · DUR 42000 ◆  【v4 瑞士国际主义 · B 类】
+     仿真本体保留：拟真浏览器下载页 + 拟真安装向导（浅色·示意图，原生配色不动）
+        A 幕 URL 打字 → Windows 栏 → 8.2 版选中 → 下载进度
+        B 幕 Welcome → 组件勾选 → 安装路径 C:\xampp（警示别改 Program Files）→ 完成
+     外围瑞士化：纸灰舞台 / Inter+Noto 页头 / 右侧步骤轨（白卡+墨+橙焦点）/ 角注 / 印章
+     红线：数字仅 8.2 / 150MB（口播白名单）；界面「示意图 · 非实拍」；口播不上屏
+============================================================= -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 0-51 · 下载安装 XAMPP · 42s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;--accent:#F5572F;}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Noto Sans SC','Inter',sans-serif}
+body.paused *{animation-play-state:paused!important}
+/* ② 舞台：纸灰托浅色界面 */
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#stage::before{content:'';position:absolute;inset:0;z-index:0;pointer-events:none;
+  background-image:linear-gradient(rgba(28,28,26,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.045) 1px,transparent 1px);
+  background-size:48px 48px}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ============ ③ 外围（瑞士化） ============ */
+#head{position:absolute;left:96px;top:38px;z-index:20;opacity:0;transform:translateY(-18px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#head.in{opacity:1;transform:none}
+#head .eye{display:inline-flex;align-items:center;gap:12px;font:600 14px Inter;letter-spacing:.14em;text-transform:uppercase;color:var(--ink)}
+#head .eye .no{background:var(--ink);color:var(--paper);padding:3px 10px;border-radius:3px;font-weight:700}
+#head h1{margin-top:12px;font:900 56px/1 'Noto Sans SC',Inter;letter-spacing:-.02em;color:var(--ink)}
+#head h1 .hl{color:var(--ink);border-bottom:6px solid var(--ink);padding-bottom:2px}
+
+#board{position:absolute;left:96px;top:190px;width:1728px;height:748px;border-radius:18px;z-index:1;
+  background:#F7F6F2;border:1px solid var(--grid);opacity:0;transform:translateY(20px);transition:all .6s cubic-bezier(.16,1,.3,1)}
+#board.in{opacity:1;transform:none}
+
+/* 拟真窗（浅色 · 原生配色保留） */
+#win{position:absolute;left:40px;top:44px;width:1180px;height:660px;border-radius:10px;overflow:hidden;z-index:4;
+  background:#F3F5F7;border:1px solid #C9CFD5;box-shadow:0 10px 26px rgba(28,28,26,.14);
+  opacity:0;transform:translateY(24px) scale(.98);transition:all .6s cubic-bezier(.2,1.2,.4,1);color:#1E2830}
+#win.in{opacity:1;transform:none}
+.wbar{display:flex;align-items:center;gap:9px;padding:10px 14px;background:#E4E8EC;border-bottom:1px solid #CDD4DA}
+.wbar i{width:11px;height:11px;border-radius:50%;display:block}
+.wbar i.r{background:#FF5F57}.wbar i.y{background:#FEBC2E}.wbar i.g{background:#28C840}
+.wbar .note{margin-left:auto;font:600 11.5px 'IBM Plex Mono';letter-spacing:.06em;color:#fff;background:var(--ink);border-radius:3px;padding:3px 9px}
+.viznote{position:absolute;right:14px;top:78px;z-index:9;font-size:11.5px;letter-spacing:1.5px;color:rgba(120,136,148,.9)}
+
+/* A 幕：浏览器下载页（原生配色） */
+#pageDownload{position:absolute;inset:34px 0 0 0}
+.chrome{display:flex;align-items:center;gap:10px;padding:9px 14px;background:#DDE2E7;border-bottom:1px solid #CDD4DA}
+.chrome .nav{font-family:'IBM Plex Mono',monospace;font-size:14px;color:#8895A0;letter-spacing:2px}
+.chrome .url{flex:1;display:flex;align-items:center;gap:8px;background:#fff;border-radius:999px;padding:6px 14px;
+  font-family:'IBM Plex Mono',monospace;font-size:15px;color:#2A3640}
+.chrome .lock{color:#2FBF71;font-size:12px}
+#dpbody{padding:26px 34px}
+.dhead{font-family:'Inter','Noto Sans SC',sans-serif;font-weight:800;font-size:40px;letter-spacing:2px;color:#E8590C}
+.dnav{display:flex;gap:20px;margin-top:12px;padding-bottom:12px;border-bottom:2px solid #DDE2E7}
+.dnav span{font-size:16px;font-weight:700;letter-spacing:1px;color:#7A8894}
+.dnav span.on{color:#0A66C2;border-bottom:3px solid #0A66C2;padding-bottom:9px;margin-bottom:-13px}
+.dcols{display:flex;gap:22px;margin-top:22px}
+.dcol{font-family:'Inter','Noto Sans SC',sans-serif;font-size:22px;font-weight:600;letter-spacing:1px;color:#8895A0;transition:color .4s}
+#winCol{color:#1E2830}
+#winCol.sel{color:#E8590C}
+#vercard{flex:1;max-width:520px;border-radius:12px;padding:20px 22px;background:#fff;border:1px solid #DDE2E7;
+  box-shadow:0 4px 12px rgba(20,30,40,.06);opacity:0;transform:translateY(14px);transition:all .5s cubic-bezier(.2,1.3,.4,1)}
+#vercard.in{opacity:1;transform:none}
+#vercard.sel{border-color:#E8590C;box-shadow:0 0 0 2px rgba(232,89,12,.35)}
+#vercard .vt{font-family:'Inter','Noto Sans SC',sans-serif;font-size:30px;font-weight:800;color:#1E2830;letter-spacing:1px}
+#vercard .vd{margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:15px;color:#7A8894}
+.vrow{display:flex;align-items:center;gap:14px;margin-top:18px}
+#dlbtn{font-family:'Noto Sans SC',sans-serif;font-size:18px;font-weight:700;letter-spacing:1px;color:#fff;background:#E8590C;
+  border:none;border-radius:9px;padding:12px 26px;transition:all .25s}
+#dlbtn.press{transform:scale(.93);background:#C9490A}
+#mbchip{font-family:'IBM Plex Mono',monospace;font-size:15px;color:#1E2830;border:1px solid #DDE2E7;border-radius:999px;
+  padding:6px 14px;background:#F7F9FA}
+#dlbar{height:12px;border-radius:999px;background:#E4E8EC;margin-top:18px;overflow:hidden}
+#dlbar i{display:block;height:100%;width:0;background:#E8590C;border-radius:999px}
+#dltx{margin-top:9px;font-family:'IBM Plex Mono',monospace;font-size:14px;color:#7A8894;opacity:0;transition:opacity .4s}
+#dltx.in{opacity:1}
+
+/* B 幕：安装向导（原生配色） */
+#wizard{position:absolute;inset:34px 0 0 0;display:none}
+#wizard.on{display:block}
+.wzhead{padding:18px 30px;background:#F6F1EC;border-bottom:1px solid #E3DAD2;display:flex;align-items:center;gap:16px}
+.wzhead .logo{font-family:'Inter','Noto Sans SC',sans-serif;font-weight:800;font-size:30px;letter-spacing:2px;color:#E8590C}
+.wzhead .wt{font-size:18px;font-weight:700;letter-spacing:1.5px;color:#6A6259}
+.crumbs{display:flex;gap:10px;padding:16px 30px 0}
+.crumbs span{font-family:'IBM Plex Mono',monospace;font-size:13px;letter-spacing:1px;color:#A9A29A;
+  border:1px solid #E3DAD2;border-radius:999px;padding:5px 14px;background:#FBF9F7;transition:all .35s}
+.crumbs span.on{color:#fff;background:#E8590C;border-color:#E8590C}
+.wbody{padding:20px 34px;position:relative}
+.wp{position:absolute;left:34px;right:34px;top:20px;opacity:0;transform:translateY(10px);transition:all .45s cubic-bezier(.16,1,.3,1);pointer-events:none}
+.wp.show{opacity:1;transform:none}
+.wp h2{font-family:'Inter','Noto Sans SC',sans-serif;font-size:30px;font-weight:700;letter-spacing:1px;color:#1E2830}
+.wp p{margin-top:12px;font-size:18px;color:#6A757E;line-height:1.6}
+.comp{display:flex;align-items:center;gap:12px;margin:11px 0;font-size:18px;color:#2A3640}
+.cb{width:20px;height:20px;border-radius:4px;border:2px solid #B9C2C9;background:#fff;flex:none;position:relative;transition:all .3s}
+.cb.mark{background:#2FBF71;border-color:#2FBF71}
+.cb.mark::after{content:'✓';position:absolute;left:3px;top:-3px;font-size:15px;font-weight:900;color:#fff}
+.comp.hl{background:#FFF3E9;border-radius:8px;padding:6px 12px;margin-left:-12px;box-shadow:inset 0 0 0 1px rgba(232,89,12,.35)}
+.comp.hl .nm{color:#C9490A;font-weight:700}
+.comp .en{font-family:'IBM Plex Mono',monospace;font-size:13px;color:#98A3AB}
+.pathrow{display:flex;align-items:center;gap:12px;margin-top:16px;background:#fff;border:1px solid #DDE2E7;border-radius:9px;padding:12px 16px;
+  font-family:'IBM Plex Mono',monospace;font-size:18px;color:#1E2830;transition:all .4s}
+.pathrow.hl{border-color:#E8590C;box-shadow:0 0 0 2px rgba(232,89,12,.3)}
+#warnbox{margin-top:16px;border-radius:10px;padding:13px 18px;background:#FFF3E9;border:1px solid rgba(232,89,12,.45);
+  font-size:17px;color:#8A4B2A;display:flex;gap:10px;align-items:flex-start;opacity:0;transform:translateY(8px);transition:all .4s}
+#warnbox.in{opacity:1;transform:none}
+#warnbox .wd{font-size:20px}
+#warnbox b{color:#C9490A}
+#warnbox.hot{box-shadow:0 0 0 2px rgba(232,89,12,.4);border-color:#E8590C}
+#finrow{display:flex;align-items:center;gap:12px;margin-top:20px;font-size:18px;color:#2A3640;opacity:0;transition:opacity .4s}
+#finrow.in{opacity:1}
+.wfoot{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;gap:12px;padding:16px 30px;border-top:1px solid #E3DAD2;background:#FAF7F4}
+.wfoot .sp{margin-left:auto}
+.wbtn{font-family:'Noto Sans SC',sans-serif;font-size:17px;font-weight:700;letter-spacing:1px;border-radius:8px;padding:11px 28px;
+  border:1px solid #D3CBC2;background:#fff;color:#5A5450;transition:all .25s}
+.wbtn.next{background:#E8590C;border-color:#E8590C;color:#fff}
+.wbtn.press{transform:scale(.93)}
+
+/* 光标 */
+#cur{position:absolute;left:0;top:0;z-index:20;width:30px;height:30px;pointer-events:none;opacity:0;transition:opacity .3s}
+#cur.on{opacity:1}
+#cur svg{width:100%;height:100%;filter:drop-shadow(0 2px 3px rgba(0,0,0,.4))}
+
+/* 右侧步骤轨（外围 · 瑞士化白卡） */
+#rail{position:absolute;left:1250px;top:44px;width:438px;height:660px;border-radius:12px;z-index:4;
+  background:var(--card);border:1px solid var(--ink);padding:26px 26px;opacity:0;transform:translateX(24px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#rail.in{opacity:1;transform:none}
+#rail .rt{font:800 24px 'Noto Sans SC';letter-spacing:.06em;color:var(--ink)}
+.step{display:flex;align-items:center;gap:14px;margin-top:26px;opacity:0;transform:translateX(12px);transition:all .45s}
+.step.in{opacity:1;transform:none}
+.step .no{width:44px;height:44px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;
+  font:700 19px 'IBM Plex Mono';color:var(--muted);border:2px solid var(--faint)}
+.step .nm{font:700 20px 'Noto Sans SC';letter-spacing:.03em;color:var(--muted)}
+.step.on .no{color:var(--paper);background:var(--ink);border-color:var(--ink)}
+.step.on .nm{color:var(--ink)}
+.step.now .no{color:#fff;background:var(--accent);border-color:var(--accent)}
+.step.now .nm{color:var(--ink)}
+.rline{width:2px;height:34px;margin-left:21px;background:var(--grid);opacity:0;transition:opacity .4s}
+.rline.in{opacity:1}
+.rline.on{background:var(--ink)}
+#rcall{margin-top:30px;border-top:1px dashed var(--grid);padding-top:20px;opacity:0;transition:opacity .4s}
+#rcall.in{opacity:1}
+#rcall .ct{font:700 16px 'Noto Sans SC';letter-spacing:.06em;color:var(--muted);margin-bottom:12px}
+#rcall .ci{display:flex;gap:10px;align-items:flex-start;font-size:16px;color:var(--ink);line-height:1.5;margin:9px 0;opacity:0;transform:translateY(6px);transition:all .4s}
+#rcall .ci.in{opacity:1;transform:none}
+#rcall .ci i{font-style:normal;color:var(--ink);font-weight:900}
+#rcall .ci b{color:var(--ink);font-weight:700}
+
+/* 完成印章（外围 · 墨底反白） */
+#stamp{position:absolute;left:1330px;top:946px;z-index:14;font:900 26px 'Noto Sans SC';
+  letter-spacing:.3em;color:var(--paper);border:3px solid var(--ink);border-radius:12px;padding:9px 22px;background:var(--ink);
+  transform:scale(2.9) rotate(-7deg);opacity:0;transition:all .4s cubic-bezier(.2,1.5,.4,1)}
+#stamp.in{transform:scale(1) rotate(-7deg);opacity:1}
+
+/* 大肥鱼 */
+#fish{position:absolute;left:1700px;top:700px;width:160px;z-index:35;opacity:0;transform:translateY(26px) scale(.66);
+  transition:all .45s cubic-bezier(.34,1.6,.64,1);pointer-events:none}
+#fish.in{opacity:1;transform:none}
+#fish img{width:100%;display:block}
+#fish .say{position:absolute;left:-452px;top:150px;width:420px;background:var(--card);border:1.5px solid var(--ink);
+  border-radius:14px;padding:12px 20px;font:700 22px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em;line-height:1.4;
+  opacity:0;transform:scale(.5);transition:all .34s cubic-bezier(.2,1.6,.4,1)}
+#fish.bub .say{opacity:1;transform:scale(1)}
+#fish .say b{color:var(--ink);font-weight:900}
+#fish .say::after{content:'';position:absolute;right:26px;top:-16px;border:9px solid transparent;border-bottom:16px solid var(--card)}
+.off{opacity:0!important}
+
+/* 角注 / HUD */
+.corner{position:absolute;font:500 15px 'Noto Sans SC';color:var(--muted);letter-spacing:.04em;z-index:41}
+#chap{left:52px;bottom:30px}
+#src{right:52px;bottom:30px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:rgba(28,28,26,.12)}
+#bar{height:100%;width:0;background:var(--ink)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(240,239,235,.94);color:var(--muted)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid var(--grid);color:var(--ink);font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(28,28,26,.06)}
+#replay.done{border-color:var(--accent);color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="cam">
+
+    <div id="head">
+      <div class="eye"><span class="no">51</span>装 XAMPP · SETUP</div>
+      <h1>下载 → <span class="hl">安装向导</span></h1>
+    </div>
+
+    <div id="board">
+      <div id="win">
+        <div class="wbar"><i class="r"></i><i class="y"></i><i class="g"></i>
+          <span class="note">画面示意 · 非实拍</span></div>
+
+        <!-- A 幕：浏览器下载页 -->
+        <div id="pageDownload">
+          <div class="chrome">
+            <span class="nav">◀ ▶ ⟳</span>
+            <span class="url"><span class="lock">🔒</span><span id="u1"></span><span id="u2" style="color:#7A8894"></span></span>
+          </div>
+          <div id="dpbody">
+            <div class="dhead">XAMPP</div>
+            <div class="dnav"><span>Home</span><span class="on">Download</span><span>Docs</span><span>Community</span></div>
+            <div class="dcols">
+              <div class="dcol" id="winCol">Windows ›</div>
+              <div id="vercard">
+                <div class="vt" id="vtitle">XAMPP 8.2</div>
+                <div class="vd">Windows 版 · phpMyAdmin 等一并自带</div>
+                <div class="vrow"><button id="dlbtn" type="button">Download</button><span id="mbchip">约 150 MB · .exe</span></div>
+                <div id="dlbar"><i id="dlprogress"></i></div>
+                <div id="dltx">下载中 · 双击即可开始安装…</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- B 幕：安装向导 -->
+        <div id="wizard">
+          <div class="wzhead"><span class="logo">XAMPP</span><span class="wt">安装向导 · Setup</span></div>
+          <div class="crumbs">
+            <span id="cr0" class="on">Welcome</span><span id="cr1">Components</span>
+            <span id="cr2">Location</span><span id="cr3">Ready</span>
+          </div>
+          <div class="wbody">
+            <div class="wp show" id="w1"><h2>欢迎使用 XAMPP 安装向导</h2><p>安装基本一路「下一步」即可。</p></div>
+            <div class="wp" id="w2">
+              <h2>选择组件</h2>
+              <div class="comp hl" id="cp1"><span class="cb mark"></span><span class="nm">Apache</span><span class="en">WEB SERVER</span></div>
+              <div class="comp hl" id="cp2"><span class="cb mark"></span><span class="nm">MySQL</span><span class="en">DATABASE</span></div>
+              <div class="comp hl" id="cp3"><span class="cb mark"></span><span class="nm">PHP</span><span class="en">INTERPRETER</span></div>
+              <div class="comp"><span class="cb mark"></span><span class="nm" style="color:#6A757E">phpMyAdmin / FileZilla</span><span class="en">EXTRA</span></div>
+            </div>
+            <div class="wp" id="w3">
+              <h2>安装位置</h2>
+              <div class="pathrow" id="pathrow"><span style="color:#98A3AB">Folder:</span> <span id="pathv">C:\xampp</span></div>
+              <div id="warnbox"><span class="wd">⚠</span><span>保持默认的 <b>C:\xampp</b> · 别改到 <b>Program Files</b>（权限更严，读写网站文件易报错）</span></div>
+            </div>
+            <div class="wp" id="w4">
+              <h2>安装完成</h2>
+              <div class="comp hl" style="width:max-content"><span class="nm">全部组件已就绪</span><span class="en">INSTALLED</span></div>
+              <div id="finrow"><span class="cb" id="fincb"></span><span>现在打开 <b style="color:#E8590C">XAMPP Control Panel</b></span></div>
+            </div>
+          </div>
+          <div class="wfoot"><span></span><span class="sp"></span>
+            <button class="wbtn" type="button">Cancel</button>
+            <button class="wbtn next" id="nbtn" type="button">Next &gt;</button>
+          </div>
+        </div>
+
+        <!-- 光标 -->
+        <div id="cur"><svg viewBox="0 0 24 24"><path d="M4 2 L4 20 L9 15 L13 23 L16 21 L12 13 L19 13 Z" fill="#fff" stroke="#111" stroke-width="1.1"/></svg></div>
+      </div>
+
+      <!-- 右侧步骤轨 -->
+      <div id="rail">
+        <div class="rt">安 装 三 步</div>
+        <div class="step now" id="st1"><span class="no">1</span><span class="nm">官网下载</span></div>
+        <div class="rline in on" id="rl1"></div>
+        <div class="step" id="st2"><span class="no">2</span><span class="nm">安装向导</span></div>
+        <div class="rline" id="rl2"></div>
+        <div class="step" id="st3"><span class="no">3</span><span class="nm">控制面板</span></div>
+        <div id="rcall"><div class="ct">两 处 留 意</div>
+          <div class="ci" id="ci1"><i>①</i><span>安装路径保持默认 <b>C:\xampp</b></span></div>
+          <div class="ci" id="ci2"><i>②</i><span>装完勾选 · 打开控制面板</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="stamp">装 好 了</div>
+
+    <div id="fish">
+      <div class="say">一路下一步 ~ 就到了 <b>控制面板</b></div>
+      <img src="Shark-GIF/006_双手身前微笑乖巧期待.gif" alt="大肥鱼">
+    </div>
+
+  </div>
+
+  <div class="corner" id="chap">07 / 十分钟立好 DVWA 靶场</div>
+  <div class="corner" id="src">界面为演示还原 · 示意图 · 非实拍</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-51 · 下载安装 XAMPP · 42s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=42000; /* ←⑤ DUR = 分镜时长 42s */
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ───────── 本页小工具 ───────── */
+function typewrite(el,str,start,dur){
+  tws.push({t:start,d:dur,f:p=>{el.textContent=str.slice(0,Math.round(str.length*p))},
+    done:()=>{el.textContent=str;}});
+  for(let k=0;k<str.length;k++){
+    if(str[k]===' ')continue;
+    tws.push({t:start+dur*k/str.length,d:1,f:()=>{if(window.__sfx)__sfx.type(.5)}});
+  }
+}
+/* 光标移动到指定坐标（#win 内坐标）· tws 驱动，冻结态正确 */
+var CURX=760,CURY=130,CURINIT=true;
+function cursorTo(x,y,start,dur){
+  var fx=CURX,fy=CURY;
+  tws.push({t:start,d:dur,e:eo,f:function(p){
+    CURX=fx+(x-fx)*p;CURY=fy+(y-fy)*p;
+    $('#cur').style.left=CURX+'px';$('#cur').style.top=CURY+'px';}});
+}
+function press(el,start){
+  el.classList.add('press');
+  tws.push({t:start+240,d:1,f:()=>{el.classList.remove('press')}});
+}
+function setStep(n){
+  ['w1','w2','w3','w4'].forEach(function(id,i){document.getElementById(id).classList.toggle('show',i===n-1)});
+  ['cr0','cr1','cr2','cr3'].forEach(function(id,i){document.getElementById(id).classList.toggle('on',i===n-1)});
+}
+function setRail(n){
+  [['st1',1],['st2',2],['st3',3]].forEach(function(p){
+    var el=document.getElementById(p[0]),idx=p[1];
+    el.classList.toggle('on',idx<n||n>=4);
+    el.classList.toggle('now',idx===n&&n<4);
+  });
+  $('#rl1').classList.toggle('on',n>=2);
+  $('#rl2').classList.toggle('on',n>=3);
+}
+
+/* ───────── 镜头 0-51 叙事 cue（22:40–23:22 · 42s） ───────── */
+on(200,()=>{$('#head').classList.add('in');__sfx.whoosh(.7,.4);});                 // 22:40「好 我们先下载」
+on(400,()=>{$('#board').classList.add('in');$('#win').classList.add('in');$('#rail').classList.add('in');
+  $('#st1').classList.add('in');$('#st2').classList.add('in');$('#st3').classList.add('in');$('#rl2').classList.add('in');__sfx.pop(.55);}); // 界面入场
+on(1200,()=>{$('#cur').classList.add('on');$('#cur').style.left='760px';$('#cur').style.top='130px';__sfx.pop(.35);}); // 22:41「进入这一个网址」
+on(3000,()=>{typewrite($('#u1'),'apachefriends.org',3000,1400);});                  // 22:43「3w.Apachefriends.org」
+on(5000,()=>{typewrite($('#u2'),'/download.html',5000,900);__sfx.pop(.4);});        // 22:45「然后download.html」
+on(7000,()=>{$('#winCol').classList.add('sel');$('#vercard').classList.add('in');camFocus(760,430,1.04,.5);__sfx.swipe(.5);}); // 22:47「找到Windows那一栏」
+on(9000,()=>{$('#vercard').classList.add('sel');$('#vtitle').style.color='#E8590C';__sfx.ding(.5);}); // 22:49「下载这个8.2的版本」
+on(11000,()=>{$('#mbchip').style.borderColor='#E8590C';__sfx.pop(.4);});            // 22:51「一个150兆左右的exe文件」
+on(12500,()=>{cursorTo(255,350,12500,700);});                                       // 光标移到 Download
+on(13300,()=>{press($('#dlbtn'),13300);__sfx.pop(.5);$('#dltx').classList.add('in');
+  tws.push({t:13400,d:2600,f:p=>{$('#dlprogress').style.width=(p*100)+'%'}});});    // 22:53「双击打开安装」
+on(16500,()=>{$('#pageDownload').style.display='none';$('#wizard').classList.add('on');
+  setStep(1);setRail(2);camTo(0,0,1,.5);__sfx.whoosh(.9,.7);});                     // 22:56「安装基本也就是一路下一步」
+on(17500,()=>{cursorTo(1088,614,17500,600);});                                      // 光标移到 Next
+on(18200,()=>{press($('#nbtn'),18200);setStep(2);__sfx.ding(.5);});                 // 22:58「中间有两个地方要留意」
+on(19000,()=>{$('#rcall').classList.add('in');$('#ci1').classList.add('in');camFocus(1000,470,1.03,.45);__sfx.pop(.45);}); // 22:59「一个是安装路径」
+on(20200,()=>{press($('#nbtn'),20200);setStep(3);$('#pathrow').classList.add('hl');__sfx.ding(.5);}); // 23:00「保持默认的C盘XAMPP文件夹」
+on(24000,()=>{$('#warnbox').classList.add('in');__sfx.thud(.85);});                 // 23:03「尽量不要改到program files那边」
+on(26000,()=>{$('#ci2').classList.add('in');__sfx.pop(.4);});                       // 23:06「那一个目录它的权限会管得严格一些」
+on(30000,()=>{$('#warnbox').classList.add('hot');__sfx.thud(.9);camFocus(760,540,1.05,.4);}); // 23:10「读写网站文件的时候」
+on(33000,()=>{camTo(0,0,1,.5);setRail(3);press($('#nbtn'),33200);setStep(4);__sfx.ding(.5);}); // 23:13「另一个就是装完之后」
+on(35500,()=>{$('#finrow').classList.add('in');__sfx.pop(.45);});                   // 23:15「它会问要不要现在就把管理面板打开」
+on(36500,()=>{cursorTo(62,302,36500,600);});                                        // 光标移到勾选
+on(37600,()=>{$('#fincb').classList.add('mark');__sfx.ding(.6);});      // 23:17「勾上直接打开」
+on(39000,()=>{setRail(4);$('#stamp').classList.add('in');camFocus(1300,660,1.04,.45);__sfx.thud(1);}); // 23:19「就叫做XAMPP Control Panel」
+on(24000,()=>{$('#fish').classList.add('in');camTo(0,0,1,.5);__sfx.pop(.5);
+  tws.push({t:39000,d:1,f:()=>{$('#fish').classList.add('bub');__sfx.pop(.4);}});}); // 鱼提前在场 · 气泡留到结尾前
+
+/* ===== [不动] QA 专用（正常播放不触发）：hash 带 t=毫秒 → 起播后跳转该时刻并冻结 ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

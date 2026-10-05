@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+     ◆ 镜头 53 · 拉取 DVWA · 24:11–24:30 · DUR 19000 ◆  【v4 瑞士国际主义】
+     主视觉：archify flow 流线（GitHub 仓库 → htdocs/DVWA，橙色流线 + 粒子沿路径）
+       左 · GitHub DVWA 仓库页（扁平白卡 · 示意图）
+       右 · 终端（墨底反白）+ htdocs 目录树（白卡）
+     字体 Inter × Noto Sans SC × IBM Plex Mono · 纸底#F0EFEB 墨#1C1C1A 唯一橙#F5572F
+     红线：GitHub 页为「示意图 · 非实拍」；回显抽象；口播不上屏
+============================================================= -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 0-53 · 拉取 DVWA · 19s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;--accent:#F5572F;}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Noto Sans SC','Inter',sans-serif}
+body.paused *{animation-play-state:paused!important}
+/* ② 舞台 */
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#stage::before{content:'';position:absolute;inset:0;z-index:0;pointer-events:none;
+  background-image:linear-gradient(rgba(28,28,26,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.045) 1px,transparent 1px);
+  background-size:48px 48px}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ============ ③ 画面层 CSS ============ */
+#head{position:absolute;left:96px;top:40px;z-index:20;opacity:0;transform:translateY(-18px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#head.in{opacity:1;transform:none}
+#head .eye{display:inline-flex;align-items:center;gap:12px;font:600 14px Inter;letter-spacing:.14em;text-transform:uppercase;color:var(--ink)}
+#head .eye .no{background:var(--ink);color:var(--paper);padding:3px 10px;border-radius:3px;font-weight:700}
+#head h1{margin-top:12px;font:900 60px/1 'Noto Sans SC',Inter;letter-spacing:-.02em;color:var(--ink)}
+#head h1 .hl{color:var(--ink);border-bottom:6px solid var(--ink);padding-bottom:2px}
+
+#board{position:absolute;left:96px;top:196px;width:1728px;height:740px;border-radius:18px;z-index:1;
+  background:#F7F6F2;border:1px solid var(--grid);opacity:0;transform:translateY(20px);transition:all .6s cubic-bezier(.16,1,.3,1)}
+#board.in{opacity:1;transform:none}
+
+/* GitHub 仓库页（扁平白卡） */
+#gh{position:absolute;left:40px;top:44px;width:900px;height:660px;border-radius:12px;overflow:hidden;z-index:4;
+  background:var(--card);border:1px solid var(--ink);
+  opacity:0;transform:translateY(24px) scale(.98);transition:all .6s cubic-bezier(.2,1.2,.4,1);color:var(--ink)}
+#gh.in{opacity:1;transform:none}
+.ghbar{display:flex;align-items:center;gap:9px;padding:11px 16px;background:var(--paper);border-bottom:1px solid var(--grid)}
+.ghbar i{width:11px;height:11px;border-radius:50%;display:block;background:#D8D7D1;border:1px solid var(--grid)}
+.ghbar .note{margin-left:auto;font:600 11px 'IBM Plex Mono';letter-spacing:.06em;color:var(--paper);background:var(--ink);border-radius:3px;padding:3px 9px}
+.ghurl{padding:12px 18px;background:var(--card);border-bottom:1px solid var(--grid);font:500 15px 'IBM Plex Mono';color:var(--muted)}
+.ghurl b{color:var(--ink);font-weight:600}
+.ghhead{padding:20px 22px 16px;display:flex;align-items:center;gap:16px}
+.ghhead .rk{font:500 13px 'IBM Plex Mono';letter-spacing:.1em;color:var(--muted)}
+.ghhead .rn{font:600 26px 'IBM Plex Mono';color:var(--ink)}
+.ghhead .rn b{color:var(--ink);font-weight:600}
+#clonebtn{margin-left:auto;font:700 16px 'Noto Sans SC';letter-spacing:.02em;color:var(--paper);background:var(--ink);
+  border:none;border-radius:8px;padding:10px 22px;transition:all .25s}
+#clonebtn.press{transform:scale(.92)}
+#gitchip{margin:0 22px 8px;display:inline-block;font:700 15px 'Noto Sans SC';letter-spacing:.03em;
+  color:var(--ink);border:1px solid var(--ink);border-radius:999px;padding:6px 15px;background:var(--card);
+  opacity:0;transform:translateX(-10px);transition:all .45s}
+#gitchip.in{opacity:1;transform:none}
+.rows{padding:8px 22px}
+.frow{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:8px;border-bottom:1px solid var(--grid);
+  font:500 16px 'IBM Plex Mono';color:var(--ink);opacity:0;transform:translateX(-8px);transition:all .4s}
+.frow.in{opacity:1;transform:none}
+.frow .ic{font:600 15px 'IBM Plex Mono';color:var(--muted)}
+.frow .msg{margin-left:auto;font:500 13.5px 'IBM Plex Mono';color:var(--muted)}
+.frow.dir .ic{color:var(--ink)}
+
+/* archify flow 流线（仓库 → htdocs） */
+#flowpath{position:absolute;inset:0;z-index:5;pointer-events:none}
+#flowpath path{fill:none;stroke:var(--accent);stroke-width:2.5;stroke-dasharray:9 7;stroke-opacity:0;
+  transition:stroke-opacity .6s ease}
+#flowpath.draw path{stroke-opacity:1}
+#flowpath polygon{opacity:0;transition:opacity .3s ease .45s}
+#flowpath.draw polygon{opacity:1}
+
+/* 右侧：终端（墨底） + htdocs */
+#term{position:absolute;left:980px;top:44px;width:708px;height:300px;border-radius:12px;overflow:hidden;z-index:4;
+  background:var(--ink);border:1px solid var(--ink);opacity:0;transform:translateX(24px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#term.in{opacity:1;transform:none}
+#term .tb{display:flex;align-items:center;gap:9px;padding:10px 14px;background:#2E2D29;border-bottom:1px solid #3A3934}
+#term .tb i{width:11px;height:11px;border-radius:50%;display:block;background:#6A6963}
+#term .tb .tt{margin-left:10px;font:500 13px 'IBM Plex Mono';color:var(--faint)}
+#term .tb .note{margin-left:auto;font:600 11px 'IBM Plex Mono';letter-spacing:.06em;color:var(--faint)}
+#tbody{padding:20px 22px;font:500 18px 'IBM Plex Mono';line-height:1.85}
+#tbody .ps{color:var(--paper)}
+#tbody .cmd{color:var(--paper)}
+#tbody .out{color:var(--muted)}
+#tbody .ok{color:var(--paper)}
+#l2,#l4{opacity:0;transition:opacity .35s}
+#l2.in,#l4.in{opacity:1}
+
+#ht{position:absolute;left:980px;top:368px;width:708px;height:336px;border-radius:12px;z-index:4;overflow:hidden;
+  background:var(--card);border:1px solid var(--ink);opacity:0;transform:translateX(24px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#ht.in{opacity:1;transform:none}
+#ht .htt{display:flex;align-items:center;gap:10px;padding:12px 18px;border-bottom:1px solid var(--grid);
+  font:600 15px 'IBM Plex Mono';color:var(--ink)}
+#ht .htt .dot{width:10px;height:10px;border-radius:3px;background:var(--ink)}
+#ht .tree{padding:16px 24px;font:500 17px 'IBM Plex Mono';line-height:2.1;color:var(--muted)}
+#ht .tree .root{color:var(--ink)}
+#dvwa{opacity:0;transform:translateY(10px);transition:all .5s cubic-bezier(.2,1.4,.4,1)}
+#dvwa.in{opacity:1;transform:none}
+#dvwa .nm{color:var(--ink);font-weight:700}
+#dvwa .files{margin-top:6px;display:flex;gap:8px;flex-wrap:wrap}
+#dvwa .files i{font-style:normal;font:500 12.5px 'IBM Plex Mono';color:var(--ink);
+  border:1px solid var(--ink);border-radius:6px;padding:3px 10px;background:var(--card)}
+
+/* clone 粒子（沿流线） */
+.cp{position:absolute;width:12px;height:12px;border-radius:50%;background:var(--accent);z-index:6;opacity:0;pointer-events:none}
+
+/* 大肥鱼 */
+#fish{position:absolute;left:1700px;top:672px;width:158px;z-index:35;opacity:0;transform:translateY(26px) scale(.66);
+  transition:all .45s cubic-bezier(.34,1.6,.64,1);pointer-events:none}
+#fish.in{opacity:1;transform:none}
+#fish img{width:100%;display:block}
+#fish .say{position:absolute;left:-424px;top:92px;width:400px;background:var(--card);border:1.5px solid var(--ink);
+  border-radius:14px;padding:12px 20px;font:700 22px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em;line-height:1.4;
+  opacity:0;transform:scale(.5);transition:all .34s cubic-bezier(.2,1.6,.4,1)}
+#fish.bub .say{opacity:1;transform:scale(1)}
+#fish .say b{color:var(--ink);font-weight:900}
+#fish .say::after{content:'';position:absolute;right:-14px;top:20px;border:8px solid transparent;border-left:14px solid var(--card)}
+.off{opacity:0!important}
+
+/* 角注 / HUD */
+.corner{position:absolute;font:500 15px 'Noto Sans SC';color:var(--muted);letter-spacing:.04em;z-index:41}
+#chap{left:52px;bottom:30px}
+#src{right:52px;bottom:30px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:rgba(28,28,26,.12)}
+#bar{height:100%;width:0;background:var(--ink)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(240,239,235,.94);color:var(--muted)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid var(--grid);color:var(--ink);font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(28,28,26,.06)}
+#replay.done{border-color:var(--accent);color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="cam">
+
+    <div id="head">
+      <div class="eye"><span class="no">53</span>拉取 DVWA · CLONE</div>
+      <h1>把仓库<span class="hl">克隆</span>下来</h1>
+    </div>
+
+    <div id="board">
+      <!-- archify flow 流线：仓库 → htdocs -->
+      <svg id="flowpath" viewBox="0 0 1728 740" preserveAspectRatio="none">
+        <path d="M858,196 C 990,110 1086,352 1196,506"/>
+        <polygon points="1196,510 1182,494 1206,496" fill="#F5572F"/>
+      </svg>
+
+      <!-- GitHub 仓库页 -->
+      <div id="gh">
+        <div class="ghbar"><i></i><i></i><i></i><span class="note">画面示意 · 非实拍</span></div>
+        <div class="ghurl">github.com / <b>digininja</b> / <b>DVWA</b></div>
+        <div class="ghhead">
+          <div><div class="rk">PUBLIC REPOSITORY</div><div class="rn"><b>digininja /</b> DVWA</div></div>
+          <button id="clonebtn" type="button">Clone</button>
+        </div>
+        <div id="gitchip">前面教的 git · 这里就用上了</div>
+        <div class="rows">
+          <div class="frow dir" id="fr0"><span class="ic">▸</span>config<span class="msg">directory</span></div>
+          <div class="frow dir" id="fr1"><span class="ic">▸</span>dvwa<span class="msg">directory</span></div>
+          <div class="frow dir" id="fr2"><span class="ic">▸</span>vulnerabilities<span class="msg">directory</span></div>
+          <div class="frow" id="fr3"><span class="ic">·</span>README.md<span class="msg">setup guide</span></div>
+          <div class="frow" id="fr4"><span class="ic">·</span>setup.php<span class="msg">installer</span></div>
+        </div>
+      </div>
+
+      <!-- 终端（墨底反白） -->
+      <div id="term">
+        <div class="tb"><i></i><i></i><i></i><span class="tt">C:\xampp\htdocs</span><span class="note">画面示意 · 非实拍</span></div>
+        <div id="tbody">
+          <div><span class="ps">C:\&gt;</span> <span class="cmd" id="c1"></span></div>
+          <div id="l2"><span class="ps">C:\xampp\htdocs&gt;</span> <span class="cmd" id="c2"></span></div>
+          <div id="l4" class="out">cloning into &lt;DVWA&gt; ...</div>
+          <div id="l6" class="ok" style="opacity:0;transition:opacity .35s">done · htdocs/DVWA/</div>
+        </div>
+      </div>
+
+      <!-- htdocs 目录 -->
+      <div id="ht">
+        <div class="htt"><span class="dot"></span>C:\xampp\htdocs</div>
+        <div class="tree">
+          <div class="root">htdocs/</div>
+          <div id="dvwa"><div><span style="color:#8F8E88">└── </span><span class="nm">DVWA/</span> <span style="color:#1C1C1A;font-weight:700">✓ 已克隆</span></div>
+            <div class="files"><i>config/</i><i>dvwa/</i><i>vulnerabilities/</i><i>README.md</i></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="fish">
+      <div class="say">仓库到手 ~ <b>下一步建库</b></div>
+      <img src="Shark-GIF/006_双手身前微笑乖巧期待.gif" alt="大肥鱼">
+    </div>
+
+  </div>
+
+  <div class="corner" id="chap">07 / 十分钟立好 DVWA 靶场</div>
+  <div class="corner" id="src">GitHub 页与终端为演示还原 · 示意图 · 非实拍</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-53 · 拉取 DVWA · 19s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=19000; /* ←⑤ DUR = 分镜时长 19s */
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ───────── 本页小工具 ───────── */
+function typewrite(el,str,start,dur){
+  tws.push({t:start,d:dur,f:p=>{el.textContent=str.slice(0,Math.round(str.length*p))},
+    done:()=>{el.textContent=str;}});
+  for(let k=0;k<str.length;k++){
+    if(str[k]===' ')continue;
+    tws.push({t:start+dur*k/str.length,d:1,f:()=>{if(window.__sfx)__sfx.type(.5)}});
+  }
+}
+/* clone 粒子：沿流线从仓库 Clone 按钮飞入 htdocs（板内坐标） */
+function cloneBurst(start){
+  var sx=858,sy=196,ex=1196,ey=506;
+  for(var i=0;i<14;i++){
+    var el=document.createElement('div');el.className='cp';$('#board').appendChild(el);
+    var jx=(i%5)*26-52, jy=(i%3)*18-18;
+    (function(el,jx,jy,i){
+      tws.push({t:start+i*75,d:820,e:eo,f:function(p){
+        var x=sx+(ex-sx)*p+jx*(1-p*0.4), y=sy+(ey-sy)*p+jy*(1-p*0.4)-Math.sin(p*Math.PI)*150;
+        el.style.left=x+'px';el.style.top=y+'px';
+        el.style.opacity=(p<.12?p/.12:(p>.88?(1-p)/.12:1));
+      },done:function(){el.style.opacity=0;}});
+    })(el,jx,jy,i);
+  }
+}
+
+/* ───────── 镜头 0-53 叙事 cue（24:11–24:30 · 19s） ───────── */
+on(150,()=>{$('#head').classList.add('in');__sfx.whoosh(.7,.4);});                 // 24:11「接下来我们下载DVWA本体」
+on(400,()=>{$('#board').classList.add('in');$('#gh').classList.add('in');$('#term').classList.add('in');$('#ht').classList.add('in');__sfx.pop(.55);}); // 界面入场
+on(700,()=>{['fr0','fr1','fr2','fr3','fr4'].forEach(function(id,i){
+  tws.push({t:700+i*150,d:1,f:function(){document.getElementById(id).classList.add('in')}});});__sfx.pop(.45);}); // 文件树
+on(2000,()=>{$('#gitchip').classList.add('in');__sfx.ding(.5);});      // 24:13「前面教的git这里就用上了」
+on(4000,()=>{$('#term').classList.add('in');__sfx.pop(.45);});                       // 24:14「先进入到XAMPP放网站的目录」
+on(4600,()=>{__sfx.pop(.4);});                                                       // 24:15「进入到放网站的目录」
+on(4800,()=>{typewrite($('#c1'),'cd C:\\xampp\\htdocs',4800,1100);});                // 24:15「使用cd命令切换到目录」（命令可示）
+on(7000,()=>{$('#ht').classList.add('in');camFocus(1330,520,1.05,.5);__sfx.pop(.5);}); // 24:18「也就是C盘XAMPP文件下的htdocs」
+on(9000,()=>{__sfx.pop(.35);});                                                      // 24:20「也就是C盘XAMPP文件下的htdocs」（保持）
+on(11000,()=>{camTo(0,0,1,.5);$('#clonebtn').classList.add('press');__sfx.thud(.9);}); // 24:22「再把DVWA拉下来」
+on(11500,()=>{$('#clonebtn').classList.remove('press');});                           // 按钮回弹
+on(12000,()=>{$('#l2').classList.add('in');__sfx.pop(.4);});                         // 24:23「我们在cmd输入以下命令」
+on(14000,()=>{__sfx.pop(.3);});                                                      // 24:25「使用cd命令」（已演示）
+on(15000,()=>{__sfx.pop(.35);});                                        // 24:26「然后切换到这个目录」
+on(16000,()=>{typewrite($('#c2'),'git clone https://github.com/digininja/DVWA.git',16000,2400);__sfx.swipe(.6);}); // 24:27「接下来使用git clone」
+on(16800,()=>{$('#flowpath').classList.add('draw');cloneBurst(16800);__sfx.whoosh(1.2,.7);}); // 24:28「把项目给克隆下来」粒子飞入
+on(17600,()=>{$('#l4').classList.add('in');});                                       // 克隆中
+on(18200,()=>{$('#l6').style.opacity=1;$('#dvwa').classList.add('in');__sfx.ding(.6);}); // 24:29 落入 htdocs
+on(10000,()=>{$('#fish').classList.add('in');camTo(0,0,1,.5);__sfx.pop(.5);
+  tws.push({t:10300,d:1,f:()=>{$('#fish').classList.add('bub');__sfx.pop(.4);}});}); // 鱼提前在场
+
+/* ===== [不动] QA 专用（正常播放不触发）：hash 带 t=毫秒 → 起播后跳转该时刻并冻结 ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+  ◆ 分镜演示页：镜头 0-27 · 报错丢给AI（17s）◆ 瑞士国际主义 v4
+  底盘：虚拟时钟黑场播放器 / WebAudio 音效 / 1920×1080 舞台 / cam 镜头层
+  主视觉（一图为纲）：diagram-design type-sequence 三演员时序 —— [报错块] →[①整段复制·粘贴]→
+    [AI 对话框] →[②修复方案]→ [答案]，生命线 + 编号消息；archify 流线粒子沿消息行进。
+  唯一强调橙 #F5572F = 报错块（问题焦点）；答案 = 墨底反白 + ✓（成功不用绿）。
+  字体：Inter × Noto Sans SC × IBM Plex Mono。
+============================================================= -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});}
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- ① 页面标题 -->
+<title>镜头 0-27 · 报错丢给AI · 17s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<!-- ② 字体（v4 系统） -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Inter','Noto Sans SC',sans-serif}
+body.paused *{animation-play-state:paused!important}
+:root{--paper:#F0EFEB;--card:#FFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;--accent:#F5572F;--dark:#1C1C1A;--darkink:#F0EFEB}
+
+/* ② 舞台：纸灰底 + 细网格 */
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#stage::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:1;
+  background-image:linear-gradient(rgba(28,28,26,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.05) 1px,transparent 1px);
+  background-size:48px 48px}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ============ ③ 画面层 CSS ============ */
+/* ── 页眉 ── */
+#head{position:absolute;left:88px;top:58px;z-index:20;opacity:0;transform:translateY(-16px);transition:all .6s cubic-bezier(.16,1,.3,1)}
+#head.in{opacity:1;transform:translateY(0)}
+.eyebrow{font:600 15px 'Inter';letter-spacing:.14em;text-transform:uppercase;color:var(--ink);display:flex;gap:12px;align-items:center}
+.eyebrow .no{background:var(--ink);color:var(--paper);padding:3px 10px;border-radius:3px;font-weight:700}
+#head h1{margin-top:14px;font:800 76px/1.02 'Inter','Noto Sans SC';letter-spacing:-.03em;color:var(--ink)}
+#head h1 b{color:var(--ink);font-weight:900;background:var(--ink);color:var(--paper);padding:0 14px;border-radius:4px}
+#head .en{margin-top:12px;font:600 14px 'IBM Plex Mono';color:var(--muted);letter-spacing:.2em;transition:color .4s}
+
+/* ── 主视觉：三演员卡（扁平） ── */
+#flowSvg{position:absolute;inset:0;width:1920px;height:1080px;z-index:11;opacity:0;transition:opacity .6s}
+#flowSvg.in{opacity:1}
+.msgpath{stroke-dasharray:1;stroke-dashoffset:1;transition:stroke-dashoffset .7s cubic-bezier(.16,1,.3,1)}
+.mg{opacity:0;transition:opacity .35s}
+.mg.in{opacity:1}
+.mg.in .msgpath{stroke-dashoffset:0}
+
+#flow{position:absolute;inset:0;z-index:12;opacity:0;transition:opacity .7s}
+#flow.in{opacity:1}
+.node{position:absolute;top:206px;width:430px;height:232px;border-radius:12px;overflow:hidden;
+  background:#fff;border:1px solid var(--grid);opacity:0;transform:translateY(24px) scale(.97);transition:all .55s cubic-bezier(.2,1.25,.4,1)}
+.node.in{opacity:1;transform:translateY(0) scale(1)}
+#nErr{left:130px;border-left:5px solid var(--accent)}
+#nChat{left:745px;transition-delay:.13s}
+#nAns{left:1360px;transition-delay:.26s}
+#nErr.alert{border-color:var(--accent);border-left-width:5px}
+#nErr.shake{animation:vshake .42s ease}
+@keyframes vshake{25%{transform:translate(-7px,0)}50%{transform:translate(6px,0)}75%{transform:translate(-3px,0)}}
+
+.nbar{height:44px;display:flex;align-items:center;gap:10px;padding:0 16px;border-bottom:1px solid var(--grid)}
+.nbar .tagl{font:700 12px 'IBM Plex Mono';letter-spacing:.14em;color:var(--ink)}
+.nbar .idx{margin-left:auto;font:700 13px 'IBM Plex Mono';color:var(--faint);letter-spacing:.1em}
+#nErr .nbar{background:#FAF8F3}
+#nChat .nbar{background:#F4F4F1}
+#nAns .nbar{background:#1C1C1A;border-color:#1C1C1A}
+#nAns .nbar .tagl{color:var(--paper)}
+#nAns .nbar .idx{color:#7A7973}
+
+.nbody{position:relative;padding:18px 18px;height:188px;overflow:hidden}
+/* 终端真实命令行（报错链可示命令 · 输出仍抽象化） */
+.cmdline{display:flex;align-items:baseline;gap:9px;margin-bottom:16px;opacity:0;transform:translateX(-14px);
+  transition:opacity .45s cubic-bezier(.16,1,.3,1),transform .45s cubic-bezier(.16,1,.3,1)}
+#errBody.in .cmdline{opacity:1;transform:none}
+.cmdline .cps{font:700 13px 'IBM Plex Mono';color:var(--muted)}
+.cmdline .cmd{font:600 14px 'IBM Plex Mono';color:var(--ink);letter-spacing:.01em;white-space:nowrap}
+.ln{height:10px;border-radius:3px;margin-bottom:13px;background:var(--faint);
+  opacity:0;transform:translateX(-14px);transition:opacity .45s cubic-bezier(.16,1,.3,1),transform .45s cubic-bezier(.16,1,.3,1)}
+.ln.in{opacity:1;transform:none}
+.ln.bad{background:var(--accent)}
+#errBody.in .ln{opacity:1;transform:none}
+#errBody .ln:nth-child(2){transition-delay:.03s}#errBody .ln:nth-child(3){transition-delay:.09s}
+#errBody .ln:nth-child(4){transition-delay:.15s}#errBody .ln:nth-child(5){transition-delay:.21s}
+#errBody .ln:nth-child(6){transition-delay:.27s}
+
+/* 选中框（框住整段报错 · 由卡片右下 CTRL+C 药丸说明，避免压字） */
+#nSel{position:absolute;left:14px;right:14px;top:50px;height:92px;border:1.6px dashed var(--ink);border-radius:6px;opacity:0;transition:opacity .35s}
+#nSel.on{opacity:1}
+
+/* 「别乱试」✕ 徽章 */
+#warnX{position:absolute;right:14px;top:40px;z-index:5;opacity:0;transform:scale(.28) rotate(14deg);transition:all .4s cubic-bezier(.2,1.6,.4,1)}
+#warnX svg{width:44px;height:44px}
+#warnX.on{opacity:1;transform:rotate(0)}
+
+/* 面板内小药丸 */
+.pill{position:absolute;left:18px;bottom:14px;font:600 12px 'IBM Plex Mono';letter-spacing:.12em;border-radius:999px;padding:4px 14px;z-index:4;color:var(--ink);border:1.4px solid var(--ink)}
+#p1{color:var(--ink);border-color:var(--ink)}
+
+/* 对话气泡 */
+#chatBody{display:flex;flex-direction:column;gap:12px;padding-top:22px}
+.bub{border-radius:10px;padding:12px 14px}
+.bub .ul{height:8px;border-radius:3px;background:var(--ink);opacity:.9;margin-top:8px}
+.bub .ul:first-child{margin-top:0}
+#vcUser{margin-left:auto;width:80%;background:#fff;border:1.4px solid var(--ink);opacity:0;transform:translateY(-14px) scale(.94);transition:all .45s cubic-bezier(.2,1.4,.4,1)}
+#vcUser.in{opacity:1;transform:none}
+#vcAi{width:64%;background:#F4F4F1;border:1px solid var(--grid);display:flex;gap:8px;align-items:center;padding:18px 16px;opacity:0;transform:translateY(14px) scale(.94);transition:all .45s cubic-bezier(.2,1.4,.4,1)}
+#vcAi.in{opacity:1;transform:none}
+#vcAi .tdot{width:10px;height:10px;border-radius:50%;background:var(--ink);animation:blip 1.1s ease-in-out infinite}
+#vcAi .tdot:nth-child(2){animation-delay:.16s}#vcAi .tdot:nth-child(3){animation-delay:.32s}
+@keyframes blip{0%,100%{opacity:.25;transform:translateY(0)}50%{opacity:1;transform:translateY(-5px)}}
+
+/* 答案逐行打印 */
+#ansBody{padding-top:22px}
+.ans{height:11px;border-radius:3px;margin-bottom:16px;background:var(--ink);transform:scaleX(0);transform-origin:left;transition:transform .38s cubic-bezier(.16,1,.3,1)}
+.ans.on{transform:scaleX(1)}
+.ans.ghostline{background:var(--faint)}
+#s3done{position:absolute;right:20px;bottom:16px;z-index:5;font:700 13px 'IBM Plex Mono';letter-spacing:.1em;color:var(--paper);background:var(--ink);border-radius:6px;padding:5px 12px;opacity:0;transform:scale(.5);transition:all .4s cubic-bezier(.2,1.6,.4,1)}
+#s3done.on{opacity:1;transform:scale(1)}
+
+/* 飞行的复制块 */
+#vizFly{position:absolute;left:345px;top:470px;width:96px;height:34px;z-index:16;border-radius:7px;
+  background:var(--accent);display:flex;align-items:center;justify-content:center;
+  font:700 12px 'IBM Plex Mono';letter-spacing:.1em;color:#fff;opacity:0;pointer-events:none}
+
+/* ── 步骤条（三步 · 编号 chip） ── */
+#steps{position:absolute;left:130px;top:876px;width:1660px;height:64px;z-index:13;display:flex;gap:30px}
+.step{flex:1;display:flex;align-items:center;gap:16px;padding:0 22px;background:#fff;border:1px solid var(--grid);border-radius:12px;transition:all .4s}
+.step .sn{width:30px;height:30px;border-radius:50%;background:#fff;border:1.5px solid var(--ink);color:var(--ink);font:800 15px 'Inter';display:flex;align-items:center;justify-content:center;flex:none;transition:all .4s}
+.step .st{font:700 24px 'Noto Sans SC';color:var(--muted);letter-spacing:.02em;transition:color .4s}
+.step.on{background:var(--ink);border-color:var(--ink)}
+.step.on .sn{background:var(--paper);border-color:var(--paper);color:var(--ink)}
+.step.on .st{color:var(--paper)}
+
+/* ── 小技巧（右上角悬浮 chip） ── */
+#tip{position:absolute;right:88px;top:74px;width:520px;height:74px;z-index:20;
+  display:flex;align-items:center;gap:18px;padding:0 24px;
+  border:1.5px solid var(--ink);border-radius:12px;background:#fff;
+  opacity:0;transform:translateY(-14px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#tip.in{opacity:1;transform:translateY(0)}
+#tip .k{font:700 12px 'IBM Plex Mono';letter-spacing:.12em;color:var(--paper);background:var(--ink);border-radius:5px;padding:4px 11px;flex:none}
+#tip .arrowKey{width:42px;height:42px;flex:none;border:2px solid var(--ink);border-radius:9px;display:flex;align-items:center;justify-content:center;animation:upkey 1.6s ease-in-out infinite}
+@keyframes upkey{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+#tip .arrowKey svg{width:22px;height:22px}
+#tip .arrowKey path{stroke:var(--ink);stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round}
+#tip .v{font:500 21px 'Noto Sans SC';color:var(--ink);letter-spacing:.01em}
+#tip .v b{color:var(--ink);font-weight:900;border-bottom:3px solid var(--ink)}
+
+/* ── 收尾强调条 ── */
+#closeBar{position:absolute;left:130px;top:876px;width:1660px;height:64px;z-index:14;display:flex;align-items:center;justify-content:center;gap:16px;border-radius:12px;background:var(--ink);opacity:0;transform:translateY(14px);transition:all .5s}
+#closeBar.in{opacity:1;transform:translateY(0)}
+#closeBar .a{font:900 24px 'Noto Sans SC';letter-spacing:.06em;color:var(--paper)}
+#closeBar .a b{color:var(--accent);font-weight:900}
+
+/* ── 大肥鱼 ── */
+.fish{position:absolute;width:290px;z-index:35;opacity:0;transform:translateY(26px) scale(.68);transition:all .45s cubic-bezier(.34,1.6,.64,1);pointer-events:none}
+.fish.show{opacity:1;transform:translateY(0) scale(1)}
+.fish img{width:100%;display:block}
+.fish .say{position:absolute;width:256px;background:#fff;border:2px solid var(--ink);border-radius:14px;padding:12px 16px;font:500 21px/1.45 'Noto Sans SC';color:var(--ink);opacity:0;transform:scale(.6);transition:all .4s cubic-bezier(.34,1.6,.64,1) .15s}
+.fish.show .say{opacity:1;transform:scale(1)}
+.fish .say b{color:var(--ink);font-weight:900}
+#fish1{left:1545px;top:600px}
+#fish1 .say{left:-150px;top:auto;bottom:120px}
+#fish1 .say::after{content:'';position:absolute;left:126px;bottom:-16px;border:9px solid transparent;border-top:11px solid var(--ink)}
+
+/* ── 角注 / HUD（一般不动） ── */
+.corner{position:absolute;font:500 14px 'IBM Plex Mono';color:var(--muted);letter-spacing:.08em;z-index:41}
+#chap{left:56px;bottom:28px}
+#src{right:56px;bottom:28px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:rgba(28,28,26,.12)}
+#bar{height:100%;width:0;background:var(--ink)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(240,239,235,.94);color:#6A6963}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #B0AFA9;color:#4A4944;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(28,28,26,.08)}
+#replay.done{border-color:#1C1C1A;color:#1C1C1A}
+/* ============ ③ 结束 ============ */
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- ============ ④ 画面层 HTML ============ -->
+  <div id="cam">
+
+    <div id="head">
+      <div class="eyebrow"><span class="no">SHOT 0-27</span>第一章 · 准备工作 · 报错处理</div>
+      <h1>报错，直接丢给 <b>AI</b></h1>
+      <div class="en">PASTE THE ERROR · GET THE FIX</div>
+    </div>
+
+    <!-- 连线 + 时序消息 + 流线粒子层 -->
+    <svg id="flowSvg" viewBox="0 0 1920 1080">
+      <!-- 生命线（自三演员卡底部垂下） -->
+      <line x1="345" y1="438" x2="345" y2="860" stroke="#C6C5BF" stroke-width="1" stroke-dasharray="4 3"/>
+      <line x1="960" y1="438" x2="960" y2="860" stroke="#C6C5BF" stroke-width="1" stroke-dasharray="4 3"/>
+      <line x1="1575" y1="438" x2="1575" y2="860" stroke="#C6C5BF" stroke-width="1" stroke-dasharray="4 3"/>
+      <!-- 激活条 -->
+      <rect x="956" y="452" width="8" height="212" fill="rgba(28,28,26,.06)" stroke="#4A4944" stroke-width=".8"/>
+      <rect x="1571" y="664" width="8" height="140" fill="rgba(28,28,26,.06)" stroke="#4A4944" stroke-width=".8"/>
+
+      <!-- 消息 ①：报错块 → AI 对话框 -->
+      <g class="mg" id="m1g">
+        <text x="648" y="482" text-anchor="middle" font-family="'Noto Sans SC',sans-serif" font-size="19" font-weight="700" fill="#1C1C1A">① 整段复制 · 粘进 AI 对话框</text>
+        <path class="msgpath" id="sm1" pathLength="1" d="M349,500 H944" fill="none" stroke="#1C1C1A" stroke-width="2.4"/>
+        <polygon class="arw1" points="958,500 938,491 938,509" fill="#1C1C1A"/>
+      </g>
+      <!-- 消息 ②：AI 对话框 → 答案 -->
+      <g class="mg" id="m2g">
+        <text x="1268" y="662" text-anchor="middle" font-family="'Noto Sans SC',sans-serif" font-size="19" font-weight="700" fill="#1C1C1A">② 修复方案 · 马上出答案</text>
+        <path class="msgpath" id="sm2" pathLength="1" d="M964,680 H1559" fill="none" stroke="#1C1C1A" stroke-width="2.2"/>
+        <polygon class="arw2" points="1573,680 1553,671 1553,689" fill="#1C1C1A"/>
+      </g>
+
+      <!-- archify 流线粒子（沿消息线行进） -->
+      <circle r="4" fill="#1C1C1A"><animateMotion dur="1.8s" repeatCount="indefinite"><mpath href="#sm1"/></animateMotion></circle>
+      <circle r="3" fill="#1C1C1A" opacity=".6"><animateMotion dur="1.8s" repeatCount="indefinite" begin="-0.9s"><mpath href="#sm1"/></animateMotion></circle>
+      <circle r="4" fill="#1C1C1A"><animateMotion dur="1.8s" repeatCount="indefinite" begin="-0.4s"><mpath href="#sm2"/></animateMotion></circle>
+      <circle r="3" fill="#1C1C1A" opacity=".6"><animateMotion dur="1.8s" repeatCount="indefinite" begin="-1.3s"><mpath href="#sm2"/></animateMotion></circle>
+    </svg>
+
+    <!-- 主视觉：三演员卡（报错块 / AI 对话框 / 答案） -->
+    <div id="flow">
+      <!-- ① 终端报错块（焦点 · 橙 = 问题） -->
+      <div class="node" id="nErr">
+        <div class="nbar"><span class="tagl">// 终端 · 报错</span><span class="idx">ACTOR 01</span></div>
+        <div class="nbody" id="errBody">
+          <div class="cmdline"><span class="cps">C:\&gt;</span><span class="cmd">pip install vulnclaw</span></div>
+          <div class="ln bad" style="width:92%"></div>
+          <div class="ln bad" style="width:70%"></div>
+          <div class="ln" style="width:80%"></div>
+          <div class="ln" style="width:46%"></div>
+          <div id="nSel"></div>
+        </div>
+        <span class="pill" id="p1">CTRL + C</span>
+        <div id="warnX"><svg width="50" height="50" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#fff" stroke="#1C1C1A" stroke-width="2.2"/><line x1="8" y1="8" x2="16" y2="16" stroke="#1C1C1A" stroke-width="2.6" stroke-linecap="round"/><line x1="16" y1="8" x2="8" y2="16" stroke="#1C1C1A" stroke-width="2.6" stroke-linecap="round"/></svg></div>
+      </div>
+
+      <!-- ② AI 对话框 -->
+      <div class="node" id="nChat">
+        <div class="nbar"><span class="tagl">// AI 对话框</span><span class="idx">ACTOR 02</span></div>
+        <div class="nbody" id="chatBody">
+          <div class="bub" id="vcUser"><div class="ul" style="width:86%"></div><div class="ul" style="width:62%"></div><div class="ul" style="width:78%"></div></div>
+          <div class="bub" id="vcAi"><span class="tdot"></span><span class="tdot"></span><span class="tdot"></span></div>
+        </div>
+        <span class="pill" id="p2">PASTE</span>
+      </div>
+
+      <!-- ③ 答案面板（墨底反白 + ✓） -->
+      <div class="node" id="nAns">
+        <div class="nbar"><span class="tagl">// 答案</span><span class="idx">ACTOR 03</span></div>
+        <div class="nbody" id="ansBody">
+          <div class="ans" id="al1" style="width:84%"></div>
+          <div class="ans" id="al2" style="width:66%"></div>
+          <div class="ans" id="al3" style="width:92%"></div>
+          <div class="ans ghostline" style="width:74%;transform:scaleX(1)"></div>
+          <div class="ans ghostline" style="width:56%;transform:scaleX(1)"></div>
+        </div>
+        <span class="pill" id="p3">SOLVED</span>
+        <div id="s3done">✓ 已解决</div>
+      </div>
+    </div>
+
+    <!-- 飞行复制块 -->
+    <div id="vizFly">CTRL+C</div>
+
+    <!-- 三步条 -->
+    <div id="steps">
+      <div class="step" id="cap1"><span class="sn">1</span><span class="st">整段复制报错</span></div>
+      <div class="step" id="cap2"><span class="sn">2</span><span class="st">粘进 AI 对话框</span></div>
+      <div class="step" id="cap3"><span class="sn">3</span><span class="st">马上出答案</span></div>
+    </div>
+
+    <!-- 小技巧 -->
+    <div id="tip">
+      <span class="k">TIP</span>
+      <div class="arrowKey"><svg viewBox="0 0 24 24"><path d="M12 20 V5 M6 11 L12 5 L18 11"/></svg></div>
+      <div class="v">按 <b>向上箭头</b> · 调出上一条命令</div>
+    </div>
+
+    <!-- 收尾强调 -->
+    <div id="closeBar"><span class="a">这套操作，<b>你今天就会用到</b></span></div>
+
+    <!-- 大肥鱼 -->
+    <div class="fish" id="fish1">
+      <div class="say">报错<b>好慌</b>，先别乱试！</div>
+      <img src="Shark-GIF/041_趴键盘愤怒符号抓狂打字.gif" alt="大肥鱼">
+    </div>
+
+  </div>
+  <div class="corner" id="chap">第一章 · 准备工作 / 命令行</div>
+  <div class="corner" id="src">三步处理法与快捷键依据口播（2026-09）</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-27 · 报错丢给AI · 17s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=17000; /* ←⑤ DUR = 分镜时长(ms) */
+const $=s=>document.querySelector(s);
+const $$=s=>document.querySelectorAll(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ── 本镜头专用小工具 ── */
+const nowMs=()=>performance.now()-t0;
+
+/* ============ ⑤ DUR 与 cue 表 ============
+   镜头起点 11:46 · cue = 口播句起点 − 11:46
+*/
+on(120,()=>camTo(-12,0,1.035,1.7));                                  // 起手轻推，落定全幅（不裁边）
+on(220,()=>$('#head').classList.add('in'));                          // 11:46「最后也是最有用的」
+on(2000,()=>{                                                        // 11:48「就是报错要丢给AI」
+  $('#head .en').style.color='#1C1C1A';
+  $('#flowSvg').classList.add('in');$('#flow').classList.add('in');
+  $('#nErr').classList.add('in');$('#nChat').classList.add('in');$('#nAns').classList.add('in');
+  __sfx.pop(.6);
+});
+on(3000,()=>{                                                        // 11:49「命令行里面报错太正常了」
+  camTo(-18,-14,1.04,0.5);
+  $('#errBody').classList.add('in');__sfx.pop(.6);
+});
+/* —— 主视觉：报错块 → 复制飞入 AI 对话窗 → 答案逐行打印 —— */
+on(3400,()=>{$('#m1g').classList.add('in');__sfx.pop(.5)});          // 报错块落位 → 路径开始生长
+on(3950,()=>{$('#nErr').classList.add('alert','shake');__sfx.thud(.5)});     // 报错抖动告警
+on(9300,()=>{$('#nSel').classList.add('on');__sfx.type(.7)});        // 选中整段报错（CTRL+C）
+on(11800,()=>{                                                       // AI 聊天窗滑入
+  $('#nChat').classList.add('in');__sfx.whoosh(.6,.4);
+});
+on(12300,()=>{                                                       // 复制块飞入 → 用户气泡滑入
+  const f=$('#vizFly');
+  tws.push({t:nowMs(),d:640,e:eio,f:p=>{
+    f.style.opacity=p<.15?p/.15:(p>.82?(1-p)/.18:1);
+    f.style.left=(345+330*p)+'px';f.style.top=(470+38*p)+'px';
+    f.style.transform='scale('+(1-.2*p)+')';
+  },done:()=>{f.style.opacity=0;$('#vcUser').classList.add('in');__sfx.pop(.5)}});
+});
+on(14200,()=>{$('#vcAi').classList.add('in');__sfx.pop(.45)});       // AI 回复气泡出现
+on(14500,()=>{                                                       // 答案逐行打字
+  $('#nAns').classList.add('in');$('#m2g').classList.add('in');
+  $('#al1').classList.add('on');__sfx.type(.6);
+});
+on(14900,()=>{$('#al2').classList.add('on');__sfx.type(.6)});
+on(15250,()=>{$('#al3').classList.add('on');$('#s3done').classList.add('on');__sfx.ding(.6)});
+on(5000,()=>{                                                        // 11:51「新手最容易犯错就是看到报错就慌了」
+  $('#nErr').classList.add('alert');$('#fish1').classList.add('show');__sfx.pop(.7);
+});
+on(8000,()=>{                                                        // 11:54「然后就开始乱试了」
+  $('#warnX').classList.add('on');__sfx.thud(1);
+});
+on(8600,()=>$('#fish1').classList.remove('show'));
+on(9000,()=>{                                                        // 11:55「不要乱试 / 直接把这个报错整段复制下来」
+  camFocus(960,470,1.05,0.6);
+  $('#cap1').classList.add('on');__sfx.pop(.8);
+});
+on(9700,()=>{$('#m1g').classList.add('in')});
+on(12000,()=>{$('#cap2').classList.add('on');$('#vcUser').classList.add('in');__sfx.pop(.8)});        // 11:58「然后开个AI对话框粘贴进去」
+on(12800,()=>{$('#m2g').classList.add('in')});
+on(14000,()=>{$('#cap3').classList.add('on');$('#nAns').classList.add('in');__sfx.pop(.8)}); // 12:00「问他怎么解决」
+on(15000,()=>{                                                       // 12:01「马上就可以出答案了」
+  $('#s3done').classList.add('on');
+  $('#nErr').style.borderLeftColor='#F5572F';$('#nChat').style.borderColor='#1C1C1A';
+  __sfx.ding(.9);
+});
+/* 12:07「就是在终端里面按这个向上的箭头，可以调出你上一条敲过的命令」
+   —— 跨镜小技巧，按期数节奏在本页尾段预显（本镜 DUR 内 15.5s） */
+on(15500,()=>{camTo(0,0,1,0.6);$('#tip').classList.add('in');__sfx.type(.8);__sfx.ding(.6)});
+on(16200,()=>{$('#closeBar').classList.add('in');__sfx.pop(.6)});    // 12:02「这套操作你今天就会用到」
+
+/* ===== [不动] QA 专用（正常播放不触发）：hash 带 t=毫秒 → 起播后跳转该时刻并冻结 ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+     镜头演示动画 · 底盘模板（「全网最基础AI渗透教程」video-demo 约定）
+     用法：复制本文件 → 只改 ①~⑤ 五个标记区 → 底盘（引导/音效/时间轴/镜头/HUD）一字不动
+       ① 页面标题       ② 字体与舞台外观
+       ③ 画面层 CSS     ④ 画面层 HTML     ⑤ DUR 与 cue 表
+     QA：URL 加 #auto,t=毫秒 → 起播后冻结在该时刻（无头截图用，必须保留钩子）
+     ============================================================ -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- ① 页面标题 -->
+<title>镜头 0-24 · 打开命令行 · 30s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<!-- ② 字体（v4）：Inter × Noto Sans SC × IBM Plex Mono -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;--accent:#F5572F;--dark:#1C1C1A}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Noto Sans SC',sans-serif}
+body.paused *{animation-play-state:paused!important}
+/* ② 舞台（Win11 桌面铺满 · 真实 Bloom 壁纸资产，渐变层作加载兜底） */
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:#0a1020}
+#desk{position:absolute;inset:0;overflow:hidden;
+  background:
+    url("material/w11.jfif") center/cover no-repeat,
+    radial-gradient(1200px 760px at 26% 30%,#2f6bd8 0%,rgba(47,107,216,0) 62%),
+    radial-gradient(1000px 700px at 76% 66%,#7b3fd0 0%,rgba(123,63,208,0) 60%),
+    radial-gradient(900px 640px at 62% 18%,#31c6e8 0%,rgba(49,198,232,0) 58%),
+    linear-gradient(150deg,#0d1a3c 0%,#101a3a 44%,#180f38 100%)}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ============ ③ 画面层 CSS ============ */
+/* ── 页眉条（v4 白卡 · 不遮桌面左上图标） ── */
+#head{position:absolute;left:150px;top:34px;z-index:30;display:flex;align-items:center;gap:14px;opacity:0;transform:translateY(-12px);
+  transition:all .6s cubic-bezier(.16,1,.3,1);background:#fff;border:1px solid var(--grid);border-radius:10px;padding:9px 16px;box-shadow:0 10px 26px rgba(28,28,26,.25)}
+#head.in{opacity:1;transform:none}
+#head .no{display:inline-block;font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:12px;letter-spacing:3px;
+  color:var(--paper);background:var(--ink);border-radius:4px;padding:4px 12px}
+#head h1{font-family:'Inter','Noto Sans SC',sans-serif;font-weight:800;font-size:24px;line-height:1;letter-spacing:-.02em;color:var(--ink)}
+#head h1 b{color:var(--accent)}
+/* ── 桌面图标 ── */
+#icons{position:absolute;left:40px;top:200px;z-index:12;display:flex;flex-direction:column;gap:16px}
+.dicon{width:112px;display:flex;flex-direction:column;align-items:center;gap:7px;
+  opacity:0;transform:translateY(14px);transition:all .5s ease}
+.dicon.in{opacity:1;transform:none}
+.dicon span{font-size:13.5px;color:#fff;text-shadow:0 2px 6px rgba(0,0,0,.85);letter-spacing:.5px}
+/* ── 任务栏 ── */
+#taskbar{position:absolute;left:0;right:0;bottom:0;height:52px;z-index:30;display:flex;align-items:center;
+  background:rgba(238,244,252,.82);backdrop-filter:blur(18px);border-top:1px solid rgba(255,255,255,.55)}
+#taskbar .mid{position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px}
+.tbtn{width:44px;height:44px;border-radius:7px;display:flex;align-items:center;justify-content:center;transition:background .18s}
+.tbtn:hover{background:rgba(255,255,255,.6)}
+.tbtn.act{position:relative}
+.tbtn.act::after{content:'';position:absolute;bottom:3px;left:50%;transform:translateX(-50%);width:16px;height:3px;border-radius:2px;background:#0067c0}
+#tray{margin-left:auto;display:flex;align-items:center;gap:16px;padding-right:18px;color:#1b1b1b;
+  font-family:'Noto Sans SC';font-size:12.5px;line-height:1.25;text-align:right}
+#tray .col{font-size:11px;color:#4a4a4a}
+
+/* ── 光标演出 ── */
+#cur{position:absolute;left:0;top:0;width:26px;height:26px;z-index:70;pointer-events:none;
+  filter:drop-shadow(0 2px 4px rgba(0,0,0,.55))}
+#ripple{position:absolute;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;z-index:69;opacity:0;
+  border:3px solid var(--accent);pointer-events:none}
+
+/* ── Win+R 键帽 ── */
+#keys{position:absolute;left:50%;top:180px;transform:translateX(-50%);z-index:32;display:flex;align-items:center;gap:16px;
+  opacity:0;transition:all .45s cubic-bezier(.2,1.4,.4,1)}
+#keys.in{opacity:1}
+#keys.out{opacity:0}
+.kcap{font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:22px;color:var(--ink);background:#fff;
+  border:1.5px solid var(--ink);border-bottom-width:5px;border-radius:8px;padding:10px 18px;min-width:64px;
+  text-align:center;box-shadow:0 10px 26px rgba(28,28,26,.4)}
+.kcap.hit{background:var(--accent);color:#fff;transform:translateY(3px);border-bottom-width:2px}
+#keys .plus{font-family:'IBM Plex Mono',monospace;font-size:24px;color:#F0EFEB}
+
+/* ── 拟真「运行」对话框 ── */
+#runDlg{position:absolute;left:700px;top:396px;width:520px;z-index:34;border-radius:9px;overflow:hidden;
+  background:#f3f6fb;box-shadow:0 24px 70px rgba(0,0,0,.5),0 0 0 1px rgba(0,0,0,.12);
+  opacity:0;transform:scale(.86);transform-origin:50% 40%;transition:all .4s cubic-bezier(.2,1.35,.4,1)}
+#runDlg.in{opacity:1;transform:scale(1)}
+#runDlg.out{opacity:0;transform:scale(.9);transition:all .3s ease}
+.dt{height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;font-size:13px;color:#2b2b2b;font-weight:700}
+.dt .x{margin-left:auto;font-size:13px;color:#5a5a5a;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:5px}
+.dt .x:hover{background:rgba(0,0,0,.06)}
+.dbody{padding:6px 20px 4px;display:flex;gap:14px}
+.dbody .txt{font-size:13px;color:#444;line-height:1.6}
+.dbody .txt .r{color:#7a5c00}
+#runIn{margin:14px 20px 0;width:calc(100% - 40px);height:38px;border:1.5px solid #9aa7bb;border-radius:6px;
+  background:#fff;font-family:'IBM Plex Mono';font-weight:600;font-size:18px;color:#14181f;padding:0 12px;outline:none;
+  box-shadow:inset 0 0 0 1px rgba(0,103,192,0)}
+#runIn.focus{border-color:#0067c0;box-shadow:inset 0 0 0 1px rgba(0,103,192,.5)}
+.dft{display:flex;justify-content:flex-end;gap:12px;padding:18px 20px 20px}
+.dbtn{font-size:14px;color:#1b1b1b;background:#e9edf5;border:1px solid #c3cddd;border-radius:6px;padding:8px 30px;transition:all .18s}
+.dbtn.pri{background:#0067c0;border-color:#0067c0;color:#fff}
+.dbtn.pri.press{background:#005aa8;transform:scale(.95)}
+
+/* ── 终端窗口（抽象态 · 无真实回显） ── */
+#cmdWin{position:absolute;left:258px;top:196px;width:1180px;height:640px;z-index:20;border-radius:10px;overflow:hidden;
+  background:#0c0c0c;box-shadow:0 26px 80px rgba(0,0,0,.66),0 0 0 1px rgba(240,239,235,.22);
+  opacity:0;transform:translateY(28px) scale(.975);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#cmdWin.in{opacity:1;transform:none}
+.cwt{height:42px;display:flex;align-items:center;gap:10px;padding:0 12px;background:#1d1d1d;font-size:13px;color:#d8d8d8}
+.cwt .ic{width:16px;height:16px;border:1.6px solid #F0EFEB;border-radius:3px;position:relative}
+.cwt .ic::after{content:'>';position:absolute;inset:0;font-size:11px;color:#F0EFEB;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono'}
+.cwt .tag{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:11.5px;letter-spacing:1px;color:#0c0c0c;
+  background:#F0EFEB;border-radius:4px;padding:3px 10px}
+.cwt .cc{width:44px;height:30px;display:flex;align-items:center;justify-content:center;color:#9aa;border-radius:5px}
+.cwt .cc:hover{background:rgba(255,255,255,.08)}
+#cmdBody{position:absolute;inset:42px 0 0 0;padding:26px 30px;font-family:'IBM Plex Mono';font-size:19px;line-height:2.5}
+.tline{display:flex;align-items:center;gap:12px;opacity:0;transform:translateX(-12px);transition:opacity .3s,transform .3s}
+.tline.in{opacity:1;transform:none}
+.ps1{color:#F0EFEB;font-weight:700;flex:none}
+.blk{height:14px;border-radius:3px;background:linear-gradient(90deg,rgba(190,205,225,.55),rgba(190,205,225,.14))}
+.blk.o{background:linear-gradient(90deg,rgba(150,160,180,.34),rgba(150,160,180,.08))}
+.caret2{width:11px;height:22px;background:#f2f2f2;animation:blink2 1.05s steps(1) infinite}
+@keyframes blink2{50%{opacity:0}}
+#cmdNote{position:absolute;right:16px;bottom:12px;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:1px;color:rgba(240,239,235,.5)}
+
+/* ── 提示符 callout ── */
+#psCall{position:absolute;left:296px;top:474px;z-index:36;width:400px;background:#fff;
+  border:1px solid var(--ink);border-radius:14px;padding:16px 20px;opacity:0;transform:scale(.7);
+  transition:all .4s cubic-bezier(.34,1.6,.64,1);box-shadow:0 16px 40px rgba(28,28,26,.35)}
+#psCall.in{opacity:1;transform:scale(1)}
+#psCall .a{font-family:'Inter','Noto Sans SC',sans-serif;font-weight:800;font-size:23px;color:var(--ink);letter-spacing:0}
+#psCall .b{margin-top:8px;font-size:15.5px;color:var(--ink);line-height:1.55}
+#psCall .b b{color:var(--accent)}
+#psCall::after{content:'';position:absolute;left:40px;top:-14px;border:7px solid transparent;border-bottom:12px solid var(--ink)}
+
+/* ── 右栏：两个黑窗口对比 ── */
+#cmp{position:absolute;left:1480px;top:196px;width:404px;height:640px;z-index:20;opacity:0;transform:translateX(26px);
+  transition:all .6s cubic-bezier(.16,1,.3,1)}
+#cmp.in{opacity:1;transform:none}
+#cmp .cpttl{font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:13px;letter-spacing:4px;color:#F0EFEB}
+.cw{position:relative;margin-top:16px;border-radius:10px;padding:16px 18px;background:rgba(14,17,26,.9);
+  border:1.5px solid rgba(240,239,235,.25);opacity:0;transform:translateY(16px);transition:all .45s cubic-bezier(.2,1.3,.4,1)}
+.cw.in{opacity:1;transform:none}
+.cw.hot{border-color:var(--accent);box-shadow:0 0 0 3px rgba(245,87,47,.16),0 16px 40px rgba(0,0,0,.55)}
+.cw.off{filter:grayscale(.8) brightness(.6)}
+.cw .bar{height:26px;border-radius:6px 6px 0 0;background:#1d1d1d;display:flex;align-items:center;padding:0 10px;gap:6px}
+.cw .bar .d{width:9px;height:9px;border-radius:50%;background:#4a4a4a}
+.cw .scr{margin-top:6px;background:#0c0c0c;border-radius:0 0 6px 6px;padding:16px 14px;display:flex;flex-direction:column;gap:11px}
+.cw .scr .l{height:9px;border-radius:2px}
+.cw .nm{margin-top:12px;font-family:'Inter','Noto Sans SC',sans-serif;font-weight:700;font-size:22px;color:#F0EFEB}
+.cw .ds{margin-top:5px;font-size:14px;color:#B0AFA9;letter-spacing:0}
+.cw .pick{position:absolute;right:16px;top:54px;font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:12px;letter-spacing:1px;
+  color:#fff;background:var(--accent);border-radius:999px;padding:4px 13px;opacity:0;transform:scale(.5);
+  transition:all .35s cubic-bezier(.2,1.6,.4,1)}
+.cw.hot .pick{opacity:1;transform:none}
+.cw .dim{position:absolute;right:16px;top:54px;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:1px;color:#B0AFA9;
+  border:1.5px dashed #6a6a70;border-radius:999px;padding:4px 12px;opacity:0;transition:opacity .35s}
+.cw.off .dim{opacity:1}
+
+/* ── 尾注条 ── */
+#foot{position:absolute;left:258px;top:866px;width:1626px;height:60px;z-index:22;display:flex;align-items:center;justify-content:center;gap:16px;
+  border:1px solid var(--grid);border-radius:12px;background:#fff;box-shadow:0 12px 30px rgba(28,28,26,.22);
+  opacity:0;transform:translateY(14px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#foot.in{opacity:1;transform:none}
+#foot .a{font-family:'Inter','Noto Sans SC',sans-serif;font-weight:800;font-size:25px;letter-spacing:0;color:var(--ink)}
+#foot .a b{color:var(--accent)}
+
+/* ── 大肥鱼 ── */
+.fish{position:absolute;width:236px;z-index:35;opacity:0;transform:translateY(24px) scale(.68);
+  transition:all .45s cubic-bezier(.34,1.6,.64,1);pointer-events:none;filter:drop-shadow(0 12px 26px rgba(0,0,0,.55))}
+.fish.show{opacity:1;transform:none}
+.fish img{width:100%;display:block}
+.fish .say{position:absolute;width:238px;background:#fff;border:1px solid var(--ink);border-radius:14px;
+  padding:11px 15px;font-size:19px;font-weight:700;color:var(--ink);line-height:1.45;
+  opacity:0;transform:scale(.6);transition:all .4s cubic-bezier(.34,1.6,.64,1) .15s;box-shadow:0 10px 26px rgba(28,28,26,.25)}
+.fish.show .say{opacity:1;transform:none}
+.fish .say b{color:var(--accent)}
+#fish1{left:1620px;top:640px}
+#fish1 .say{left:-4px;top:-178px}
+#fish1 .say::after{content:'';position:absolute;left:64px;bottom:-16px;border:9px solid transparent;border-top:11px solid #fff}
+
+/* ── 角注 / HUD（一般不动） ── */
+.corner{position:absolute;font-family:'Inter','IBM Plex Mono',sans-serif;font-size:13px;color:var(--paper);letter-spacing:.06em;z-index:41;
+  background:var(--ink);padding:4px 11px;border-radius:4px}
+#chap{left:56px;bottom:74px}
+#src{right:56px;bottom:74px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:var(--grid)}
+#bar{height:100%;width:0;background:var(--ink);box-shadow:none}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(5,8,14,.92);backdrop-filter:blur(4px);color:#aab}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #556;color:#ccc;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(28,28,26,.08)}
+#replay.done{animation:pulse 1.2s infinite;border-color:var(--accent);color:var(--accent)}
+@keyframes pulse{50%{opacity:.5}}
+/* ============ ③ 结束 ============ */
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- ============ ④ 画面层 HTML ============ -->
+  <div id="cam">
+
+    <div id="desk"></div>
+
+    <!-- 桌面图标 -->
+    <div id="icons">
+      <div class="dicon" id="ic1">
+        <svg width="46" height="46" viewBox="0 0 46 46"><rect x="4" y="8" width="38" height="26" rx="2.5" fill="#dfe9f7" stroke="#8fa4c0" stroke-width="1.5"/><rect x="7" y="11" width="32" height="20" fill="#2f6bd8"/><rect x="16" y="36" width="14" height="4" rx="1.5" fill="#c3d0e2"/></svg>
+        <span>此电脑</span>
+      </div>
+      <div class="dicon" id="ic2">
+        <svg width="46" height="46" viewBox="0 0 46 46"><path d="M12 10h22l4 6v18a2.5 2.5 0 0 1-2.5 2.5h-25A2.5 2.5 0 0 1 8 34V16z" fill="#e8eef8" stroke="#8fa4c0" stroke-width="1.5"/><path d="M12 10l4 6h22" fill="none" stroke="#8fa4c0" stroke-width="1.5"/></svg>
+        <span>回收站</span>
+      </div>
+      <div class="dicon" id="ic3">
+        <svg width="46" height="46" viewBox="0 0 46 46"><rect x="4" y="8" width="38" height="30" rx="2.5" fill="#0c0c0c" stroke="#8fa4c0" stroke-width="1.5"/><path d="M12 18l6 5-6 5" fill="none" stroke="#F0EFEB" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><line x1="22" y1="28" x2="32" y2="28" stroke="#F0EFEB" stroke-width="2.4" stroke-linecap="round"/></svg>
+        <span>命令提示符</span>
+      </div>
+    </div>
+
+    <!-- Win+R 键帽 -->
+    <div id="keys">
+      <span class="kcap" id="kWin">Win</span><span class="plus">+</span><span class="kcap" id="kR">R</span>
+    </div>
+
+    <!-- 拟真「运行」对话框（示意图 · 非实拍） -->
+    <div id="runDlg">
+      <div class="dt"><svg width="16" height="16" viewBox="0 0 16 16"><rect x="1" y="2" width="14" height="12" rx="1.6" fill="#0067c0" opacity=".85"/></svg>运行<span class="x">✕</span></div>
+      <div class="dbody"><svg width="34" height="34" viewBox="0 0 34 34"><rect x="3" y="5" width="28" height="20" rx="2" fill="none" stroke="#0067c0" stroke-width="2.2"/><path d="M9 12l4 3.5-4 3.5" fill="none" stroke="#0067c0" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><line x1="16" y1="19" x2="24" y2="19" stroke="#0067c0" stroke-width="2.2" stroke-linecap="round"/></svg>
+        <div class="txt">Windows 将根据你所输入的名称，为你打开相应的程序、文件夹、文档或 <span class="r">Internet 资源。</span></div></div>
+      <input id="runIn" readonly value="">
+      <div class="dft"><span class="dbtn pri" id="runOk">确定</span><span class="dbtn">取消</span></div>
+    </div>
+
+    <!-- 终端窗口（抽象态） -->
+    <div id="cmdWin">
+      <div class="cwt">
+        <span class="ic"></span><span>命令提示符</span>
+        <span class="tag">cmd</span>
+        <span class="cc">─</span><span class="cc">▢</span><span class="cc">✕</span>
+      </div>
+      <div id="cmdBody"></div>
+      <span id="cmdNote">抽象态 · 不含真实回显</span>
+    </div>
+
+    <!-- 提示符 callout -->
+    <div id="psCall">
+      <div class="a">提示符</div>
+      <div class="b">一闪一闪的那一小段<br><b>系统准备好了</b>，等你下命令</div>
+    </div>
+
+    <!-- 右栏：两个黑窗口对比 -->
+    <div id="cmp">
+      <div class="cpttl">WINDOWS 里有两个黑窗口</div>
+      <div class="cw" id="cw1">
+        <div class="bar"><span class="d"></span><span class="d"></span><span class="d"></span></div>
+        <div class="scr"><div class="l" style="width:78%;background:rgba(240,239,235,.55)"></div><div class="l" style="width:52%;background:rgba(190,205,225,.28)"></div><div class="l" style="width:66%;background:rgba(190,205,225,.2)"></div></div>
+        <div class="nm">命令提示符</div>
+        <div class="ds">cmd · 本期从头到尾只用它</div>
+        <span class="pick">本期用这个</span>
+      </div>
+      <div class="cw" id="cw2">
+        <div class="bar"><span class="d"></span><span class="d"></span><span class="d"></span></div>
+        <div class="scr"><div class="l" style="width:70%;background:rgba(190,205,225,.3)"></div><div class="l" style="width:84%;background:rgba(190,205,225,.22)"></div><div class="l" style="width:46%;background:rgba(190,205,225,.18)"></div></div>
+        <div class="nm">PowerShell</div>
+        <div class="ds">能做更多 · 先不用管它</div>
+        <span class="dim">暂不使用</span>
+      </div>
+    </div>
+
+    <!-- 大肥鱼 -->
+    <div class="fish" id="fish1">
+      <div class="say">跟着点，<b>别慌</b></div>
+      <img src="Shark-GIF/006_双手身前微笑乖巧期待.gif" alt="大肥鱼">
+    </div>
+
+    <!-- 光标 -->
+    <div id="ripple"></div>
+    <svg id="cur" data-x="960" data-y="760" style="transform:translate(960px,760px)" viewBox="0 0 26 26">
+      <path d="M4 2 L4 20 L9.4 15.2 L13 23.4 L16.4 21.8 L12.8 13.8 L19.6 13.4 Z" fill="#fff" stroke="#111" stroke-width="1.3"/>
+    </svg>
+
+  </div>
+
+  <!-- 固定 UI 层（不随镜头缩放） -->
+  <div id="head">
+    <span class="no">SHOT 0-24</span>
+    <h1>打开命令行 · <b>Win + R</b> 输入 cmd</h1>
+  </div>
+  <div id="foot"><span class="a">本期从头到尾 · 只用 <b>cmd</b> 这一个窗口</span></div>
+
+  <!-- Win11 任务栏 -->
+  <div id="taskbar">
+    <div class="mid">
+      <span class="tbtn act"><svg width="22" height="22" viewBox="0 0 22 22"><rect x="1" y="1" width="9" height="9" rx="1" fill="#0067c0"/><rect x="12" y="1" width="9" height="9" rx="1" fill="#0067c0"/><rect x="1" y="12" width="9" height="9" rx="1" fill="#0067c0"/><rect x="12" y="12" width="9" height="9" rx="1" fill="#0067c0"/></svg></span>
+      <span class="tbtn"><svg width="20" height="20" viewBox="0 0 20 20"><circle cx="8.6" cy="8.6" r="5.6" fill="none" stroke="#3b4a63" stroke-width="2"/><line x1="12.8" y1="12.8" x2="17.4" y2="17.4" stroke="#3b4a63" stroke-width="2" stroke-linecap="round"/></svg></span>
+      <span class="tbtn"><svg width="22" height="22" viewBox="0 0 22 22"><path d="M2.5 5h6.2l1.6 2.2h9.2v10.3H2.5z" fill="#e8b93b" stroke="#c99a1c" stroke-width="1.2"/></svg></span>
+      <span class="tbtn"><svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11" r="9" fill="none" stroke="#2e9fd8" stroke-width="2.2"/><path d="M4 8c4.6 2.4 9.4 2.4 14 0M5 15c4-2 8-2 12 0" fill="none" stroke="#2e9fd8" stroke-width="1.8"/></svg></span>
+      <span class="tbtn"><svg width="22" height="22" viewBox="0 0 22 22"><rect x="2" y="3.5" width="18" height="15" rx="2" fill="#0c0c0c" stroke="#7d8ba3" stroke-width="1.2"/><path d="M6.4 9l2.8 2.4-2.8 2.4" fill="none" stroke="#F0EFEB" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><line x1="11" y1="14" x2="15.6" y2="14" stroke="#F0EFEB" stroke-width="1.9" stroke-linecap="round"/></svg></span>
+    </div>
+    <div id="tray">
+      <svg width="17" height="17" viewBox="0 0 17 17"><path d="M2 6.4a9 9 0 0 1 13 0M4.4 9.2a5.6 5.6 0 0 1 8.2 0" fill="none" stroke="#2b2b2b" stroke-width="1.6" stroke-linecap="round"/><circle cx="8.5" cy="12.4" r="1.2" fill="#2b2b2b"/></svg>
+      <svg width="17" height="17" viewBox="0 0 17 17"><path d="M3.2 7.4 6.6 10.4V6.6L3.2 9.6z" fill="#2b2b2b"/><path d="M6.6 6.6 10 4v9l-3.4-2.4z" fill="#2b2b2b"/><path d="M11.6 6.4a3.4 3.4 0 0 1 0 4.4M13.4 4.6a6 6 0 0 1 0 7.6" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <div class="col">14:20<br>2026/10/1</div>
+    </div>
+  </div>
+
+  <div class="corner" id="chap">第二章 · 命令行 / 打开</div>
+  <div class="corner" id="src">界面为演示还原 · Windows 11 版式（示意图 · 非实拍）</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-24 · 打开命令行 · 30s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=30000; /* ←⑤ DUR = 分镜时长(ms) */
+const $=s=>document.querySelector(s);
+const $$=s=>document.querySelectorAll(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ── 光标演出：弧线飞移 + 点击涟漪 ── */
+const curEl=$('#cur');
+function curTo(x,y,start,dur,arc){
+  const sx=+curEl.dataset.x||960, sy=+curEl.dataset.y||760;
+  const cx=(sx+x)/2, cy=(sy+y)/2-(arc||70);
+  tws.push({t:start,d:dur,e:eio,f:p=>{
+    const q=1-p, nx=q*q*sx+2*q*p*cx+p*p*x, ny=q*q*sy+2*q*p*cy+p*p*y;
+    curEl.style.transform=`translate(${nx}px,${ny}px)`;curEl.dataset.x=nx;curEl.dataset.y=ny;
+  }});
+}
+function clickFx(start){
+  const r=$('#ripple'), x=+curEl.dataset.x, y=+curEl.dataset.y;
+  r.style.left=x+'px';r.style.top=y+'px';
+  tws.push({t:start,d:420,f:p=>{r.style.opacity=(p<.15?p/.15:(1-p)/.85*0.9);r.style.transform='scale('+(0.35+p*0.9)+')'},done:()=>{r.style.opacity=0}});
+  tws.push({t:start,d:150,f:p=>{const s=1-0.14*Math.sin(p*Math.PI);curEl.style.width=(26*s)+'px';curEl.style.height=(26*s)+'px'},done:()=>{curEl.style.width='26px';curEl.style.height='26px'}});
+}
+/* ── 终端抽象行（只有线条块，无任何回显文字） ── */
+(function(){
+  const body=$('#cmdBody');
+  const rows=[
+    {p:true,w:430},{p:false,w:300},
+    {p:true,w:250}
+  ];
+  rows.forEach(r=>{
+    const d=document.createElement('div');d.className='tline';
+    d.innerHTML='<span class="ps1">C:\\&gt;</span>';
+    const b=document.createElement('div');b.className='blk';b.style.width=r.w+'px';d.appendChild(b);
+    body.appendChild(d);
+  });
+  const tail=document.createElement('div');tail.className='tline';
+  tail.innerHTML='<span class="ps1">C:\\&gt;</span>';
+  const car=document.createElement('div');car.className='caret2';tail.appendChild(car);
+  body.appendChild(tail);
+})();
+const TLINES=$$('#cmdBody .tline');
+
+/* ============ ⑤ DUR 与 cue 表 ============
+   镜头起点 10:39 · cue = 口播句起点 − 10:39
+*/
+on(120,()=>{camTo(-24,0,1.03,1.8);$('#head').classList.add('in');__sfx.pop(.6)}); // 10:39「首先我们打开命令行很简单」
+on(700,()=>{['#ic1','#ic2','#ic3'].forEach((id,i)=>setTimeout(()=>{$(id).classList.add('in')},i*130))});
+on(1000,()=>{                                                        // 10:40「就是在虚拟机里面按下Windows键加R」
+  $('#keys').classList.add('in');
+  curTo(872,706,1000,900,-80);
+  __sfx.ding(.6);
+});
+on(1500,()=>{$('#kWin').classList.add('hit')});
+on(1750,()=>{$('#kWin').classList.remove('hit');$('#kR').classList.add('hit')});
+on(2050,()=>{$('#kR').classList.remove('hit')});
+on(2600,()=>{camFocus(960,520,1.16,0.7);curTo(1180,560,2600,800,-90)}); // 光标移向并点击「确定」
+on(3200,()=>{                                                        // 10:41「运行窗口」
+  $('#keys').classList.add('out');
+  $('#runDlg').classList.add('in');$('#runIn').classList.add('focus');__sfx.thud(.85);
+});
+on(4000,()=>{                                                        // 10:43「在这个运行窗口里面输入cmd」
+  const el=$('#runIn'),tx='cmd';
+  tws.push({t:4000,d:tx.length*170,f:p=>{const n=Math.floor(p*tx.length);if(n!==+el.dataset.n){el.dataset.n=n;el.value=tx.slice(0,n);__sfx.type(.75)}},done:()=>{el.value=tx}});
+});
+on(6000,()=>{                                                        // 10:45「然后回车 / 命令行窗口就弹出来了」
+  $('#runOk').classList.add('press');__sfx.ding(.6);
+  camCut(-26,0,1.03);
+});
+on(6300,()=>{
+  $('#runDlg').classList.add('out');
+  $('#cmdWin').classList.add('in');__sfx.thud(1);
+  curTo(1180,880,6300,700,-70);
+});
+on(6600,()=>{camTo(-16,-6,1.04,0.7)});
+on(7000,()=>{TLINES.forEach((l,i)=>setTimeout(()=>l.classList.add('in'),i*120))}); // 10:47「后面我们主要都在这个窗口中进行操作」
+on(11000,()=>{                                                       // 10:50「窗口里面这个一闪一闪的短句叫做提示符」
+  camFocus(620,540,1.12,0.7);
+  curTo(430,600,11000,700,-70);
+  $('#psCall').classList.add('in');__sfx.pop(.8);
+});
+on(14000,()=>{__sfx.ding(.6)});                                      // 10:53「意思就是系统准备好了」
+on(16600,()=>{                                                        // 10:54「等待你来下命令了」
+  $('#fish1').classList.add('show');__sfx.pop(.7);
+});
+on(16000,()=>{                                                        // 10:55「你每敲一行」
+  $('#psCall').classList.remove('in');
+  camTo(-16,-6,1.04,0.7);
+  const tail=TLINES[3];
+  const blk=document.createElement('div');blk.className='blk';blk.style.width='0px';
+  tail.insertBefore(blk,tail.querySelector('.caret2'));
+  tws.push({t:16000,d:900,f:p=>{blk.style.width=(360*p)+'px';if(Math.floor(p*12)!==Math.floor((p-.02)*12))__sfx.type(.6)}});
+});
+on(17500,()=>{                                                        // 10:56「然后回车 / 它就会执行一行」
+  const out=document.createElement('div');out.className='tline in';
+  out.innerHTML='<div class="blk o" style="width:0px;margin-left:76px"></div>';
+  $('#cmdBody').appendChild(out);
+  tws.push({t:17500,d:600,f:p=>{out.firstChild.style.width=(300*p)+'px'}});
+  __sfx.thud(.6);
+});
+on(18800,()=>$('#fish1').classList.remove('show'));                   // 大肥鱼常驻至右栏对比场景前
+on(19000,()=>{                                                        // 10:58「这种黑窗口Windows里面其实有两个」
+  camTo(0,0,1,0.7);
+  $('#cmp').classList.add('in');__sfx.swipe(.8);
+});
+on(21000,()=>{$('#cw1').classList.add('in','hot');__sfx.ding(.7)});   // 11:00「一个是现在这个cmd」
+on(23000,()=>{$('#cw2').classList.add('in');__sfx.pop(.6)});          // 11:02「然后另一个叫做powershell」
+on(24000,()=>{                                                        // 11:03「powershell它能做的事情更多一点」
+  camFocus(1560,480,1.12,0.7);
+});
+on(26000,()=>{                                                        // 11:05「但是这一期我们从头到尾只需要用这个cmd就好了」
+  camTo(0,0,1,0.7);
+  $('#foot').classList.add('in');__sfx.thud(.9);__sfx.ding(.7);
+});
+on(29000,()=>{                                                        // 11:08「那个先不用管它」
+  $('#cw2').classList.add('off');__sfx.pop(.5);
+});
+
+/* ===== [不动] QA 专用（正常播放不触发）：hash 带 t=毫秒 → 起播后跳转该时刻并冻结 ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

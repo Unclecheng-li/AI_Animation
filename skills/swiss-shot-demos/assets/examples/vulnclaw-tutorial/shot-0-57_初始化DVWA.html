@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+     镜头 0-57 · 初始化 DVWA · 26:09–26:42（33s，DUR=33000）
+     主视觉：拟真浏览器 127.0.0.1/dvwa（登录页 → Setup 检查清单 → Create/Reset → 成功）
+     副视觉：右「两套账号别搞混」对照卡 + 「只看两项」聚焦卡
+     v4：瑞士国际主义 · 纸灰舞台 + 浏览器仿真本体保留 · 外围重绘（无发光）
+     红线：拟真界面为示意图 · 非实拍（角注常驻）；不伪造 DVWA 真实页面内容；
+           检查清单除口播点名的 mysqli / pdo_mysql 外均为抽象行块；地址只出现 127.0.0.1
+     数字白名单：仅 127.0.0.1（口播）
+     ============================================================ -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 0-57 · 初始化 DVWA · 26:09 · 33s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;--accent:#F5572F;--dark:#1C1C1A;--darkink:#F0EFEB;--darkgrid:#2E2D29}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:var(--paper);overflow:hidden;color:var(--ink);font-family:'Inter','Noto Sans SC',sans-serif;-webkit-font-smoothing:antialiased}
+body.paused *{animation-play-state:paused!important}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+.scan{position:absolute;inset:0;pointer-events:none;
+  background-image:linear-gradient(rgba(28,28,26,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.04) 1px,transparent 1px);
+  background-size:44px 44px}
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* 页头 */
+#hdr{position:absolute;left:88px;top:50px;z-index:14}
+#hdr .no{display:inline-block;font:700 13px 'IBM Plex Mono';letter-spacing:.14em;color:var(--paper);background:var(--ink);border-radius:3px;padding:4px 11px}
+#hdr h1{font:800 42px/1.04 'Inter','Noto Sans SC';letter-spacing:-.02em;color:var(--ink);margin-top:10px}
+#hdr h1 b{color:var(--ink)}
+#hdr .sub{font:400 16px 'Noto Sans SC';letter-spacing:.02em;color:var(--muted);margin-top:6px}
+#chipTop{position:absolute;right:88px;top:60px;z-index:14;font:500 14px 'IBM Plex Mono','Noto Sans SC';color:var(--muted);
+  background:#fff;border:1px solid var(--grid);border-radius:999px;padding:9px 20px;opacity:0;transition:opacity .5s}
+#chipTop.in{opacity:1}
+#chipTop b{color:var(--ink);font-weight:600}
+
+/* 浏览器（仿真本体） */
+#browser{position:absolute;left:88px;top:170px;width:1290px;height:800px;border-radius:14px;overflow:hidden;
+  background:#fff;border:1px solid var(--ink);opacity:0;transform:translateY(30px) scale(.72);transition:all .75s cubic-bezier(.16,1,.3,1)}
+#browser.in{opacity:1;transform:none}
+.br-bar{height:54px;display:flex;align-items:center;gap:9px;padding:0 18px;background:var(--paper);border-bottom:1px solid var(--grid)}
+.br-bar i{width:12px;height:12px;border-radius:50%;background:var(--faint)}
+.br-tab{font:500 14.5px 'IBM Plex Mono';color:var(--ink);border:1px solid var(--grid);border-top:none;border-radius:0 0 7px 7px;padding:8px 18px;background:#fff;margin-left:8px}
+.br-url{flex:1;margin-left:10px;font:500 16px 'IBM Plex Mono';color:var(--ink);background:#fff;border:1px solid var(--grid);border-radius:999px;padding:8px 20px;white-space:nowrap;overflow:hidden}
+.br-body{position:relative;height:746px}
+.view{position:absolute;inset:0;transition:opacity .45s ease}
+.view.gone{opacity:0;visibility:hidden}
+/* 登录视图 */
+#vLogin{display:flex;align-items:center;justify-content:center;background:var(--paper)}
+.lg-box{width:470px;background:#fff;border:1px solid var(--ink);border-radius:12px;padding:34px 40px}
+.lg-box .lt{font:800 38px 'Inter','Noto Sans SC';color:var(--ink);letter-spacing:-.01em;margin-bottom:8px}
+.lg-box .ls{font:400 14px 'Noto Sans SC';color:var(--muted);letter-spacing:.02em;margin-bottom:22px}
+.lg-f{display:flex;align-items:center;gap:12px;margin-bottom:13px}
+.lg-f label{font:500 15px 'IBM Plex Mono';color:var(--muted);width:104px}
+.lg-f .ip{flex:1;font:500 18px 'IBM Plex Mono';color:var(--ink);background:var(--paper);border:1px solid var(--grid);border-radius:6px;padding:9px 13px;min-height:42px;display:flex;align-items:center;transition:border-color .3s,background .3s}
+.lg-f .ip.hi{border-color:var(--ink);border-width:2px;background:#fff}
+#lgGo{margin-top:8px;width:100%;background:var(--ink);border:none;border-radius:6px;color:var(--paper);font:800 20px 'Inter','Noto Sans SC';
+  letter-spacing:.08em;padding:12px 0;transition:transform .18s,opacity .3s;opacity:.35}
+#lgGo.on{opacity:1}
+#lgGo.press{transform:scale(.95)}
+/* Setup 视图 */
+#vSetup{display:flex;flex-direction:column;padding:44px 34px 0;background:#fff}
+.su-t{font:800 30px 'Inter','Noto Sans SC';color:var(--ink);letter-spacing:-.01em}
+.su-s{font:400 14.5px 'Noto Sans SC';color:var(--muted);margin:4px 0 16px}
+#clWrap{flex:none;height:520px;overflow:hidden;position:relative}
+#clInner{transition:transform .85s cubic-bezier(.16,1,.3,1)}
+.crow{display:flex;align-items:center;gap:14px;height:70px;border:1px solid var(--grid);border-radius:9px;
+  background:#fff;padding:0 18px;margin-bottom:12px;opacity:0;transform:translateX(-16px);
+  transition:opacity .45s cubic-bezier(.16,1,.3,1),transform .45s cubic-bezier(.16,1,.3,1),border-color .4s,background .4s}
+.crow.in{opacity:1;transform:none}
+.crow .ct{font:500 17px 'IBM Plex Mono';color:var(--ink);letter-spacing:.02em}
+.crow .badge{margin-left:auto;font:600 14px 'IBM Plex Mono';color:var(--muted);border:1px solid var(--faint);border-radius:999px;padding:3px 12px;transition:all .4s}
+.crow.foc{border-color:var(--ink);border-width:2px}
+.crow.green{border-color:var(--ink);background:var(--dark)}
+.crow.green .ct{color:var(--darkink)}
+.crow.green .badge{color:var(--ink);background:var(--darkink);border-color:var(--darkink)}
+.crow.ghost{opacity:.5}
+#suFoot{height:110px;display:flex;align-items:center;gap:18px;border-top:1px solid var(--grid);background:var(--paper);padding:0 6px}
+.sbtn{font:700 18px 'IBM Plex Mono','Noto Sans SC';letter-spacing:.04em;color:var(--paper);background:var(--ink);border:none;border-radius:7px;padding:13px 26px;transition:transform .2s,opacity .25s;opacity:.35}
+.sbtn.on{opacity:1}
+.sbtn.press{transform:scale(.94)}
+.su-note{font:400 14px 'Noto Sans SC';color:var(--muted)}
+/* 成功视图 */
+#vDone{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:var(--paper)}
+.dn-card{background:var(--dark);border-radius:14px;padding:32px 56px;text-align:center}
+.dn-card .d1{font:800 38px 'Inter';color:var(--darkink);letter-spacing:.02em}
+.dn-card .d2{font:400 16px 'Noto Sans SC';color:#B0AFA9;margin-top:8px}
+.dn-tip{font:500 15px 'IBM Plex Mono';color:var(--muted);letter-spacing:.04em}
+.viz-note{position:absolute;right:16px;bottom:14px;z-index:9;font:600 13px 'IBM Plex Mono','Noto Sans SC';letter-spacing:.06em;
+  color:var(--paper);background:var(--ink);border-radius:4px;padding:3px 10px}
+
+/* 右：对照 + 重点 */
+#side{position:absolute;left:1410px;top:170px;width:422px;height:800px;background:#fff;border:1px solid var(--grid);border-radius:12px;
+  opacity:0;transform:translateY(26px);transition:all .7s cubic-bezier(.16,1,.3,1)}
+#side.in{opacity:1;transform:none}
+.sd-t{font:800 24px 'Inter','Noto Sans SC';color:var(--ink);letter-spacing:-.01em;padding:22px 24px 4px}
+.sd-s{font:400 14px 'Noto Sans SC';color:var(--muted);padding:0 24px 14px}
+.acct{border-radius:10px;padding:14px 18px;margin:0 24px 12px;opacity:0;transform:translateY(12px);transition:all .5s cubic-bezier(.16,1,.3,1),background .4s,color .4s}
+.acct.in{opacity:1;transform:none}
+.acct .ah{font:600 12px 'IBM Plex Mono';letter-spacing:.14em;text-transform:uppercase;margin-bottom:8px}
+.acct .av{font:600 19px 'IBM Plex Mono';letter-spacing:.02em}
+.acct .av i{color:var(--muted);font-style:normal;margin:0 8px}
+.acct.web{border:1.5px solid var(--ink);background:#fff}
+.acct.web .ah{color:var(--muted)}
+.acct.web .av{color:var(--ink)}
+.acct.db{border:1.5px solid var(--ink);background:var(--dark)}
+.acct.db .ah{color:#B0AFA9}
+.acct.db .av{color:var(--darkink)}
+.acct.db .av i{color:#8F8E88}
+#neq{text-align:center;font:700 22px 'Inter','Noto Sans SC';color:var(--muted);letter-spacing:.14em;opacity:0;transition:opacity .45s;margin:-2px 0 10px}
+#neq.in{opacity:1}
+#bigWarn{margin:4px 24px 0;border-radius:10px;padding:14px;text-align:center;font:800 18px 'Noto Sans SC';letter-spacing:.1em;
+  color:#fff;background:var(--accent);opacity:0;transform:scale(1.12);transition:all .3s cubic-bezier(.2,1.6,.4,1)}
+#bigWarn.in{opacity:1;transform:none}
+.focus2{margin:18px 24px 0;border:1.5px solid var(--ink);border-radius:10px;padding:16px 18px;background:#fff;
+  opacity:0;transform:translateY(12px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+.focus2.in{opacity:1;transform:none}
+.focus2 .fh{font:800 15px 'Noto Sans SC';color:var(--ink);letter-spacing:.06em;margin-bottom:12px}
+.frow2{display:flex;align-items:center;gap:10px;font:500 16px 'IBM Plex Mono';color:var(--muted);
+  padding:8px 0;border-bottom:1px solid var(--grid);opacity:.45;transition:opacity .45s,color .45s}
+.frow2:last-of-type{border-bottom:none}
+.frow2.lit{opacity:1;color:var(--ink)}
+.frow2 .ok{margin-left:auto;font:700 13px 'IBM Plex Mono';color:var(--paper);background:var(--ink);border-radius:3px;padding:2px 9px;opacity:0;transform:scale(.6);transition:all .4s cubic-bezier(.2,1.6,.4,1)}
+.frow2.lit .ok{opacity:1;transform:none}
+.focus2 .fc{font:400 13.5px 'Noto Sans SC';color:var(--muted);margin-top:10px;opacity:0;transition:opacity .45s}
+.focus2 .fc.in{opacity:1}
+
+/* 大肥鱼 */
+.fish{position:absolute;left:470px;top:958px;z-index:30;display:flex;align-items:flex-end;gap:12px;pointer-events:none;
+  opacity:0;transform:translateY(20px) scale(.9);transition:all .5s cubic-bezier(.2,1.5,.4,1)}
+.fish.in{opacity:1;transform:none}
+.fish img{width:110px;height:110px;object-fit:contain}
+.say{max-width:470px;margin-bottom:8px;background:#fff;border:1.5px solid var(--ink);border-radius:12px;padding:9px 15px;
+  font:700 15.5px 'Noto Sans SC';color:var(--ink);line-height:1.45}
+.say b{font-weight:900;color:var(--ink)}
+
+/* 角注 / HUD */
+.corner{position:absolute;font:500 15px 'Inter','Noto Sans SC';letter-spacing:.06em;color:var(--faint);z-index:41}
+#chap{left:88px;bottom:30px}
+#src{right:88px;bottom:30px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:var(--grid)}
+#bar{height:100%;width:0;background:var(--ink)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(240,239,235,.94);color:var(--muted)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid var(--faint);color:var(--ink);font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(28,28,26,.06)}
+#replay.done{border-color:var(--ink);color:var(--ink)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="scan"></div>
+  <div id="cam">
+    <div id="hdr">
+      <span class="no">SHOT 0-57 · 26:09</span>
+      <h1>初始化 <b>·</b> Create / Reset Database</h1>
+      <div class="sub">127.0.0.1/dvwa · 第一次进来先把库建起来</div>
+    </div>
+    <div id="chipTop">顺手把难度调一下 <b>→ 下一镜</b></div>
+
+    <!-- 浏览器 -->
+    <div id="browser">
+      <div class="br-bar"><i></i><i></i><i></i><span class="br-tab" id="brTab">DVWA :: Login</span><span class="br-url" id="brUrl">http://127.0.0.1</span></div>
+      <div class="br-body">
+        <!-- 登录 -->
+        <div class="view" id="vLogin">
+          <div class="lg-box">
+            <div class="lt">DVWA LOGIN</div>
+            <div class="ls">DVWA 网站自己的登录账号</div>
+            <div class="lg-f"><label>Username</label><span class="ip" id="ipU"></span></div>
+            <div class="lg-f"><label>Password</label><span class="ip" id="ipP"></span></div>
+            <button id="lgGo">LOGIN</button>
+          </div>
+        </div>
+        <!-- Setup -->
+        <div class="view gone" id="vSetup">
+          <div class="su-t">Database Setup</div>
+          <div class="su-s">环境检查清单 · 逐项告诉你够不够</div>
+          <div id="clWrap"><div id="clInner">
+            <div class="crow" id="r1"><span class="ct">PHP 版本</span><span class="badge">检查</span></div>
+            <div class="crow" id="r2"><span class="ct">MySQL 扩展</span><span class="badge">检查</span></div>
+            <div class="crow foc" id="r3"><span class="ct">mysqli</span><span class="badge" id="bd3">检查</span></div>
+            <div class="crow foc" id="r4"><span class="ct">pdo_mysql</span><span class="badge" id="bd4">检查</span></div>
+            <div class="crow ghost" id="r5"><span class="ct">其他检查项 …</span><span class="badge">略</span></div>
+            <div class="crow ghost" id="r6"><span class="ct">其他检查项 …</span><span class="badge">略</span></div>
+            <div class="crow ghost" id="r7"><span class="ct">其他检查项 …</span><span class="badge">略</span></div>
+            <div class="crow ghost" id="r8"><span class="ct">其他检查项 …</span><span class="badge">略</span></div>
+          </div></div>
+          <div id="suFoot">
+            <button class="sbtn" id="crBtn">Create / Reset Database</button>
+            <span class="su-note" id="suNote">拉到底 · 点它</span>
+          </div>
+        </div>
+        <!-- 成功 -->
+        <div class="view gone" id="vDone">
+          <div class="dn-card"><div class="d1">SETUP SUCCESSFUL ✓</div><div class="d2">数据库已创建 · 回到登录页重新登录</div></div>
+          <div class="dn-tip">→ 跳回登录页 …</div>
+        </div>
+        <span class="viz-note">示意图 · 非实拍</span>
+      </div>
+    </div>
+
+    <!-- 右侧对照 -->
+    <div id="side">
+      <div class="sd-t">两套账号 · 别搞混</div>
+      <div class="sd-s">登录网站的 ≠ 连数据库的</div>
+      <div class="acct web" id="aW"><div class="ah">网站登录（现在填的）</div><div class="av">admin <i>/</i> password</div></div>
+      <div id="neq">≠　不 是 一 回 事</div>
+      <div class="acct db" id="aD"><div class="ah">数据库账号（上一镜建的）</div><div class="av">dvwa <i>/</i> p@ssw0rd</div></div>
+      <div id="bigWarn">不 要 搞 混 了</div>
+      <div class="focus2" id="fo2">
+        <div class="fh">只 看 两 项</div>
+        <div class="frow2" id="f3"><span>mysqli</span><span class="ok">✓ 通过</span></div>
+        <div class="frow2" id="f4"><span>pdo_mysql</span><span class="ok">✓ 通过</span></div>
+        <div class="fc" id="fo2c">这两项通过 → 连接数据库没有问题</div>
+      </div>
+      <span class="viz-note">示意图 · 非实拍</span>
+    </div>
+
+    <!-- 大肥鱼 -->
+    <div class="fish" id="fishA"><img src="Shark-GIF/006_双手身前微笑乖巧期待.gif" alt=""><div class="say">清单不用逐条看懂，<b>盯住两项通过的就够</b></div></div>
+    <div class="fish" id="fishB"><img src="Shark-GIF/026_双手合十微笑请求拜托.gif" alt=""><div class="say">点一下 <b>Create / Reset</b>，库就建好了 · 接着跳回登录页</div></div>
+
+  </div>
+
+  <div class="corner" id="chap">第六章 · 立靶场（DVWA 十分钟就绪）</div>
+  <div class="corner" id="src">口播对齐 timeline.md · DVWA 界面为示意图 · 非实拍</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-57 · 初始化 DVWA · 33s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=33000; /* ←⑤ DUR=分镜时长(ms) */
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ===== 本页补间工具 ===== */
+function typ(el,str,start,dur){
+  for(let i=tws.length-1;i>=0;i--)if(tws[i].typel===el)tws.splice(i,1);
+  tws.push({typel:el,t:start,d:dur,e:p=>p,f:p=>{el.textContent=str.slice(0,Math.round(str.length*Math.min(1,p)));}});
+}
+function rev(sel,cls){const e=$(sel);if(e)e.classList.add(cls||'in');}
+function showView(id){document.querySelectorAll('.view').forEach(v=>v.classList.add('gone'));$(id).classList.remove('gone');}
+
+/* ============ ⑤ DUR 与 cue 表 ============
+   cue 时刻 = 口播句起点(绝对) − 镜头起点(26:09=1569s)
+*/
+on(0,()=>{rev('#browser');rev('#side');__sfx.whoosh(.9,.5);});                 // 26:09「所以是」
+on(1200,()=>{__sfx.pop(.45);});                                                // 26:09「好 接下来我们初始化」
+on(2000,()=>{rev('#chipTop');__sfx.ding(.3);});                                // 26:11「顺手把难度调一下」
+on(3000,()=>{typ($('#brUrl'),'http://127.0.0.1',3000,900);__sfx.type(.6);});   // 26:12「我们在浏览器打开127.0.0.1」
+on(5000,()=>{typ($('#brUrl'),'http://127.0.0.1/dvwa',5000,800);__sfx.type(.6);}); // 26:14「然后斜杠DVWA」
+on(7000,()=>{typ($('#ipU'),'admin',7000,600);typ($('#ipP'),'password',7800,900);__sfx.type(.7);}); // 26:16「输入admin和password进去」
+on(9000,()=>{$('#ipU').classList.add('hi');$('#ipP').classList.add('hi');rev('#aW');$('#lgGo').classList.add('on');__sfx.pop(.5);}); // 26:18「这里的admin和password」
+on(10000,()=>{__sfx.pop(.4);});                                                // 26:19「是DVWA网站自己的登录账号」
+on(12000,()=>{rev('#aD');rev('#neq');__sfx.ding(.35);});                       // 26:21「跟我们刚数据库的那一组是不一样的」
+on(14000,()=>{__sfx.pop(.4);});                                                // 26:23「不是一回事」
+on(15000,()=>{rev('#bigWarn');__sfx.thud(.55);});                              // 26:24「不要搞混了」
+on(16000,()=>{$('#lgGo').classList.add('press');__sfx.thud(.5);
+  setTimeout(()=>{showView('#vSetup');$('#brTab').textContent='DVWA :: Setup';},260);});   // 26:25「第一次进来我们先初始化页面」
+on(18000,()=>{rev('#r1');rev('#r2');__sfx.pop(.45);});                         // 26:27「页面上有一份检查清单」
+on(19000,()=>{['r3','r4','r5','r6','r7','r8'].forEach(x=>rev('#'+x));__sfx.pop(.4);});    // 26:28「它会逐项告诉你环境够不够」
+on(16000,()=>{rev('#fishA');__sfx.pop(.5);});                                  // 鱼提前在场
+on(21000,()=>{rev('#fo2');__sfx.pop(.5);});                      // 26:30「但是我们只要看两项就好」
+on(23000,()=>{rev('#f3');rev('#f4');__sfx.type(.6);});                         // 26:32「就是这个mysqli和pdo_mysql」
+on(25000,()=>{['r3','r4'].forEach(x=>$('#'+x).classList.add('green'));$('#bd3').textContent='✓ 通过';$('#bd4').textContent='✓ 通过';
+  ['f3','f4'].forEach(x=>$('#'+x).classList.add('lit'));__sfx.ding(.5);});  // 26:34「这两项是绿的」
+on(26000,()=>{rev('#fo2c');__sfx.pop(.45);});                                  // 26:35「就说明连接数据库没有问题」
+on(28000,()=>{$('#clInner').style.transform='translateY(-136px)';$('#crBtn').classList.add('on');$('#suNote').textContent='到底了 · 点它';__sfx.swipe(.6);}); // 26:37「我们就拉到底」
+on(29000,()=>{$('#crBtn').classList.add('press');__sfx.thud(.7);
+  setTimeout(()=>{showView('#vDone');$('#brTab').textContent='DVWA :: Setup';$('#suNote').textContent='已创建';},300);}); // 26:37「点击Create / Reset Database」
+on(19500,()=>{$('#fishA').classList.remove('in');rev('#fishB');__sfx.ding(.5);}); // 鱼交接 · 末鱼提前在场（26:40）
+
+/* ===== [不动] QA 专用（正常播放不触发）：hash 带 t=毫秒 → 起播后跳转该时刻并冻结 ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

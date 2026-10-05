@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+     镜头 0-54 · 建库建号 · 24:30–25:05（35s，DUR=35000）  【v4 瑞士国际主义】
+     主视觉：diagram-design DP security matrix 权限矩阵（灰阶逐格点亮 · 焦点格橙）
+     副视觉：PHPMyAdmin 示意操作台（扁平白卡）：建库 → 建用户 → 授权 → 执行
+     红线：拟真界面为示意图 · 非实拍；密码/库内容一律示意态；故事发生在 127.0.0.1
+     数字白名单：仅 dvwa / p@ssw0rd / 127.0.0.1（均来自口播）
+     ============================================================ -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 0-54 · 建库建号 · 35s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;--accent:#F5572F;}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Noto Sans SC','Inter',sans-serif}
+body.paused *{animation-play-state:paused!important}
+/* ② 舞台外观 */
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+.gridbg{position:absolute;inset:0;pointer-events:none;z-index:0;
+  background-image:linear-gradient(rgba(28,28,26,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.045) 1px,transparent 1px);
+  background-size:48px 48px}
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ============ ③ 画面层 CSS ============ */
+/* 页眉 */
+#hdr{position:absolute;left:64px;top:36px;z-index:14}
+#hdr .no{display:inline-flex;align-items:center;font:700 14px 'IBM Plex Mono';letter-spacing:.14em;
+  color:var(--paper);background:var(--ink);border-radius:3px;padding:4px 12px}
+#hdr h1{margin-top:10px;font:900 38px 'Noto Sans SC',Inter;color:var(--ink);letter-spacing:.02em}
+#hdr h1 b{color:var(--ink)}
+#hdr .sub{margin-top:4px;font:500 16px 'Noto Sans SC';color:var(--muted);letter-spacing:.06em}
+#railTag{position:absolute;right:64px;top:48px;z-index:14;font:600 14px 'IBM Plex Mono';letter-spacing:.06em;
+  color:var(--ink);border:1px solid var(--ink);border-radius:999px;padding:7px 18px;background:var(--card);opacity:0;transition:opacity .5s}
+#railTag.in{opacity:1}
+#railTag b{color:var(--ink);font-weight:700}
+
+/* 左：示意操作台（扁平白卡） */
+#dbwin{position:absolute;left:64px;top:160px;width:600px;height:740px;border-radius:14px;overflow:hidden;
+  background:var(--card);border:1px solid var(--ink);
+  opacity:0;transform:translateY(34px) scale(.98);transition:all .7s cubic-bezier(.16,1,.3,1)}
+#dbwin.in{opacity:1;transform:none}
+.dw-bar{height:48px;display:flex;align-items:center;gap:9px;padding:0 16px;background:var(--paper);border-bottom:1px solid var(--grid)}
+.dw-bar i{width:12px;height:12px;border-radius:50%;background:#D8D7D1;border:1px solid var(--grid)}
+.dw-url{flex:1;margin-left:8px;font:500 15px 'IBM Plex Mono';color:var(--ink);background:var(--card);
+  border:1px solid var(--ink);border-radius:999px;padding:6px 16px;white-space:nowrap}
+.dw-body{padding:14px 18px 0}
+.dw-title{display:flex;align-items:baseline;gap:12px;margin-bottom:12px}
+.dw-title .tt{font:800 26px Inter,'Noto Sans SC';color:var(--ink);letter-spacing:.01em}
+.dw-title .badge{font:600 13px 'IBM Plex Mono';color:var(--ink);border:1px solid var(--ink);border-radius:999px;padding:3px 10px;letter-spacing:.04em;
+  opacity:0;transform:translateX(-8px);transition:all .45s}
+.dw-title .badge.in{opacity:1;transform:none}
+/* 步骤 */
+.dstep{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:9px;margin-bottom:8px;
+  border:1px solid var(--grid);background:var(--paper);
+  opacity:.3;transform:translateX(-16px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+.dstep.on{opacity:1;transform:none;border-color:var(--ink);background:var(--card)}
+.dstep.done{border-color:var(--ink)}
+.dstep.done .n{background:var(--ink);color:var(--paper)}
+.dstep .n{font:700 15px 'IBM Plex Mono';color:var(--ink);width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:4px}
+.dstep .t{font:700 16.5px 'Noto Sans SC';color:var(--ink);letter-spacing:.01em}
+.dstep .v{margin-left:auto;font:600 15px 'IBM Plex Mono';color:var(--ink)}
+/* 表单 */
+.pane{margin-top:12px;border:1px solid var(--grid);border-radius:10px;padding:13px 15px;background:var(--paper);
+  opacity:0;transform:translateY(14px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+.pane.in{opacity:1;transform:none}
+.pane .pt{font:600 13px 'IBM Plex Mono';letter-spacing:.1em;color:var(--muted);margin-bottom:10px}
+.frow{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+.frow label{width:118px;font:500 14.5px 'Noto Sans SC';color:var(--muted);flex:none}
+.fld{flex:1;min-height:36px;font:500 16px 'IBM Plex Mono';color:var(--ink);background:var(--card);
+  border:1px solid var(--ink);border-radius:6px;padding:7px 12px;display:flex;align-items:center;white-space:nowrap;overflow:hidden}
+.fld.hi{border-width:2px}
+.caret{display:inline-block;width:8px;height:18px;background:var(--ink);margin-left:2px;animation:blk 1s steps(1) infinite}
+@keyframes blk{50%{opacity:0}}
+.btn{display:inline-flex;align-items:center;font:700 15.5px 'Noto Sans SC';color:var(--paper);background:var(--ink);border-radius:7px;
+  padding:8px 20px;letter-spacing:.02em;opacity:0;transform:scale(.94);transition:all .35s cubic-bezier(.2,1.5,.4,1)}
+.btn.in{opacity:1;transform:none}
+.btn.press{transform:scale(.9)}
+.btn.amb{background:var(--card);color:var(--ink);border:1px solid var(--ink)}
+.chk{width:22px;height:22px;flex:none;border:2px solid var(--faint);border-radius:5px;position:relative;transition:all .3s}
+.chk.on{background:var(--ink);border-color:var(--ink)}
+.chk.on::after{content:'';position:absolute;left:6px;top:1px;width:6px;height:12px;border:solid var(--paper);border-width:0 3px 3px 0;transform:rotate(45deg)}
+.chk-txt{font:500 14px 'Noto Sans SC';color:var(--ink);line-height:1.4}
+/* 底部状态行 */
+.dw-foot{position:absolute;left:0;right:0;bottom:0;height:44px;display:flex;align-items:center;gap:12px;padding:0 18px;
+  background:var(--paper);border-top:1px solid var(--grid)}
+.dw-foot .st{font:500 14px 'IBM Plex Mono';color:var(--muted);letter-spacing:.02em}
+.dw-foot .st.done{color:var(--ink);font-weight:600}
+/* 右：权限矩阵 */
+#mtxWrap{position:absolute;left:700px;top:160px;width:1156px;height:740px;border-radius:14px;
+  background:var(--card);border:1px solid var(--ink);
+  opacity:0;transform:translateY(30px) scale(.985);transition:all .75s cubic-bezier(.16,1,.3,1)}
+#mtxWrap.in{opacity:1;transform:none}
+#mtxCap{position:absolute;left:34px;top:20px;font:900 25px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em}
+#mtxCap b{color:var(--ink)}
+#mtxSub{position:absolute;left:34px;top:56px;font:500 14.5px 'Noto Sans SC';color:var(--muted);letter-spacing:.03em}
+#mtxSvg{position:absolute;left:28px;top:84px;width:1100px;height:600px}
+.cell{opacity:.12;transition:opacity .45s ease}
+.cell.lit{opacity:1}
+.cell.foc{opacity:0}
+.cell.foc.lit{opacity:1}
+/* 角注（示意） */
+.viz-note{position:absolute;right:14px;bottom:10px;z-index:9;font:600 12px 'IBM Plex Mono';letter-spacing:.06em;
+  color:var(--paper);background:var(--ink);border-radius:3px;padding:3px 9px}
+/* 大肥鱼 */
+.fish{position:absolute;left:620px;top:900px;z-index:30;display:flex;align-items:flex-end;gap:12px;pointer-events:none;
+  opacity:0;transform:translateY(20px) scale(.9);transition:all .5s cubic-bezier(.2,1.5,.4,1)}
+.fish.in{opacity:1;transform:none}
+.fish img{width:142px;height:142px;object-fit:contain}
+.say{max-width:360px;margin-bottom:14px;background:var(--card);border:1.5px solid var(--ink);border-radius:14px;padding:11px 16px;
+  font:700 16px 'Noto Sans SC';color:var(--ink);line-height:1.5}
+.say b{color:var(--ink);font-weight:900}
+/* 印章（墨底反白） */
+#stamp{position:absolute;left:1178px;top:892px;z-index:28;transform:rotate(-8deg) scale(2.6);opacity:0;
+  transform-origin:left top;transition:all .26s cubic-bezier(.2,1.7,.4,1);pointer-events:none}
+#stamp.in{opacity:1;transform:rotate(-8deg) scale(1)}
+#stamp .sp{display:block;border:4px double var(--ink);border-radius:12px;padding:12px 30px 14px;text-align:center;background:var(--ink)}
+#stamp .s1{display:block;font:900 46px 'Noto Sans SC';color:var(--paper);letter-spacing:.16em;text-indent:.16em}
+#stamp .s2{display:block;font:500 15px 'Noto Sans SC';color:var(--faint);letter-spacing:.06em;margin-top:3px}
+
+/* ----- 角注 / HUD ----- */
+.corner{position:absolute;font:500 16px 'Noto Sans SC';color:var(--muted);letter-spacing:.04em;z-index:41}
+#chap{left:52px;bottom:30px}
+#src{right:52px;bottom:30px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:rgba(28,28,26,.12)}
+#bar{height:100%;width:0;background:var(--ink)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(240,239,235,.94);color:var(--muted)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid var(--grid);color:var(--ink);font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(28,28,26,.06)}
+#replay.done{border-color:var(--accent);color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="gridbg"></div>
+  <!-- ============ ④ 画面层 HTML ============ -->
+  <div id="cam">
+    <!-- 页眉 -->
+    <div id="hdr">
+      <span class="no">SHOT 0-54 · 24:30</span>
+      <h1>建库 <b>·</b> 建号 <b>·</b> 授权</h1>
+      <div class="sub">不用敲命令 · 网页点一点</div>
+    </div>
+    <div id="railTag">数据库 <b>dvwa</b> · 账号 <b>dvwa</b> · 密码 <b>p@ssw0rd</b></div>
+
+    <!-- 左：示意操作台 -->
+    <div id="dbwin">
+      <div class="dw-bar"><i></i><i></i><i></i><span class="dw-url" id="urlBar">http://127.0.0.1</span></div>
+      <div class="dw-body">
+        <div class="dw-title"><span class="tt" id="ttl">PHPMyAdmin</span><span class="badge" id="badge">XAMPP 自带 · 网页版</span></div>
+
+        <div class="dstep" id="st1"><span class="n">01</span><span class="t">新建数据库</span><span class="v" id="v1"></span></div>
+        <div class="dstep" id="st2"><span class="n">02</span><span class="t">添加用户账户</span><span class="v" id="v2"></span></div>
+        <div class="dstep" id="st3"><span class="n">03</span><span class="t">勾选授权</span><span class="v" id="v3"></span></div>
+        <div class="dstep" id="st4"><span class="n">04</span><span class="t">执行</span><span class="v" id="v4"></span></div>
+
+        <div class="pane" id="dbPane">
+          <div class="pt">新建数据库</div>
+          <div class="frow"><label>数据库名</label><span class="fld" id="dbName"></span></div>
+          <button class="btn" id="dbGo">创 建</button>
+        </div>
+
+        <div class="pane" id="usPane">
+          <div class="pt">添加用户账户</div>
+          <div class="frow"><label>用户名</label><span class="fld" id="uName"></span></div>
+          <div class="frow"><label>主机名</label><span class="fld hi" id="uHost">本地 · localhost（默认）</span></div>
+          <div class="frow"><label>密码</label><span class="fld hi" id="uPass"></span></div>
+          <div class="frow"><span class="chk" id="ck"></span><span class="chk-txt">创建与用户名同名的数据库<br>并授予全部权限</span></div>
+          <button class="btn amb" id="usGo">执 行</button>
+        </div>
+      </div>
+      <div class="dw-foot"><span class="st" id="footSt">等待操作…</span></div>
+      <span class="viz-note">示意图 · 非实拍</span>
+    </div>
+
+    <!-- 右：DP 权限矩阵（灰阶逐格点亮 · 焦点格橙） -->
+    <div id="mtxWrap">
+      <div id="mtxCap">权限矩阵 <b>· GRANT</b></div>
+      <div id="mtxSub">行 = 数据库对象　列 = 账号　格 = 该账号的权限（逐格点亮）</div>
+      <svg id="mtxSvg" viewBox="0 0 980 530" preserveAspectRatio="xMidYMid meet">
+        <!-- 表头 -->
+        <rect x="16" y="20" width="300" height="56" rx="6" fill="#FFFFFF" stroke="#1C1C1A" stroke-width="1"/>
+        <text x="166" y="44" text-anchor="middle" fill="#1C1C1A" font-family="IBM Plex Mono,monospace" font-size="15" font-weight="700">数据库对象</text>
+        <text x="166" y="63" text-anchor="middle" fill="#8F8E88" font-family="IBM Plex Mono,monospace" font-size="12">vs. 账号</text>
+
+        <rect id="hd0" x="336" y="20" width="290" height="56" rx="6" fill="#1C1C1A" stroke="#1C1C1A" stroke-width="1"/>
+        <text x="481" y="44" text-anchor="middle" fill="#F0EFEB" font-family="IBM Plex Mono,monospace" font-size="15" font-weight="700">root</text>
+        <text x="481" y="63" text-anchor="middle" fill="#C6C5BF" font-family="IBM Plex Mono,monospace" font-size="12">数据库管理员 · 本机</text>
+
+        <rect id="hd1" x="650" y="20" width="290" height="56" rx="6" fill="#1C1C1A" stroke="#1C1C1A" stroke-width="1"/>
+        <text x="795" y="44" text-anchor="middle" fill="#F0EFEB" font-family="IBM Plex Mono,monospace" font-size="15" font-weight="700">dvwa</text>
+        <text x="795" y="63" text-anchor="middle" fill="#C6C5BF" font-family="IBM Plex Mono,monospace" font-size="12">DVWA 专用账号 · 新建</text>
+
+        <!-- 行 0 · dvwa 数据库 -->
+        <rect x="16" y="96" width="300" height="56" rx="6" fill="#F7F6F2" stroke="#DEDDD6" stroke-width="1"/>
+        <text x="30" y="130" fill="#1C1C1A" font-family="IBM Plex Mono,monospace" font-size="16">dvwa 数据库</text>
+        <text x="302" y="130" text-anchor="end" fill="#8F8E88" font-family="IBM Plex Mono,monospace" font-size="12">新建</text>
+        <g class="cell" id="c00"><rect x="336" y="96" width="290" height="56" rx="6" fill="rgba(28,28,26,.08)" stroke="rgba(28,28,26,.12)" stroke-width="1"/><text x="481" y="130" text-anchor="middle" fill="#1C1C1A" font-family="IBM Plex Mono,monospace" font-size="15" font-weight="600">全部</text></g>
+        <g class="cell foc" id="c01"><rect x="650" y="96" width="290" height="56" rx="6" fill="rgba(245,87,47,.08)" stroke="#F5572F" stroke-width="1.8"/><text x="795" y="122" text-anchor="middle" fill="#F5572F" font-family="IBM Plex Mono,monospace" font-size="15" font-weight="700">全部权限</text><text x="795" y="140" text-anchor="middle" fill="#F5572F" font-family="IBM Plex Mono,monospace" font-size="11">GRANT ALL</text></g>
+
+        <!-- 行 1 · users 表 -->
+        <rect x="16" y="158" width="300" height="56" rx="6" fill="#F7F6F2" stroke="#DEDDD6" stroke-width="1"/>
+        <text x="30" y="192" fill="#1C1C1A" font-family="IBM Plex Mono,monospace" font-size="16">users 表</text>
+        <text x="302" y="192" text-anchor="end" fill="#8F8E88" font-family="IBM Plex Mono,monospace" font-size="12">读取数据</text>
+        <g class="cell" id="c10"><rect x="336" y="158" width="290" height="56" rx="6" fill="rgba(28,28,26,.08)" stroke="rgba(28,28,26,.12)" stroke-width="1"/><text x="481" y="192" text-anchor="middle" fill="#1C1C1A" font-family="IBM Plex Mono,monospace" font-size="15" font-weight="600">全部</text></g>
+        <g class="cell" id="c11"><rect x="650" y="158" width="290" height="56" rx="6" fill="#FFFFFF" stroke="rgba(28,28,26,.12)" stroke-width="1"/><text x="795" y="192" text-anchor="middle" fill="#1C1C1A" font-family="IBM Plex Mono,monospace" font-size="15">读 / 写</text></g>
+
+        <!-- 行 2 · 表结构 -->
+        <rect x="16" y="220" width="300" height="56" rx="6" fill="#F7F6F2" stroke="#DEDDD6" stroke-width="1"/>
+        <text x="30" y="254" fill="#1C1C1A" font-family="IBM Plex Mono,monospace" font-size="16">表结构 Schema</text>
+        <g class="cell" id="c20"><rect x="336" y="220" width="290" height="56" rx="6" fill="rgba(28,28,26,.08)" stroke="rgba(28,28,26,.12)" stroke-width="1"/><text x="481" y="254" text-anchor="middle" fill="#1C1C1A" font-family="IBM Plex Mono,monospace" font-size="15" font-weight="600">全部</text></g>
+        <g class="cell" id="c21"><rect x="650" y="220" width="290" height="56" rx="6" fill="#FFFFFF" stroke="rgba(28,28,26,.12)" stroke-width="1"/><text x="795" y="254" text-anchor="middle" fill="#1C1C1A" font-family="IBM Plex Mono,monospace" font-size="15">读 / 写</text></g>
+
+        <!-- 行 3 · 数据读写 -->
+        <rect x="16" y="282" width="300" height="56" rx="6" fill="#F7F6F2" stroke="#DEDDD6" stroke-width="1"/>
+        <text x="30" y="316" fill="#1C1C1A" font-family="IBM Plex Mono,monospace" font-size="16">数据读写 DML</text>
+        <g class="cell" id="c30"><rect x="336" y="282" width="290" height="56" rx="6" fill="rgba(28,28,26,.08)" stroke="rgba(28,28,26,.12)" stroke-width="1"/><text x="481" y="316" text-anchor="middle" fill="#1C1C1A" font-family="IBM Plex Mono,monospace" font-size="15" font-weight="600">全部</text></g>
+        <g class="cell" id="c31"><rect x="650" y="282" width="290" height="56" rx="6" fill="#FFFFFF" stroke="rgba(28,28,26,.12)" stroke-width="1"/><text x="795" y="316" text-anchor="middle" fill="#1C1C1A" font-family="IBM Plex Mono,monospace" font-size="15">读 / 写</text></g>
+
+        <!-- 行 4 · 存储过程 / 视图 -->
+        <rect x="16" y="344" width="300" height="56" rx="6" fill="#F7F6F2" stroke="#DEDDD6" stroke-width="1"/>
+        <text x="30" y="378" fill="#1C1C1A" font-family="IBM Plex Mono,monospace" font-size="16">存储过程 / 视图</text>
+        <g class="cell" id="c40"><rect x="336" y="344" width="290" height="56" rx="6" fill="rgba(28,28,26,.08)" stroke="rgba(28,28,26,.12)" stroke-width="1"/><text x="481" y="378" text-anchor="middle" fill="#1C1C1A" font-family="IBM Plex Mono,monospace" font-size="15" font-weight="600">全部</text></g>
+        <g class="cell" id="c41"><rect x="650" y="344" width="290" height="56" rx="6" fill="#FFFFFF" stroke="rgba(28,28,26,.12)" stroke-width="1"/><text x="795" y="378" text-anchor="middle" fill="#1C1C1A" font-family="IBM Plex Mono,monospace" font-size="15">读 / 写</text></g>
+
+        <!-- 行 5 · 账号管理 -->
+        <rect x="16" y="406" width="300" height="56" rx="6" fill="#F7F6F2" stroke="#DEDDD6" stroke-width="1"/>
+        <text x="30" y="440" fill="#1C1C1A" font-family="IBM Plex Mono,monospace" font-size="16">账号管理 GRANT</text>
+        <g class="cell" id="c50"><rect x="336" y="406" width="290" height="56" rx="6" fill="rgba(28,28,26,.08)" stroke="rgba(28,28,26,.12)" stroke-width="1"/><text x="481" y="440" text-anchor="middle" fill="#1C1C1A" font-family="IBM Plex Mono,monospace" font-size="15" font-weight="600">全部</text></g>
+        <g class="cell" id="c51"><rect x="650" y="406" width="290" height="56" rx="6" fill="#F0EFEB" stroke="rgba(28,28,26,.12)" stroke-width="1"/><text x="795" y="440" text-anchor="middle" fill="#8F8E88" font-family="IBM Plex Mono,monospace" font-size="15">无权限</text></g>
+
+        <!-- 图例 -->
+        <line x1="16" y1="486" x2="964" y2="486" stroke="#DEDDD6" stroke-width="1"/>
+        <text x="16" y="512" fill="#8F8E88" font-family="IBM Plex Mono,monospace" font-size="11" letter-spacing="2">LEGEND</text>
+        <rect x="96" y="499" width="16" height="13" rx="2" fill="rgba(245,87,47,.1)" stroke="#F5572F"/>
+        <text x="120" y="511" fill="#4A4944" font-family="IBM Plex Mono,monospace" font-size="12">全部权限（本次授予）</text>
+        <rect x="300" y="499" width="16" height="13" rx="2" fill="#FFFFFF" stroke="rgba(28,28,26,.25)"/>
+        <text x="324" y="511" fill="#4A4944" font-family="IBM Plex Mono,monospace" font-size="12">读写</text>
+        <rect x="400" y="499" width="16" height="13" rx="2" fill="rgba(28,28,26,.08)" stroke="rgba(28,28,26,.25)"/>
+        <text x="424" y="511" fill="#4A4944" font-family="IBM Plex Mono,monospace" font-size="12">全部（管理员）</text>
+        <rect x="560" y="499" width="16" height="13" rx="2" fill="#F0EFEB" stroke="rgba(28,28,26,.25)"/>
+        <text x="584" y="511" fill="#4A4944" font-family="IBM Plex Mono,monospace" font-size="12">无权限</text>
+      </svg>
+    </div>
+
+    <!-- 印章 -->
+    <div id="stamp"><span class="sp"><span class="s1">授 权 完 成</span><span class="s2">dvwa → dvwa · 全部权限</span></span></div>
+
+    <!-- 大肥鱼 -->
+    <div class="fish" id="fishA"><img src="Shark-GIF/006_双手身前微笑乖巧期待.gif" alt=""><div class="say">这一块<b>一条命令都不用敲</b>，网页点一点就建好了</div></div>
+    <div class="fish" id="fishB"><img src="Shark-GIF/026_双手合十微笑请求拜托.gif" alt=""><div class="say">库、账号、密码<b>三样对齐</b>，下一步配置才有得连</div></div>
+
+  </div>
+
+  <!-- 角注 -->
+  <div class="corner" id="chap">第六章 · 立靶场（DVWA 十分钟就绪）</div>
+  <div class="corner" id="src">口播对齐 timeline.md · 界面为示意图 · 非实拍</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-54 · 建库建号 · 35s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=35000; /* ←⑤ DUR=分镜时长(ms) */
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ===== 本页补间工具 ===== */
+/* 打字机：逐个字符上屏 */
+function typ(el,str,start,dur){
+  for(let i=tws.length-1;i>=0;i--)if(tws[i].typel===el)tws.splice(i,1);   /* 同一元素重复打字：旧补间先撤离，避免冻结回放时被旧值覆盖 */
+  tws.push({typel:el,t:start,d:dur,e:p=>p,f:p=>{const n=Math.round(str.length*Math.min(1,p));el.textContent=str.slice(0,n);}});
+}
+function lit(id,cls){const e=document.getElementById(id);if(e)e.classList.add(cls||'lit');}
+function reveal(sel,cls){const e=$(sel);if(e)e.classList.add(cls||'in');}
+
+/* ============ ⑤ DUR 与 cue 表 ============
+   cue 时刻 = 口播句起点(绝对) − 镜头起点(24:30=1470s)
+*/
+on(300,()=>{reveal('#dbwin');reveal('#mtxWrap');__sfx.whoosh(.9,.5);});          // 24:30「然后数据库这一块不用敲命令」
+on(2000,()=>{reveal('#badge');__sfx.pop(.5);});                                   // 24:32「XAMPP里面自带一个网页版的数据库管理工具」
+on(5000,()=>{typ($('#ttl'),'PHPMyAdmin',5000,900);__sfx.type(.5);reveal('#railTag');}); // 24:35「叫做PHPMyAdmin」
+on(6000,()=>{reveal('#dbPane');$('#st1').classList.add('on');__sfx.pop(.4);});    // 24:36「点击一下就能建好」
+on(7000,()=>{typ($('#urlBar'),'http://127.0.0.1',7000,900);__sfx.type(.6);});     // 24:37「我们在浏览器打开127.0.0.1」
+on(10000,()=>{typ($('#urlBar'),'http://127.0.0.1/phpmyadmin',10000,900);__sfx.type(.6);}); // 24:40「然后斜杠PHPMyAdmin」
+on(12000,()=>{reveal('#dbGo');$('#dbGo').classList.add('in');__sfx.pop(.5);});    // 24:42「进入之后在左边这里点击新建」
+on(14000,()=>{typ($('#dbName'),'dvwa',14000,700);__sfx.type(.7);});               // 24:44「数据库的名字填dvwa」
+on(16000,()=>{$('#dbGo').classList.add('press');__sfx.thud(.5);
+  setTimeout(()=>lit('c00'),140);
+  setTimeout(()=>{$('#v1').textContent='dvwa';$('#st1').classList.add('done');$('#dbGo').classList.remove('press');},420);});  // 24:46「然后点击创建就好」
+on(17000,()=>{reveal('#usPane');$('#st2').classList.add('on');__sfx.ding(.35);}); // 24:47「创建好之后」
+on(18000,()=>{$('#footSt').textContent='数据库 dvwa 已创建';__sfx.pop(.4);});      // 24:48「我们再创建一个给DVWA专用的账号」
+on(20000,()=>{__sfx.pop(.45);});                                                  // 24:50「点击上方的用户账户」
+on(22000,()=>{typ($('#uName'),'dvwa',22000,700);__sfx.type(.7);});                // 24:52「再点击添加用户账户」→ 用户名 dvwa
+on(23000,()=>{lit('c11');__sfx.pop(.4);});                                        // 24:53「用户名填dvwa」
+on(25000,()=>{__sfx.pop(.35);$('#uHost').classList.add('hi');});                  // 24:55「然后主机名保持跟他默认的本地这一项密码」
+on(28000,()=>{typ($('#uPass'),'p@ssw0rd',28000,900);__sfx.type(.75);});           // 24:58「填这个p@ssw0rd」
+on(29000,()=>{lit('c20');lit('c21');__sfx.pop(.4);});                             // 24:59「然后往下拉」
+on(29500,()=>{$('#ck').classList.add('on');__sfx.pop(.5);$('#st3').classList.add('on');}); // 24:59「勾上那一句创建与用户名同名的数据库」
+on(12000,()=>{reveal('#fishA');__sfx.pop(.5);});                                  // 24:59→25:03 中段大肥鱼（提前）
+on(20000,()=>{$('#fishA').classList.remove('in');reveal('#fishB');__sfx.pop(.5);}); // 鱼交接 · fishB 常驻到下段
+on(33000,()=>{const s=$('#stamp');$('#st4').classList.add('on');__sfx.thud(.7);
+  setTimeout(()=>{lit('c01');lit('c31');lit('c41');},80);
+  setTimeout(()=>{s.classList.add('in');},240);});                                 // 25:03「并授予全部的权限」
+on(34000,()=>{$('#usGo').classList.add('press');__sfx.thud(.6);$('#footSt').textContent='已执行 · 权限已授予';
+  $('#footSt').classList.add('done');lit('c50');lit('c51');['st1','st2','st3','st4'].forEach(x=>$('#'+x).classList.add('done'));
+  __sfx.ding(.5);});                                                               // 25:04「然后执行」
+
+/* ===== [不动] QA 专用（正常播放不触发）：hash 带 t=毫秒 → 起播后跳转该时刻并冻结 ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

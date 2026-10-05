@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+     ◆ 镜头 52 · 起服务验证 · 23:22–24:11 · DUR 49000 ◆  【v4 瑞士国际主义 · B 类】
+     仿真本体保留：XAMPP 控制面板（浅色·示意图）+ 浏览器欢迎页（浅色·示意图）
+       A 幕 面板 Apache/MySQL 红 ✕ → 绿 ✓ → Start → 运行
+       B 幕 MariaDB 说明卡（外围 · 瑞士白卡）：面板写 MySQL，实际装的是 MariaDB
+       C 幕 浏览器打开 127.0.0.1 → 欢迎页 → 服务已跑起来
+     外围瑞士化：纸灰舞台 / Inter+Noto 页头 / 墨底反白印章 / 角注
+     红线：面板/浏览器均「示意图 · 非实拍」；靶场地址只出现 127.0.0.1；口播不上屏
+============================================================= -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 0-52 · 起服务验证 · 49s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;--accent:#F5572F;}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Noto Sans SC','Inter',sans-serif}
+body.paused *{animation-play-state:paused!important}
+/* ② 舞台 */
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#stage::before{content:'';position:absolute;inset:0;z-index:0;pointer-events:none;
+  background-image:linear-gradient(rgba(28,28,26,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.045) 1px,transparent 1px);
+  background-size:48px 48px}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ============ ③ 外围（瑞士化） ============ */
+#head{position:absolute;left:96px;top:36px;z-index:20;opacity:0;transform:translateY(-18px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#head.in{opacity:1;transform:none}
+#head .eye{display:inline-flex;align-items:center;gap:12px;font:600 14px Inter;letter-spacing:.14em;text-transform:uppercase;color:var(--ink)}
+#head .eye .no{background:var(--ink);color:var(--paper);padding:3px 10px;border-radius:3px;font-weight:700}
+#head h1{margin-top:12px;font:900 56px/1 'Noto Sans SC',Inter;letter-spacing:-.02em;color:var(--ink)}
+#head h1 .hl{color:var(--ink);border-bottom:6px solid var(--ink);padding-bottom:2px}
+
+#board{position:absolute;left:96px;top:186px;width:1728px;height:756px;border-radius:18px;z-index:1;
+  background:#F7F6F2;border:1px solid var(--grid);opacity:0;transform:translateY(20px);transition:all .6s cubic-bezier(.16,1,.3,1)}
+#board.in{opacity:1;transform:none}
+
+/* ── A 幕：XAMPP 控制面板（浅色 · 原生配色保留） ── */
+#xwin{position:absolute;left:40px;top:44px;width:1020px;height:668px;border-radius:10px;overflow:hidden;z-index:4;
+  background:#EFEFEF;border:1px solid #CFCFCB;box-shadow:0 10px 26px rgba(28,28,26,.14);color:#333;
+  opacity:0;transform:translateY(24px) scale(.98);transition:all .6s cubic-bezier(.2,1.2,.4,1)}
+#xwin.in{opacity:1;transform:none}
+.vx-title{display:flex;align-items:center;gap:10px;padding:13px 18px;font:700 16px 'IBM Plex Mono';
+  letter-spacing:.02em;color:#fff;background:#E8590C}
+.vx-title .viz-note{margin-left:auto;font:600 11px 'IBM Plex Mono';color:rgba(255,255,255,.85);letter-spacing:.06em}
+.vx-row{display:flex;align-items:center;gap:13px;padding:15px 18px;border-bottom:1px solid #DDD;transition:background .4s;opacity:0;transform:translateX(-8px)}
+.vx-row.in{opacity:1;transform:none}
+.vx-row .badge{width:24px;height:24px;border-radius:5px;flex:none;display:flex;align-items:center;justify-content:center;
+  font-size:16px;font-weight:900;color:#fff;background:#C0392B;transition:all .35s}
+.vx-row .badge.ok{background:#28C840}
+.vx-row.dim{opacity:.4}
+.vx-row .vx-mod{font:700 18px Inter,'Noto Sans SC';width:150px;color:#222}
+.vx-row.on .vx-mod{color:#C9490A}
+.vx-row .vx-svc{width:14px;height:14px;border-radius:50%;background:#BBB;flex:none;transition:all .35s}
+.vx-row.run{background:#E4F5E6}
+.vx-row.run .vx-svc{background:#28C840}
+.vx-row .vx-port{margin-left:auto;font:500 14px 'IBM Plex Mono';color:#8A8A8A}
+.vx-btn{border:1px solid #BBB;background:#FFF;border-radius:4px;padding:6px 18px;font:600 14px 'IBM Plex Mono';color:#333;transition:all .2s}
+.vx-btn.start{background:#E3F2FD;border-color:#90CAF9}
+.vx-btn.press{transform:scale(.9);background:#BBDEFB}
+.vx-log{position:absolute;left:0;right:0;bottom:0;height:300px;background:#101418;padding:16px 20px;font:500 14px 'IBM Plex Mono';line-height:2;color:#8FA3B2;overflow:hidden}
+.vx-log div{opacity:0;transform:translateY(6px);transition:all .3s}
+.vx-log div.in{opacity:1;transform:none}
+.vx-log .ok{color:#4ED896}
+.vx-log .cy{color:#8FF2FF}
+
+/* ── B 幕：MariaDB 说明卡（外围 · 瑞士白卡） ── */
+#note{position:absolute;left:1096px;top:44px;width:592px;height:668px;border-radius:12px;z-index:4;
+  background:var(--card);border:1px solid var(--ink);padding:28px 30px;opacity:0;transform:translateX(26px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#note.in{opacity:1;transform:none}
+#note.live{border-color:var(--ink);border-width:2px}
+#note .nt{font:900 26px 'Noto Sans SC';letter-spacing:.02em;color:var(--ink)}
+#note .nsub{margin-top:10px;font-size:17px;color:var(--muted);line-height:1.5}
+#note .nsub b{color:var(--ink);font-weight:700}
+.branch{margin-top:26px;opacity:0;transform:translateY(10px);transition:all .5s}
+.branch.in{opacity:1;transform:none}
+.branch svg{width:100%;height:210px;display:block}
+.branch .ns{font-family:'IBM Plex Mono',monospace;font-size:15px;fill:#8F8E88}
+.branch .ns.hot{fill:#F5572F;font-weight:600}
+#mdbhot{margin-top:8px;display:flex;gap:12px;opacity:0;transform:translateY(8px);transition:all .45s}
+#mdbhot.in{opacity:1;transform:none}
+.chip{font:700 16px 'Noto Sans SC';letter-spacing:.03em;border-radius:999px;padding:8px 18px;transition:all .4s}
+.chip.g{border:1px solid var(--ink);color:var(--ink);background:var(--card)}
+.chip.b{border:1px solid var(--muted);color:var(--muted);background:var(--card)}
+.chip.hot{border-color:var(--ink);background:var(--ink);color:var(--paper)}
+#docq{margin-top:22px;border-left:3px solid var(--ink);padding:2px 0 2px 16px;opacity:0;transform:translateY(8px);transition:all .45s}
+#docq.in{opacity:1;transform:none}
+#docq .q{font-size:17px;color:var(--ink);line-height:1.5}
+#docq .q b{color:var(--ink);font-weight:900}
+#docq .qs{margin-top:6px;font:500 12.5px 'IBM Plex Mono';letter-spacing:.08em;color:var(--muted)}
+#okstamp{position:absolute;left:1150px;top:600px;z-index:14;font:900 23px 'Noto Sans SC';
+  letter-spacing:.2em;color:var(--paper);border:3px solid var(--ink);border-radius:11px;padding:8px 20px;background:var(--ink);
+  transform:scale(2.9) rotate(-7deg);opacity:0;transition:all .4s cubic-bezier(.2,1.5,.4,1)}
+#okstamp.in{transform:scale(1) rotate(-7deg);opacity:1}
+
+/* ── C 幕：浏览器（浅色 · 原生配色保留） ── */
+#bwin{position:absolute;left:40px;top:44px;width:1648px;height:668px;border-radius:10px;overflow:hidden;z-index:5;
+  background:#F6F8FA;border:1px solid #CFCFCB;box-shadow:0 10px 26px rgba(28,28,26,.14);display:none;color:#1E2830}
+#bwin.on{display:block}
+.bchrome{display:flex;align-items:center;gap:10px;padding:12px 16px;background:#E4E8EC;border-bottom:1px solid #CDD4DA}
+.bchrome .nav{font-family:'IBM Plex Mono',monospace;font-size:15px;color:#8895A0;letter-spacing:2px}
+.bchrome .url{flex:1;display:flex;align-items:center;gap:8px;background:#fff;border-radius:999px;padding:8px 16px;
+  font-family:'IBM Plex Mono',monospace;font-size:17px;color:#2A3640}
+.bchrome .lock{color:#2FBF71;font-size:13px}
+#bpage{padding:44px 60px;text-align:center}
+#bload{height:7px;background:#E4E8EC;border-radius:999px;overflow:hidden;margin-bottom:34px}
+#bload i{display:block;height:100%;width:0;background:#1C1C1A;border-radius:999px}
+#welcome{opacity:0;transform:translateY(16px);transition:all .6s cubic-bezier(.16,1,.3,1)}
+#welcome.in{opacity:1;transform:none}
+#welcome .big{font:900 64px 'Inter';letter-spacing:.02em;color:#1E2830}
+#welcome .wt2{margin-top:14px;font-size:22px;color:#5A6873}
+#welcome .wtag{margin-top:26px;display:inline-block;font:700 19px 'Noto Sans SC';
+  letter-spacing:.04em;color:var(--paper);border:2px solid #1C1C1A;border-radius:999px;padding:10px 26px;background:#1C1C1A;transition:all .4s}
+#welcome .bars{margin-top:38px;display:flex;flex-direction:column;gap:14px;align-items:center}
+#welcome .bars i{display:block;height:16px;border-radius:4px;background:#DDE1E6;opacity:0;transition:opacity .5s}
+#welcome .bars i.in{opacity:1}
+#welcome .wviz{margin-top:20px;font:500 13px 'IBM Plex Mono';letter-spacing:.08em;color:#98A3AB}
+
+/* 光标 */
+#cur{position:absolute;left:0;top:0;z-index:20;width:30px;height:30px;pointer-events:none;opacity:0;transition:opacity .3s}
+#cur.on{opacity:1}
+#cur svg{width:100%;height:100%;filter:drop-shadow(0 2px 3px rgba(0,0,0,.4))}
+
+/* 大肥鱼 */
+#fish{position:absolute;left:1700px;top:660px;width:160px;z-index:35;opacity:0;transform:translateY(26px) scale(.66);
+  transition:all .45s cubic-bezier(.34,1.6,.64,1);pointer-events:none}
+#fish.in{opacity:1;transform:none}
+#fish img{width:100%;display:block}
+#fish .say{position:absolute;left:-430px;top:96px;width:406px;background:var(--card);border:1.5px solid var(--ink);
+  border-radius:14px;padding:12px 20px;font:700 22px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em;line-height:1.4;
+  opacity:0;transform:scale(.5);transition:all .34s cubic-bezier(.2,1.6,.4,1)}
+#fish.bub .say{opacity:1;transform:scale(1)}
+#fish .say b{color:var(--ink);font-weight:900}
+#fish .say::after{content:'';position:absolute;right:-14px;top:20px;border:8px solid transparent;border-left:14px solid var(--card)}
+.off{opacity:0!important}
+
+/* 角注 / HUD */
+.corner{position:absolute;font:500 15px 'Noto Sans SC';color:var(--muted);letter-spacing:.04em;z-index:41}
+#chap{left:52px;bottom:30px}
+#src{right:52px;bottom:30px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:rgba(28,28,26,.12)}
+#bar{height:100%;width:0;background:var(--ink)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:rgba(240,239,235,.94);color:var(--muted)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid var(--grid);color:var(--ink);font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(28,28,26,.06)}
+#replay.done{border-color:var(--accent);color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="cam">
+
+    <div id="head">
+      <div class="eye"><span class="no">52</span>起服务 · START</div>
+      <h1>点两下，<span class="hl">全绿</span></h1>
+    </div>
+
+    <div id="board">
+      <!-- A 幕：控制面板 -->
+      <div id="xwin">
+        <div class="vx-title">XAMPP Control Panel<span class="viz-note">示意图 · 非实拍</span></div>
+        <div class="vx-row" id="xA"><span class="badge" id="bdA">✕</span><span class="vx-mod">Apache</span><span class="vx-svc"></span>
+          <span class="vx-port">:80</span><button class="vx-btn start" id="btA" type="button">Start</button></div>
+        <div class="vx-row" id="xM"><span class="badge" id="bdM">✕</span><span class="vx-mod">MySQL</span><span class="vx-svc"></span>
+          <span class="vx-port">:3306</span><button class="vx-btn start" id="btM" type="button">Start</button></div>
+        <div class="vx-row" id="xO1"><span class="badge ok" style="background:#888">·</span><span class="vx-mod">Mercury</span><span class="vx-svc"></span><span class="vx-port">:25</span><button class="vx-btn" type="button">Start</button></div>
+        <div class="vx-row" id="xO2"><span class="badge ok" style="background:#888">·</span><span class="vx-mod">FileZilla</span><span class="vx-svc"></span><span class="vx-port">:21</span><button class="vx-btn" type="button">Start</button></div>
+        <div class="vx-row" id="xO3"><span class="badge ok" style="background:#888">·</span><span class="vx-mod">Tomcat</span><span class="vx-svc"></span><span class="vx-port">:8080</span><button class="vx-btn" type="button">Start</button></div>
+        <div class="vx-log" id="vxLog">
+          <div id="l0" class="in" style="color:#5C6A76">Initializing Control Panel ...</div>
+          <div id="l1">Starting Apache...</div>
+          <div id="l2" class="ok">Apache running · :80</div>
+          <div id="l3">Starting MySQL...</div>
+          <div id="l4" class="ok">MySQL running · :3306</div>
+          <div id="l5" class="cy">服务已就绪 → 浏览器验证 127.0.0.1</div>
+        </div>
+      </div>
+
+      <!-- B 幕：MariaDB 说明卡（外围瑞士白卡） -->
+      <div id="note">
+        <div class="nt">名字不一样，别怀疑</div>
+        <div class="nsub">面板上写的是 <b>MySQL</b>，实际装进来的是 <b>MariaDB</b></div>
+        <div class="branch" id="branch">
+          <svg viewBox="0 0 520 210" preserveAspectRatio="xMidYMid meet">
+            <path id="bl1" d="M60 105 H170" stroke="#8F8E88" stroke-width="2.6" fill="none"/>
+            <path id="bl2" d="M170 105 C240 105 240 52 320 52" stroke="#B0AFA9" stroke-width="2.6" fill="none" stroke-dasharray="7 6"/>
+            <path id="bl3" d="M170 105 C240 105 240 158 320 158" stroke="#F5572F" stroke-width="3.2" fill="none"/>
+            <circle cx="170" cy="105" r="6" fill="#8F8E88"/>
+            <circle cx="320" cy="52" r="6" fill="#B0AFA9"/>
+            <circle cx="320" cy="158" r="6" fill="#F5572F"/>
+            <text class="ns" x="152" y="94" text-anchor="end" id="tn0">同一个源头</text>
+            <text class="ns" x="336" y="46" id="tn1">MySQL</text>
+            <text class="ns" x="336" y="152" id="tn2">MariaDB</text>
+          </svg>
+        </div>
+        <div id="mdbhot">
+          <span class="chip b" id="ch1">同一套的两个分支</span>
+          <span class="chip g" id="ch2">用法几乎一样</span>
+        </div>
+        <div id="docq"><div class="q">装 DVWA · 官方更推荐 <b>MariaDB</b>（开箱就能用；MySQL 还得额外配置）</div>
+          <div class="qs">DVWA 官方文档 / OFFICIAL DOCS</div></div>
+      </div>
+
+      <!-- C 幕：浏览器 -->
+      <div id="bwin">
+        <div class="bchrome"><span class="nav">◀ ▶ ⟳</span>
+          <span class="url"><span class="lock">🔒</span><span id="bu"></span></span></div>
+        <div id="bpage">
+          <div id="bload"><i id="bloadi"></i></div>
+          <div id="welcome">
+            <div class="big">127.0.0.1</div>
+            <div class="wt2">本地服务欢迎页 · 画面示意</div>
+            <div class="wtag">服务已经跑起来了 ✓</div>
+            <div class="bars"><i style="width:420px"></i><i style="width:560px"></i><i style="width:340px"></i></div>
+            <div class="wviz">示意页 · 非实拍</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="okstamp">名 字 不 同 · 没 问 题</div>
+      <div id="cur"><svg viewBox="0 0 24 24"><path d="M4 2 L4 20 L9 15 L13 23 L16 21 L12 13 L19 13 Z" fill="#fff" stroke="#111" stroke-width="1.1"/></svg></div>
+    </div>
+
+    <div id="fish">
+      <div class="say">服务起来了 ~ <b>可以放靶场了</b></div>
+      <img src="Shark-GIF/006_双手身前微笑乖巧期待.gif" alt="大肥鱼">
+    </div>
+
+  </div>
+
+  <div class="corner" id="chap">07 / 十分钟立好 DVWA 靶场</div>
+  <div class="corner" id="src">面板与欢迎页均为演示还原 · 示意图 · 非实拍</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-52 · 起服务验证 · 49s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=49000; /* ←⑤ DUR = 分镜时长 49s */
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ───────── 本页小工具 ───────── */
+function typewrite(el,str,start,dur){
+  tws.push({t:start,d:dur,f:p=>{el.textContent=str.slice(0,Math.round(str.length*p))},
+    done:()=>{el.textContent=str;}});
+  for(let k=0;k<str.length;k++){
+    if(str[k]===' ')continue;
+    tws.push({t:start+dur*k/str.length,d:1,f:()=>{if(window.__sfx)__sfx.type(.5)}});
+  }
+}
+var CURX=760,CURY=200;
+function cursorTo(x,y,start,dur){
+  var fx=CURX,fy=CURY;
+  tws.push({t:start,d:dur,e:eo,f:function(p){CURX=fx+(x-fx)*p;CURY=fy+(y-fy)*p;
+    $('#cur').style.left=CURX+'px';$('#cur').style.top=CURY+'px';}});
+}
+function press(el,start){
+  el.classList.add('press');
+  tws.push({t:start+240,d:1,f:()=>{el.classList.remove('press')}});
+}
+function typeLine(id,start){
+  tws.push({t:start,d:1,f:()=>{document.getElementById(id).classList.add('in')}});
+}
+
+/* ───────── 镜头 0-52 叙事 cue（23:22–24:11 · 49s） ───────── */
+on(200,()=>{$('#head').classList.add('in');__sfx.whoosh(.7,.4);});                 // 23:22「以后管理这套系统就靠它了」
+on(400,()=>{$('#board').classList.add('in');$('#xwin').classList.add('in');$('#note').classList.add('in');__sfx.pop(.55);}); // 界面入场
+on(2000,()=>{['xA','xM','xO1','xO2','xO3'].forEach(function(id,i){
+  tws.push({t:2000+i*160,d:1,f:function(){document.getElementById(id).classList.add('in')}});});__sfx.pop(.5);}); // 23:24「窗口里面列着一堆组件」
+on(4000,()=>{$('#xO1').classList.add('dim');$('#xO2').classList.add('dim');$('#xO3').classList.add('dim');__sfx.pop(.4);}); // 23:26「我们只用了上两个」
+on(5000,()=>{$('#xA').classList.add('on');$('#xM').classList.add('on');__sfx.ding(.5);}); // 23:27「最上面这两个就是Apache和MySQL」
+on(7000,()=>{$('#cur').classList.add('on');CURX=60;CURY=200;$('#cur').style.left='60px';$('#cur').style.top='200px';__sfx.pop(.4);}); // 23:29「左边的这个红叉」
+on(9000,()=>{cursorTo(38,196,9000,600);});                                          // 光标移到 Apache ✕
+on(10000,()=>{$('#bdA').textContent='✓';$('#bdA').classList.add('ok');
+  typeLine('l1',10000);__sfx.ding(.5);});                                           // 23:32「各自点一下」→ 安装 Apache 服务
+on(11000,()=>{cursorTo(38,278,11000,500);});                                        // 光标移到 MySQL ✕
+on(11800,()=>{$('#bdM').textContent='✓';$('#bdM').classList.add('ok');typeLine('l3',11800);__sfx.ding(.5);}); // 23:33「把服务组件给安装起来」
+on(13000,()=>{__sfx.ding(.45);});                                      // 23:35「等红叉变成绿色之后」
+on(15000,()=>{cursorTo(650,196,15000,600);});                                       // 光标移到 Apache Start
+on(16000,()=>{press($('#btA'),16000);$('#xA').classList.add('run');$('#btA').textContent='Stop';
+  typeLine('l2',16000);__sfx.ding(.55);});                                          // 23:37「再各自点一下右边start」
+on(17000,()=>{cursorTo(650,278,17000,500);});                                       // 光标移到 MySQL Start
+on(17800,()=>{press($('#btM'),17800);$('#xM').classList.add('run');$('#btM').textContent='Stop';
+  typeLine('l4',17800);typeLine('l5',18300);__sfx.ding(.6);});          // 23:39「两行的状态变成绿色就是起来了」
+on(19000,()=>{$('#note').classList.add('live');camFocus(1390,420,1.03,.5);__sfx.swipe(.6);}); // 23:41「有一个地方得先说明一下」
+on(21000,()=>{$('#xM').classList.add('on');__sfx.pop(.45);});          // 23:43「面板上那一行写的是MySQL」
+on(23000,()=>{$('#branch').classList.add('in');__sfx.pop(.5);});                    // 23:45「实际装进来是MariaDB」
+on(25000,()=>{$('#mdbhot').classList.add('in');$('#ch1').classList.add('hot');$('#tn2').classList.add('hot');__sfx.ding(.5);}); // 23:47「同一套东西的两个分支」
+on(28000,()=>{$('#ch2').classList.add('hot');__sfx.ding(.45);});                    // 23:50「用法也几乎一样」
+on(29000,()=>{$('#docq').classList.add('in');__sfx.pop(.5);});                      // 23:51「DVWA官方文档里还专门提到」
+on(32000,()=>{$('#docq').classList.add('in');$('#ch2').classList.add('hot');__sfx.ding(.55);}); // 23:54「更推荐用MariaDB」
+on(34000,()=>{$('#tn1').style.opacity='.5';__sfx.pop(.4);});                        // 23:56「MySQL还得额外配置才行」
+on(38000,()=>{$('#okstamp').classList.add('in');__sfx.thud(.95);});    // 24:00「不用怀疑是没问题的」
+on(39000,()=>{camTo(0,0,1,.5);__sfx.whoosh(.9,.7);
+  $('#xwin').style.display='none';$('#note').style.display='none';$('#okstamp').style.display='none';
+  $('#bwin').classList.add('on');$('#cur').classList.remove('on');});               // 24:01「接下来验证一下」
+on(40500,()=>{typewrite($('#bu'),'127.0.0.1',40500,1600);__sfx.type(.6);});         // 24:02「浏览器这里在URL这里」
+on(43000,()=>{__sfx.ding(.45);});                                      // 24:05「输入127.0.0.1」
+on(45000,()=>{tws.push({t:45000,d:2200,f:p=>{$('#bloadi').style.width=(p*100)+'%'}});__sfx.swipe(.5);}); // 24:07「然后打开看一下」
+on(46200,()=>{$('#welcome').classList.add('in');__sfx.ding(.55);});                 // 24:08「如果能跳出来到欢迎页」
+on(46800,()=>{document.querySelectorAll('#welcome .bars i').forEach(function(b,i){
+  tws.push({t:46800+i*180,d:1,f:function(){b.classList.add('in')}});});});
+on(48000,()=>{__sfx.ding(.6);$('#welcome .wtag').classList.add('done');}); // 24:10「就说明服务已经跑起来了」
+on(28000,()=>{$('#fish').classList.add('in');__sfx.pop(.5);
+  tws.push({t:47000,d:1,f:()=>{$('#fish').classList.add('bub');__sfx.pop(.4);}});}); // 鱼提前在场 · 气泡留到结尾前
+
+/* ===== [不动] QA 专用（正常播放不触发）：hash 带 t=毫秒 → 起播后跳转该时刻并冻结 ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

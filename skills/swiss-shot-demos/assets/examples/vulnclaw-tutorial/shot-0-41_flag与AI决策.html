@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+     镜头 41 · flag 与 AI 决策 · 17:19–17:49 · DUR 30000  【v4 瑞士国际主义】
+     主视觉：① flag 解剖大卡（巨串标本 + 结构分解条 + 三段分解卡）
+             ② 双主图对照：固定脚本流程图（矩形步骤 / 判定菱形 / 断裂分支）
+                          vs  AI 决策环（diagram-design type-loop：hub + 虚线回写辐条）
+     字体 Inter × IBM Plex Mono × Noto Sans SC · 纸底 #F0EFEB × 墨 #1C1C1A × 唯一橙 #F5572F
+     ============================================================ -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});}
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜头 0-41 · flag 与 AI 决策 · 30s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F0EFEB;--card:#FFFFFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;
+  --accent:#F5572F;--dark:#1C1C1A;--darkink:#F0EFEB;--darkgrid:#2E2D29;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:var(--paper);overflow:hidden;color:var(--ink);
+  font-family:'Inter','Noto Sans SC',sans-serif;-webkit-font-smoothing:antialiased}
+body.paused *{animation-play-state:paused!important}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#bg{position:absolute;inset:0;z-index:0;opacity:1;
+  background-image:linear-gradient(rgba(28,28,26,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.05) 1px,transparent 1px);
+  background-size:44px 44px}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+.act{position:absolute;inset:0}
+.act.hide{display:none}
+
+/* 页眉 */
+.kick{position:absolute;left:130px;font:600 15px Inter,'Noto Sans SC';letter-spacing:.14em;text-transform:uppercase;color:var(--ink);
+  display:flex;gap:12px;align-items:center;opacity:0;transform:translateX(-14px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+.kick .no{background:var(--ink);color:var(--paper);padding:3px 10px;border-radius:3px;font-weight:700}
+.kick.in{opacity:1;transform:none}
+.h1{position:absolute;left:126px;font:800 70px/1.05 'Inter','Noto Sans SC';letter-spacing:-.02em;color:var(--ink);
+  opacity:0;transform:translateY(26px);transition:all .6s cubic-bezier(.16,1,.3,1)}
+.h1.in{opacity:1;transform:none}
+.h1 b{font-weight:900}
+
+/* ── 第一幕：flag 解剖大卡 ── */
+#fmt{position:absolute;left:130px;top:214px;width:1662px;height:690px;border-radius:12px;overflow:hidden;
+  background:var(--card);border:1px solid var(--grid);opacity:0;transform:translateY(26px) scale(.99);
+  transition:all .6s cubic-bezier(.16,1,.3,1)}
+#fmt.in{opacity:1;transform:none}
+.anabs{position:absolute;inset:0;width:100%;height:100%}
+.anl line{stroke:var(--faint);stroke-width:1;stroke-dasharray:5 6;opacity:0;transition:opacity .5s .25s}
+#fmt.in .anl line{opacity:1}
+.seg{opacity:0;transform:scaleX(0);transform-origin:left center;transform-box:fill-box;
+  transition:opacity .3s ease,transform .6s cubic-bezier(.2,1.1,.4,1)}
+#fmt.in .seg{opacity:1;transform:scaleX(1)}
+#fmt.in .sg1{transition-delay:.15s}#fmt.in .sg2{transition-delay:.28s}
+#fmt.in .sg3{transition-delay:.4s}#fmt.in .sg4{transition-delay:.52s}
+.sg1{fill:#1C1C1A}.sg2{fill:#F5572F}.sg3{fill:#B0AFA9}.sg4{fill:#F5572F}
+.fstr{position:absolute;left:0;right:0;top:96px;display:flex;justify-content:center;align-items:baseline;gap:6px}
+.fx{font-family:'IBM Plex Mono',monospace;font-weight:700;line-height:1.15;position:relative;
+  transition:color .35s,transform .35s}
+.fx.hot{transform:translateY(-4px)}
+.fx::after{content:'';position:absolute;left:4%;right:4%;bottom:-14px;height:5px;border-radius:2px;
+  background:currentColor;opacity:0;transform:scaleX(0);transform-origin:left;transition:all .45s cubic-bezier(.16,1,.3,1)}
+.fx.hot::after{opacity:1;transform:scaleX(1)}
+#f1{font-size:104px;color:#8F8E88}
+#f1.hot{color:#1C1C1A}
+#f2,#f4{font-size:110px;color:#8F8E88}
+#f2.hot,#f4.hot{color:#F5572F}
+.fx.bracepulse{animation:vbrace .65s cubic-bezier(.2,1.6,.4,1)}
+@keyframes vbrace{0%{transform:translateY(-4px) scale(1)}45%{transform:translateY(-14px) scale(1.28)}100%{transform:translateY(-4px) scale(1)}}
+#f3{font-size:96px;color:#8F8E88;letter-spacing:1px}
+#f3.hot{color:#4A4944}
+#fmtCap{position:absolute;left:0;right:0;text-align:center;top:628px;font:500 19px 'Noto Sans SC';letter-spacing:.04em;
+  color:var(--muted);opacity:0;transition:opacity .5s}
+#fmtCap.in{opacity:1}
+
+#parts{position:absolute;left:176px;top:376px;display:flex;gap:20px}
+.pt{border-radius:10px;padding:22px 26px;display:flex;align-items:center;gap:18px;
+  background:var(--card);border:1px solid var(--grid);
+  opacity:0;transform:translateY(22px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+.pt.in{opacity:1;transform:none}
+.pt.hot{border-color:var(--accent);border-width:2px}
+.pt .pn{font:800 30px Inter;color:var(--ink);flex:none}
+.pt .ptx{font:500 24px 'Noto Sans SC';color:var(--ink);letter-spacing:.01em;line-height:1.35}
+.pt .ptx b{color:var(--ink);font-weight:900}
+.pt.hot .ptx b{color:var(--accent)}
+#p1{width:470px;height:132px}
+#p2{width:330px;height:132px;justify-content:center}
+#p3{width:440px;height:132px}
+#p2 .braces{font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:58px;color:var(--accent);line-height:1;flex:none}
+#p2 .ptx{font-size:22px}
+
+#stamp{position:absolute;left:1490px;top:726px;opacity:0;transform:rotate(-8deg) scale(2.4);
+  transition:all .42s cubic-bezier(.2,1.6,.4,1);z-index:6}
+#stamp.in{opacity:1;transform:rotate(-8deg) scale(1)}
+#stamp .sp{display:inline-block;background:var(--ink);border-radius:8px;padding:11px 26px 13px;text-align:center;white-space:nowrap}
+#stamp .st1{display:block;font:900 38px 'Noto Sans SC';color:var(--paper);letter-spacing:.16em;text-indent:.16em;line-height:1.1}
+#stamp .st2{display:block;font:600 12px 'IBM Plex Mono';letter-spacing:.5em;color:#C6C5BF;margin-top:6px;text-indent:.5em}
+
+#quote{position:absolute;left:130px;top:918px;width:1662px;height:104px;border-radius:12px;
+  display:flex;align-items:center;padding:0 36px;gap:24px;
+  background:var(--card);border:1px solid var(--grid);opacity:0;transform:translateY(22px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#quote.in{opacity:1;transform:none}
+#quote .qm{font:800 70px Inter;color:var(--faint);line-height:.7;margin-top:20px}
+#quote .qt{font:700 36px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em}
+#quote .qt b{color:var(--accent);font-weight:900}
+#quote .qtag{margin-left:auto;font:700 17px 'Noto Sans SC';letter-spacing:.06em;color:var(--paper);
+  background:var(--ink);border-radius:3px;padding:9px 20px;white-space:nowrap}
+
+/* ── 第二幕：脚本断裂图 vs 决策环 ── */
+#h2{top:108px;font-size:60px}
+.col{position:absolute;top:214px;height:690px;border-radius:12px;padding:26px 30px;
+  background:var(--card);border:1px solid var(--grid);opacity:0;transform:translateY(24px);
+  transition:all .55s cubic-bezier(.16,1,.3,1)}
+.col.in{opacity:1;transform:none}
+#colL{left:130px;width:800px}
+#colR{left:990px;width:800px}
+.col .chd{display:flex;align-items:baseline;gap:16px;padding-bottom:16px;border-bottom:1px solid var(--grid);
+  opacity:0;transform:translateY(12px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+.col .chd.in{opacity:1;transform:none}
+.col .cn{font:900 30px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em}
+.col .ce{font:600 12px 'IBM Plex Mono';letter-spacing:.3em;color:var(--muted);text-transform:uppercase}
+/* 固定脚本流程图 */
+.cflow{margin-top:14px;opacity:0;transform:translateY(12px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+.cflow.in{opacity:1;transform:none}
+.cflow .fb{fill:#fff;stroke:var(--grid);stroke-width:1.5;transition:all .4s}
+.cflow .fb.lit{stroke:var(--ink);fill:#F4F3EF}
+.cflow .ft{font:600 22px 'IBM Plex Mono';fill:#B0AFA9;text-anchor:middle;transition:fill .4s}
+.cflow .ft.lit{fill:var(--ink)}
+.cflow .fl{stroke:var(--faint);stroke-width:2.5;stroke-linecap:round;opacity:0;transition:opacity .35s,transform .45s ease;transform-box:fill-box}
+.cflow .fl.lit{opacity:1}
+.cflow .fa{fill:var(--faint);opacity:0;transition:opacity .35s .12s,transform .45s ease;transform-box:fill-box}
+.cflow .fa.lit{opacity:1}
+.cflow .fbx{opacity:0;transform:scale(2.2);transform-box:fill-box;transform-origin:center;transition:all .35s cubic-bezier(.2,1.6,.4,1)}
+/* diagram-design type-flowchart：形状承载类型（矩形=步骤 / 菱形=判定 / 每条分支带标注） */
+.cflow .fd{fill:#fff;stroke:var(--ink);stroke-width:1.6;opacity:0;transform:scale(.55);
+  transform-box:fill-box;transform-origin:center;transition:all .45s cubic-bezier(.2,1.5,.4,1) .1s}
+.cflow.in .fd{opacity:1;transform:none}
+.cflow .fdl{font:600 13px 'IBM Plex Mono';fill:var(--muted);text-anchor:middle;letter-spacing:.08em;opacity:0;transition:opacity .4s .2s}
+.cflow.in .fdl{opacity:1}
+.cflow .fbl{font:600 14px 'IBM Plex Mono';fill:var(--ink);letter-spacing:.06em}
+.cflow .fsb{stroke:var(--faint);stroke-width:2;stroke-linecap:round;stroke-dasharray:5 6;opacity:0;transition:opacity .4s}
+.cflow.in .fsb{opacity:1}
+.cflow .fsl{font:600 14px 'IBM Plex Mono';fill:var(--muted);letter-spacing:.06em}
+.cflow.broken #fl2a{transform:rotate(8deg) translateY(4px);transform-origin:100% 50%}
+.cflow.broken #fl2b{transform:rotate(-11deg) translateY(6px);transform-origin:0 50%}
+.cflow.broken #fl2b,.cflow.broken #fb3,.cflow.broken #ft3,.cflow.broken #fa2{opacity:.2}
+.cflow.broken .fbx{opacity:1;transform:scale(1)}
+/* 决策环（type-loop） */
+.vr-wrap{margin-top:16px;display:flex;flex-direction:column;align-items:center;gap:14px}
+.viz-ring{width:330px;height:330px;position:relative;
+  opacity:0;transform:translateY(20px) scale(.9);transition:all .55s cubic-bezier(.16,1,.3,1)}
+.viz-ring.in{opacity:1;transform:none}
+.viz-ring .rt{fill:none;stroke:var(--grid);stroke-width:2;stroke-dasharray:5 8}
+.viz-ring .vnd circle{fill:#fff;stroke:var(--faint);stroke-width:2;transition:all .4s cubic-bezier(.2,1.5,.4,1)}
+.viz-ring .vnd text{font:700 15px 'Noto Sans SC';fill:var(--muted);text-anchor:middle;transition:fill .4s}
+.viz-ring .vnd.lit circle{stroke:var(--ink);stroke-width:2.5}
+.viz-ring .vnd.lit text{fill:var(--ink)}
+.viz-ring .fw{fill:none;stroke:var(--accent);stroke-width:2.6;stroke-linecap:round;stroke-dasharray:8 12;opacity:0;transition:opacity .6s}
+.viz-ring.flow .fw{opacity:1;animation:vflow 1.5s linear infinite}
+@keyframes vflow{to{stroke-dashoffset:-80}}
+.viz-ring .fh{fill:var(--accent);opacity:0;transition:opacity .6s}
+.viz-ring.flow .fh{opacity:1}
+/* type-loop：唯一深色 hub（累积状态）+ 虚线回写辐条（本型定义信号） */
+.viz-ring .hub{opacity:0;transform:scale(.78);transform-box:fill-box;transform-origin:center;transition:all .5s cubic-bezier(.2,1.4,.4,1) .15s}
+.viz-ring.in .hub{opacity:1;transform:none}
+.viz-ring .hub rect{fill:var(--dark);stroke:var(--dark)}
+.viz-ring .hubN{font:900 17px 'Noto Sans SC';fill:var(--paper);text-anchor:middle}
+.viz-ring .hubS{font:600 9px 'IBM Plex Mono';letter-spacing:.3em;fill:#8F8E88;text-anchor:middle}
+.viz-ring .sp{stroke:var(--faint);stroke-width:1.6;stroke-linecap:round;stroke-dasharray:5 4;opacity:0;transition:opacity .5s .2s}
+.viz-ring.in .sp{opacity:1}
+.viz-ring .sph{fill:var(--faint);opacity:0;transition:opacity .5s .3s}
+.viz-ring.in .sph{opacity:1}
+.line{display:flex;align-items:center;gap:14px;margin-top:12px;padding:13px 20px;border-radius:8px;width:100%;
+  background:#F4F3EF;border:1px solid var(--grid);
+  font:700 22px 'Noto Sans SC';color:var(--ink);letter-spacing:.01em;
+  opacity:0;transform:translateX(18px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+.line.in{opacity:1;transform:none}
+.line .mk{font:800 22px Inter;color:var(--accent)}
+.line b{color:var(--accent);font-weight:900}
+.cnote{margin-top:18px;font:700 24px 'Noto Sans SC';color:var(--ink);letter-spacing:.01em;opacity:0;transform:translateY(12px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+.cnote.in{opacity:1;transform:none}
+#stall{margin-top:24px;display:flex;align-items:center;gap:16px;padding:16px 24px;border-radius:8px;
+  background:var(--ink);color:var(--paper);
+  opacity:0;transform:translateX(-16px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#stall.in{opacity:1;transform:none}
+#stall .sx{font:800 26px Inter;color:var(--paper);line-height:1}
+#stall .sxl{font:900 26px 'Noto Sans SC';color:var(--paper);letter-spacing:.03em}
+#stall .sxs{font:500 18px 'Noto Sans SC';color:#8F8E88;margin-left:auto;letter-spacing:.02em}
+#foot{position:absolute;left:130px;top:922px;width:1660px;height:100px;border-radius:12px;
+  display:flex;align-items:center;justify-content:center;border-top:1px solid var(--grid);
+  font:900 30px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em;
+  opacity:0;transform:translateY(18px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#foot.in{opacity:1;transform:none}
+#foot em{font-style:normal;color:var(--muted);font-weight:500}
+#foot b{color:var(--ink);font-weight:900}
+
+/* 大肥鱼 */
+.fish{position:absolute;width:280px;z-index:35;opacity:0;transform:translateY(30px) scale(.6);
+  transition:all .45s cubic-bezier(.34,1.6,.64,1);pointer-events:none}
+.fish.show{opacity:1;transform:none}
+.fish img{width:100%;display:block}
+.fish .say{position:absolute;width:250px;background:#fff;border:1.5px solid var(--ink);border-radius:10px;padding:12px 16px;
+  font:900 23px 'Noto Sans SC';color:var(--ink);line-height:1.45;opacity:0;transform:scale(.6);
+  transition:all .4s cubic-bezier(.34,1.6,.64,1) .18s}
+.fish.show .say{opacity:1;transform:scale(1)}
+.fish .say b{font-weight:900}
+#fish1{left:1612px;top:6px}
+#fish1 .say{left:-236px;top:8px}
+#fish1 .say::after{content:'';position:absolute;right:-16px;top:50px;border:9px solid transparent;border-left:11px solid #fff}
+#fish2{left:1612px;top:6px}
+#fish2 .say{left:-236px;top:8px}
+#fish2 .say::after{content:'';position:absolute;right:-16px;top:50px;border:9px solid transparent;border-left:11px solid #fff}
+
+/* 角注 / HUD */
+.corner{position:absolute;font:600 15px Inter,'Noto Sans SC';letter-spacing:.1em;color:var(--faint);z-index:41}
+#chap{left:88px;bottom:30px}
+#src{right:88px;bottom:30px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:rgba(28,28,26,.1)}
+#bar{height:100%;width:0;background:var(--accent)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;background:var(--ink);color:var(--paper)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #556;color:#ccc;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(245,87,47,.18)}
+#replay.done{border-color:var(--accent);color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="bg"></div>
+  <div id="cam">
+    <!-- 第一幕 -->
+    <div class="act" id="act1">
+      <div class="kick" id="k1" style="top:76px"><span class="no">PART 01</span><span>通关凭证</span></div>
+      <div class="h1" id="t1" style="top:118px">flag 长什么样</div>
+
+      <div id="fmt">
+        <svg class="anabs" viewBox="0 0 1662 690" preserveAspectRatio="none" aria-hidden="true">
+          <g class="anl">
+            <line x1="176" y1="206" x2="176" y2="296"/>
+            <line x1="426" y1="206" x2="426" y2="296"/>
+            <line x1="488" y1="206" x2="488" y2="296"/>
+            <line x1="1424" y1="206" x2="1424" y2="296"/>
+            <line x1="1486" y1="206" x2="1486" y2="296"/>
+          </g>
+          <rect class="seg sg1" x="176" y="294" width="250" height="9" rx="4"/>
+          <rect class="seg sg2" x="428" y="294" width="58" height="9" rx="4"/>
+          <rect class="seg sg3" x="490" y="294" width="932" height="9" rx="4"/>
+          <rect class="seg sg4" x="1424" y="294" width="62" height="9" rx="4"/>
+        </svg>
+        <div class="fstr">
+          <span class="fx" id="f1">flag</span>
+          <span class="fx" id="f2">{</span>
+          <span class="fx" id="f3">x9Kd-4Qm7-Lp2V</span>
+          <span class="fx" id="f4">}</span>
+        </div>
+
+        <div id="parts">
+          <div class="pt" id="p1"><span class="pn">01</span><span class="ptx">以 <b>flag</b> 开头</span></div>
+          <div class="pt" id="p2"><span class="braces">{ }</span><span class="ptx">一对<br>大括号</span></div>
+          <div class="pt" id="p3"><span class="pn">03</span><span class="ptx">里面包一串<br><b>像密码一样</b>的内容</span></div>
+        </div>
+        <div id="fmtCap">大括号里的内容每次都不一样 · 它只是一串固定格式的字符串</div>
+      </div>
+
+      <div id="stamp"><span class="sp"><span class="st1">找到即通关</span><span class="st2">CLEARED</span></span></div>
+
+      <div id="quote">
+        <div class="qm">“</div>
+        <div class="qt">帮我把整个靶场的 <b>flag</b> 找出来</div>
+        <div class="qtag">VulnClaw 的直接用法</div>
+      </div>
+    </div>
+
+    <!-- 第二幕 -->
+    <div class="act hide" id="act2">
+      <div class="kick" id="k2" style="top:76px"><span class="no">PART 02</span><span>它跟固定脚本的区别</span></div>
+      <div class="h1" id="t2" style="top:118px;font-size:60px">区别在<b>遇到意外之后</b></div>
+
+      <div class="col" id="colL">
+        <div class="chd" id="chdL"><span class="cn">固定脚本</span><span class="ce">Fixed Script</span></div>
+        <div class="cflow" id="cflow">
+          <svg width="740" height="420" viewBox="0 0 740 420">
+            <rect class="fb" id="fb1" x="10" y="136" width="160" height="104" rx="6"/>
+            <text class="ft" id="ft1" x="90" y="197">步骤 1</text>
+            <line class="fl" id="fl1" x1="170" y1="188" x2="198" y2="188"/>
+            <polygon class="fa" id="fa1" points="198,176 220,188 198,200"/>
+            <rect class="fb" id="fb2" x="198" y="136" width="160" height="104" rx="6"/>
+            <text class="ft" id="ft2" x="278" y="197">步骤 2</text>
+            <line class="fl" id="fl2a" x1="358" y1="188" x2="400" y2="188"/>
+            <!-- 判定节点（菱形）：脚本只有一条出口，缺少「是」的分支 -->
+            <text class="fdl" x="434" y="142">遇到意外?</text>
+            <polygon class="fd" id="fd" points="434,152 468,188 434,224 400,188"/>
+            <line class="fl" id="fl2b" x1="468" y1="188" x2="508" y2="188"/>
+            <text class="fbl" x="486" y="180">否</text>
+            <polygon class="fa" id="fa2" points="508,176 530,188 508,200"/>
+            <rect class="fb" id="fb3" x="508" y="136" width="160" height="104" rx="6"/>
+            <text class="ft" id="ft3" x="588" y="197">步骤 3</text>
+            <!-- 「是」分支：脚本接不住 → 停摆 -->
+            <line class="fsb" id="fs1" x1="434" y1="224" x2="434" y2="292"/>
+            <text class="fsl" x="418" y="252" text-anchor="end">是</text>
+            <g class="fbx"><line x1="422" y1="246" x2="446" y2="270" stroke="#1C1C1A" stroke-width="5" stroke-linecap="round"/><line x1="446" y1="246" x2="422" y2="270" stroke="#1C1C1A" stroke-width="5" stroke-linecap="round"/></g>
+            <text x="434" y="322" text-anchor="middle" font-size="19" fill="#6A6963" font-family="IBM Plex Mono,monospace" letter-spacing="2">意外</text>
+          </svg>
+        </div>
+        <div class="cnote" id="cnote">按写死的流程走</div>
+        <div id="stall"><span class="sx">✕</span><span class="sxl">意外 → 停摆</span><span class="sxs">只会照原样重试</span></div>
+      </div>
+
+      <div class="col" id="colR">
+        <div class="chd" id="chdR"><span class="cn">AI · VulnClaw</span><span class="ce">Live Decision</span></div>
+        <div class="vr-wrap">
+          <div class="viz-ring" id="vizRing">
+            <svg width="330" height="330" viewBox="0 0 240 240">
+              <circle class="rt" cx="120" cy="120" r="92"/>
+              <path class="fw" d="M148.4 32.5 A92 92 0 0 1 207.5 91.6"/>
+              <polygon class="fh" points="0,-5 10,0 0,5" transform="translate(207.5,91.6) rotate(72)"/>
+              <path class="fw" d="M207.5 148.4 A92 92 0 0 1 148.4 207.5"/>
+              <polygon class="fh" points="0,-5 10,0 0,5" transform="translate(148.4,207.5) rotate(162)"/>
+              <path class="fw" d="M91.6 207.5 A92 92 0 0 1 32.5 148.4"/>
+              <polygon class="fh" points="0,-5 10,0 0,5" transform="translate(32.5,148.4) rotate(252)"/>
+              <path class="fw" d="M32.5 91.6 A92 92 0 0 1 91.6 32.5"/>
+              <polygon class="fh" points="0,-5 10,0 0,5" transform="translate(91.6,32.5) rotate(-18)"/>
+              <!-- type-loop：虚线回写辐条（每站把状态写回 hub） -->
+              <g class="spk">
+                <line class="sp" x1="120" y1="50" x2="120" y2="92"/><polygon class="sph" points="0,-5 10,0 0,5" transform="translate(120,92) rotate(90)"/>
+                <line class="sp" x1="190" y1="120" x2="166" y2="120"/><polygon class="sph" points="0,-5 10,0 0,5" transform="translate(166,120) rotate(180)"/>
+                <line class="sp" x1="120" y1="190" x2="120" y2="148"/><polygon class="sph" points="0,-5 10,0 0,5" transform="translate(120,148) rotate(-90)"/>
+                <line class="sp" x1="50" y1="120" x2="74" y2="120"/><polygon class="sph" points="0,-5 10,0 0,5" transform="translate(74,120) rotate(0)"/>
+              </g>
+              <g class="vnd" id="nd1"><circle cx="120" cy="28" r="22"/><text x="120" y="33">决策</text></g>
+              <g class="vnd" id="nd2"><circle cx="212" cy="120" r="22"/><text x="212" y="125">行动</text></g>
+              <g class="vnd" id="nd3"><circle cx="120" cy="212" r="22"/><text x="120" y="217">反馈</text></g>
+              <g class="vnd" id="nd4"><circle cx="28" cy="120" r="22"/><text x="28" y="125">纠正</text></g>
+              <!-- hub：唯一深色元素（每次循环累积的共享状态） -->
+              <g class="hub">
+                <rect x="80" y="98" width="80" height="44" rx="8"/>
+                <text class="hubN" x="120" y="119">决策中枢</text>
+                <text class="hubS" x="120" y="134">LIVE</text>
+              </g>
+            </svg>
+          </div>
+          <div class="line" id="r1"><span class="mk">▸</span>每一步都<b>现场决策</b></div>
+          <div class="line" id="r2"><span class="mk">▸</span>被拦截 → <b>换思路</b></div>
+          <div class="line" id="r3"><span class="mk">▸</span>走错了 → <b>自己纠正</b></div>
+        </div>
+      </div>
+
+      <div id="foot">不是快慢的差别 <em>——</em> 是遇到意外之后，还能不能<b>继续往下走</b></div>
+    </div>
+  </div>
+
+  <!-- 大肥鱼 -->
+  <div class="fish" id="fish1">
+    <div class="say">就找<b>这一串</b></div>
+    <img src="Shark-GIF/006_双手身前微笑乖巧期待.gif" alt="大肥鱼">
+  </div>
+  <div class="fish" id="fish2">
+    <div class="say">它<b>不会停</b>下来</div>
+    <img src="Shark-GIF/006_双手身前微笑乖巧期待.gif" alt="大肥鱼">
+  </div>
+
+  <div class="corner" id="chap">第四章 · flag 与 AI 决策</div>
+  <div class="corner" id="src">口播对齐 timeline.md · 17:19–17:49</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-41 · flag 与 AI 决策 · 30s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=30000; /* ←⑤ DUR */
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ===== 补间工具 ===== */
+const show=(sel,cls)=>{const el=$(sel);if(el)el.classList.add(cls||'in')};
+
+/* ============ ⑤ DUR 与 cue 表 ============ */
+/* 口播区间 17:19–17:49（镜头起点 17:19=1039s） */
+on(300,()=>{show('#k1');__sfx.pop(.4);});                                        // 17:19「现在正式来讲一下」
+on(1000,()=>{show('#t1');__sfx.pop(.6);});                                       // 17:20「flag是题目里面藏了一段固定格式的字符串」
+on(5000,()=>{show('#fmt');show('#fmtCap');camFocus(960,470,1.06,.55);__sfx.ding(.5);}); // 17:24「它长这个样子」
+on(6100,()=>{$('#f1').classList.add('hot');show('#p1');__sfx.pop(.55);});        // 17:25「就是flag开头」
+on(7100,()=>{$('#f2').classList.add('hot','bracepulse');$('#f4').classList.add('hot','bracepulse');show('#p2');__sfx.pop(.55);}); // 17:26「然后有个大括号」（大括号弹跳亮起）
+on(8100,()=>{$('#f3').classList.add('hot');show('#p3');__sfx.pop(.55);});        // 17:27「大括号里面包一串相当于长得像密码一样的内容」
+on(8300,()=>{ /* 占位串持续乱码，示意「内容每次都不一样」（暂停即冻结） */
+  const el=$('#f3'),cs='abcdefghjkmnpqrstuvwxyzACDEFHJKLMNPQRTUVWXY23456789';let fr=0;
+  tws.push({t:8300,d:999999,e:p=>p,f:()=>{fr++;if(fr%7)return;
+    let s='';for(let i=0;i<12;i++)s+=cs[(Math.random()*cs.length)|0];
+    el.textContent=s.slice(0,4)+'-'+s.slice(4,8)+'-'+s.slice(8,12);}});
+});
+on(11200,()=>{show('#stamp');__sfx.thud(.7);});                                  // 17:30「找到它之后就等于通关了」
+on(11800,()=>{camTo(0,0,1,.5);});                                                // 收回镜头，准备投递用法
+on(13100,()=>{show('#quote');__sfx.swipe(.6);});                                 // 17:32「帮我把整个靶场的flag找出来」
+on(13400,()=>{show('#fish1','show');__sfx.pop(.45);});                           // 大肥鱼：就找这一串
+/* —— 硬切第二幕 —— */
+on(17000,()=>{$('#act1').classList.add('hide');$('#fish1').classList.remove('show');
+  $('#act2').classList.remove('hide');camCut(0,0,1);__sfx.swipe(.9);});          // 17:36「它跟固定脚本的区别就在于」
+on(17300,()=>{show('#k2');__sfx.pop(.4);});
+on(18100,()=>{show('#t2');$('#colL').classList.add('in');show('#chdL');__sfx.pop(.6);}); // 17:36「它跟固定脚本的区别就在于」
+on(19100,()=>{show('#cflow');__sfx.swipe(.5);});                                 // 17:38「脚本是按写死的流程来走的」
+on(19300,()=>{$('#fb1').classList.add('lit');$('#ft1').classList.add('lit');__sfx.pop(.4)}); // 场景：步骤1 亮起
+on(19700,()=>{$('#fl1').classList.add('lit');$('#fa1').classList.add('lit');__sfx.type(.5)});
+on(20000,()=>{$('#fb2').classList.add('lit');$('#ft2').classList.add('lit');__sfx.pop(.4)}); // 场景：步骤2 亮起
+on(20400,()=>{$('#fl2a').classList.add('lit');$('#fl2b').classList.add('lit');$('#fa2').classList.add('lit');__sfx.type(.5)});
+on(20700,()=>{$('#fb3').classList.add('lit');$('#ft3').classList.add('lit');__sfx.pop(.4)}); // 场景：步骤3 亮起（完整链）
+on(19800,()=>{show('#cnote');__sfx.pop(.45);});
+on(21200,()=>{                                                                     // 17:40「一旦遇到意外就会停摆」
+  show('#stall');__sfx.thud(.6);
+  $('#cflow').classList.add('broken');                                             // 场景：连线断裂 + ✕ + 步骤3 灰掉
+});
+on(22100,()=>{$('#colR').classList.add('in');show('#chdR');__sfx.ding(.5);});     // 17:41「而像VulnClaw这种AI的每一步」
+on(22500,()=>{$('#vizRing').classList.add('in');__sfx.pop(.45)});                  // 场景：环形决策图滑入
+on(24100,()=>{show('#r1');$('#nd1').classList.add('lit');$('#vizRing').classList.add('flow');__sfx.pop(.55);}); // 17:43「都是由大模型来进行现场决策的」
+on(17400,()=>{show('#fish2','show');__sfx.pop(.45);});                           // 大肥鱼：它不会停下来
+on(25000,()=>{$('#nd2').classList.add('lit');__sfx.pop(.4)});                      // 场景：节点逐个点亮（循环节拍）
+on(25700,()=>{$('#nd3').classList.add('lit');__sfx.pop(.4)});
+on(26100,()=>{show('#r2');$('#nd4').classList.add('lit');__sfx.pop(.55);});        // 17:45「碰到拦截的话就会尝试转换思路」
+on(28100,()=>{show('#r3');__sfx.pop(.55);});                                     // 17:47「走错了就会自己尝试纠正」
+on(29200,()=>{show('#foot');__sfx.swipe(.6);});                                  // 收尾定格
+
+/* ===== [不动] QA 专用（正常播放不触发） ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>

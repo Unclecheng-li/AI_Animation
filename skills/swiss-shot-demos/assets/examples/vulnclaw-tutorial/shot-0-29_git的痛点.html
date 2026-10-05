@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- ============================================================
+     镜头 0-29 · git 的痛点 · 12:23–13:00 · 37s ｜瑞士国际主义 v4（全重设计）
+     三幕叙事：
+       ① 混乱版本链（type-timeline）—— 靠文件名记版本：报告.doc → 报告_最终…真的最终…
+         越改越乱 → 改坏了 → 想回退 → 一根回退箭头在中间断裂（type-state 死胡同 · 橙 ✕）
+       ② AI 放大（lieflat 灰阶对照）—— 手动改 3 格 vs AI 一次改一片：×10 不止（唯一橙数字）
+       ③ git 的解法 —— 一条笔直干净的历史链 + 三条能力 → 落地橙色焦点结论「一键还原」
+     唯一强调橙 #F5572F 三幕各一处、时间上互斥（断裂 ✕ / ×10 / 结论条）。
+     字体：Inter × Noto Sans SC × IBM Plex Mono。回显不伪造、127.0.0.1 唯一。
+     ============================================================ -->
+<script>
+/* ===== [不动] 播放器引导：虚拟时钟黑场启动 ===== */
+(function(){
+  (function(){
+    var realRAF=window.requestAnimationFrame.bind(window);
+    var realPerf=performance.now.bind(performance);
+    var started=false,startReal=0;
+    function clock(){return started?(realPerf()-startReal):0;}
+    window.__startPlayback=function(){if(started)return;started=true;startReal=realPerf();};
+    performance.now=clock;
+    window.requestAnimationFrame=function(cb){return realRAF(function(){cb(clock());});};
+  })();
+  var css=document.createElement('style');
+  css.textContent='#introZ{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity 1.4s ease}#introZ .btn{pointer-events:auto;cursor:pointer;font-family:"Cascadia Mono","Microsoft YaHei","PingFang SC",sans-serif;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:16px 52px;transition:background .3s,transform .2s,opacity .4s}#introZ .btn:hover{background:rgba(255,255,255,.18)}#introZ .btn:active{transform:scale(.96)}#introZ .hint{margin-top:20px;font-family:"Cascadia Mono",Consolas,monospace;font-size:13px;color:#8a8a8a;letter-spacing:2px;opacity:.7}#hud{transition:opacity .35s ease}body.hud-off #hud{opacity:0!important;pointer-events:none}';
+  document.head.appendChild(css);
+  function boot(){
+    var z=document.createElement('div');z.id='introZ';
+    var b=document.createElement('button');b.type='button';b.className='btn';b.textContent='启 动 播 放';
+    var h=document.createElement('div');h.className='hint';h.textContent='点击开始 · 黑场渐变后播放';
+    z.appendChild(b);z.appendChild(h);document.body.appendChild(z);
+    var playing=false;
+    function showHud(){document.body.classList.remove('hud-off');}
+    function hideHud(){document.body.classList.add('hud-off');}
+    hideHud();
+    addEventListener('mousemove',function(e){if(!playing)return;if(innerHeight-e.clientY<=60)showHud();else hideHud();});
+    addEventListener('mouseleave',function(){if(playing)hideHud();});
+    b.addEventListener('click',function(){
+      if(playing)return;playing=true;
+      b.style.pointerEvents='none';b.style.opacity='0';h.style.opacity='0';
+      setTimeout(function(){z.style.opacity='0';z.style.pointerEvents='none';},600);
+      setTimeout(function(){window.__startPlayback();},2000);
+    });
+    if(location.hash.indexOf('auto')>=0)setTimeout(function(){b.click();},80); /* QA 无头自动起播 */
+  }
+  if(document.body)boot();else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+<script>
+/* ===== [不动] SFX 引擎：WebAudio 合成 ===== */
+window.__sfx=(function(){
+  var ctx=null,master=null,noiseBuf=null;
+  function ensure(){
+    if(ctx)return ctx;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC)return null;
+      ctx=new AC();
+      master=ctx.createGain();master.gain.value=0.24;
+      var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;
+      master.connect(lp);lp.connect(ctx.destination);
+      var len=Math.floor(ctx.sampleRate*1.2);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+      var d=noiseBuf.getChannelData(0);for(var i=0;i<len;i++)d[i]=Math.random()*2-1;
+    }catch(e){ctx=null}
+    return ctx;
+  }
+  addEventListener('pointerdown',function(){var c=ensure();if(c&&c.state==='suspended')c.resume();});
+  function ok(){return !!(ctx&&ctx.state==='running'&&master);}
+  function env(g,t0,a,peak,dur){g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(peak,t0+a);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);}
+  function pop(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';var f=330+Math.random()*90;
+    o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*2.05,t+0.09);
+    env(g,t,0.012,0.5*vol,0.16);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.2);
+  }
+  function whoosh(durS,vol){
+    if(!ok())return;var d=Math.max(0.25,Math.min(durS||1,1.8));vol=vol||0.9;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=0.9;
+    bp.frequency.setValueAtTime(330,t);bp.frequency.exponentialRampToValueAtTime(1300,t+d*0.55);bp.frequency.exponentialRampToValueAtTime(430,t+d);
+    var g=ctx.createGain();g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.3*vol,t+d*0.4);g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+d+0.05);
+  }
+  function swipe(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,src=ctx.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+    var bp=ctx.createBiquadFilter();bp.type='bandpass';bp.Q.value=1.3;
+    bp.frequency.setValueAtTime(2500,t);bp.frequency.exponentialRampToValueAtTime(720,t+0.22);
+    var g=ctx.createGain();env(g,t,0.02,0.26*vol,0.26);
+    src.connect(bp);bp.connect(g);g.connect(master);src.start(t);src.stop(t+0.32);
+  }
+  function type(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='square';o.frequency.value=1400+Math.random()*900;
+    var lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2700;
+    env(g,t,0.004,0.1*vol,0.05);
+    o.connect(lp);lp.connect(g);g.connect(master);o.start(t);o.stop(t+0.07);
+  }
+  function ding(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime;
+    [[660,0.2],[990,0.09]].forEach(function(p){
+      var o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=p[0];
+      env(g,t,0.01,p[1]*vol,0.6);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.7);
+    });
+  }
+  function thud(vol){
+    if(!ok())return;vol=vol||1;
+    var t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(155,t);o.frequency.exponentialRampToValueAtTime(60,t+0.16);
+    env(g,t,0.008,0.5*vol,0.22);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.28);
+  }
+  return {pop:pop,whoosh:whoosh,swipe:swipe,type:type,ding:ding,thud:thud};
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- ① 页面标题 -->
+<title>镜头 0-29 · git的痛点 · 37s</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<!-- ② 字体（v4 系统） -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Inter','Noto Sans SC',sans-serif}
+body.paused *{animation-play-state:paused!important}
+:root{--paper:#F0EFEB;--card:#FFF;--ink:#1C1C1A;--muted:#8F8E88;--faint:#C6C5BF;--grid:#DEDDD6;--accent:#F5572F;--dark:#1C1C1A}
+
+/* ② 舞台：纸灰底 + 细网格 */
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform:translate(-50%,-50%);overflow:hidden;background:var(--paper)}
+#stage::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:1;
+  background-image:linear-gradient(rgba(28,28,26,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(28,28,26,.05) 1px,transparent 1px);
+  background-size:48px 48px}
+
+/* ===== [不动] 镜头层 ===== */
+#cam{position:absolute;inset:0;transform-origin:0 0;transform:scale(1);transition:transform var(--cd,1.4s) cubic-bezier(.16,1,.3,1);z-index:10}
+
+/* ============ ③ 画面层 CSS ============ */
+/* ── 页眉 ── */
+#head{position:absolute;left:88px;top:52px;z-index:20;opacity:0;transform:translateY(-14px);transition:all .6s cubic-bezier(.16,1,.3,1)}
+#head.in{opacity:1;transform:none}
+.eyebrow{font:600 15px 'Inter';letter-spacing:.14em;text-transform:uppercase;color:var(--ink);display:flex;gap:12px;align-items:center}
+.eyebrow .no{background:var(--ink);color:var(--paper);padding:3px 10px;border-radius:3px;font-weight:700}
+#head h1{margin-top:14px;font:800 54px/1.02 'Inter','Noto Sans SC';letter-spacing:-.03em;color:var(--ink)}
+#head h1 b{font-weight:900;background:var(--ink);color:var(--paper);padding:0 14px;border-radius:4px}
+#actTag{position:absolute;right:88px;top:60px;z-index:20;display:flex;align-items:center;gap:12px;opacity:0;transform:translateY(-14px);transition:all .55s cubic-bezier(.16,1,.3,1)}
+#actTag.in{opacity:1;transform:none}
+#actTag .n{font:800 15px 'Inter';color:var(--paper);background:var(--ink);border-radius:4px;padding:4px 11px}
+#actTag .t{font:600 13px 'IBM Plex Mono';letter-spacing:.16em;color:var(--muted)}
+
+/* ── 痛苦 chips（开场 · 三件事） ── */
+#painbar{position:absolute;left:88px;top:330px;display:flex;gap:14px;z-index:19}
+.pc{padding:12px 22px;border-radius:10px;font:700 22px 'Noto Sans SC';color:var(--ink);letter-spacing:.06em;
+  background:var(--card);border:1px solid var(--grid);opacity:0;transform:translateY(-14px) scale(.92);transition:all .5s cubic-bezier(.2,1.4,.4,1)}
+.pc.in{opacity:1;transform:none}
+
+/* ── 工作台白卡（三幕共用位置） ── */
+.bench{position:absolute;left:88px;top:210px;width:1744px;height:600px;border-radius:16px;z-index:5;overflow:hidden;
+  background:var(--card);border:1px solid var(--grid);opacity:0;transform:translateY(24px);transition:all .6s cubic-bezier(.16,1,.3,1)}
+.bench.in{opacity:1;transform:none}
+.bTitle{position:absolute;left:40px;top:26px;z-index:3}
+.bTitle .a{font:900 30px 'Noto Sans SC';letter-spacing:.02em;color:var(--ink)}
+.bTitle .a b{font-weight:900;border-bottom:5px solid var(--ink)}
+.bTitle .b{display:block;margin-top:9px;font:600 12px 'IBM Plex Mono';letter-spacing:.2em;color:var(--muted)}
+
+/* ── ① 混乱版本链 ── */
+#axisA{position:absolute;left:60px;right:60px;top:400px;height:1.5px;background:var(--ink);z-index:4;
+  opacity:0;transform:scaleX(.45);transform-origin:left;transition:opacity .5s,transform .8s cubic-bezier(.16,1,.3,1)}
+#axisA.in{opacity:1;transform:scaleX(1)}
+.fchip{position:absolute;width:270px;height:70px;margin-left:-135px;z-index:6;
+  background:var(--card);border:1px solid var(--grid);border-radius:10px;padding:10px 14px;
+  display:flex;align-items:center;font-family:'IBM Plex Mono';font-size:15px;line-height:1.35;color:var(--ink);word-break:break-word;
+  opacity:0;transform:translateY(20px) scale(.94) rotate(var(--rot,0deg));transition:all .5s cubic-bezier(.2,1.3,.4,1)}
+.fchip.in{opacity:1;transform:translateY(0) scale(1) rotate(var(--rot,0deg))}
+.fchip.bad{border:2px solid var(--ink)}
+.fchip.dim{opacity:.3}
+.ftick{position:absolute;width:1.5px;background:var(--faint);margin-left:-.75px;opacity:0;transition:opacity .4s}
+.ftick.in{opacity:1}
+.fdot{position:absolute;top:393px;width:14px;height:14px;border-radius:50%;margin-left:-7px;z-index:7;
+  background:var(--paper);border:2.5px solid var(--muted);opacity:0;transition:all .45s cubic-bezier(.2,1.6,.4,1)}
+.fdot.in{opacity:1}
+.fdot.bad{background:var(--ink);border-color:var(--ink)}
+.fdot.cur{background:var(--ink);border-color:var(--ink);box-shadow:0 0 0 4px var(--paper),0 0 0 5.5px var(--muted)}
+/* 回退箭头 + 死胡同 */
+#arcsA{position:absolute;inset:0;width:1744px;height:600px;z-index:8;pointer-events:none}
+.draw{stroke-dasharray:1;stroke-dashoffset:1;transition:stroke-dashoffset .85s cubic-bezier(.16,1,.3,1)}
+.draw.drawn{stroke-dashoffset:0}
+#bkHead{transition:opacity .35s}
+#bkLabel{opacity:0;transition:opacity .4s .2s,fill .3s}
+#bkLabel.on{opacity:1}
+#deadX,#deadLbl{opacity:0;transition:opacity .35s}
+#deadX.on,#deadLbl.on{opacity:1}
+
+/* ── ② AI 放大 · 灰阶对照 ── */
+.cmpLbl{position:absolute;left:60px;font:700 20px 'Noto Sans SC';color:var(--ink);z-index:6}
+.cmpLbl .en{margin-left:12px;font:600 12px 'IBM Plex Mono';letter-spacing:.18em;color:var(--muted)}
+.cmpStrip{position:absolute;left:60px;display:flex;gap:6px;z-index:6}
+.cell{width:30px;height:30px;border-radius:4px;background:#EDECE8;display:flex;align-items:center;justify-content:center;
+  font:700 14px 'IBM Plex Mono';color:transparent;transition:background .35s,color .35s}
+.cell.on{background:var(--faint)}
+.cell.hot{background:var(--ink)}
+.cell.q{color:var(--ink);background:#fff;border:1.5px dashed var(--ink)}
+.cell.bad{background:var(--accent);color:#fff}
+#ampNum{position:absolute;right:250px;top:150px;z-index:9;display:flex;align-items:baseline;gap:6px;opacity:0;transition:opacity .3s}
+#ampNum.in{opacity:1}
+#ampNum .x{font:800 34px 'Inter';color:var(--accent)}
+#ampNum .n{font:800 118px/0.8 'Inter';letter-spacing:-.04em;color:var(--accent)}
+#ampNum .u{margin-left:10px;font:700 24px 'Noto Sans SC';color:var(--ink);letter-spacing:.04em}
+
+/* ── ③ git 一条干净链 ── */
+#chainC{position:absolute;inset:0;width:1744px;height:600px;z-index:6}
+#gitrows{position:absolute;left:60px;top:380px;width:1180px;display:flex;flex-direction:column;gap:14px;z-index:7}
+.grow2{height:56px;border-radius:12px;display:flex;align-items:center;gap:14px;padding:0 22px;
+  background:var(--card);border:1px solid var(--grid);opacity:0;transform:translateY(16px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+.grow2.in{opacity:1;transform:none}
+.grow2 .gi{width:26px;height:26px;border-radius:50%;background:var(--ink);display:flex;align-items:center;justify-content:center;
+  font:700 13px 'IBM Plex Mono';color:var(--paper);flex:none}
+.grow2 .gt{font:700 25px 'Noto Sans SC';color:var(--ink);letter-spacing:.02em}
+.grow2 .gt b{color:var(--ink);font-weight:900;border-bottom:3px solid var(--ink)}
+
+/* ── 解说条（三幕共用） ── */
+#narr{position:absolute;left:88px;top:828px;width:1744px;height:68px;border-radius:12px;z-index:14;
+  border:1px solid var(--ink);background:var(--card);display:flex;align-items:center;gap:16px;padding:0 30px;
+  opacity:0;transform:translateY(14px);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#narr.in{opacity:1;transform:none}
+#narr .q{font:800 26px 'IBM Plex Mono';color:var(--ink);line-height:1}
+#narr .t{font:700 28px 'Noto Sans SC';color:var(--muted);letter-spacing:.02em}
+#narr .t b{color:var(--ink);font-weight:900}
+
+/* ── 落点结论（唯一橙 · 焦点） ── */
+#verdict{position:absolute;left:88px;top:828px;width:1744px;height:68px;border-radius:12px;z-index:16;
+  background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;gap:18px;
+  opacity:0;transform:translateY(14px) scale(.98);transition:all .5s cubic-bezier(.16,1,.3,1)}
+#verdict.in{opacity:1;transform:none}
+#verdict .a{font:900 32px 'Noto Sans SC';letter-spacing:.06em;color:#fff}
+#verdict .a b{font-weight:900;background:#fff;color:var(--accent);padding:2px 12px;border-radius:5px}
+
+/* ── 大肥鱼（鱼政策：末鱼 ≤60%×DUR 起，保持到结尾前） ── */
+#fish1{position:absolute;right:118px;bottom:296px;width:176px;z-index:30;opacity:0;transform:translateY(22px) scale(.72);
+  transition:all .5s cubic-bezier(.2,1.6,.4,1)}
+#fish1.in{opacity:1;transform:none}
+#fish1 .say{position:absolute;right:calc(100% + 12px);bottom:24px;width:252px;background:#fff;border:2px solid var(--ink);
+  border-radius:14px;padding:10px 16px;font:500 19px/1.4 'Noto Sans SC';color:var(--ink);
+  opacity:0;transform:scale(.6);transform-origin:right center;transition:all .4s cubic-bezier(.2,1.6,.4,1)}
+#fish1.bub .say{opacity:1;transform:none}
+#fish1 .say b{color:var(--ink);font-weight:900;border-bottom:3px solid var(--ink)}
+#fish1 .say::after{content:'';position:absolute;right:-13px;bottom:30px;border:7px solid transparent;border-left:12px solid #fff}
+#fish1 img{width:158px;display:block;margin:0 auto}
+
+.corner{position:absolute;font:500 15px 'IBM Plex Mono';color:var(--muted);letter-spacing:.08em;z-index:29}
+#chap{left:52px;bottom:30px}
+#src{right:52px;bottom:30px}
+#hud{position:fixed;left:0;right:0;bottom:0;z-index:60;font-family:'IBM Plex Mono',monospace;pointer-events:none}
+#track{height:5px;background:rgba(28,28,26,.12)}
+#bar{height:100%;width:0;background:var(--ink)}
+#hudrow{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;font-size:12px;color:#6A6963;
+  background:rgba(240,239,235,.94);border-top:1px solid var(--grid)}
+#hud button{pointer-events:auto;background:transparent;border:1px solid #B0AFA9;color:#4A4944;font-family:inherit;font-size:12px;padding:3px 14px;margin-left:8px;border-radius:3px;cursor:pointer}
+#hud button:hover{background:rgba(28,28,26,.08)}
+#replay.done{border-color:#1C1C1A;color:#1C1C1A}
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- ============ ④ 画面层 HTML ============ -->
+  <div id="cam">
+
+    <div id="head">
+      <div class="eyebrow"><span class="no">SHOT 0-29</span>第一章 · 准备工作 · 版本管理</div>
+      <h1>第三个准备工作 · <b>git</b></h1>
+    </div>
+    <div id="actTag"><span class="n">01</span><span class="t">混乱 · CHAOS</span></div>
+
+    <!-- 痛苦 chips（开场） -->
+    <div id="painbar">
+      <div class="pc" id="pc1">改文件</div>
+      <div class="pc" id="pc2">改表格</div>
+      <div class="pc" id="pc3">改代码</div>
+    </div>
+
+    <!-- ① 混乱版本链 -->
+    <div class="bench" id="benchA">
+      <div class="bTitle" id="bTitleA"><span class="a">没有版本管理 · <b>文件名就是版本</b></span><span class="b">FILE NAME = VERSION</span></div>
+      <div id="axisA"></div>
+      <svg id="arcsA" viewBox="0 0 1744 600">
+        <path id="bk2" class="draw" pathLength="1" d="M1595,438 L1000,438" fill="none" stroke="#8F8E88" stroke-width="2.4"/>
+        <path id="bk1" class="draw" pathLength="1" d="M1000,438 L210,438" fill="none" stroke="#8F8E88" stroke-width="2.4"/>
+        <polygon id="bkHead" points="206,438 230,428 230,448" fill="#8F8E88" opacity="0"/>
+        <text id="bkLabel" x="820" y="478" text-anchor="middle" font-family="'Noto Sans SC',sans-serif" font-size="17" font-weight="700" fill="#8F8E88">想回到 · 上一个能用的版本</text>
+        <g id="deadX"><line x1="985" y1="423" x2="1015" y2="453" stroke="#F5572F" stroke-width="5" stroke-linecap="round"/><line x1="1015" y1="423" x2="985" y2="453" stroke="#F5572F" stroke-width="5" stroke-linecap="round"/></g>
+        <text id="deadLbl" x="1000" y="500" text-anchor="middle" font-family="'Noto Sans SC',sans-serif" font-size="16" font-weight="900" fill="#F5572F">死胡同</text>
+      </svg>
+    </div>
+
+    <!-- ② AI 放大 · 灰阶对照 -->
+    <div class="bench" id="benchB">
+      <div class="bTitle"><span class="a">换成让 <b>AI 来改</b> · 坑被放大</span><span class="b">MASS EDIT · NO TRACE</span></div>
+      <div class="cmpLbl" style="top:150px">手动改 · 只动几个<span class="en">MANUAL</span></div>
+      <div class="cmpStrip" id="stripM" style="top:190px"></div>
+      <div class="cmpLbl" style="top:322px">AI 一次改 · 动几十个<span class="en">MASS EDIT</span></div>
+      <div class="cmpStrip" id="stripAI" style="top:362px"></div>
+      <div id="ampNum"><span class="x">×</span><span class="n" id="ampN">0</span><span class="u">不止</span></div>
+    </div>
+
+    <!-- ③ git 一条干净链 -->
+    <div class="bench" id="benchC">
+      <div class="bTitle"><span class="a">git · <b>版本管理工具</b></span><span class="b">VERSION CONTROL SYSTEM</span></div>
+      <svg id="chainC" viewBox="0 0 1744 600"></svg>
+      <div id="gitrows">
+        <div class="grow2" id="gr1"><span class="gi">01</span><span class="gt">每次改动<b>存成记录</b></span></div>
+        <div class="grow2" id="gr2"><span class="gi">02</span><span class="gt">翻出<b>任意历史版本</b></span></div>
+        <div class="grow2" id="gr3"><span class="gi">03</span><span class="gt">选中<b>一键还原</b></span></div>
+      </div>
+    </div>
+
+    <!-- 解说条（三幕共用） -->
+    <div id="narr"><span class="q">&gt;</span><span class="t" id="narrT">靠文件名记版本</span></div>
+
+    <!-- 落点结论（唯一橙焦点） -->
+    <div id="verdict"><span class="a">改坏了 · <b>一键还原</b></span></div>
+
+    <!-- 大肥鱼 -->
+    <div id="fish1">
+      <div class="say">越改越乱 · <b>别慌</b></div>
+      <img src="Shark-GIF/026_双手合十微笑请求拜托.gif" alt="大肥鱼">
+    </div>
+
+  </div>
+
+  <div class="corner" id="chap">章 0 · 准备 ｜ 镜头 29 · git 的痛点 · 12:23–13:00</div>
+  <div class="corner" id="src">口播对齐 timeline.md ｜ type-timeline 混乱版本链 · type-state 死胡同 · lieflat 灰阶对照</div>
+</div>
+
+<div id="hud">
+  <div id="track"><div id="bar"></div></div>
+  <div id="hudrow"><span>镜头 0-29 · git的痛点 · 37s</span><span><span id="tc" style="margin-right:10px">00:00</span><button id="pauseBtn">暂停</button><button id="replay" onclick="location.reload()">重播</button></span></div>
+</div>
+
+<script>
+/* ===== [不动] 时间轴引擎 ===== */
+const DUR=37000; /* ←⑤ DUR=分镜时长(ms) */
+const $=s=>document.querySelector(s);
+let t0=performance.now(),paused=false,pStart=0;
+const cues=[],on=(t,f)=>cues.push({t,f,done:false});
+const tws=[],eo=p=>1-Math.pow(1-p,3),ei=p=>p*p,eio=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+function tick(now){if(paused)return;const el=now-t0;
+  for(const c of cues)if(!c.done&&el>=c.t){c.done=true;c.f()}
+  for(let i=tws.length-1;i>=0;i--){const tw=tws[i],p=(el-tw.t)/tw.d;if(p<0)continue;const q=Math.min(1,p);tw.f(tw.e?tw.e(q):q);if(q>=1){tws.splice(i,1);if(tw.done)tw.done()}}
+  $('#bar').style.width=Math.min(100,el/DUR*100)+'%';
+  const t=el/1000;$('#tc').textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+  if(el<DUR+2500)requestAnimationFrame(tick);else $('#replay').classList.add('done');
+}
+requestAnimationFrame(tick);
+$('#pauseBtn').onclick=()=>{paused=!paused;document.body.classList.toggle('paused',paused);$('#pauseBtn').textContent=paused?'继续':'暂停';if(paused){pStart=performance.now()}else{t0+=performance.now()-pStart;requestAnimationFrame(tick)}};
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);$('#stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+addEventListener('resize',fit);fit();
+
+/* ===== [不动] 镜头调度 ===== */
+const cam=$('#cam');
+function camTo(tx,ty,s,dur){cam.style.setProperty('--cd',dur+'s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;if(window.__sfx)__sfx.whoosh(dur,0.65)}
+function camFocus(fx,fy,s,dur){let tx=960-fx*s,ty=540-fy*s;
+  tx=Math.min(0,Math.max(1920-1920*s,tx));ty=Math.min(0,Math.max(1080-1080*s,ty));camTo(tx,ty,s,dur)}
+function camCut(tx,ty,s){cam.style.setProperty('--cd','0.001s');cam.style.transform=`translate(${tx}px,${ty}px) scale(${s})`}
+
+/* ───────── 本镜头专用小工具 ───────── */
+const nowMs=()=>performance.now()-t0;
+function slam(el,at){tws.push({t:at,d:520,e:p=>1-Math.pow(1-p,4),f:p=>{
+    el.style.transform='scale('+(1+1.7*Math.pow(1-p,3))+')';el.style.opacity=Math.min(1,p*2.4);
+  },done:()=>{el.style.transform='scale(1)';el.style.opacity=1;}});}
+function cnt(el,from,to,dur,start){tws.push({t:start,d:dur,e:eo,f:p=>{el.textContent=Math.round(from+(to-from)*p)}});}
+function narr(html){$('#narrT').innerHTML=html;}
+function tag(n,t){$('#actTag .n').textContent=n;$('#actTag .t').textContent=t;}
+function swap(hide,show){$(hide).classList.remove('in');$(show).classList.add('in');}
+
+/* ── ① 混乱版本链：靠文件名记版本 ── */
+const FILES=[
+  {n:'报告.doc',x:170,y:250,rot:0},
+  {n:'报告_最终.doc',x:455,y:272,rot:-1.8},
+  {n:'报告_最终2.doc',x:740,y:238,rot:2.2},
+  {n:'报告_最终_真的最终.doc',x:1025,y:284,rot:-2.6},
+  {n:'报告_最终_真的最终_改.doc',x:1310,y:242,rot:3},
+  {n:'报告_最终_真的最终_改_还用这个.doc',x:1595,y:268,rot:-2}
+];
+(function(){
+  const A=$('#benchA');
+  FILES.forEach((f,i)=>{
+    const t=document.createElement('div');t.className='ftick';t.id='ft'+(i+1);
+    t.style.left=f.x+'px';t.style.top=(f.y+70)+'px';t.style.height=(400-(f.y+70))+'px';A.appendChild(t);
+    const c=document.createElement('div');c.className='fchip';c.id='fc'+(i+1);
+    c.style.left=f.x+'px';c.style.top=f.y+'px';c.style.setProperty('--rot',f.rot+'deg');c.textContent=f.n;A.appendChild(c);
+    const d=document.createElement('div');d.className='fdot';d.id='fd'+(i+1);d.style.left=f.x+'px';A.appendChild(d);
+  });
+})();
+
+/* ── ② 灰阶对照格（手动 3 格 / AI 一片） ── */
+(function(){
+  for(let i=0;i<32;i++){const c=document.createElement('div');c.className='cell';$('#stripM').appendChild(c);}
+  for(let i=0;i<32;i++){const c=document.createElement('div');c.className='cell';c.id='a'+i;$('#stripAI').appendChild(c);}
+})();
+
+/* ── ③ 干净历史链 ── */
+const CX=[200,460,720,980,1240,1500],CY=250;
+const CDOTS=[];let ccur=null;
+(function(){
+  const svg=$('#chainC'),XS='http://www.w3.org/2000/svg';
+  const ax=document.createElementNS(XS,'line');ax.setAttribute('x1',120);ax.setAttribute('y1',CY);ax.setAttribute('x2',1620);ax.setAttribute('y2',CY);
+  ax.setAttribute('stroke','#1C1C1A');ax.setAttribute('stroke-width','1.5');ax.setAttribute('opacity','0');ax.id='axC';svg.appendChild(ax);
+  const tcap=document.createElementNS(XS,'text');tcap.setAttribute('x',870);tcap.setAttribute('y',CY+92);tcap.setAttribute('text-anchor','middle');
+  tcap.setAttribute('font-family',"'IBM Plex Mono',monospace");tcap.setAttribute('font-size','14');tcap.setAttribute('letter-spacing','3');
+  tcap.setAttribute('fill','#8F8E88');tcap.id='tcapC';tcap.setAttribute('opacity','0');tcap.textContent='每一次改动 · 都在链上';
+  svg.appendChild(tcap);
+  CX.forEach((x,i)=>{
+    const t=document.createElementNS(XS,'line');t.setAttribute('x1',x);t.setAttribute('y1',CY-14);t.setAttribute('x2',x);t.setAttribute('y2',CY+14);
+    t.setAttribute('stroke','#C6C5BF');t.setAttribute('stroke-width','1.2');t.setAttribute('opacity','0');t.id='ct'+i;svg.appendChild(t);
+    const d=document.createElementNS(XS,'circle');d.setAttribute('cx',x);d.setAttribute('cy',CY);d.setAttribute('r',8);
+    d.setAttribute('fill','#F0EFEB');d.setAttribute('stroke','#8F8E88');d.setAttribute('stroke-width','2');d.setAttribute('opacity','0');d.id='cd'+i;svg.appendChild(d);
+    CDOTS.push(d);
+  });
+  const g=document.createElementNS(XS,'g');g.id='ccur';g.style.opacity='0';
+  g.style.transition='opacity .4s, transform .5s cubic-bezier(.2,1.6,.4,1)';
+  const r=document.createElementNS(XS,'circle');r.setAttribute('cx',0);r.setAttribute('cy',CY);r.setAttribute('r',15);
+  r.setAttribute('fill','none');r.setAttribute('stroke','#1C1C1A');r.setAttribute('stroke-width','2.5');g.appendChild(r);svg.appendChild(g);
+  ccur=g;
+})();
+function chainIn(){
+  const svg=$('#chainC');
+  svg.querySelectorAll('line,circle').forEach(n=>{if(n.id&&n.id!=='ccur')n.setAttribute('opacity','1')});
+  const tc=$('#tcapC');if(tc)tc.setAttribute('opacity','1');
+}
+function cc(i){ccur.style.transform='translateX('+CX[i]+'px)';ccur.style.opacity='1';
+  CDOTS[i].setAttribute('fill','#1C1C1A');CDOTS[i].setAttribute('stroke','#1C1C1A');}
+
+/* ============ ⑤ DUR 与 cue 表 ============
+   镜头起点 12:23 · cue = 口播句起点 − 12:23
+*/
+on(150,()=>{__sfx.swipe(.3);});                                                                     // 黑场渐显
+on(300,()=>{                                                                                        // 12:23「好的那么接下来是第三个准备工作」
+  $('#head').classList.add('in');$('#actTag').classList.add('in');
+  $('#benchA').classList.add('in');$('#narr').classList.add('in');narr('靠文件名记版本');
+  __sfx.pop(.7);
+});
+on(900,()=>{                                                                                        // 版本链轴就位 + 第一版文件名
+  $('#axisA').classList.add('in');
+  $('#fc1').classList.add('in');$('#ft1').classList.add('in');$('#fd1').classList.add('in');
+});
+on(1500,()=>{                                                                                       // 12:25「git先从一个大概所有人都经历过的痛苦讲起」
+  $('#pc1').classList.add('in');$('#pc2').classList.add('in');$('#pc3').classList.add('in');
+  ['fc2','ft2','fd2','fc3','ft3','fd3'].forEach(id=>$('#'+id).classList.add('in'));
+  narr('一个人人都经历过的痛苦');
+  __sfx.pop(.6);
+});
+on(4600,()=>{                                                                                       // 硬切进翻车时间线
+  $('#pc1').classList.remove('in');$('#pc2').classList.remove('in');$('#pc3').classList.remove('in');
+  camCut(0,0,1);tag('02','越改越乱 · CHAOS');
+  $('#bTitleA').innerHTML='<span class="a">改着改着就 <b>回不去了</b></span><span class="b">EDIT · BREAK · NO WAY BACK</span>';
+  camTo(-6,-6,1.02,.5);
+  __sfx.whoosh(.9,.5);__sfx.thud(.42);
+});
+on(5000,()=>{                                                                                       // 12:28「比如说你修改一个文件」
+  $('#fc4').classList.add('in');$('#ft4').classList.add('in');$('#fd4').classList.add('in');
+  $('#fd3').classList.add('cur');narr('修改一个文件');__sfx.pop(.62);
+});
+on(5300,()=>{$('#fd1').classList.add('in');__sfx.pop(.45);});                                        // 场景：起点态收敛
+on(7000,()=>{                                                                                       // 12:30「改着改着发现改坏了」
+  $('#fc5').classList.add('in');$('#ft5').classList.add('in');$('#fd5').classList.add('in');
+  $('#fd3').classList.remove('cur');$('#fd5').classList.add('cur');
+  narr('改着改着 · 开始<b>不对</b>');__sfx.pop(.62);
+});
+on(7400,()=>{$('#fc5').classList.add('bad');$('#fd5').classList.add('bad');narr('改着改着 · <b>改坏了</b>');__sfx.thud(.6);}); // 坏点爆红
+on(9000,()=>{                                                                                       // 12:32「然后想回到上一个能用的版本」
+  $('#fc6').classList.add('in');$('#ft6').classList.add('in');$('#fd6').classList.add('in');
+  $('#bk2').classList.add('drawn');$('#bk1').classList.add('drawn');
+  $('#bkHead').style.opacity='1';$('#bkLabel').classList.add('on');
+  narr('想回到<b>上一个能用的版本</b>');__sfx.swipe(.6);
+});
+on(9400,()=>{__sfx.pop(.4);});                                                                       // 回退箭头画完
+on(11000,()=>{                                                                                      // 12:34「但是回不去了」
+  $('#bk1').classList.remove('drawn');$('#bkHead').style.opacity='0';
+  $('#deadX').classList.add('on');
+  const lb=$('#bkLabel');lb.classList.add('on');lb.setAttribute('fill','#F5572F');lb.setAttribute('x','1300');lb.textContent='回不去了';
+  narr('可是 <b>回不去了</b>');
+  $('#fd5').classList.remove('cur');$('#fd4').classList.add('bad');$('#fd6').classList.add('bad');
+  __sfx.thud(.5);
+});
+on(11400,()=>{$('#deadLbl').classList.add('on');__sfx.thud(.8);});                                   // 回退箭头断裂+✕
+on(11500,()=>{['fc1','fc2','fc3','fc4'].forEach(id=>$('#'+id).classList.add('dim'));});              // 早期版本淡出（回不去了）
+on(14000,()=>{                                                                                      // 12:37「都遇到过这种事情对吧」
+  camTo(0,-11,1.02,.6);
+  narr('改文件 · 改表格 · 改代码 —— 都<b>遇到过吧</b>');__sfx.pop(.55);
+});
+on(15000,()=>{                                                                                      // 12:38「然后我们让AI来改东西」
+  camCut(0,0,1);tag('03','AI 放大 · AMPLIFIED');swap('#benchA','#benchB');
+  $('#fd3').style.opacity='0';
+  narr('让 <b>AI</b> 来改 · 坑被放大');
+  // 手动改：只亮 3 格
+  const ms=$('#stripM').children;[9,20,27].forEach(i=>ms[i].classList.add('on'));
+  __sfx.whoosh(.9,.5);
+});
+on(17000,()=>{                                                                                      // 12:40「这个问题会被放大10倍不止」
+  slam($('#ampNum'),17000);cnt($('#ampN'),0,10,700,17000);
+  const cs=$('#stripAI').children;let k=0;
+  for(let i=0;i<cs.length;i++){ if(i%4===0)continue;
+    const c=cs[i];tws.push({t:17000+k*45,d:1,f:()=>c.classList.add('hot')});k++;
+  }
+  narr('放大 <b>10 倍不止</b>');
+  __sfx.thud(.55);__sfx.type(.4);
+});
+on(19000,()=>{                                                                                      // 12:42「AI它一次能改几十个文件」
+  const cs=$('#stripAI').children;for(let i=0;i<cs.length;i++){if(i%4!==0)cs[i].classList.add('hot');}
+  narr('一次改<b>几十个文件</b>');__sfx.pop(.62);__sfx.type(.5);
+});
+on(20000,()=>{                                                                                      // 鱼政策：末鱼 ≤60%×DUR（22200）起，保持到结尾前
+  $('#fish1').classList.add('in');$('#fish1').classList.add('bub');__sfx.pop(.5);
+});
+on(21000,()=>{                                                                                      // 12:44「你根本不知道它动了哪里」
+  narr('动了哪里 · <b>不知道</b>');__sfx.pop(.62);
+  const cs=$('#stripAI').children;let n=0;const qs=[3,10,19,26];
+  qs.forEach(i=>{cs[i].classList.remove('hot');cs[i].classList.add('q');cs[i].textContent='?';});
+});
+on(23000,()=>{                                                                                      // 12:46「跑起来如果报错了」
+  narr('跑起来 · 又<b>报错</b>');__sfx.pop(.4);__sfx.thud(.45);
+  const cs=$('#stripAI').children;cs[13].classList.remove('hot');cs[13].classList.add('bad');cs[13].textContent='✕';
+});
+on(24000,()=>{                                                                                      // 12:47「你想退回回去」12:48「可能连从哪里开始退都不知道」
+  narr('想退 · 连<b>从哪退</b>都不知道');
+  const cs=$('#stripAI').children;
+  for(let i=0;i<cs.length;i++){if(cs[i].classList.contains('hot'))cs[i].style.transform='translateY('+((i%2)?'-3px':'3px')+')';}
+  setTimeout(()=>{const cs2=$('#stripAI').children;
+    for(let i=0;i<cs2.length;i++){if(cs2[i].classList.contains('hot'))cs2[i].style.transform='';}},700);
+  __sfx.pop(.68);
+});
+on(26000,()=>{                                                                                      // 12:49「那么git它就是干这个的」
+  camCut(0,0,1);tag('04','git · VERSIONED');swap('#benchB','#benchC');
+  $('#fish1 .say').innerHTML='<b>git</b> 就是干这个的！';
+  $('#ampNum').style.opacity='0';
+  chainIn();
+  narr('<b>git</b> 就是干这个的');__sfx.whoosh(1.0,.5);__sfx.ding(.5);
+});
+on(28000,()=>{                                                                                      // 12:51「它是程序员都在用的版本管理工具」
+  narr('程序员都在用的<b>版本管理工具</b>');__sfx.pop(.55);
+});
+/* —— 提交点链逐个点亮（墨链延伸） —— */
+on(28200,()=>{cc(0);__sfx.pop(.5);});
+on(29400,()=>{cc(1);__sfx.pop(.45);});
+on(31000,()=>{$('#gr1').classList.add('in');__sfx.pop(.6);});                                        // 12:54「它可以把你文件夹里的每一次改动」12:56「都存成一个记录」
+on(31400,()=>{cc(2);__sfx.pop(.45);});
+on(33200,()=>{cc(3);__sfx.pop(.45);});
+on(34000,()=>{$('#gr2').classList.add('in');__sfx.pop(.6);});                                        // 12:57「并且可以随时翻出任意一个历史版本」
+on(34800,()=>{cc(4);__sfx.ding(.5);});
+on(36000,()=>{                                                                                      // 12:59「一键还原」
+  $('#gr3').classList.add('in');__sfx.ding(.62);
+  $('#verdict').classList.add('in');$('#narr').classList.remove('in');__sfx.thud(.6);
+  cc(2);['cd3','cd4','cd5'].forEach(id=>$('#'+id).setAttribute('fill','#C6C5BF'));
+});
+on(36300,()=>{$('#fish1 .say').innerHTML='记住这仨 · <b>够用</b>';__sfx.pop(.35);});
+
+/* ===== [不动] QA 专用（正常播放不触发）：hash 带 t=毫秒 → 起播后跳转该时刻并冻结 ===== */
+(function(){
+  var m=/t=(\d+)/.exec(location.hash||'');
+  if(!m)return;
+  var MS=+m[1];
+  var st=document.createElement('style');st.textContent='*{transition:none!important}';
+  var orig=window.__startPlayback;
+  window.__startPlayback=function(){
+    orig();
+    t0=performance.now()-MS;
+    tick(performance.now());
+    paused=true;document.body.classList.add('paused');document.head.appendChild(st);
+  };
+})();
+</script>
+</body>
+</html>
