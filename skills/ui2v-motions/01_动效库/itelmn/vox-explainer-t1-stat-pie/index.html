@@ -1,0 +1,272 @@
+<!doctype html>
+<!--
+  VOX EXPLAINER · tier1 · stat · PIE SLICE
+  A filled pie via conic-gradient (yellow slice = value, rest kraft/ink).
+  One yellow wedge is pulled slightly out (offset a few px from center).
+  The big % number sits beside the pie.
+  Slots: kicker, stat, label (richtext), source.
+  Knob: data-pct on #pie-wrap (0..100, default 73). JS sets the conic angle.
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+/* ============================================================================
+   VOX EXPLAINER — style tokens
+   Single source of palette / type / motion / texture for every card in this
+   style. Cards reference these vars and never hardcode colors, fonts, easings,
+   or textures. Tweak here, all cards update.
+   See DESIGN.md for the why. Inspiration: Vox-style animated explainer.
+   ============================================================================ */
+
+/* Type. The HyperFrames compiler embeds supported fonts by name at render time;
+   this @import is what makes standalone / browser preview show the right faces. */
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@400;700;900&family=Caveat:wght@700&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,900;1,9..144,900&display=swap");
+
+:root {
+  /* --- palette (mirror style.json + DESIGN.md). 5 symbolic colors. --------- */
+  --paper:        #efe9dc;   /* warm newsprint background */
+  --paper-2:      #e6dcc4;   /* kraft / aged paper variant */
+  --ink:          #17130e;   /* warm near-black print ink (text + engravings) */
+  --yellow:       #37BDF8;   /* AIS blue accent — THE highlight (circles, marker boxes). Token name kept --yellow; value is now blue. */
+  --red:          #e23b2e;   /* editorial red — circles, scribbles, alarm */
+  --orange:       #f26a1b;   /* cutout outline / secondary accent */
+
+  /* semantic aliases the blueprint contract expects */
+  --bg:     var(--paper);
+  --fg:     var(--ink);
+  --accent: var(--yellow);
+  --muted:  rgba(23, 19, 14, 0.55);
+
+  /* --- typography ---------------------------------------------------------- */
+  /* Fraunces = the expressive voice (statements). Archivo = metadata, recedes.
+     Caveat = handwritten margin notes only. Weight contrast is EXTREME. */
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-label:   "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-hand:    "Caveat", "Bradley Hand", cursive;
+  /* contract aliases */
+  --font-body:    var(--font-label);
+  --font-mono:    var(--font-label);
+
+  --wt-thin:  300;
+  --wt-reg:   400;
+  --wt-bold:  700;
+  --wt-black: 900;
+
+  /* video sizes for 1920x1080 (big — readable in 2s) */
+  --size-mega:     320px;   /* hero stat number */
+  --size-display:  150px;   /* takeover headline */
+  --size-title:    92px;    /* section title */
+  --size-headline: 56px;    /* card headline */
+  --size-body:     32px;    /* supporting copy */
+  --size-label:    24px;    /* kicker / metadata */
+  --size-tiny:     18px;    /* credits, fine print */
+
+  --track-tight: -0.03em;   /* display tracking, tighter than web */
+  --track-wide:  0.16em;    /* uppercase label tracking */
+
+  /* --- motion — the choppy, low-shutter Vox signature ---------------------- */
+  /* Snap in hard, settle with a tiny overshoot. Stepped eases give the
+     stop-motion / low-shutter feel. GSAP string eases live in the cards. */
+  --ease-snap: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in:   cubic-bezier(0.5, 0, 0.75, 0);
+  --ease-out:  cubic-bezier(0.16, 1, 0.3, 1);
+  --gsap-pop:   back.out(2.2);     /* paper-cut elements popping in */
+  --gsap-step:  steps(6);          /* choppy / shutter motion */
+  --dur-in:  0.42s;
+  --dur-out: 0.3s;
+
+  /* --- shape --------------------------------------------------------------- */
+  --radius: 2px;            /* paper cuts are nearly square, barely rounded */
+  --pad: 56px;
+  --marker-skew: -1.4deg;   /* highlight boxes sit slightly off-level */
+
+  /* --- textures (deterministic SVG data-URIs + gradients) ------------------ */
+  /* Paper fiber grain — fractalNoise, fixed seed (deterministic render). */
+  --tex-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+
+  /* Halftone dots — for filling cutout placeholders / shadows the Vox way. */
+  --tex-halftone: radial-gradient(circle at center, var(--ink) 1.1px, transparent 1.6px);
+  --tex-halftone-size: 7px 7px;
+
+  /* Faint construction grid (blueprint guides). */
+  --grid-line: rgba(23, 19, 14, 0.07);
+  --grid-size: 64px;
+}
+
+</style>
+    <style>
+      html, body { margin: 0; }
+      #t1-stat-pie {
+        position: absolute; inset: 0; width: 1920px; height: 1080px;
+        background: var(--paper); color: var(--ink);
+        font-family: var(--font-display); overflow: hidden;
+      }
+      #t1-stat-pie .grid {
+        position: absolute; inset: -2px;
+        background-image:
+          repeating-linear-gradient(0deg,  var(--grid-line) 0 1px, transparent 1px var(--grid-size)),
+          repeating-linear-gradient(90deg, var(--grid-line) 0 1px, transparent 1px var(--grid-size));
+      }
+      #t1-stat-pie .grain {
+        position: absolute; inset: -40px; background: var(--tex-grain);
+        background-size: 180px 180px; mix-blend-mode: multiply; opacity: 0.4; pointer-events: none; z-index: 6;
+      }
+      #t1-stat-pie .vignette {
+        position: absolute; inset: 0; pointer-events: none; z-index: 5;
+        background: radial-gradient(120% 120% at 40% 50%, transparent 52%, rgba(23,19,14,0.2) 100%);
+      }
+      #t1-stat-pie .kicker {
+        position: absolute; left: 130px; top: 100px;
+        font-family: var(--font-label); font-weight: var(--wt-bold);
+        font-size: var(--size-label); letter-spacing: var(--track-wide);
+        text-transform: uppercase; color: var(--red);
+      }
+      /* pie lives in the left half */
+      #t1-stat-pie .pie-area {
+        position: absolute; left: 150px; top: 50%; transform: translateY(-50%);
+        width: 560px; height: 560px;
+      }
+      /* main pie disc */
+      #t1-stat-pie .pie-disc {
+        position: absolute; inset: 0; border-radius: 50%;
+        box-shadow: 0 0 0 5px var(--ink);
+        /* conic-gradient set by JS */
+      }
+      /* pulled-out yellow wedge — a separate absolutely-positioned circle
+         clipped to the wedge shape by clip-path polygon, offset from center */
+      #t1-stat-pie .wedge-out {
+        position: absolute; inset: 0; border-radius: 50%;
+        /* clip-path set by JS */
+        background: var(--yellow);
+        /* offset slightly toward the slice midpoint — set by JS */
+      }
+      /* thick border ring mimics segment separation */
+      #t1-stat-pie .pie-ring {
+        position: absolute; inset: 0; border-radius: 50%;
+        box-shadow: 0 0 0 5px var(--ink);
+        pointer-events: none;
+      }
+      /* right panel — big stat + label */
+      #t1-stat-pie .right {
+        position: absolute; left: 800px; right: 130px; top: 50%; transform: translateY(-50%);
+      }
+      #t1-stat-pie .stat {
+        font-weight: var(--wt-black); font-size: 340px; line-height: 0.88;
+        letter-spacing: -0.06em; font-variant-numeric: tabular-nums; color: var(--ink);
+        display: block;
+      }
+      #t1-stat-pie .label {
+        margin-top: 32px;
+        font-weight: var(--wt-thin); font-size: 58px; line-height: 1.06;
+        letter-spacing: var(--track-tight); color: var(--ink);
+      }
+      #t1-stat-pie .label em { font-style: italic; font-weight: var(--wt-black); }
+      #t1-stat-pie .source {
+        position: absolute; left: 130px; bottom: 88px;
+        font-family: var(--font-label); font-weight: var(--wt-bold);
+        font-size: var(--size-tiny); letter-spacing: var(--track-wide);
+        text-transform: uppercase; color: var(--muted);
+      }
+      /* "the rest" label on the dark wedge */
+      #t1-stat-pie .rest-label {
+        position: absolute; font-family: var(--font-label); font-weight: var(--wt-bold);
+        font-size: 22px; letter-spacing: var(--track-wide); text-transform: uppercase;
+        color: var(--paper); opacity: 0.72;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="t1-stat-pie" data-composition-id="t1-stat-pie" data-start="0" data-width="1920" data-height="1080" class="clip" data-duration="5">
+      <div class="grid"></div>
+      <div class="kicker" data-slot="kicker">SHARE OF REVENUE</div>
+
+      <div class="pie-area">
+        <div class="pie-disc" id="pie-disc" data-pct="73"></div>
+        <div class="wedge-out" id="wedge-out"></div>
+        <div class="pie-ring"></div>
+        <div class="rest-label" id="rest-label">27%</div>
+      </div>
+
+      <div class="right">
+        <span class="stat" data-slot="stat">73%</span>
+        <div class="label" data-slot="label">of ad spend now captured by <em>short-form video</em></div>
+      </div>
+
+      <div class="source" data-slot="source">SOURCE · AD MARKET REPORT 2026</div>
+      <div class="vignette"></div>
+      <div class="grain"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      window.__timelines = window.__timelines || {};
+
+      var disc  = document.getElementById("pie-disc");
+      var wedge = document.getElementById("wedge-out");
+      var restLbl = document.getElementById("rest-label");
+      var pct   = Math.max(0, Math.min(100, parseInt(disc.getAttribute("data-pct"), 10) || 73));
+      var rest  = 100 - pct;
+      restLbl.textContent = rest + "%";
+
+      // Conic gradient: yellow from 0deg to pct*3.6deg, then paper-2 (kraft) for the remainder
+      var deg = pct * 3.6;
+      disc.style.background = "conic-gradient(var(--yellow) 0deg " + deg + "deg, var(--paper-2) " + deg + "deg 360deg)";
+
+      // Pulled-out wedge: same yellow wedge, offset ~14px toward its visual midpoint
+      // Midpoint angle of the yellow slice (starting from 12 o'clock = -90deg)
+      var midAngleDeg = (deg / 2) - 90;
+      var midAngleRad = midAngleDeg * Math.PI / 180;
+      var offsetPx = 16;
+      var ox = offsetPx * Math.cos(midAngleRad);
+      var oy = offsetPx * Math.sin(midAngleRad);
+      // clip-path: sector polygon (center + arc points approx with many vertices)
+      var r = 280; // half of 560px
+      var cx = 280; var cy = 280;
+      var numPts = 48;
+      var startAngle = -Math.PI / 2;          // 0% at top
+      var endAngle   = startAngle + (deg * Math.PI / 180);
+      var pts = [cx + "px " + cy + "px"];
+      for (var i = 0; i <= numPts; i++) {
+        var a = startAngle + (endAngle - startAngle) * (i / numPts);
+        pts.push((cx + r * Math.cos(a)).toFixed(2) + "px " + (cy + r * Math.sin(a)).toFixed(2) + "px");
+      }
+      wedge.style.clipPath  = "polygon(" + pts.join(", ") + ")";
+      wedge.style.transform = "translate(" + ox.toFixed(2) + "px, " + oy.toFixed(2) + "px)";
+
+      // Position "rest%" label at the center of the remainder arc
+      var restMidAngleDeg = deg + (360 - deg) / 2 - 90; // degrees from top
+      var restMidRad = restMidAngleDeg * Math.PI / 180;
+      var lx = cx + 0.58 * r * Math.cos(restMidRad) - 30;
+      var ly = cy + 0.58 * r * Math.sin(restMidRad) - 12;
+      restLbl.style.left = lx.toFixed(0) + "px";
+      restLbl.style.top  = ly.toFixed(0) + "px";
+
+      var tl = gsap.timeline({ paused: true });
+
+      tl.fromTo("#t1-stat-pie .grain", { backgroundPosition: "0px 0px" },
+                { backgroundPosition: "150px 130px", duration: 0.5, ease: "steps(4)", repeat: 11, yoyo: true }, 0);
+
+      tl.from("#t1-stat-pie .kicker", { autoAlpha: 0, x: -20, duration: 0.3, ease: "steps(4)" }, 0.2);
+
+      // Pie disc grows via scale, stepped
+      tl.from("#t1-stat-pie .pie-disc", { scale: 0, transformOrigin: "50% 50%", duration: 0.45, ease: "steps(6)" }, 0.35);
+      tl.from("#t1-stat-pie .pie-ring", { scale: 0, transformOrigin: "50% 50%", duration: 0.45, ease: "steps(6)" }, 0.35);
+
+      // Pulled wedge pops out
+      tl.from(wedge, { scale: 0, transformOrigin: "50% 50%", duration: 0.28, ease: "back.out(2.2)" }, 0.65);
+
+      // Rest label
+      tl.from(restLbl, { autoAlpha: 0, duration: 0.25 }, 0.85);
+
+      // Big stat number
+      tl.from("#t1-stat-pie .stat", { autoAlpha: 0, scale: 0.55, transformOrigin: "0% 50%", duration: 0.45, ease: "back.out(2.4)" }, 0.8);
+
+      tl.from("#t1-stat-pie .label",  { autoAlpha: 0, y: 18, duration: 0.38, ease: "power3.out" }, 1.15);
+      tl.from("#t1-stat-pie .source", { autoAlpha: 0, duration: 0.28 }, 1.45);
+
+      tl.set({}, {}, 6);
+      window.__timelines["t1-stat-pie"] = tl;
+    </script>
+  </body>
+</html>

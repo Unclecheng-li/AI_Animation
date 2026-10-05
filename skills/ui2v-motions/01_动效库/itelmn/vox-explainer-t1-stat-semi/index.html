@@ -1,0 +1,255 @@
+<!doctype html>
+<!--
+  VOX EXPLAINER · tier1 · stat · SEMICIRCLE GAUGE
+  A 180° arc along the top half: faint ink track + yellow fill sweeping via
+  stroke-dashoffset. Big number centered below the arc. Min + max labels at ends.
+  Distinct from full arc-gauge (t1-stat-arc) — this is a HALF circle.
+  Slots: kicker, stat, minLabel, maxLabel, label (richtext), source.
+  Knob: data-pct on <svg> (0..100, default 73). Arc computed in JS.
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+/* ============================================================================
+   VOX EXPLAINER — style tokens
+   Single source of palette / type / motion / texture for every card in this
+   style. Cards reference these vars and never hardcode colors, fonts, easings,
+   or textures. Tweak here, all cards update.
+   See DESIGN.md for the why. Inspiration: Vox-style animated explainer.
+   ============================================================================ */
+
+/* Type. The HyperFrames compiler embeds supported fonts by name at render time;
+   this @import is what makes standalone / browser preview show the right faces. */
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@400;700;900&family=Caveat:wght@700&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,900;1,9..144,900&display=swap");
+
+:root {
+  /* --- palette (mirror style.json + DESIGN.md). 5 symbolic colors. --------- */
+  --paper:        #efe9dc;   /* warm newsprint background */
+  --paper-2:      #e6dcc4;   /* kraft / aged paper variant */
+  --ink:          #17130e;   /* warm near-black print ink (text + engravings) */
+  --yellow:       #37BDF8;   /* AIS blue accent — THE highlight (circles, marker boxes). Token name kept --yellow; value is now blue. */
+  --red:          #e23b2e;   /* editorial red — circles, scribbles, alarm */
+  --orange:       #f26a1b;   /* cutout outline / secondary accent */
+
+  /* semantic aliases the blueprint contract expects */
+  --bg:     var(--paper);
+  --fg:     var(--ink);
+  --accent: var(--yellow);
+  --muted:  rgba(23, 19, 14, 0.55);
+
+  /* --- typography ---------------------------------------------------------- */
+  /* Fraunces = the expressive voice (statements). Archivo = metadata, recedes.
+     Caveat = handwritten margin notes only. Weight contrast is EXTREME. */
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-label:   "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-hand:    "Caveat", "Bradley Hand", cursive;
+  /* contract aliases */
+  --font-body:    var(--font-label);
+  --font-mono:    var(--font-label);
+
+  --wt-thin:  300;
+  --wt-reg:   400;
+  --wt-bold:  700;
+  --wt-black: 900;
+
+  /* video sizes for 1920x1080 (big — readable in 2s) */
+  --size-mega:     320px;   /* hero stat number */
+  --size-display:  150px;   /* takeover headline */
+  --size-title:    92px;    /* section title */
+  --size-headline: 56px;    /* card headline */
+  --size-body:     32px;    /* supporting copy */
+  --size-label:    24px;    /* kicker / metadata */
+  --size-tiny:     18px;    /* credits, fine print */
+
+  --track-tight: -0.03em;   /* display tracking, tighter than web */
+  --track-wide:  0.16em;    /* uppercase label tracking */
+
+  /* --- motion — the choppy, low-shutter Vox signature ---------------------- */
+  /* Snap in hard, settle with a tiny overshoot. Stepped eases give the
+     stop-motion / low-shutter feel. GSAP string eases live in the cards. */
+  --ease-snap: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in:   cubic-bezier(0.5, 0, 0.75, 0);
+  --ease-out:  cubic-bezier(0.16, 1, 0.3, 1);
+  --gsap-pop:   back.out(2.2);     /* paper-cut elements popping in */
+  --gsap-step:  steps(6);          /* choppy / shutter motion */
+  --dur-in:  0.42s;
+  --dur-out: 0.3s;
+
+  /* --- shape --------------------------------------------------------------- */
+  --radius: 2px;            /* paper cuts are nearly square, barely rounded */
+  --pad: 56px;
+  --marker-skew: -1.4deg;   /* highlight boxes sit slightly off-level */
+
+  /* --- textures (deterministic SVG data-URIs + gradients) ------------------ */
+  /* Paper fiber grain — fractalNoise, fixed seed (deterministic render). */
+  --tex-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+
+  /* Halftone dots — for filling cutout placeholders / shadows the Vox way. */
+  --tex-halftone: radial-gradient(circle at center, var(--ink) 1.1px, transparent 1.6px);
+  --tex-halftone-size: 7px 7px;
+
+  /* Faint construction grid (blueprint guides). */
+  --grid-line: rgba(23, 19, 14, 0.07);
+  --grid-size: 64px;
+}
+
+</style>
+    <style>
+      html, body { margin: 0; }
+      #t1-stat-semi {
+        position: absolute; inset: 0; width: 1920px; height: 1080px;
+        background: var(--paper); color: var(--ink);
+        font-family: var(--font-display); overflow: hidden;
+      }
+      #t1-stat-semi .grid {
+        position: absolute; inset: -2px;
+        background-image:
+          repeating-linear-gradient(0deg,  var(--grid-line) 0 1px, transparent 1px var(--grid-size)),
+          repeating-linear-gradient(90deg, var(--grid-line) 0 1px, transparent 1px var(--grid-size));
+      }
+      #t1-stat-semi .grain {
+        position: absolute; inset: -40px; background: var(--tex-grain);
+        background-size: 180px 180px; mix-blend-mode: multiply; opacity: 0.4; pointer-events: none; z-index: 6;
+      }
+      #t1-stat-semi .vignette {
+        position: absolute; inset: 0; pointer-events: none; z-index: 5;
+        background: radial-gradient(120% 120% at 50% 40%, transparent 52%, rgba(23,19,14,0.2) 100%);
+      }
+      #t1-stat-semi .kicker {
+        position: absolute; left: 50%; transform: translateX(-50%); top: 92px;
+        font-family: var(--font-label); font-weight: var(--wt-bold);
+        font-size: var(--size-label); letter-spacing: var(--track-wide);
+        text-transform: uppercase; color: var(--red); white-space: nowrap;
+      }
+      /* gauge container — centered */
+      #t1-stat-semi .gaugewrap {
+        position: absolute; left: 50%; top: 148px;
+        transform: translateX(-50%);
+        width: 800px; height: 440px;  /* half the SVG height since it's a semicircle */
+      }
+      /* SVG is 800×800 but we only see the top 440px (the arc half + needle clearance) */
+      #t1-stat-semi svg {
+        width: 800px; height: 800px;
+        position: absolute; top: 0; left: 0;
+      }
+      #t1-stat-semi .stat {
+        position: absolute; bottom: 0; left: 0; right: 0; text-align: center;
+        font-weight: var(--wt-black); font-size: 220px; line-height: 1;
+        letter-spacing: -0.05em; font-variant-numeric: tabular-nums; color: var(--ink);
+      }
+      /* end-cap labels positioned at the two arc termini */
+      #t1-stat-semi .min-label,
+      #t1-stat-semi .max-label {
+        position: absolute; bottom: 30px;
+        font-family: var(--font-label); font-weight: var(--wt-bold);
+        font-size: var(--size-label); letter-spacing: var(--track-wide);
+        text-transform: uppercase; color: var(--muted);
+      }
+      #t1-stat-semi .min-label { left: 0; }
+      #t1-stat-semi .max-label { right: 0; }
+      /* label + source */
+      #t1-stat-semi .label {
+        position: absolute; left: 130px; right: 130px; bottom: 160px;
+        font-weight: var(--wt-thin); font-size: 52px; line-height: 1.06;
+        letter-spacing: var(--track-tight); color: var(--ink); text-align: center;
+      }
+      #t1-stat-semi .label em { font-style: italic; font-weight: var(--wt-black); }
+      #t1-stat-semi .source {
+        position: absolute; left: 50%; transform: translateX(-50%); bottom: 90px;
+        font-family: var(--font-label); font-weight: var(--wt-bold);
+        font-size: var(--size-tiny); letter-spacing: var(--track-wide);
+        text-transform: uppercase; color: var(--muted); white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="t1-stat-semi" data-composition-id="t1-stat-semi" data-start="0" data-width="1920" data-height="1080" class="clip" data-duration="5">
+      <div class="grid"></div>
+      <div class="kicker" data-slot="kicker">AUDIENCE RETENTION</div>
+
+      <div class="gaugewrap">
+        <!--
+          SVG 800×800 viewBox 0 0 200 200.
+          Semicircle = top half of a circle centered at (100,100) r=88.
+          The arc goes from (12,100) to (188,100) clockwise through the top.
+          We rotate the whole SVG -90deg around its own center so the track
+          starts at 9 o'clock and sweeps clockwise to 3 o'clock — classic gauge.
+        -->
+        <svg viewBox="0 0 200 200" data-pct="73" style="transform: rotate(0deg);">
+          <!-- faint track — full semicircle. pathLength used for easy dash calc. -->
+          <path class="track-path"
+                d="M 12,100 A 88,88 0 0 1 188,100"
+                fill="none" stroke="rgba(23,19,14,0.18)" stroke-width="18"
+                stroke-linecap="butt" pathLength="100" />
+          <!-- yellow fill arc — dashoffset controls coverage -->
+          <path class="arc-path"
+                d="M 12,100 A 88,88 0 0 1 188,100"
+                fill="none" stroke="var(--yellow)" stroke-width="18"
+                stroke-linecap="butt" pathLength="100" />
+          <!-- needle tick at current value -->
+          <line class="needle" x1="100" y1="20" x2="100" y2="42"
+                stroke="var(--ink)" stroke-width="4" stroke-linecap="round" />
+        </svg>
+        <div class="stat" data-slot="stat">73%</div>
+        <div class="min-label" data-slot="minLabel">0%</div>
+        <div class="max-label" data-slot="maxLabel">100%</div>
+      </div>
+
+      <div class="label" data-slot="label">of each video watched — <em>well above</em> the 52% average</div>
+      <div class="source" data-slot="source">SOURCE · PLATFORM ANALYTICS 2026</div>
+      <div class="vignette"></div>
+      <div class="grain"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      window.__timelines = window.__timelines || {};
+
+      var svg   = document.querySelector("#t1-stat-semi svg");
+      var pct   = Math.max(0, Math.min(100, parseInt(svg.getAttribute("data-pct"), 10) || 73));
+      var arc   = svg.querySelector(".arc-path");
+      var needle = svg.querySelector(".needle");
+
+      // pathLength="100" means dasharray 100 and dashoffset = 100 - pct
+      arc.style.strokeDasharray  = "100";
+      arc.style.strokeDashoffset = String(100 - pct);  // final state
+
+      // Position needle: sweeps 180°. At pct=0 → angle -90 (left end);
+      // at pct=100 → angle +90 (right end). Center (100,100), r=88.
+      var angleDeg  = -180 + (pct / 100) * 180;         // -180..0 in degrees
+      var angleRad  = angleDeg * Math.PI / 180;
+      var nx1 = 100 + 72 * Math.cos(angleRad);
+      var ny1 = 100 + 72 * Math.sin(angleRad);
+      var nx2 = 100 + 56 * Math.cos(angleRad);
+      var ny2 = 100 + 56 * Math.sin(angleRad);
+      needle.setAttribute("x1", nx1.toFixed(2));
+      needle.setAttribute("y1", ny1.toFixed(2));
+      needle.setAttribute("x2", nx2.toFixed(2));
+      needle.setAttribute("y2", ny2.toFixed(2));
+
+      var tl = gsap.timeline({ paused: true });
+
+      tl.fromTo("#t1-stat-semi .grain", { backgroundPosition: "0px 0px" },
+                { backgroundPosition: "150px 130px", duration: 0.5, ease: "steps(4)", repeat: 11, yoyo: true }, 0);
+
+      tl.from("#t1-stat-semi .kicker", { autoAlpha: 0, x: -20, duration: 0.3, ease: "steps(4)" }, 0.2);
+
+      tl.from("#t1-stat-semi .gaugewrap", { autoAlpha: 0, scale: 0.88, transformOrigin: "50% 100%", duration: 0.35, ease: "back.out(1.8)" }, 0.3);
+
+      // Sweep arc via dashoffset
+      tl.fromTo(arc,
+        { strokeDashoffset: "100" },
+        { strokeDashoffset: String(100 - pct), duration: 0.7, ease: "steps(9)" }, 0.5);
+
+      tl.from("#t1-stat-semi .stat",      { autoAlpha: 0, scale: 0.55, transformOrigin: "50% 50%", duration: 0.4, ease: "back.out(2.4)" }, 1.0);
+      tl.from("#t1-stat-semi .min-label", { autoAlpha: 0, duration: 0.28 }, 1.1);
+      tl.from("#t1-stat-semi .max-label", { autoAlpha: 0, duration: 0.28 }, 1.15);
+      tl.from("#t1-stat-semi .label",     { autoAlpha: 0, y: 18, duration: 0.38, ease: "power3.out" }, 1.2);
+      tl.from("#t1-stat-semi .source",    { autoAlpha: 0, duration: 0.28 }, 1.5);
+
+      tl.set({}, {}, 6);
+      window.__timelines["t1-stat-semi"] = tl;
+    </script>
+  </body>
+</html>

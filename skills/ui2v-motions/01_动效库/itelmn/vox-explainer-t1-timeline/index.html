@@ -1,0 +1,215 @@
+<!doctype html>
+<!--
+  VOX EXPLAINER · tier1 · overview  (full-paper takeover: 3-up photo timeline)
+  Three archive photo-cards (yellow frames) along a marker timeline with dates.
+  Slots: title, img1/2/3 (background-image set by agent), evt1/2/3, yr1/2/3, date1/2/3.
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+/* ============================================================================
+   VOX EXPLAINER — style tokens
+   Single source of palette / type / motion / texture for every card in this
+   style. Cards reference these vars and never hardcode colors, fonts, easings,
+   or textures. Tweak here, all cards update.
+   See DESIGN.md for the why. Inspiration: Vox-style animated explainer.
+   ============================================================================ */
+
+/* Type. The HyperFrames compiler embeds supported fonts by name at render time;
+   this @import is what makes standalone / browser preview show the right faces. */
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@400;700;900&family=Caveat:wght@700&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,900;1,9..144,900&display=swap");
+
+:root {
+  /* --- palette (mirror style.json + DESIGN.md). 5 symbolic colors. --------- */
+  --paper:        #efe9dc;   /* warm newsprint background */
+  --paper-2:      #e6dcc4;   /* kraft / aged paper variant */
+  --ink:          #17130e;   /* warm near-black print ink (text + engravings) */
+  --yellow:       #37BDF8;   /* AIS blue accent — THE highlight (circles, marker boxes). Token name kept --yellow; value is now blue. */
+  --red:          #e23b2e;   /* editorial red — circles, scribbles, alarm */
+  --orange:       #f26a1b;   /* cutout outline / secondary accent */
+
+  /* semantic aliases the blueprint contract expects */
+  --bg:     var(--paper);
+  --fg:     var(--ink);
+  --accent: var(--yellow);
+  --muted:  rgba(23, 19, 14, 0.55);
+
+  /* --- typography ---------------------------------------------------------- */
+  /* Fraunces = the expressive voice (statements). Archivo = metadata, recedes.
+     Caveat = handwritten margin notes only. Weight contrast is EXTREME. */
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-label:   "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-hand:    "Caveat", "Bradley Hand", cursive;
+  /* contract aliases */
+  --font-body:    var(--font-label);
+  --font-mono:    var(--font-label);
+
+  --wt-thin:  300;
+  --wt-reg:   400;
+  --wt-bold:  700;
+  --wt-black: 900;
+
+  /* video sizes for 1920x1080 (big — readable in 2s) */
+  --size-mega:     320px;   /* hero stat number */
+  --size-display:  150px;   /* takeover headline */
+  --size-title:    92px;    /* section title */
+  --size-headline: 56px;    /* card headline */
+  --size-body:     32px;    /* supporting copy */
+  --size-label:    24px;    /* kicker / metadata */
+  --size-tiny:     18px;    /* credits, fine print */
+
+  --track-tight: -0.03em;   /* display tracking, tighter than web */
+  --track-wide:  0.16em;    /* uppercase label tracking */
+
+  /* --- motion — the choppy, low-shutter Vox signature ---------------------- */
+  /* Snap in hard, settle with a tiny overshoot. Stepped eases give the
+     stop-motion / low-shutter feel. GSAP string eases live in the cards. */
+  --ease-snap: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in:   cubic-bezier(0.5, 0, 0.75, 0);
+  --ease-out:  cubic-bezier(0.16, 1, 0.3, 1);
+  --gsap-pop:   back.out(2.2);     /* paper-cut elements popping in */
+  --gsap-step:  steps(6);          /* choppy / shutter motion */
+  --dur-in:  0.42s;
+  --dur-out: 0.3s;
+
+  /* --- shape --------------------------------------------------------------- */
+  --radius: 2px;            /* paper cuts are nearly square, barely rounded */
+  --pad: 56px;
+  --marker-skew: -1.4deg;   /* highlight boxes sit slightly off-level */
+
+  /* --- textures (deterministic SVG data-URIs + gradients) ------------------ */
+  /* Paper fiber grain — fractalNoise, fixed seed (deterministic render). */
+  --tex-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+
+  /* Halftone dots — for filling cutout placeholders / shadows the Vox way. */
+  --tex-halftone: radial-gradient(circle at center, var(--ink) 1.1px, transparent 1.6px);
+  --tex-halftone-size: 7px 7px;
+
+  /* Faint construction grid (blueprint guides). */
+  --grid-line: rgba(23, 19, 14, 0.07);
+  --grid-size: 64px;
+}
+
+</style>
+    <style>
+      html, body { margin: 0; }
+      #t1-timeline {
+        position: absolute; inset: 0; width: 1920px; height: 1080px;
+        background: var(--paper); color: var(--ink);
+        font-family: var(--font-display); overflow: hidden;
+      }
+      #t1-timeline .grid {
+        position: absolute; inset: -2px;
+        background-image:
+          repeating-linear-gradient(0deg,  var(--grid-line) 0 1px, transparent 1px var(--grid-size)),
+          repeating-linear-gradient(90deg, var(--grid-line) 0 1px, transparent 1px var(--grid-size));
+      }
+      #t1-timeline .grain {
+        position: absolute; inset: -40px; background: var(--tex-grain);
+        background-size: 180px 180px; mix-blend-mode: multiply; opacity: 0.4; pointer-events: none;
+      }
+      #t1-timeline .vignette {
+        position: absolute; inset: 0; pointer-events: none;
+        background: radial-gradient(130% 120% at 50% 40%, transparent 60%, rgba(23,19,14,0.14) 100%);
+      }
+      /* marker title */
+      #t1-timeline .title {
+        position: absolute; top: 96px; left: 50%; transform: translateX(-50%) skewX(var(--marker-skew));
+        background: var(--yellow); padding: 8px 28px; z-index: 3;
+        font-weight: var(--wt-black); font-size: var(--size-title); letter-spacing: var(--track-tight);
+        text-transform: uppercase; white-space: nowrap;
+      }
+      #t1-timeline .intro {
+        position: absolute; top: 250px; left: 50%; transform: translateX(-50%);
+        width: 1000px; text-align: center; z-index: 3;
+        font-family: var(--font-label); font-weight: var(--wt-reg);
+        font-size: var(--size-body); line-height: 1.4; color: var(--muted);
+      }
+      /* the timeline rule */
+      #t1-timeline .rule {
+        position: absolute; left: 200px; right: 200px; top: 690px; height: 10px;
+        background: var(--yellow); transform-origin: left center; z-index: 1;
+      }
+      /* three columns */
+      #t1-timeline .cols {
+        position: absolute; left: 200px; right: 200px; top: 360px;
+        display: flex; justify-content: space-between; z-index: 2;
+      }
+      #t1-timeline .col { width: 440px; text-align: center; }
+      #t1-timeline .photo {
+        width: 440px; height: 280px; margin: 0 auto;
+        background-color: var(--paper-2); background-image: var(--tex-halftone);
+        background-size: var(--tex-halftone-size); background-position: center;
+        outline: 8px solid var(--yellow); outline-offset: -8px;
+        box-shadow: 12px 16px 0 rgba(23,19,14,0.12);
+      }
+      #t1-timeline .evt {
+        margin-top: 22px; font-family: var(--font-label); font-weight: var(--wt-bold);
+        font-size: var(--size-label); color: var(--ink); line-height: 1.25;
+      }
+      #t1-timeline .tick { color: var(--ink); font-size: 28px; line-height: 0.6; margin-top: 8px; }
+      #t1-timeline .yr {
+        margin-top: 24px; font-weight: var(--wt-black); font-size: 76px;
+        letter-spacing: -0.03em; color: var(--ink); font-variant-numeric: tabular-nums;
+      }
+      #t1-timeline .date {
+        font-family: var(--font-label); font-weight: var(--wt-bold);
+        font-size: var(--size-tiny); letter-spacing: var(--track-wide);
+        text-transform: uppercase; color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="t1-timeline" data-composition-id="t1-timeline" data-start="0" data-width="1920" data-height="1080" class="clip" data-duration="5">
+      <div class="grid"></div>
+      <div class="title" data-slot="title">HISTORY TIMELINE</div>
+      <div class="intro" data-slot="intro">Three moments that changed how the story was told.</div>
+      <div class="rule"></div>
+      <div class="cols">
+        <div class="col c1">
+          <div class="photo" data-slot="img1"></div>
+          <div class="evt" data-slot="evt1">The first broadcast</div>
+          <div class="tick">&#9660;</div>
+          <div class="yr" data-slot="yr1">1935</div>
+          <div class="date" data-slot="date1">September 15</div>
+        </div>
+        <div class="col c2">
+          <div class="photo" data-slot="img2"></div>
+          <div class="evt" data-slot="evt2">The turning point</div>
+          <div class="tick">&#9660;</div>
+          <div class="yr" data-slot="yr2">1939</div>
+          <div class="date" data-slot="date2">September 1</div>
+        </div>
+        <div class="col c3">
+          <div class="photo" data-slot="img3"></div>
+          <div class="evt" data-slot="evt3">The aftermath</div>
+          <div class="tick">&#9660;</div>
+          <div class="yr" data-slot="yr3">1941</div>
+          <div class="date" data-slot="date3">December 7</div>
+        </div>
+      </div>
+      <div class="vignette"></div>
+      <div class="grain"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      tl.fromTo("#t1-timeline .grain", { backgroundPosition: "0px 0px" },
+                { backgroundPosition: "160px 100px", duration: 0.5, ease: "steps(4)", repeat: 13, yoyo: true }, 0);
+
+      tl.from("#t1-timeline .title", { autoAlpha: 0, scaleX: 0, transformOrigin: "left center", duration: 0.4, ease: "power3.out" }, 0.15)
+        .from("#t1-timeline .intro", { autoAlpha: 0, y: 14, duration: 0.35 }, 0.45)
+        .from("#t1-timeline .rule", { scaleX: 0, duration: 0.6, ease: "power2.inOut" }, 0.5)
+        .from("#t1-timeline .c1", { autoAlpha: 0, y: 40, duration: 0.45, ease: "back.out(1.6)" }, 0.7)
+        .from("#t1-timeline .c2", { autoAlpha: 0, y: 40, duration: 0.45, ease: "back.out(1.6)" }, 0.85)
+        .from("#t1-timeline .c3", { autoAlpha: 0, y: 40, duration: 0.45, ease: "back.out(1.6)" }, 1.0)
+        .set({}, {}, 7);
+
+      window.__timelines["t1-timeline"] = tl;
+    </script>
+  </body>
+</html>

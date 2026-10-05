@@ -1,0 +1,281 @@
+<!doctype html>
+<!--
+  VOX EXPLAINER · tier1 · overview · ROADMAP PATH
+  A stylized winding road across the canvas (thick ink path + dashed yellow
+  centerline) with 4 milestone stops (numbered square markers, NOT arrowheads).
+  Path draws in via stroke-dashoffset, stops pop along it. Title at top.
+  Slots: title, intro, stop1, stop2, stop3, stop4, source.
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+/* ============================================================================
+   VOX EXPLAINER — style tokens
+   Single source of palette / type / motion / texture for every card in this
+   style. Cards reference these vars and never hardcode colors, fonts, easings,
+   or textures. Tweak here, all cards update.
+   See DESIGN.md for the why. Inspiration: Vox-style animated explainer.
+   ============================================================================ */
+
+/* Type. The HyperFrames compiler embeds supported fonts by name at render time;
+   this @import is what makes standalone / browser preview show the right faces. */
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@400;700;900&family=Caveat:wght@700&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,900;1,9..144,900&display=swap");
+
+:root {
+  /* --- palette (mirror style.json + DESIGN.md). 5 symbolic colors. --------- */
+  --paper:        #efe9dc;   /* warm newsprint background */
+  --paper-2:      #e6dcc4;   /* kraft / aged paper variant */
+  --ink:          #17130e;   /* warm near-black print ink (text + engravings) */
+  --yellow:       #37BDF8;   /* AIS blue accent — THE highlight (circles, marker boxes). Token name kept --yellow; value is now blue. */
+  --red:          #e23b2e;   /* editorial red — circles, scribbles, alarm */
+  --orange:       #f26a1b;   /* cutout outline / secondary accent */
+
+  /* semantic aliases the blueprint contract expects */
+  --bg:     var(--paper);
+  --fg:     var(--ink);
+  --accent: var(--yellow);
+  --muted:  rgba(23, 19, 14, 0.55);
+
+  /* --- typography ---------------------------------------------------------- */
+  /* Fraunces = the expressive voice (statements). Archivo = metadata, recedes.
+     Caveat = handwritten margin notes only. Weight contrast is EXTREME. */
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-label:   "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-hand:    "Caveat", "Bradley Hand", cursive;
+  /* contract aliases */
+  --font-body:    var(--font-label);
+  --font-mono:    var(--font-label);
+
+  --wt-thin:  300;
+  --wt-reg:   400;
+  --wt-bold:  700;
+  --wt-black: 900;
+
+  /* video sizes for 1920x1080 (big — readable in 2s) */
+  --size-mega:     320px;   /* hero stat number */
+  --size-display:  150px;   /* takeover headline */
+  --size-title:    92px;    /* section title */
+  --size-headline: 56px;    /* card headline */
+  --size-body:     32px;    /* supporting copy */
+  --size-label:    24px;    /* kicker / metadata */
+  --size-tiny:     18px;    /* credits, fine print */
+
+  --track-tight: -0.03em;   /* display tracking, tighter than web */
+  --track-wide:  0.16em;    /* uppercase label tracking */
+
+  /* --- motion — the choppy, low-shutter Vox signature ---------------------- */
+  /* Snap in hard, settle with a tiny overshoot. Stepped eases give the
+     stop-motion / low-shutter feel. GSAP string eases live in the cards. */
+  --ease-snap: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in:   cubic-bezier(0.5, 0, 0.75, 0);
+  --ease-out:  cubic-bezier(0.16, 1, 0.3, 1);
+  --gsap-pop:   back.out(2.2);     /* paper-cut elements popping in */
+  --gsap-step:  steps(6);          /* choppy / shutter motion */
+  --dur-in:  0.42s;
+  --dur-out: 0.3s;
+
+  /* --- shape --------------------------------------------------------------- */
+  --radius: 2px;            /* paper cuts are nearly square, barely rounded */
+  --pad: 56px;
+  --marker-skew: -1.4deg;   /* highlight boxes sit slightly off-level */
+
+  /* --- textures (deterministic SVG data-URIs + gradients) ------------------ */
+  /* Paper fiber grain — fractalNoise, fixed seed (deterministic render). */
+  --tex-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+
+  /* Halftone dots — for filling cutout placeholders / shadows the Vox way. */
+  --tex-halftone: radial-gradient(circle at center, var(--ink) 1.1px, transparent 1.6px);
+  --tex-halftone-size: 7px 7px;
+
+  /* Faint construction grid (blueprint guides). */
+  --grid-line: rgba(23, 19, 14, 0.07);
+  --grid-size: 64px;
+}
+
+</style>
+    <style>
+      html, body { margin: 0; }
+      #t1-ov-road {
+        position: absolute; inset: 0; width: 1920px; height: 1080px;
+        background: var(--paper); color: var(--ink);
+        font-family: var(--font-display); overflow: hidden;
+      }
+      #t1-ov-road .grid {
+        position: absolute; inset: -2px;
+        background-image:
+          repeating-linear-gradient(0deg,  var(--grid-line) 0 1px, transparent 1px var(--grid-size)),
+          repeating-linear-gradient(90deg, var(--grid-line) 0 1px, transparent 1px var(--grid-size));
+      }
+      #t1-ov-road .grain {
+        position: absolute; inset: -40px; background: var(--tex-grain);
+        background-size: 180px 180px; mix-blend-mode: multiply; opacity: 0.4; pointer-events: none; z-index: 6;
+      }
+      #t1-ov-road .vignette {
+        position: absolute; inset: 0; pointer-events: none; z-index: 5;
+        background: radial-gradient(130% 120% at 50% 48%, transparent 55%, rgba(23,19,14,0.16) 100%);
+      }
+
+      /* marker title */
+      #t1-ov-road .title {
+        position: absolute; top: 72px; left: 50%; transform: translateX(-50%) skewX(var(--marker-skew));
+        background: var(--yellow); padding: 8px 28px; z-index: 3;
+        font-weight: var(--wt-black); font-size: var(--size-title); letter-spacing: var(--track-tight);
+        text-transform: uppercase; white-space: nowrap;
+      }
+
+      /* intro sub-line */
+      #t1-ov-road .intro {
+        position: absolute; top: 218px; left: 50%; transform: translateX(-50%);
+        width: 1100px; text-align: center; z-index: 3;
+        font-family: var(--font-label); font-weight: var(--wt-reg);
+        font-size: var(--size-body); line-height: 1.4; color: var(--muted);
+      }
+
+      /* SVG canvas for the road path */
+      #t1-ov-road .road-svg {
+        position: absolute; left: 0; top: 280px; width: 1920px; height: 720px; z-index: 2;
+      }
+
+      /* milestone stop blocks */
+      #t1-ov-road .stops {
+        position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; z-index: 4;
+        pointer-events: none;
+      }
+      #t1-ov-road .stop {
+        position: absolute;
+      }
+      #t1-ov-road .stop-pin {
+        width: 72px; height: 72px;
+        background: var(--ink); color: var(--paper);
+        display: flex; align-items: center; justify-content: center;
+        font-weight: var(--wt-black); font-size: 36px; font-variant-numeric: tabular-nums;
+        transform: rotate(45deg);
+      }
+      #t1-ov-road .stop-num {
+        transform: rotate(-45deg); display: block;
+      }
+      #t1-ov-road .stop-label {
+        position: absolute; left: 90px; top: 50%; transform: translateY(-50%);
+        font-family: var(--font-label); font-weight: var(--wt-bold);
+        font-size: var(--size-label); letter-spacing: 0.04em;
+        text-transform: uppercase; color: var(--ink);
+        white-space: nowrap; max-width: 380px;
+      }
+
+      /* source */
+      #t1-ov-road .source {
+        position: absolute; left: 130px; bottom: 60px; z-index: 7;
+        font-family: var(--font-label); font-weight: var(--wt-bold);
+        font-size: var(--size-tiny); letter-spacing: var(--track-wide);
+        text-transform: uppercase; color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="t1-ov-road" data-composition-id="t1-ov-road" data-start="0" data-width="1920" data-height="1080" class="clip" data-duration="5">
+      <div class="grid"></div>
+      <div class="title" data-slot="title">THE ROADMAP</div>
+      <div class="intro" data-slot="intro">Four milestones that define where we're headed.</div>
+
+      <!-- SVG road: a winding cubic bezier path -->
+      <svg class="road-svg" viewBox="0 0 1920 720" preserveAspectRatio="none"
+           xmlns="http://www.w3.org/2000/svg">
+        <!-- thick ink road outline -->
+        <path id="road-path"
+              d="M 80,560 C 280,560 360,180 640,180 C 920,180 960,540 1280,540 C 1520,540 1640,220 1840,220"
+              fill="none" stroke="var(--ink)" stroke-width="56"
+              stroke-linecap="round" stroke-linejoin="round"/>
+        <!-- paper-colored road surface (slightly narrower) -->
+        <path id="road-surface"
+              d="M 80,560 C 280,560 360,180 640,180 C 920,180 960,540 1280,540 C 1520,540 1640,220 1840,220"
+              fill="none" stroke="var(--paper-2)" stroke-width="40"
+              stroke-linecap="round" stroke-linejoin="round"/>
+        <!-- dashed yellow centerline -->
+        <path id="road-center"
+              d="M 80,560 C 280,560 360,180 640,180 C 920,180 960,540 1280,540 C 1520,540 1640,220 1840,220"
+              fill="none" stroke="var(--yellow)" stroke-width="6"
+              stroke-dasharray="40 28" stroke-linecap="round"/>
+      </svg>
+
+      <!-- milestone stops — positioned at the 4 path anchor-ish points -->
+      <div class="stops">
+        <!-- Stop 1: near x=80, y=280+560=840 in comp coords -->
+        <div class="stop s1" style="left:44px; top:780px;">
+          <div class="stop-pin"><span class="stop-num">1</span></div>
+          <div class="stop-label" data-slot="stop1" style="left:90px; top:-4px; transform:none;">Discovery</div>
+        </div>
+        <!-- Stop 2: near x=640, y=280+180=460 -->
+        <div class="stop s2" style="left:604px; top:400px;">
+          <div class="stop-pin"><span class="stop-num">2</span></div>
+          <div class="stop-label" data-slot="stop2" style="left:90px; top:-4px; transform:none;">Planning</div>
+        </div>
+        <!-- Stop 3: near x=1280, y=280+540=820 -->
+        <div class="stop s3" style="left:1244px; top:760px;">
+          <div class="stop-pin"><span class="stop-num">3</span></div>
+          <div class="stop-label" data-slot="stop3" style="left:90px; top:-4px; transform:none;">Execution</div>
+        </div>
+        <!-- Stop 4: near x=1840, y=280+220=500 -->
+        <div class="stop s4" style="left:1804px; top:440px;">
+          <div class="stop-pin"><span class="stop-num">4</span></div>
+          <div class="stop-label" data-slot="stop4" style="right:0; left:auto; transform:none;
+            top:-4px; text-align:right; right:90px;">Delivery</div>
+        </div>
+      </div>
+
+      <div class="source" data-slot="source">SOURCE · STRATEGY DOC</div>
+      <div class="vignette"></div>
+      <div class="grain"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      window.__timelines = window.__timelines || {};
+
+      // Measure path length deterministically via SVG API
+      const roadPath = document.getElementById("road-path");
+      const roadSurface = document.getElementById("road-surface");
+      const roadCenter  = document.getElementById("road-center");
+
+      function initPath(el) {
+        const len = el.getTotalLength ? el.getTotalLength() : 2400;
+        el.style.strokeDasharray = len;
+        el.style.strokeDashoffset = len;
+        return len;
+      }
+      const pathLen = initPath(roadPath);
+      initPath(roadSurface);
+      initPath(roadCenter);
+
+      const tl = gsap.timeline({ paused: true });
+
+      // grain flicker (finite)
+      tl.fromTo("#t1-ov-road .grain", { backgroundPosition: "0px 0px" },
+        { backgroundPosition: "140px 120px", duration: 0.5, ease: "steps(4)", repeat: 11, yoyo: true }, 0);
+
+      // title in
+      tl.from("#t1-ov-road .title",
+        { autoAlpha: 0, scaleX: 0, transformOrigin: "left center", duration: 0.35, ease: "power3.out" }, 0.15);
+      tl.from("#t1-ov-road .intro",
+        { autoAlpha: 0, y: 14, duration: 0.3 }, 0.42);
+
+      // road draws in (stepped, choppy)
+      tl.to([roadPath, roadSurface, roadCenter],
+        { strokeDashoffset: 0, duration: 0.8, ease: "steps(12)" }, 0.55);
+
+      // stops pop along the road
+      [".s1", ".s2", ".s3", ".s4"].forEach((sel, i) => {
+        const t = 0.9 + i * 0.25;
+        tl.from("#t1-ov-road " + sel + " .stop-pin",
+          { autoAlpha: 0, scale: 0, transformOrigin: "center center", duration: 0.28, ease: "back.out(1.8)" }, t);
+        tl.from("#t1-ov-road " + sel + " .stop-label",
+          { autoAlpha: 0, x: 16, duration: 0.25, ease: "power3.out" }, t + 0.12);
+      });
+
+      tl.from("#t1-ov-road .source", { autoAlpha: 0, duration: 0.3 }, 2.1);
+      tl.set({}, {}, 7);
+
+      window.__timelines["t1-ov-road"] = tl;
+    </script>
+  </body>
+</html>

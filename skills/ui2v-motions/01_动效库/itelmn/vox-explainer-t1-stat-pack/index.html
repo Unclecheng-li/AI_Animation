@@ -1,0 +1,273 @@
+<!doctype html>
+<!--
+  VOX EXPLAINER · tier1 · stat · AREA / CIRCLE-PACK COMPARISON
+  One LARGE yellow circle vs a SMALL reference circle (area comparison).
+  The large circle's area is proportional to the stat; small circle is reference unit.
+  The big multiplier number is the hero. Circles pop in via scale.
+  Slots: kicker, bigLabel, smallLabel, stat (the multiplier), label (richtext), source.
+  Knob: data-mult on #pack-wrap (integer, default 12) — sets the area ratio.
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+/* ============================================================================
+   VOX EXPLAINER — style tokens
+   Single source of palette / type / motion / texture for every card in this
+   style. Cards reference these vars and never hardcode colors, fonts, easings,
+   or textures. Tweak here, all cards update.
+   See DESIGN.md for the why. Inspiration: Vox-style animated explainer.
+   ============================================================================ */
+
+/* Type. The HyperFrames compiler embeds supported fonts by name at render time;
+   this @import is what makes standalone / browser preview show the right faces. */
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@400;700;900&family=Caveat:wght@700&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,900;1,9..144,900&display=swap");
+
+:root {
+  /* --- palette (mirror style.json + DESIGN.md). 5 symbolic colors. --------- */
+  --paper:        #efe9dc;   /* warm newsprint background */
+  --paper-2:      #e6dcc4;   /* kraft / aged paper variant */
+  --ink:          #17130e;   /* warm near-black print ink (text + engravings) */
+  --yellow:       #37BDF8;   /* AIS blue accent — THE highlight (circles, marker boxes). Token name kept --yellow; value is now blue. */
+  --red:          #e23b2e;   /* editorial red — circles, scribbles, alarm */
+  --orange:       #f26a1b;   /* cutout outline / secondary accent */
+
+  /* semantic aliases the blueprint contract expects */
+  --bg:     var(--paper);
+  --fg:     var(--ink);
+  --accent: var(--yellow);
+  --muted:  rgba(23, 19, 14, 0.55);
+
+  /* --- typography ---------------------------------------------------------- */
+  /* Fraunces = the expressive voice (statements). Archivo = metadata, recedes.
+     Caveat = handwritten margin notes only. Weight contrast is EXTREME. */
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-label:   "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-hand:    "Caveat", "Bradley Hand", cursive;
+  /* contract aliases */
+  --font-body:    var(--font-label);
+  --font-mono:    var(--font-label);
+
+  --wt-thin:  300;
+  --wt-reg:   400;
+  --wt-bold:  700;
+  --wt-black: 900;
+
+  /* video sizes for 1920x1080 (big — readable in 2s) */
+  --size-mega:     320px;   /* hero stat number */
+  --size-display:  150px;   /* takeover headline */
+  --size-title:    92px;    /* section title */
+  --size-headline: 56px;    /* card headline */
+  --size-body:     32px;    /* supporting copy */
+  --size-label:    24px;    /* kicker / metadata */
+  --size-tiny:     18px;    /* credits, fine print */
+
+  --track-tight: -0.03em;   /* display tracking, tighter than web */
+  --track-wide:  0.16em;    /* uppercase label tracking */
+
+  /* --- motion — the choppy, low-shutter Vox signature ---------------------- */
+  /* Snap in hard, settle with a tiny overshoot. Stepped eases give the
+     stop-motion / low-shutter feel. GSAP string eases live in the cards. */
+  --ease-snap: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in:   cubic-bezier(0.5, 0, 0.75, 0);
+  --ease-out:  cubic-bezier(0.16, 1, 0.3, 1);
+  --gsap-pop:   back.out(2.2);     /* paper-cut elements popping in */
+  --gsap-step:  steps(6);          /* choppy / shutter motion */
+  --dur-in:  0.42s;
+  --dur-out: 0.3s;
+
+  /* --- shape --------------------------------------------------------------- */
+  --radius: 2px;            /* paper cuts are nearly square, barely rounded */
+  --pad: 56px;
+  --marker-skew: -1.4deg;   /* highlight boxes sit slightly off-level */
+
+  /* --- textures (deterministic SVG data-URIs + gradients) ------------------ */
+  /* Paper fiber grain — fractalNoise, fixed seed (deterministic render). */
+  --tex-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+
+  /* Halftone dots — for filling cutout placeholders / shadows the Vox way. */
+  --tex-halftone: radial-gradient(circle at center, var(--ink) 1.1px, transparent 1.6px);
+  --tex-halftone-size: 7px 7px;
+
+  /* Faint construction grid (blueprint guides). */
+  --grid-line: rgba(23, 19, 14, 0.07);
+  --grid-size: 64px;
+}
+
+</style>
+    <style>
+      html, body { margin: 0; }
+      #t1-stat-pack {
+        position: absolute; inset: 0; width: 1920px; height: 1080px;
+        background: var(--paper); color: var(--ink);
+        font-family: var(--font-display); overflow: hidden;
+      }
+      #t1-stat-pack .grid {
+        position: absolute; inset: -2px;
+        background-image:
+          repeating-linear-gradient(0deg,  var(--grid-line) 0 1px, transparent 1px var(--grid-size)),
+          repeating-linear-gradient(90deg, var(--grid-line) 0 1px, transparent 1px var(--grid-size));
+      }
+      #t1-stat-pack .grain {
+        position: absolute; inset: -40px; background: var(--tex-grain);
+        background-size: 180px 180px; mix-blend-mode: multiply; opacity: 0.4; pointer-events: none; z-index: 6;
+      }
+      #t1-stat-pack .vignette {
+        position: absolute; inset: 0; pointer-events: none; z-index: 5;
+        background: radial-gradient(120% 120% at 50% 50%, transparent 52%, rgba(23,19,14,0.18) 100%);
+      }
+      #t1-stat-pack .kicker {
+        position: absolute; left: 130px; top: 92px;
+        font-family: var(--font-label); font-weight: var(--wt-bold);
+        font-size: var(--size-label); letter-spacing: var(--track-wide);
+        text-transform: uppercase; color: var(--red);
+      }
+      /* big circle */
+      #t1-stat-pack .circle-big {
+        position: absolute;
+        border-radius: 50%;
+        background: var(--yellow);
+        box-shadow: 0 0 0 5px var(--ink);
+      }
+      /* small circle */
+      #t1-stat-pack .circle-small {
+        position: absolute;
+        border-radius: 50%;
+        background: var(--paper-2);
+        box-shadow: 0 0 0 4px var(--ink);
+      }
+      /* label under big circle */
+      #t1-stat-pack .big-label {
+        position: absolute;
+        font-family: var(--font-label); font-weight: var(--wt-black);
+        font-size: 28px; letter-spacing: var(--track-wide);
+        text-transform: uppercase; color: var(--ink); text-align: center;
+      }
+      /* label under small circle */
+      #t1-stat-pack .small-label {
+        position: absolute;
+        font-family: var(--font-label); font-weight: var(--wt-bold);
+        font-size: 26px; letter-spacing: var(--track-wide);
+        text-transform: uppercase; color: var(--muted); text-align: center;
+      }
+      /* multiplier connector */
+      #t1-stat-pack .mult-badge {
+        position: absolute;
+        font-weight: var(--wt-black); font-size: 200px; line-height: 1;
+        letter-spacing: -0.05em; font-variant-numeric: tabular-nums;
+        color: var(--ink);
+      }
+      #t1-stat-pack .mult-badge .mult-x {
+        font-size: 100px; font-weight: var(--wt-black); color: var(--red);
+        vertical-align: super; line-height: 0;
+      }
+      /* right-side label + source */
+      #t1-stat-pack .label {
+        position: absolute; right: 130px; bottom: 220px; width: 620px;
+        font-weight: var(--wt-thin); font-size: 54px; line-height: 1.06;
+        letter-spacing: var(--track-tight); color: var(--ink); text-align: right;
+      }
+      #t1-stat-pack .label em { font-style: italic; font-weight: var(--wt-black); }
+      #t1-stat-pack .source {
+        position: absolute; left: 130px; bottom: 88px;
+        font-family: var(--font-label); font-weight: var(--wt-bold);
+        font-size: var(--size-tiny); letter-spacing: var(--track-wide);
+        text-transform: uppercase; color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="t1-stat-pack" data-composition-id="t1-stat-pack" data-start="0" data-width="1920" data-height="1080" class="clip" data-duration="5">
+      <div class="grid"></div>
+      <div class="kicker" data-slot="kicker">REACH COMPARISON</div>
+
+      <!-- circles and labels positioned by JS for determinism -->
+      <div class="circle-big"   id="circle-big"   data-mult="12"></div>
+      <div class="circle-small" id="circle-small"></div>
+      <div class="big-label"    id="big-label"   data-slot="bigLabel">Short-Form Video</div>
+      <div class="small-label"  id="small-label" data-slot="smallLabel">Long-Form Video</div>
+
+      <!-- big multiplier hero number -->
+      <div class="mult-badge" id="mult-badge">
+        <span data-slot="stat">12</span><span class="mult-x">×</span>
+      </div>
+
+      <div class="label" data-slot="label">more viewers reached on average per <em>post</em></div>
+      <div class="source" data-slot="source">SOURCE · REACH ANALYTICS 2026</div>
+      <div class="vignette"></div>
+      <div class="grain"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      window.__timelines = window.__timelines || {};
+
+      // Deterministic circle sizing: area proportional to mult.
+      // Reference (small) circle r = 80px. Big circle r = 80 * sqrt(mult).
+      var bigEl   = document.getElementById("circle-big");
+      var smallEl = document.getElementById("circle-small");
+      var bigLbl  = document.getElementById("big-label");
+      var smallLbl= document.getElementById("small-label");
+      var badge   = document.getElementById("mult-badge");
+
+      var mult = Math.max(1, parseInt(bigEl.getAttribute("data-mult"), 10) || 12);
+      var rSmall = 80;
+      var rBig   = Math.round(rSmall * Math.sqrt(mult));  // area-correct radius
+
+      // Position: big circle centered at (500, 540); small circle to its right
+      var bigCX  = 460; var bigCY  = 530;
+      var gap    = 90;
+      var smallCX = bigCX + rBig + gap + rSmall;
+      var smallCY = bigCY + rBig - rSmall;  // bottom-align the circles
+
+      bigEl.style.width  = (rBig   * 2) + "px";
+      bigEl.style.height = (rBig   * 2) + "px";
+      bigEl.style.left   = (bigCX  - rBig)   + "px";
+      bigEl.style.top    = (bigCY  - rBig)   + "px";
+
+      smallEl.style.width  = (rSmall * 2) + "px";
+      smallEl.style.height = (rSmall * 2) + "px";
+      smallEl.style.left   = (smallCX - rSmall) + "px";
+      smallEl.style.top    = (smallCY - rSmall) + "px";
+
+      // Labels centered under each circle
+      var lblWidth = 300;
+      bigLbl.style.width  = lblWidth + "px";
+      bigLbl.style.left   = (bigCX   - lblWidth / 2) + "px";
+      bigLbl.style.top    = (bigCY   + rBig + 24) + "px";
+
+      smallLbl.style.width  = lblWidth + "px";
+      smallLbl.style.left   = (smallCX - lblWidth / 2) + "px";
+      smallLbl.style.top    = (smallCY + rSmall + 24) + "px";
+
+      // Badge: center-right area
+      badge.style.left = (smallCX + rSmall + 80) + "px";
+      badge.style.top  = "50%";
+      badge.style.transform = "translateY(-50%)";
+
+      var tl = gsap.timeline({ paused: true });
+
+      tl.fromTo("#t1-stat-pack .grain", { backgroundPosition: "0px 0px" },
+                { backgroundPosition: "150px 130px", duration: 0.5, ease: "steps(4)", repeat: 11, yoyo: true }, 0);
+
+      tl.from("#t1-stat-pack .kicker", { autoAlpha: 0, x: -20, duration: 0.3, ease: "steps(4)" }, 0.2);
+
+      // Small circle pops in first as the reference
+      tl.from(smallEl, { scale: 0, transformOrigin: "50% 50%", duration: 0.32, ease: "back.out(2.2)" }, 0.35);
+      tl.from(smallLbl, { autoAlpha: 0, y: 12, duration: 0.28, ease: "power2.out" }, 0.55);
+
+      // Big circle scales up with steps — the reveal moment
+      tl.from(bigEl, { scale: 0, transformOrigin: "50% 50%", duration: 0.55, ease: "steps(6)" }, 0.65);
+      tl.from(bigLbl, { autoAlpha: 0, y: 12, duration: 0.28, ease: "power2.out" }, 1.0);
+
+      // Hero multiplier snaps in
+      tl.from(badge, { autoAlpha: 0, scale: 0.5, duration: 0.42, ease: "back.out(2.4)" }, 1.1);
+
+      tl.from("#t1-stat-pack .label",  { autoAlpha: 0, y: 18, duration: 0.38, ease: "power3.out" }, 1.4);
+      tl.from("#t1-stat-pack .source", { autoAlpha: 0, duration: 0.28 }, 1.65);
+
+      tl.set({}, {}, 6);
+      window.__timelines["t1-stat-pack"] = tl;
+    </script>
+  </body>
+</html>

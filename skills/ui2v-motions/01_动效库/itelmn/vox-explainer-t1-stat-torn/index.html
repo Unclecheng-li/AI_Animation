@@ -1,0 +1,324 @@
+<!doctype html>
+<!--
+  VOX EXPLAINER · tier1 · stat · TORN-NUMBER
+  The big number split across a DIAGONAL PAPER TEAR: top-left half on var(--paper),
+  bottom-right half on var(--paper-2) kraft, offset slightly with a torn edge
+  (clip-path) and a drop shadow along the tear. The two halves SLIDE together on
+  entrance (one from up-left, one from down-right) then settle.
+  Slots: kicker, stat, label (richtext <em>), source.
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+/* ============================================================================
+   VOX EXPLAINER — style tokens
+   Single source of palette / type / motion / texture for every card in this
+   style. Cards reference these vars and never hardcode colors, fonts, easings,
+   or textures. Tweak here, all cards update.
+   See DESIGN.md for the why. Inspiration: Vox-style animated explainer.
+   ============================================================================ */
+
+/* Type. The HyperFrames compiler embeds supported fonts by name at render time;
+   this @import is what makes standalone / browser preview show the right faces. */
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@400;700;900&family=Caveat:wght@700&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,900;1,9..144,900&display=swap");
+
+:root {
+  /* --- palette (mirror style.json + DESIGN.md). 5 symbolic colors. --------- */
+  --paper:        #efe9dc;   /* warm newsprint background */
+  --paper-2:      #e6dcc4;   /* kraft / aged paper variant */
+  --ink:          #17130e;   /* warm near-black print ink (text + engravings) */
+  --yellow:       #37BDF8;   /* AIS blue accent — THE highlight (circles, marker boxes). Token name kept --yellow; value is now blue. */
+  --red:          #e23b2e;   /* editorial red — circles, scribbles, alarm */
+  --orange:       #f26a1b;   /* cutout outline / secondary accent */
+
+  /* semantic aliases the blueprint contract expects */
+  --bg:     var(--paper);
+  --fg:     var(--ink);
+  --accent: var(--yellow);
+  --muted:  rgba(23, 19, 14, 0.55);
+
+  /* --- typography ---------------------------------------------------------- */
+  /* Fraunces = the expressive voice (statements). Archivo = metadata, recedes.
+     Caveat = handwritten margin notes only. Weight contrast is EXTREME. */
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-label:   "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-hand:    "Caveat", "Bradley Hand", cursive;
+  /* contract aliases */
+  --font-body:    var(--font-label);
+  --font-mono:    var(--font-label);
+
+  --wt-thin:  300;
+  --wt-reg:   400;
+  --wt-bold:  700;
+  --wt-black: 900;
+
+  /* video sizes for 1920x1080 (big — readable in 2s) */
+  --size-mega:     320px;   /* hero stat number */
+  --size-display:  150px;   /* takeover headline */
+  --size-title:    92px;    /* section title */
+  --size-headline: 56px;    /* card headline */
+  --size-body:     32px;    /* supporting copy */
+  --size-label:    24px;    /* kicker / metadata */
+  --size-tiny:     18px;    /* credits, fine print */
+
+  --track-tight: -0.03em;   /* display tracking, tighter than web */
+  --track-wide:  0.16em;    /* uppercase label tracking */
+
+  /* --- motion — the choppy, low-shutter Vox signature ---------------------- */
+  /* Snap in hard, settle with a tiny overshoot. Stepped eases give the
+     stop-motion / low-shutter feel. GSAP string eases live in the cards. */
+  --ease-snap: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in:   cubic-bezier(0.5, 0, 0.75, 0);
+  --ease-out:  cubic-bezier(0.16, 1, 0.3, 1);
+  --gsap-pop:   back.out(2.2);     /* paper-cut elements popping in */
+  --gsap-step:  steps(6);          /* choppy / shutter motion */
+  --dur-in:  0.42s;
+  --dur-out: 0.3s;
+
+  /* --- shape --------------------------------------------------------------- */
+  --radius: 2px;            /* paper cuts are nearly square, barely rounded */
+  --pad: 56px;
+  --marker-skew: -1.4deg;   /* highlight boxes sit slightly off-level */
+
+  /* --- textures (deterministic SVG data-URIs + gradients) ------------------ */
+  /* Paper fiber grain — fractalNoise, fixed seed (deterministic render). */
+  --tex-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+
+  /* Halftone dots — for filling cutout placeholders / shadows the Vox way. */
+  --tex-halftone: radial-gradient(circle at center, var(--ink) 1.1px, transparent 1.6px);
+  --tex-halftone-size: 7px 7px;
+
+  /* Faint construction grid (blueprint guides). */
+  --grid-line: rgba(23, 19, 14, 0.07);
+  --grid-size: 64px;
+}
+
+</style>
+    <style>
+      html, body { margin: 0; }
+      #t1-stat-torn {
+        position: absolute; inset: 0; width: 1920px; height: 1080px;
+        background: var(--paper); color: var(--ink);
+        font-family: var(--font-display); overflow: hidden;
+      }
+
+      /* === TORN HALVES === */
+      /* Top-left panel — warm paper */
+      #t1-stat-torn .half-top {
+        position: absolute; inset: 0;
+        background: var(--paper);
+        /* diagonal torn clip: from (0,0) to (1920,0) to (1920,460) to (1040,1080) to (0,1080) */
+        clip-path: polygon(0 0, 100% 0, 100% 42%, 54% 100%, 0 100%);
+        z-index: 1;
+      }
+      /* Bottom-right panel — kraft paper */
+      #t1-stat-torn .half-bottom {
+        position: absolute; inset: 0;
+        background: var(--paper-2);
+        /* inverse of top: the remaining lower-right triangle */
+        clip-path: polygon(100% 42%, 100% 100%, 54% 100%);
+        z-index: 1;
+      }
+      /* Tear shadow — a thin stripe along the tear edge */
+      #t1-stat-torn .tear-shadow {
+        position: absolute; inset: 0;
+        z-index: 2; pointer-events: none;
+        /* A narrow diagonal band simulating a drop shadow along the tear */
+        background: linear-gradient(
+          -54deg,
+          transparent 42%,
+          rgba(23,19,14,0.22) calc(42% + 0px),
+          rgba(23,19,14,0.12) calc(42% + 20px),
+          transparent calc(42% + 40px)
+        );
+      }
+      /* Jagged tear edge — SVG-rendered irregular line */
+      #t1-stat-torn .tear-edge {
+        position: absolute; inset: 0; z-index: 3; pointer-events: none;
+        overflow: hidden;
+      }
+      #t1-stat-torn .tear-edge svg {
+        position: absolute; inset: 0; width: 100%; height: 100%;
+      }
+
+      /* === GRID (behind halves, just on top panel) === */
+      #t1-stat-torn .grid {
+        position: absolute; inset: -2px; z-index: 0;
+        background-image:
+          repeating-linear-gradient(0deg,  var(--grid-line) 0 1px, transparent 1px var(--grid-size)),
+          repeating-linear-gradient(90deg, var(--grid-line) 0 1px, transparent 1px var(--grid-size));
+      }
+
+      /* === STAT NUMBER (split visually by the tear) === */
+      /* The number sits centered-ish; the tear cuts through it */
+      #t1-stat-torn .stat-wrap {
+        position: absolute;
+        left: 0; right: 0; top: 50%;
+        transform: translateY(-55%);
+        z-index: 4;
+        display: flex; align-items: center; justify-content: center;
+      }
+      #t1-stat-torn .stat {
+        font-weight: var(--wt-black);
+        font-size: 580px;
+        line-height: 0.82;
+        letter-spacing: -0.05em;
+        color: var(--ink);
+        font-variant-numeric: tabular-nums;
+        text-shadow:
+          0 8px 32px rgba(23,19,14,0.18),
+          0 2px 0 rgba(23,19,14,0.35);
+        user-select: none;
+      }
+
+      /* === YELLOW ACCENT SLAB on tear === */
+      #t1-stat-torn .accent-slab {
+        position: absolute;
+        /* a narrow yellow stripe along the tear direction */
+        left: 0; right: 0; top: 0; bottom: 0;
+        z-index: 2; pointer-events: none;
+        background: var(--yellow);
+        clip-path: polygon(
+          100% 42%,
+          100% calc(42% + 8px),
+          54% calc(100% + 8px),
+          54% 100%
+        );
+      }
+
+      /* === TEXT LABELS === */
+      #t1-stat-torn .kicker {
+        position: absolute; left: 130px; top: 108px; z-index: 5;
+        font-family: var(--font-label); font-weight: var(--wt-bold);
+        font-size: var(--size-label); letter-spacing: var(--track-wide);
+        text-transform: uppercase; color: var(--red);
+      }
+      #t1-stat-torn .label {
+        position: absolute; left: 130px; right: 700px; bottom: 148px; z-index: 5;
+        font-weight: var(--wt-thin); font-size: 54px; line-height: 1.08;
+        letter-spacing: var(--track-tight); color: var(--ink);
+      }
+      #t1-stat-torn .label em { font-style: italic; font-weight: var(--wt-black); }
+      #t1-stat-torn .source {
+        position: absolute; left: 130px; bottom: 80px; z-index: 5;
+        font-family: var(--font-label); font-weight: var(--wt-bold);
+        font-size: var(--size-tiny); letter-spacing: var(--track-wide);
+        text-transform: uppercase; color: var(--muted);
+      }
+
+      /* === TEXTURE / VIGNETTE === */
+      #t1-stat-torn .grain {
+        position: absolute; inset: -40px; background: var(--tex-grain);
+        background-size: 180px 180px; mix-blend-mode: multiply; opacity: 0.45;
+        pointer-events: none; z-index: 8;
+      }
+      #t1-stat-torn .vignette {
+        position: absolute; inset: 0; pointer-events: none; z-index: 7;
+        background: radial-gradient(120% 120% at 50% 50%, transparent 52%, rgba(23,19,14,0.20) 100%);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="t1-stat-torn" data-composition-id="t1-stat-torn" data-start="0" data-width="1920" data-height="1080" class="clip" data-duration="5">
+      <div class="grid"></div>
+      <div class="half-top"></div>
+      <div class="half-bottom"></div>
+      <div class="accent-slab"></div>
+      <div class="tear-shadow"></div>
+      <!-- Jagged SVG torn edge overlay -->
+      <div class="tear-edge">
+        <svg viewBox="0 0 1920 1080" preserveAspectRatio="none">
+          <!-- A poly-line following the tear diagonal with irregular steps -->
+          <polyline
+            points="1920,453 1880,449 1840,455 1800,447 1760,452 1720,446 1680,453 1640,448 1600,455 1560,449 1520,454 1480,447 1440,453 1400,449 1360,456 1320,450 1280,455 1240,448 1200,454 1160,449 1120,456 1080,450 1040,1080"
+            fill="none"
+            stroke="rgba(23,19,14,0.28)"
+            stroke-width="3"
+          />
+        </svg>
+      </div>
+
+      <div class="stat-wrap">
+        <div class="stat" data-slot="stat">47%</div>
+      </div>
+
+      <div class="kicker" data-slot="kicker">ATTENTION DEFICIT</div>
+      <div class="label" data-slot="label">of viewers stop watching<br>in the <em>first 8 seconds</em></div>
+      <div class="source" data-slot="source">SOURCE · RETENTION STUDY 2025</div>
+
+      <div class="vignette"></div>
+      <div class="grain"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      window.__timelines = window.__timelines || {};
+
+      const tl = gsap.timeline({ paused: true });
+
+      // Grain flicker — finite stepped loop
+      tl.fromTo("#t1-stat-torn .grain",
+        { backgroundPosition: "0px 0px" },
+        { backgroundPosition: "150px 130px", duration: 0.5, ease: "steps(4)", repeat: 11, yoyo: true },
+        0
+      );
+
+      // Kicker snaps in first
+      tl.from("#t1-stat-torn .kicker",
+        { autoAlpha: 0, x: -24, duration: 0.28, ease: "steps(4)" },
+        0.15
+      );
+
+      // TOP half slides in from upper-left
+      tl.from("#t1-stat-torn .half-top",
+        { x: -80, y: -60, duration: 0.45, ease: "back.out(2.2)" },
+        0.28
+      );
+
+      // BOTTOM half slides in from lower-right
+      tl.from("#t1-stat-torn .half-bottom",
+        { x: 80, y: 60, duration: 0.45, ease: "back.out(2.2)" },
+        0.28
+      );
+
+      // Accent slab appears with halves
+      tl.from("#t1-stat-torn .accent-slab",
+        { autoAlpha: 0, duration: 0.2 },
+        0.55
+      );
+
+      // Tear shadow + edge settle in
+      tl.from("#t1-stat-torn .tear-shadow",
+        { autoAlpha: 0, duration: 0.3, ease: "power2.out" },
+        0.55
+      );
+      tl.from("#t1-stat-torn .tear-edge",
+        { autoAlpha: 0, duration: 0.2 },
+        0.6
+      );
+
+      // Stat number slams in — clip-path reveal from the tear diagonal direction
+      tl.from("#t1-stat-torn .stat",
+        { autoAlpha: 0, scale: 0.82, duration: 0.4, ease: "back.out(2.4)" },
+        0.48
+      );
+
+      // Label wipes up
+      tl.from("#t1-stat-torn .label",
+        { autoAlpha: 0, y: 28, duration: 0.38, ease: "power3.out" },
+        0.95
+      );
+
+      tl.from("#t1-stat-torn .source",
+        { autoAlpha: 0, duration: 0.28 },
+        1.22
+      );
+
+      // Hold for 6s total
+      tl.set({}, {}, 6);
+
+      window.__timelines["t1-stat-torn"] = tl;
+    </script>
+  </body>
+</html>

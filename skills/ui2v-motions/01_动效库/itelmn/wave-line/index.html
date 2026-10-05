@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html data-composition-id="wave-line" data-width="720" data-height="1280">
+<head>
+  <meta charset="utf-8">
+  <title>HyperFrames — Wave Line</title>
+  <link rel="stylesheet" href="shared/styles.css">
+  <style>
+    .wave-w { width: min(900px, 88vw); display: flex; flex-direction: column; align-items: center; gap: 16px;
+      will-change: transform, opacity; }
+    .wave-svg { width: 100%; height: 80px; overflow: visible; }
+    .wave-line { fill: none; stroke-width: 2; stroke-linecap: round; }
+    .wave-fill { stroke: none; opacity: 0.1; }
+    .wave-label { font-size: 24px; font-weight: 700; text-align: center; }
+    .wave-sublabel { font-size: 16px; color: var(--hf-muted); text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="hf-center wave-w" id="waveW" data-composition-id="wave-line" data-start="0" data-duration="3" data-track-index="0">
+    <svg class="wave-svg" id="waveSvg" viewBox="0 0 800 80" preserveAspectRatio="none">
+      <path class="wave-fill" id="waveFill"></path>
+      <path class="wave-line" id="waveLine"></path>
+    </svg>
+    <div class="wave-label hf-text-heading" id="label"></div>
+    <div class="wave-sublabel hf-text-body" id="sublabel"></div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script>
+    const v = window.__hyperframes?.getVariables?.() ?? {};
+    const accentColor = v.accentColor ?? '#9f75ff';
+    const yPos = v.yPos ?? 50;
+    const label = v.label ?? 'AI Active';
+    const sublabel = v.sublabel ?? 'Processing 2,400 tasks';
+    const waveType = v.waveType ?? 'pulse'; // pulse, heartbeat, sine
+
+    document.getElementById('waveW').style.top = yPos + '%';
+    document.getElementById('label').textContent = label;
+    document.getElementById('sublabel').textContent = sublabel;
+
+    const waveLine = document.getElementById('waveLine');
+    const waveFill = document.getElementById('waveFill');
+    waveLine.style.stroke = accentColor;
+    waveFill.style.fill = accentColor;
+
+    // Generate wave path
+    function genWave(offset) {
+      let d = 'M 0 40';
+      for (let x = 0; x <= 800; x += 4) {
+        let y;
+        if (waveType === 'heartbeat') {
+          const phase = (x + offset) % 200;
+          if (phase < 20) y = 40 - (phase / 20) * 25;
+          else if (phase < 40) y = 15 + ((phase - 20) / 20) * 40;
+          else if (phase < 50) y = 55 - ((phase - 40) / 10) * 15;
+          else y = 40 + Math.sin((phase - 50) * 0.05) * 3;
+        } else {
+          y = 40 + Math.sin((x + offset) * 0.03) * 20 * (1 + 0.5 * Math.sin((x + offset) * 0.008));
+        }
+        d += ` L ${x} ${y}`;
+      }
+      return d;
+    }
+
+    waveLine.setAttribute('d', genWave(0));
+    waveFill.setAttribute('d', genWave(0) + ' L 800 80 L 0 80 Z');
+
+    const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+    tl.fromTo('#waveW', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, ease: 'back.out(1.2)' }, 0);
+    tl.fromTo('#label', { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.3 }, 0.15);
+    tl.fromTo('#sublabel', { opacity: 0 }, { opacity: 1, duration: 0.25 }, 0.25);
+
+    // Animate wave scrolling
+    let offset = 0;
+    function animateWave() {
+      offset += 3;
+      waveLine.setAttribute('d', genWave(offset));
+      waveFill.setAttribute('d', genWave(offset) + ' L 800 80 L 0 80 Z');
+    }
+    gsap.ticker.add(animateWave);
+
+    const dur = parseFloat(v.timingDuration ?? 3);
+    tl.to('#waveW', { opacity: 0, y: -12, duration: 0.3, ease: 'power2.in' }, Math.max(dur - 0.5, 0.6));
+  </script>
+</body>
+</html>
+

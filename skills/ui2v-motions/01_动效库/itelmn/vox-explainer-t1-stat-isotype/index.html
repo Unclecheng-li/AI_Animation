@@ -1,0 +1,217 @@
+<!doctype html>
+<!--
+  VOX EXPLAINER · tier1 · stat · ISOTYPE PICTOGRAPH
+  A single row of 10 identical person silhouettes (circle head + rounded-
+  trapezoid body via SVG path), N filled yellow, the rest faint ink outline.
+  Reads "N in 10". Big number displayed beside/above. Built in JS deterministically.
+  Distinct from dot-grid: figurative icons, single row of 10 (not a grid of 100).
+  Slots: kicker, stat, label (richtext <em>), source.
+  Knob: data-fill on .figures (0..10, default 7).
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+/* ============================================================================
+   VOX EXPLAINER — style tokens
+   Single source of palette / type / motion / texture for every card in this
+   style. Cards reference these vars and never hardcode colors, fonts, easings,
+   or textures. Tweak here, all cards update.
+   See DESIGN.md for the why. Inspiration: Vox-style animated explainer.
+   ============================================================================ */
+
+/* Type. The HyperFrames compiler embeds supported fonts by name at render time;
+   this @import is what makes standalone / browser preview show the right faces. */
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@400;700;900&family=Caveat:wght@700&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,900;1,9..144,900&display=swap");
+
+:root {
+  /* --- palette (mirror style.json + DESIGN.md). 5 symbolic colors. --------- */
+  --paper:        #efe9dc;   /* warm newsprint background */
+  --paper-2:      #e6dcc4;   /* kraft / aged paper variant */
+  --ink:          #17130e;   /* warm near-black print ink (text + engravings) */
+  --yellow:       #37BDF8;   /* AIS blue accent — THE highlight (circles, marker boxes). Token name kept --yellow; value is now blue. */
+  --red:          #e23b2e;   /* editorial red — circles, scribbles, alarm */
+  --orange:       #f26a1b;   /* cutout outline / secondary accent */
+
+  /* semantic aliases the blueprint contract expects */
+  --bg:     var(--paper);
+  --fg:     var(--ink);
+  --accent: var(--yellow);
+  --muted:  rgba(23, 19, 14, 0.55);
+
+  /* --- typography ---------------------------------------------------------- */
+  /* Fraunces = the expressive voice (statements). Archivo = metadata, recedes.
+     Caveat = handwritten margin notes only. Weight contrast is EXTREME. */
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-label:   "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-hand:    "Caveat", "Bradley Hand", cursive;
+  /* contract aliases */
+  --font-body:    var(--font-label);
+  --font-mono:    var(--font-label);
+
+  --wt-thin:  300;
+  --wt-reg:   400;
+  --wt-bold:  700;
+  --wt-black: 900;
+
+  /* video sizes for 1920x1080 (big — readable in 2s) */
+  --size-mega:     320px;   /* hero stat number */
+  --size-display:  150px;   /* takeover headline */
+  --size-title:    92px;    /* section title */
+  --size-headline: 56px;    /* card headline */
+  --size-body:     32px;    /* supporting copy */
+  --size-label:    24px;    /* kicker / metadata */
+  --size-tiny:     18px;    /* credits, fine print */
+
+  --track-tight: -0.03em;   /* display tracking, tighter than web */
+  --track-wide:  0.16em;    /* uppercase label tracking */
+
+  /* --- motion — the choppy, low-shutter Vox signature ---------------------- */
+  /* Snap in hard, settle with a tiny overshoot. Stepped eases give the
+     stop-motion / low-shutter feel. GSAP string eases live in the cards. */
+  --ease-snap: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in:   cubic-bezier(0.5, 0, 0.75, 0);
+  --ease-out:  cubic-bezier(0.16, 1, 0.3, 1);
+  --gsap-pop:   back.out(2.2);     /* paper-cut elements popping in */
+  --gsap-step:  steps(6);          /* choppy / shutter motion */
+  --dur-in:  0.42s;
+  --dur-out: 0.3s;
+
+  /* --- shape --------------------------------------------------------------- */
+  --radius: 2px;            /* paper cuts are nearly square, barely rounded */
+  --pad: 56px;
+  --marker-skew: -1.4deg;   /* highlight boxes sit slightly off-level */
+
+  /* --- textures (deterministic SVG data-URIs + gradients) ------------------ */
+  /* Paper fiber grain — fractalNoise, fixed seed (deterministic render). */
+  --tex-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+
+  /* Halftone dots — for filling cutout placeholders / shadows the Vox way. */
+  --tex-halftone: radial-gradient(circle at center, var(--ink) 1.1px, transparent 1.6px);
+  --tex-halftone-size: 7px 7px;
+
+  /* Faint construction grid (blueprint guides). */
+  --grid-line: rgba(23, 19, 14, 0.07);
+  --grid-size: 64px;
+}
+
+</style>
+    <style>
+      html, body { margin: 0; }
+      #t1-stat-iso {
+        position: absolute; inset: 0; width: 1920px; height: 1080px;
+        background: var(--paper); color: var(--ink);
+        font-family: var(--font-display); overflow: hidden;
+      }
+      #t1-stat-iso .grid {
+        position: absolute; inset: -2px;
+        background-image:
+          repeating-linear-gradient(0deg,  var(--grid-line) 0 1px, transparent 1px var(--grid-size)),
+          repeating-linear-gradient(90deg, var(--grid-line) 0 1px, transparent 1px var(--grid-size));
+      }
+      #t1-stat-iso .grain {
+        position: absolute; inset: -40px; background: var(--tex-grain);
+        background-size: 180px 180px; mix-blend-mode: multiply; opacity: 0.4; pointer-events: none; z-index: 6;
+      }
+      #t1-stat-iso .vignette {
+        position: absolute; inset: 0; pointer-events: none; z-index: 5;
+        background: radial-gradient(120% 120% at 50% 50%, transparent 56%, rgba(23,19,14,0.16) 100%);
+      }
+      #t1-stat-iso .kicker {
+        position: absolute; left: 130px; top: 180px;
+        font-family: var(--font-label); font-weight: var(--wt-bold);
+        font-size: var(--size-label); letter-spacing: var(--track-wide);
+        text-transform: uppercase; color: var(--red);
+      }
+      /* ---- big stat ---- */
+      #t1-stat-iso .stat {
+        position: absolute; left: 130px; top: 250px;
+        font-weight: var(--wt-black); font-size: 280px; line-height: 0.9;
+        letter-spacing: -0.04em; color: var(--ink); font-variant-numeric: tabular-nums;
+      }
+      #t1-stat-iso .stat .in-ten {
+        font-size: 0.3em; font-weight: var(--wt-thin);
+        color: var(--muted); letter-spacing: 0; vertical-align: middle;
+      }
+      /* ---- figure row ---- */
+      #t1-stat-iso .figures {
+        position: absolute; left: 130px; right: 130px; top: 610px;
+        display: flex; gap: 18px; align-items: flex-end; height: 200px;
+      }
+      #t1-stat-iso .figure {
+        flex: 1; height: 100%;
+        display: flex; flex-direction: column; align-items: center; gap: 6px;
+      }
+      /* SVG fills handled by class; "on" = yellow fill, "off" = transparent fill + muted stroke */
+      #t1-stat-iso .figure svg {
+        width: 100%; height: 100%; overflow: visible;
+      }
+      /* ---- label + source ---- */
+      #t1-stat-iso .label {
+        position: absolute; left: 130px; right: 130px; top: 840px;
+        font-weight: var(--wt-thin); font-size: 56px; line-height: 1.05;
+        letter-spacing: var(--track-tight); color: var(--ink);
+      }
+      #t1-stat-iso .label em { font-style: italic; font-weight: var(--wt-black); }
+      #t1-stat-iso .source {
+        position: absolute; left: 130px; bottom: 96px;
+        font-family: var(--font-label); font-weight: var(--wt-bold);
+        font-size: var(--size-tiny); letter-spacing: var(--track-wide);
+        text-transform: uppercase; color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="t1-stat-iso" data-composition-id="t1-stat-iso" data-start="0" data-width="1920" data-height="1080" class="clip" data-duration="5">
+      <div class="grid"></div>
+      <div class="kicker" data-slot="kicker">OUT OF EVERY TEN</div>
+      <div class="stat" data-slot="stat">7<span class="in-ten"> in 10</span></div>
+      <div class="figures" data-fill="7" id="figures"></div>
+      <div class="label" data-slot="label">already rely on AI tools <em>weekly</em></div>
+      <div class="source" data-slot="source">SOURCE · WORKFORCE SURVEY 2026</div>
+      <div class="vignette"></div>
+      <div class="grain"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      window.__timelines = window.__timelines || {};
+      const figs = document.getElementById("figures");
+      const fill = Math.max(0, Math.min(10, parseInt(figs.getAttribute("data-fill"), 10) || 7));
+
+      // Deterministic person silhouette via inline SVG:
+      // head = circle, body = rounded trapezoid (wider at shoulders, narrower at base)
+      function makeFigureSVG(on) {
+        const fillColor   = on ? "#37BDF8" : "transparent";
+        const strokeColor = on ? "#17130e" : "rgba(23,19,14,0.30)";
+        const strokeW     = on ? 5 : 3;
+        // viewBox: 0 0 60 120
+        // head: cx=30 cy=18 r=14; body: trapezoid M 8,35 L 52,35 L 46,100 L 14,100 Z with rx corners
+        return `<svg viewBox="0 0 60 120" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="30" cy="18" r="14"
+            fill="${fillColor}" stroke="${strokeColor}" stroke-width="${strokeW}"/>
+          <path d="M 10,38 Q 6,38 6,44 L 6,56 Q 6,60 8,62 L 14,100 Q 14,104 18,104 L 42,104 Q 46,104 46,100 L 52,62 Q 54,60 54,56 L 54,44 Q 54,38 50,38 Z"
+            fill="${fillColor}" stroke="${strokeColor}" stroke-width="${strokeW}" stroke-linejoin="round"/>
+        </svg>`;
+      }
+
+      for (let i = 0; i < 10; i++) {
+        const fig = document.createElement("div");
+        fig.className = "figure";
+        fig.innerHTML = makeFigureSVG(i < fill);
+        figs.appendChild(fig);
+      }
+
+      const tl = gsap.timeline({ paused: true });
+      tl.fromTo("#t1-stat-iso .grain", { backgroundPosition: "0px 0px" },
+                { backgroundPosition: "150px 130px", duration: 0.5, ease: "steps(4)", repeat: 11, yoyo: true }, 0);
+      tl.from("#t1-stat-iso .kicker",   { autoAlpha: 0, x: -20, duration: 0.3, ease: "steps(4)" }, 0.2)
+        .from("#t1-stat-iso .stat",     { autoAlpha: 0, scale: 0.7, duration: 0.45, ease: "back.out(2.2)" }, 0.3)
+        .from("#t1-stat-iso .figure",   { autoAlpha: 0, y: 30, duration: 0.06, ease: "steps(1)", stagger: 0.07 }, 0.6)
+        .from("#t1-stat-iso .label",    { autoAlpha: 0, y: 20, duration: 0.4, ease: "power3.out" }, 1.4)
+        .from("#t1-stat-iso .source",   { autoAlpha: 0, duration: 0.3 }, 1.65)
+        .set({}, {}, 6);
+      window.__timelines["t1-stat-iso"] = tl;
+    </script>
+  </body>
+</html>

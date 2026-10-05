@@ -1,0 +1,327 @@
+<!doctype html>
+<!--
+  VOX EXPLAINER · tier1 · overview · MAP + LEGEND
+  Left ~60%: faint contour-map area with 4 numbered marker pins (yellow squares).
+  Right 40%: legend panel listing what each numbered pin means.
+  Pins pop in sequentially; legend rows stagger in after.
+  Slots: title, leg1, leg2, leg3, leg4, source.
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+/* ============================================================================
+   VOX EXPLAINER — style tokens
+   Single source of palette / type / motion / texture for every card in this
+   style. Cards reference these vars and never hardcode colors, fonts, easings,
+   or textures. Tweak here, all cards update.
+   See DESIGN.md for the why. Inspiration: Vox-style animated explainer.
+   ============================================================================ */
+
+/* Type. The HyperFrames compiler embeds supported fonts by name at render time;
+   this @import is what makes standalone / browser preview show the right faces. */
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@400;700;900&family=Caveat:wght@700&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,900;1,9..144,900&display=swap");
+
+:root {
+  /* --- palette (mirror style.json + DESIGN.md). 5 symbolic colors. --------- */
+  --paper:        #efe9dc;   /* warm newsprint background */
+  --paper-2:      #e6dcc4;   /* kraft / aged paper variant */
+  --ink:          #17130e;   /* warm near-black print ink (text + engravings) */
+  --yellow:       #37BDF8;   /* AIS blue accent — THE highlight (circles, marker boxes). Token name kept --yellow; value is now blue. */
+  --red:          #e23b2e;   /* editorial red — circles, scribbles, alarm */
+  --orange:       #f26a1b;   /* cutout outline / secondary accent */
+
+  /* semantic aliases the blueprint contract expects */
+  --bg:     var(--paper);
+  --fg:     var(--ink);
+  --accent: var(--yellow);
+  --muted:  rgba(23, 19, 14, 0.55);
+
+  /* --- typography ---------------------------------------------------------- */
+  /* Fraunces = the expressive voice (statements). Archivo = metadata, recedes.
+     Caveat = handwritten margin notes only. Weight contrast is EXTREME. */
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-label:   "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-hand:    "Caveat", "Bradley Hand", cursive;
+  /* contract aliases */
+  --font-body:    var(--font-label);
+  --font-mono:    var(--font-label);
+
+  --wt-thin:  300;
+  --wt-reg:   400;
+  --wt-bold:  700;
+  --wt-black: 900;
+
+  /* video sizes for 1920x1080 (big — readable in 2s) */
+  --size-mega:     320px;   /* hero stat number */
+  --size-display:  150px;   /* takeover headline */
+  --size-title:    92px;    /* section title */
+  --size-headline: 56px;    /* card headline */
+  --size-body:     32px;    /* supporting copy */
+  --size-label:    24px;    /* kicker / metadata */
+  --size-tiny:     18px;    /* credits, fine print */
+
+  --track-tight: -0.03em;   /* display tracking, tighter than web */
+  --track-wide:  0.16em;    /* uppercase label tracking */
+
+  /* --- motion — the choppy, low-shutter Vox signature ---------------------- */
+  /* Snap in hard, settle with a tiny overshoot. Stepped eases give the
+     stop-motion / low-shutter feel. GSAP string eases live in the cards. */
+  --ease-snap: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in:   cubic-bezier(0.5, 0, 0.75, 0);
+  --ease-out:  cubic-bezier(0.16, 1, 0.3, 1);
+  --gsap-pop:   back.out(2.2);     /* paper-cut elements popping in */
+  --gsap-step:  steps(6);          /* choppy / shutter motion */
+  --dur-in:  0.42s;
+  --dur-out: 0.3s;
+
+  /* --- shape --------------------------------------------------------------- */
+  --radius: 2px;            /* paper cuts are nearly square, barely rounded */
+  --pad: 56px;
+  --marker-skew: -1.4deg;   /* highlight boxes sit slightly off-level */
+
+  /* --- textures (deterministic SVG data-URIs + gradients) ------------------ */
+  /* Paper fiber grain — fractalNoise, fixed seed (deterministic render). */
+  --tex-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+
+  /* Halftone dots — for filling cutout placeholders / shadows the Vox way. */
+  --tex-halftone: radial-gradient(circle at center, var(--ink) 1.1px, transparent 1.6px);
+  --tex-halftone-size: 7px 7px;
+
+  /* Faint construction grid (blueprint guides). */
+  --grid-line: rgba(23, 19, 14, 0.07);
+  --grid-size: 64px;
+}
+
+</style>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      html, body { margin: 0; }
+      #t1-ov-maplegend {
+        position: absolute; inset: 0; width: 1920px; height: 1080px;
+        background: var(--paper); color: var(--ink);
+        font-family: var(--font-display); overflow: hidden;
+      }
+      #t1-ov-maplegend .grid {
+        position: absolute; inset: -2px;
+        background-image:
+          repeating-linear-gradient(0deg,  var(--grid-line) 0 1px, transparent 1px var(--grid-size)),
+          repeating-linear-gradient(90deg, var(--grid-line) 0 1px, transparent 1px var(--grid-size));
+      }
+      #t1-ov-maplegend .grain {
+        position: absolute; inset: -40px; background: var(--tex-grain);
+        background-size: 180px 180px; mix-blend-mode: multiply; opacity: 0.42;
+        pointer-events: none; z-index: 10;
+      }
+      #t1-ov-maplegend .vignette {
+        position: absolute; inset: 0; pointer-events: none; z-index: 9;
+        background: radial-gradient(130% 120% at 40% 50%, transparent 52%, rgba(23,19,14,0.2) 100%);
+      }
+
+      /* marker title */
+      #t1-ov-maplegend .marker-title {
+        position: absolute; top: 72px; left: 50%; transform: translateX(-50%) skewX(var(--marker-skew));
+        background: var(--yellow); padding: 10px 36px; z-index: 5;
+        font-weight: var(--wt-black); font-size: var(--size-title);
+        letter-spacing: var(--track-tight); text-transform: uppercase; white-space: nowrap;
+      }
+
+      /* map area: left 60% below title */
+      #t1-ov-maplegend .map-area {
+        position: absolute; left: 0; top: 200px; width: 1140px; bottom: 80px;
+        overflow: hidden;
+      }
+      /* faint contour map built from layered gradients */
+      #t1-ov-maplegend .map-contours {
+        position: absolute; inset: 0;
+        background:
+          radial-gradient(ellipse 420px 280px at 38% 60%, rgba(23,19,14,0.08) 0%, transparent 70%),
+          radial-gradient(ellipse 600px 400px at 28% 45%, rgba(23,19,14,0.06) 0%, transparent 65%),
+          radial-gradient(ellipse 300px 200px at 65% 35%, rgba(23,19,14,0.07) 0%, transparent 60%),
+          radial-gradient(ellipse 240px 160px at 55% 68%, rgba(23,19,14,0.05) 0%, transparent 55%),
+          radial-gradient(ellipse 800px 600px at 50% 55%, rgba(226,59,46,0.04) 0%, transparent 80%),
+          linear-gradient(155deg, rgba(23,19,14,0.04) 0%, transparent 50%);
+      }
+      /* contour rings drawn as layered box-shadows on pseudo-elements via outline stacking */
+      #t1-ov-maplegend .ring {
+        position: absolute; border-radius: 50%; border: 2px solid rgba(23,19,14,0.12);
+      }
+      #t1-ov-maplegend .ring1 { width: 280px; height: 180px; left: 198px; top: 210px; }
+      #t1-ov-maplegend .ring2 { width: 450px; height: 300px; left: 114px; top: 140px; }
+      #t1-ov-maplegend .ring3 { width: 620px; height: 420px; left: 28px;  top: 70px;  }
+      #t1-ov-maplegend .ring4 { width: 200px; height: 130px; left: 700px; top: 160px; }
+      #t1-ov-maplegend .ring5 { width: 340px; height: 220px; left: 630px; top: 95px;  }
+
+      /* numbered pin = yellow square */
+      #t1-ov-maplegend .pin {
+        position: absolute; z-index: 4;
+        width: 56px; height: 56px;
+        background: var(--yellow); border: 3px solid var(--ink);
+        display: flex; align-items: center; justify-content: center;
+        font-weight: var(--wt-black); font-size: 32px;
+        box-shadow: 4px 4px 0 rgba(23,19,14,0.25);
+        transform: rotate(-4deg);
+      }
+      /* pin "stem" — a small square below */
+      #t1-ov-maplegend .pin::after {
+        content: ''; position: absolute; bottom: -12px; left: 50%;
+        transform: translateX(-50%) rotate(45deg);
+        width: 12px; height: 12px;
+        background: var(--yellow); border-right: 3px solid var(--ink); border-bottom: 3px solid var(--ink);
+      }
+      /* pin positions */
+      #t1-ov-maplegend .pin1 { left: 295px; top: 280px; }
+      #t1-ov-maplegend .pin2 { left: 720px; top: 190px; }
+      #t1-ov-maplegend .pin3 { left: 490px; top: 420px; }
+      #t1-ov-maplegend .pin4 { left: 870px; top: 410px; }
+
+      /* divider line between map and legend */
+      #t1-ov-maplegend .divider {
+        position: absolute; left: 1140px; top: 200px; bottom: 80px;
+        width: 5px; background: var(--ink); z-index: 3;
+      }
+
+      /* legend panel: right 40% */
+      #t1-ov-maplegend .legend {
+        position: absolute; left: 1165px; top: 200px; right: 40px;
+        bottom: 80px; z-index: 3;
+        display: flex; flex-direction: column; justify-content: center;
+        gap: 0;
+      }
+      #t1-ov-maplegend .legend-header {
+        font-family: var(--font-label); font-weight: var(--wt-bold);
+        font-size: var(--size-label); letter-spacing: var(--track-wide);
+        text-transform: uppercase; color: var(--muted);
+        margin-bottom: 40px; padding-bottom: 16px;
+        border-bottom: 4px solid var(--ink);
+      }
+      #t1-ov-maplegend .leg-row {
+        display: flex; align-items: flex-start; gap: 30px;
+        padding: 30px 0; border-bottom: 2px solid rgba(23,19,14,0.15);
+      }
+      #t1-ov-maplegend .leg-num {
+        flex-shrink: 0;
+        width: 52px; height: 52px;
+        background: var(--yellow); border: 3px solid var(--ink);
+        display: flex; align-items: center; justify-content: center;
+        font-weight: var(--wt-black); font-size: 30px;
+        box-shadow: 3px 3px 0 rgba(23,19,14,0.2);
+        transform: rotate(-2deg); margin-top: 4px;
+      }
+      #t1-ov-maplegend .leg-text {
+        font-family: var(--font-label); font-weight: var(--wt-bold);
+        font-size: 40px; line-height: 1.2; color: var(--ink);
+      }
+
+      /* source */
+      #t1-ov-maplegend .source {
+        position: absolute; left: 120px; bottom: 36px; z-index: 6;
+        font-family: var(--font-label); font-weight: var(--wt-bold);
+        font-size: var(--size-tiny); letter-spacing: var(--track-wide);
+        text-transform: uppercase; color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="t1-ov-maplegend" data-composition-id="t1-ov-maplegend" data-start="0" data-width="1920" data-height="1080" class="clip" data-duration="5">
+      <div class="grid"></div>
+
+      <div class="marker-title" data-slot="title">THE LANDSCAPE</div>
+
+      <!-- map area -->
+      <div class="map-area">
+        <div class="map-contours"></div>
+        <div class="ring ring1"></div>
+        <div class="ring ring2"></div>
+        <div class="ring ring3"></div>
+        <div class="ring ring4"></div>
+        <div class="ring ring5"></div>
+        <div class="pin pin1">1</div>
+        <div class="pin pin2">2</div>
+        <div class="pin pin3">3</div>
+        <div class="pin pin4">4</div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- legend panel -->
+      <div class="legend">
+        <div class="legend-header">KEY LOCATIONS</div>
+        <div class="leg-row lr1">
+          <div class="leg-num">1</div>
+          <div class="leg-text" data-slot="leg1">The starting point — where it began</div>
+        </div>
+        <div class="leg-row lr2">
+          <div class="leg-num">2</div>
+          <div class="leg-text" data-slot="leg2">The pressure point — where tension built</div>
+        </div>
+        <div class="leg-row lr3">
+          <div class="leg-num">3</div>
+          <div class="leg-text" data-slot="leg3">The turning point — where things shifted</div>
+        </div>
+        <div class="leg-row lr4">
+          <div class="leg-num">4</div>
+          <div class="leg-text" data-slot="leg4">The end point — where we are now</div>
+        </div>
+      </div>
+
+      <div class="source" data-slot="source">SOURCE · REFERENCE 2026</div>
+      <div class="vignette"></div>
+      <div class="grain"></div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      // finite grain flicker
+      tl.fromTo("#t1-ov-maplegend .grain", { backgroundPosition: "0px 0px" },
+                { backgroundPosition: "155px 105px", duration: 0.5, ease: "steps(4)", repeat: 11, yoyo: true }, 0);
+
+      // marker title snaps in
+      tl.from("#t1-ov-maplegend .marker-title",
+              { autoAlpha: 0, scaleX: 0, transformOrigin: "center center", duration: 0.35, ease: "power3.out" }, 0.15);
+
+      // map area + contours reveal
+      tl.from("#t1-ov-maplegend .map-area",
+              { autoAlpha: 0, duration: 0.4, ease: "power2.out" }, 0.35);
+      tl.from("#t1-ov-maplegend .ring",
+              { autoAlpha: 0, scale: 0.7, transformOrigin: "center center",
+                duration: 0.3, ease: "back.out(1.4)", stagger: 0.07 }, 0.55);
+
+      // divider draws down
+      tl.from("#t1-ov-maplegend .divider",
+              { scaleY: 0, transformOrigin: "top center", duration: 0.4, ease: "power2.inOut" }, 0.5);
+
+      // pins pop in sequentially
+      tl.from("#t1-ov-maplegend .pin1",
+              { autoAlpha: 0, scale: 0, transformOrigin: "center bottom", duration: 0.3, ease: "back.out(2.2)" }, 0.75);
+      tl.from("#t1-ov-maplegend .pin2",
+              { autoAlpha: 0, scale: 0, transformOrigin: "center bottom", duration: 0.3, ease: "back.out(2.2)" }, 0.92);
+      tl.from("#t1-ov-maplegend .pin3",
+              { autoAlpha: 0, scale: 0, transformOrigin: "center bottom", duration: 0.3, ease: "back.out(2.2)" }, 1.09);
+      tl.from("#t1-ov-maplegend .pin4",
+              { autoAlpha: 0, scale: 0, transformOrigin: "center bottom", duration: 0.3, ease: "back.out(2.2)" }, 1.26);
+
+      // legend header stamps in
+      tl.from("#t1-ov-maplegend .legend-header",
+              { autoAlpha: 0, x: 20, duration: 0.3, ease: "steps(4)" }, 0.7);
+
+      // legend rows stagger in after pins
+      tl.from("#t1-ov-maplegend .lr1",
+              { autoAlpha: 0, x: 30, duration: 0.3, ease: "back.out(1.6)" }, 0.85);
+      tl.from("#t1-ov-maplegend .lr2",
+              { autoAlpha: 0, x: 30, duration: 0.3, ease: "back.out(1.6)" }, 1.02);
+      tl.from("#t1-ov-maplegend .lr3",
+              { autoAlpha: 0, x: 30, duration: 0.3, ease: "back.out(1.6)" }, 1.19);
+      tl.from("#t1-ov-maplegend .lr4",
+              { autoAlpha: 0, x: 30, duration: 0.3, ease: "back.out(1.6)" }, 1.36);
+
+      tl.from("#t1-ov-maplegend .source", { autoAlpha: 0, duration: 0.3 }, 1.7);
+
+      tl.set({}, {}, 7);
+
+      window.__timelines["t1-ov-maplegend"] = tl;
+    </script>
+  </body>
+</html>

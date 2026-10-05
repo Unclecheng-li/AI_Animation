@@ -1,0 +1,410 @@
+<!doctype html>
+<!--
+  VOX EXPLAINER · tier1 · stat · MAP STAT
+  The number over a faint topographic/contour or grid MAP (build the map look with
+  layered repeating gradients / concentric rounded shapes — deterministic), a single
+  yellow DIAMOND location marker (functional map marker, not a pin) with a place
+  label; the stat ties to the place. Slow push for depth.
+  Slots: kicker, stat, place, label (richtext), source.
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+/* ============================================================================
+   VOX EXPLAINER — style tokens
+   Single source of palette / type / motion / texture for every card in this
+   style. Cards reference these vars and never hardcode colors, fonts, easings,
+   or textures. Tweak here, all cards update.
+   See DESIGN.md for the why. Inspiration: Vox-style animated explainer.
+   ============================================================================ */
+
+/* Type. The HyperFrames compiler embeds supported fonts by name at render time;
+   this @import is what makes standalone / browser preview show the right faces. */
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@400;700;900&family=Caveat:wght@700&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,900;1,9..144,900&display=swap");
+
+:root {
+  /* --- palette (mirror style.json + DESIGN.md). 5 symbolic colors. --------- */
+  --paper:        #efe9dc;   /* warm newsprint background */
+  --paper-2:      #e6dcc4;   /* kraft / aged paper variant */
+  --ink:          #17130e;   /* warm near-black print ink (text + engravings) */
+  --yellow:       #37BDF8;   /* AIS blue accent — THE highlight (circles, marker boxes). Token name kept --yellow; value is now blue. */
+  --red:          #e23b2e;   /* editorial red — circles, scribbles, alarm */
+  --orange:       #f26a1b;   /* cutout outline / secondary accent */
+
+  /* semantic aliases the blueprint contract expects */
+  --bg:     var(--paper);
+  --fg:     var(--ink);
+  --accent: var(--yellow);
+  --muted:  rgba(23, 19, 14, 0.55);
+
+  /* --- typography ---------------------------------------------------------- */
+  /* Fraunces = the expressive voice (statements). Archivo = metadata, recedes.
+     Caveat = handwritten margin notes only. Weight contrast is EXTREME. */
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-label:   "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-hand:    "Caveat", "Bradley Hand", cursive;
+  /* contract aliases */
+  --font-body:    var(--font-label);
+  --font-mono:    var(--font-label);
+
+  --wt-thin:  300;
+  --wt-reg:   400;
+  --wt-bold:  700;
+  --wt-black: 900;
+
+  /* video sizes for 1920x1080 (big — readable in 2s) */
+  --size-mega:     320px;   /* hero stat number */
+  --size-display:  150px;   /* takeover headline */
+  --size-title:    92px;    /* section title */
+  --size-headline: 56px;    /* card headline */
+  --size-body:     32px;    /* supporting copy */
+  --size-label:    24px;    /* kicker / metadata */
+  --size-tiny:     18px;    /* credits, fine print */
+
+  --track-tight: -0.03em;   /* display tracking, tighter than web */
+  --track-wide:  0.16em;    /* uppercase label tracking */
+
+  /* --- motion — the choppy, low-shutter Vox signature ---------------------- */
+  /* Snap in hard, settle with a tiny overshoot. Stepped eases give the
+     stop-motion / low-shutter feel. GSAP string eases live in the cards. */
+  --ease-snap: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in:   cubic-bezier(0.5, 0, 0.75, 0);
+  --ease-out:  cubic-bezier(0.16, 1, 0.3, 1);
+  --gsap-pop:   back.out(2.2);     /* paper-cut elements popping in */
+  --gsap-step:  steps(6);          /* choppy / shutter motion */
+  --dur-in:  0.42s;
+  --dur-out: 0.3s;
+
+  /* --- shape --------------------------------------------------------------- */
+  --radius: 2px;            /* paper cuts are nearly square, barely rounded */
+  --pad: 56px;
+  --marker-skew: -1.4deg;   /* highlight boxes sit slightly off-level */
+
+  /* --- textures (deterministic SVG data-URIs + gradients) ------------------ */
+  /* Paper fiber grain — fractalNoise, fixed seed (deterministic render). */
+  --tex-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+
+  /* Halftone dots — for filling cutout placeholders / shadows the Vox way. */
+  --tex-halftone: radial-gradient(circle at center, var(--ink) 1.1px, transparent 1.6px);
+  --tex-halftone-size: 7px 7px;
+
+  /* Faint construction grid (blueprint guides). */
+  --grid-line: rgba(23, 19, 14, 0.07);
+  --grid-size: 64px;
+}
+
+</style>
+    <style>
+      html, body { margin: 0; }
+      #t1-stat-map {
+        position: absolute; inset: 0; width: 1920px; height: 1080px;
+        background: var(--paper); color: var(--ink);
+        font-family: var(--font-display); overflow: hidden;
+      }
+
+      /* === STAGE for ken-burns push === */
+      #t1-stat-map .stage {
+        position: absolute; inset: 0;
+        transform-origin: 55% 48%;
+      }
+
+      /* === TOPOGRAPHIC MAP BACKGROUND === */
+      /* Contour lines built with layered CSS — deterministic repeating gradients */
+      #t1-stat-map .map-bg {
+        position: absolute; inset: 0;
+        background: var(--paper-2);
+      }
+      /* Grid base */
+      #t1-stat-map .map-grid {
+        position: absolute; inset: 0;
+        background-image:
+          repeating-linear-gradient(0deg,  rgba(23,19,14,0.06) 0 1px, transparent 1px 40px),
+          repeating-linear-gradient(90deg, rgba(23,19,14,0.06) 0 1px, transparent 1px 40px);
+      }
+      /* Topo contour lines — diagonal ruled hatching at low opacity */
+      #t1-stat-map .map-contours {
+        position: absolute; inset: 0;
+        background-image:
+          repeating-linear-gradient(
+            22deg,
+            transparent 0px,
+            transparent 38px,
+            rgba(23,19,14,0.065) 38px,
+            rgba(23,19,14,0.065) 40px
+          ),
+          repeating-linear-gradient(
+            -22deg,
+            transparent 0px,
+            transparent 68px,
+            rgba(23,19,14,0.04) 68px,
+            rgba(23,19,14,0.04) 70px
+          );
+      }
+      /* Concentric "elevation rings" centered on the marker location ~(1080, 520) */
+      #t1-stat-map .map-rings {
+        position: absolute;
+        /* Center point on the marker */
+        left: 780px; top: 220px;
+        width: 600px; height: 600px;
+        transform: translate(-50%, -50%);
+        border-radius: 50%;
+        background:
+          radial-gradient(
+            ellipse 98% 72% at 50% 50%,
+            transparent 14%,
+            rgba(23,19,14,0.055) 14.5%,
+            transparent 15.5%,
+            transparent 24%,
+            rgba(23,19,14,0.05) 24.5%,
+            transparent 25.5%,
+            transparent 36%,
+            rgba(23,19,14,0.045) 36.5%,
+            transparent 37.5%,
+            transparent 48%,
+            rgba(23,19,14,0.04) 48.5%,
+            transparent 49.5%,
+            transparent 62%,
+            rgba(23,19,14,0.035) 62.5%,
+            transparent 63.5%,
+            transparent 76%,
+            rgba(23,19,14,0.03) 76.5%,
+            transparent 77.5%,
+            transparent 90%,
+            rgba(23,19,14,0.025) 90.5%,
+            transparent 91.5%
+          );
+      }
+      /* Second ring set slightly offset for organic feel */
+      #t1-stat-map .map-rings-2 {
+        position: absolute;
+        left: 820px; top: 260px;
+        width: 900px; height: 680px;
+        transform: translate(-50%, -50%) rotate(18deg);
+        border-radius: 48%;
+        background:
+          radial-gradient(
+            ellipse 95% 75% at 50% 50%,
+            transparent 18%,
+            rgba(23,19,14,0.03) 18.5%,
+            transparent 19.5%,
+            transparent 32%,
+            rgba(23,19,14,0.028) 32.5%,
+            transparent 33.5%,
+            transparent 48%,
+            rgba(23,19,14,0.025) 48.5%,
+            transparent 49.5%,
+            transparent 65%,
+            rgba(23,19,14,0.02) 65.5%,
+            transparent 66.5%
+          );
+      }
+      /* Fine halftone dot texture for map paper feel */
+      #t1-stat-map .map-dots {
+        position: absolute; inset: 0;
+        background-image: var(--tex-halftone);
+        background-size: 12px 12px;
+        opacity: 0.07;
+      }
+
+      /* === INK SCRIM to help text read === */
+      #t1-stat-map .scrim {
+        position: absolute; inset: 0; z-index: 2; pointer-events: none;
+        background: linear-gradient(
+          135deg,
+          rgba(23,19,14,0.08) 0%,
+          transparent 40%,
+          transparent 60%,
+          rgba(23,19,14,0.12) 100%
+        );
+      }
+
+      /* === DIAMOND LOCATION MARKER === */
+      #t1-stat-map .marker-wrap {
+        position: absolute;
+        left: 1040px; top: 340px;
+        z-index: 5;
+        transform: translate(-50%, -50%);
+      }
+      /* Diamond = rotated square */
+      #t1-stat-map .marker-diamond {
+        width: 48px; height: 48px;
+        background: var(--yellow);
+        border: 4px solid var(--ink);
+        transform: rotate(45deg);
+        box-shadow: 3px 3px 0 0 rgba(23,19,14,0.4);
+      }
+      /* Thin crosshair lines from diamond center */
+      #t1-stat-map .marker-cross-h,
+      #t1-stat-map .marker-cross-v {
+        position: absolute;
+        background: var(--ink);
+        opacity: 0.5;
+      }
+      #t1-stat-map .marker-cross-h {
+        width: 90px; height: 2px;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+      }
+      #t1-stat-map .marker-cross-v {
+        width: 2px; height: 90px;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+      }
+      /* Place label tag */
+      #t1-stat-map .place-tag {
+        position: absolute;
+        left: calc(100% + 18px); top: 50%;
+        transform: translateY(-50%);
+        background: var(--ink); color: var(--paper);
+        font-family: var(--font-label); font-weight: var(--wt-bold);
+        font-size: 22px; letter-spacing: var(--track-wide);
+        text-transform: uppercase; padding: 8px 18px;
+        white-space: nowrap;
+      }
+
+      /* === STAT number === */
+      #t1-stat-map .stat {
+        position: absolute; left: 100px; top: 50%;
+        transform: translateY(-56%); z-index: 4;
+        font-weight: var(--wt-black); font-size: 420px;
+        line-height: 0.82; letter-spacing: -0.05em;
+        color: var(--ink); font-variant-numeric: tabular-nums;
+        text-shadow: 0 8px 28px rgba(23,19,14,0.15);
+      }
+
+      /* === KICKER === */
+      #t1-stat-map .kicker {
+        position: absolute; left: 130px; top: 116px; z-index: 5;
+        font-family: var(--font-label); font-weight: var(--wt-bold);
+        font-size: var(--size-label); letter-spacing: var(--track-wide);
+        text-transform: uppercase; color: var(--red);
+      }
+
+      /* === LABEL === */
+      #t1-stat-map .label {
+        position: absolute; left: 130px; right: 800px; bottom: 160px; z-index: 5;
+        font-weight: var(--wt-thin); font-size: 52px; line-height: 1.08;
+        letter-spacing: var(--track-tight); color: var(--ink);
+      }
+      #t1-stat-map .label em { font-style: italic; font-weight: var(--wt-black); }
+
+      /* === SOURCE === */
+      #t1-stat-map .source {
+        position: absolute; left: 130px; bottom: 84px; z-index: 5;
+        font-family: var(--font-label); font-weight: var(--wt-bold);
+        font-size: var(--size-tiny); letter-spacing: var(--track-wide);
+        text-transform: uppercase; color: var(--muted);
+      }
+
+      /* === TEXTURE === */
+      #t1-stat-map .grain {
+        position: absolute; inset: -40px; background: var(--tex-grain);
+        background-size: 180px 180px; mix-blend-mode: multiply; opacity: 0.40;
+        pointer-events: none; z-index: 9;
+      }
+      #t1-stat-map .vignette {
+        position: absolute; inset: 0; pointer-events: none; z-index: 8;
+        background: radial-gradient(120% 120% at 50% 50%, transparent 50%, rgba(23,19,14,0.22) 100%);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="t1-stat-map" data-composition-id="t1-stat-map" data-start="0" data-width="1920" data-height="1080" class="clip" data-duration="5">
+      <!-- Slow camera push stage -->
+      <div class="stage">
+        <div class="map-bg"></div>
+        <div class="map-grid"></div>
+        <div class="map-contours"></div>
+        <div class="map-rings"></div>
+        <div class="map-rings-2"></div>
+        <div class="map-dots"></div>
+        <div class="scrim"></div>
+
+        <!-- Diamond marker with place label -->
+        <div class="marker-wrap">
+          <div class="marker-cross-h"></div>
+          <div class="marker-cross-v"></div>
+          <div class="marker-diamond"></div>
+          <div class="place-tag" data-slot="place">SAN FRANCISCO</div>
+        </div>
+      </div>
+
+      <div class="stat" data-slot="stat">1 in 3</div>
+      <div class="kicker" data-slot="kicker">CONCENTRATION</div>
+      <div class="label" data-slot="label">of AI startups are<br>built within <em>5 miles</em> of here</div>
+      <div class="source" data-slot="source">SOURCE · CRUNCHBASE 2025</div>
+
+      <div class="vignette"></div>
+      <div class="grain"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      window.__timelines = window.__timelines || {};
+
+      const tl = gsap.timeline({ paused: true });
+
+      // Slow camera push (ken-burns) — defines duration
+      tl.fromTo("#t1-stat-map .stage",
+        { scale: 1.0 },
+        { scale: 1.07, duration: 6, ease: "none" },
+        0
+      );
+
+      // Grain flicker
+      tl.fromTo("#t1-stat-map .grain",
+        { backgroundPosition: "0px 0px" },
+        { backgroundPosition: "150px 130px", duration: 0.5, ease: "steps(4)", repeat: 11, yoyo: true },
+        0
+      );
+
+      // Map fades in
+      tl.from("#t1-stat-map .map-bg",
+        { autoAlpha: 0, duration: 0.4 },
+        0
+      );
+
+      // Kicker
+      tl.from("#t1-stat-map .kicker",
+        { autoAlpha: 0, x: -20, duration: 0.28, ease: "steps(4)" },
+        0.2
+      );
+
+      // Stat sweeps up with clip reveal
+      tl.from("#t1-stat-map .stat",
+        {
+          autoAlpha: 0,
+          y: 50,
+          clipPath: "inset(0 0 100% 0)",
+          duration: 0.48,
+          ease: "power3.out"
+        },
+        0.32
+      );
+
+      // Marker pops in
+      tl.from("#t1-stat-map .marker-wrap",
+        { autoAlpha: 0, scale: 0, duration: 0.35, ease: "back.out(2.4)" },
+        0.68
+      );
+      tl.from("#t1-stat-map .place-tag",
+        { autoAlpha: 0, x: -16, duration: 0.28, ease: "power2.out" },
+        0.88
+      );
+
+      // Label wipes up
+      tl.from("#t1-stat-map .label",
+        { autoAlpha: 0, y: 22, duration: 0.38, ease: "power3.out" },
+        0.95
+      );
+
+      tl.from("#t1-stat-map .source",
+        { autoAlpha: 0, duration: 0.28 },
+        1.22
+      );
+
+      window.__timelines["t1-stat-map"] = tl;
+    </script>
+  </body>
+</html>
