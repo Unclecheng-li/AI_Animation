@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en" data-composition-variables='[
+  {"id":"title","type":"string","label":"Chart Title","default":"Gap Analysis Diagram"},
+  {"id":"metricLabel","type":"string","label":"Metric Label","default":"Sales Metrics"},
+  {"id":"potentialLabel","type":"string","label":"Potential Label","default":"Potential (Where We Want To Be)"},
+  {"id":"performanceLabel","type":"string","label":"Performance Label","default":"Performance (Where We Are)"},
+  {"id":"gapLabel","type":"string","label":"Gap Label","default":"THE GAP"},
+  {"id":"xAxisLabel","type":"string","label":"X-Axis Label","default":"Time"},
+  {"id":"yAxisLabel","type":"string","label":"Y-Axis Label","default":"Unity or value"},
+  {"id":"primaryColor","type":"color","label":"Primary Color","default":"#285f9f"},
+  {"id":"performanceColor","type":"color","label":"Performance Line Color","default":"#cd5746"},
+  {"id":"potentialColor","type":"color","label":"Potential Line Color","default":"#2f765f"},
+  {"id":"bgColor","type":"color","label":"Background Color","default":"#f5f2ea"},
+  {"id":"basePlateImage","type":"string","label":"Base Plate Image","default":"v2-base-blue.png"},
+  {"id":"duration","type":"number","label":"Duration (seconds)","default":6,"min":3,"max":15,"step":0.5}
+]'>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=block">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root { --primary: #285f9f; --performance: #cd5746; --potential: #2f765f; --bg: #f5f2ea; --base-plate: url("v2-base-blue.png"); }
+    body {
+      width: 1920px; height: 1080px;
+      background-color: var(--bg);
+      background-image: var(--base-plate);
+      background-size: 1920px 1080px;
+      background-position: 0 0;
+      background-repeat: no-repeat;
+      font-family: 'Inter', Arial, Helvetica, sans-serif;
+      overflow: hidden;
+      position: relative;
+    }
+    [data-composition-id] { position: absolute; inset: 0; width: 1920px; height: 1080px; overflow: hidden; }
+    [data-composition-id] > * { z-index: 1; }
+    #el-fade { position: absolute; inset: 0; background: #000; opacity: 0; z-index: 99; pointer-events: none; }
+    .title { position: absolute; top: 60px; left: 60px; font-size: 42px; font-weight: 700; color: var(--primary); opacity: 0; }
+    .chart-area { position: absolute; left: 180px; top: 180px; width: 1300px; height: 720px; opacity: 0; }
+    .y-axis { position: absolute; left: 0; top: 0; width: 2px; height: 100%; background: #5a6e78; transform-origin: bottom center; }
+    .x-axis { position: absolute; left: 0; bottom: 0; width: 100%; height: 2px; background: #5a6e78; transform-origin: left center; }
+    .axis-label { position: absolute; font-size: 18px; font-weight: 600; color: #5a6e78; }
+    .y-label-high { top: -28px; left: -50px; }
+    .y-label-low { bottom: -28px; left: -40px; }
+    .x-label-high { bottom: -28px; right: -50px; }
+    .x-label { bottom: -28px; left: 50%; transform: translateX(-50%); }
+    .data-line { position: absolute; height: 3px; background: var(--potential); transform-origin: left center; border-radius: 2px; }
+    .data-line.performance-line { background: var(--performance); }
+    .dot { position: absolute; width: 16px; height: 16px; border-radius: 50%; background: var(--potential); z-index: 5; }
+    .dot.performance-dot { background: var(--performance); }
+    .gap-area { position: absolute; opacity: 0.15; z-index: 2; }
+    .gap-area svg { width: 100%; height: 100%; }
+    .chart-label { position: absolute; font-size: 16px; font-weight: 600; white-space: nowrap; }
+    .label-potential { color: var(--potential); }
+    .label-performance { color: var(--performance); }
+    .label-gap { font-size: 24px; font-weight: 800; color: #b1792f; letter-spacing: 2px; }
+    .legend { position: absolute; bottom: 60px; left: 180px; display: flex; gap: 40px; opacity: 0; }
+    .legend-item { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 600; color: #182026; }
+    .legend-swatch { width: 24px; height: 4px; border-radius: 2px; }
+    .legend-swatch.potential { background: var(--potential); }
+    .legend-swatch.performance { background: var(--performance); }
+  </style>
+</head>
+<body>
+  <div data-composition-id="gap-analysis" data-width="1920" data-height="1080" data-duration="6" data-start="0">
+    <div id="el-fade"></div>
+    <div class="title" id="chartTitle"></div>
+    <div class="chart-area" id="chart">
+      <div class="y-axis"></div>
+      <div class="x-axis"></div>
+      <div class="axis-label y-label-high">High</div>
+      <div class="axis-label y-label-low">Low</div>
+      <div class="axis-label x-label-high">High</div>
+      <div class="axis-label x-label" id="xAxisLbl"></div>
+      <div class="gap-area" id="gapArea" style="left:120px;top:100px;width:980px;height:520px;">
+        <svg viewBox="0 0 980 520" preserveAspectRatio="none">
+          <polygon id="gapPoly" points="0,420 0,160 700,40 980,40 980,280" fill="#b1792f" opacity="0.4" />
+        </svg>
+      </div>
+      <div class="data-line" id="potentialLine" style="left:0;top:140px;width:1050px;"></div>
+      <div class="dot" id="potentialDot" style="left:680px;top:132px;"></div>
+      <div class="data-line performance-line" id="performanceLine" style="left:0;top:400px;width:1050px;"></div>
+      <div class="dot performance-dot" id="performanceDot" style="left:960px;top:392px;"></div>
+      <div class="chart-label label-potential" id="labelPotential" style="left:700px;top:80px;"></div>
+      <div class="chart-label label-performance" id="labelPerformance" style="left:980px;top:350px;"></div>
+      <div class="chart-label label-gap" id="labelGap" style="left:480px;top:260px;"></div>
+    </div>
+    <div class="legend" id="legend">
+      <div class="legend-item"><span class="legend-swatch potential"></span><span id="legendPotential">Potential</span></div>
+      <div class="legend-item"><span class="legend-swatch performance"></span><span id="legendPerformance">Performance</span></div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      var vars = __hyperframes.getVariables();
+      var primaryColor = vars.primaryColor || '#285f9f';
+      var performanceColor = vars.performanceColor || '#cd5746';
+      var potentialColor = vars.potentialColor || '#2f765f';
+      var bgColor = vars.bgColor || '#f5f2ea';
+      var basePlateImage = vars.basePlateImage || 'v2-base-blue.png';
+      var DURATION = Number(vars.duration) || 6;
+      var root = document.documentElement;
+      root.style.setProperty('--primary', primaryColor);
+      root.style.setProperty('--performance', performanceColor);
+      root.style.setProperty('--potential', potentialColor);
+      root.style.setProperty('--bg', bgColor);
+      root.style.setProperty('--base-plate', 'url("' + basePlateImage + '")');
+      document.getElementById('chartTitle').textContent = vars.title || 'Gap Analysis Diagram';
+      document.getElementById('xAxisLbl').textContent = vars.xAxisLabel || 'Time';
+      document.getElementById('labelPotential').textContent = (vars.potentialLabel || 'Potential (Where We Want To Be)').replace('\n', ' ');
+      document.getElementById('labelPerformance').textContent = (vars.performanceLabel || 'Performance (Where We Are)').replace('\n', ' ');
+      document.getElementById('labelGap').textContent = vars.gapLabel || 'THE GAP';
+      var TOTAL = DURATION + 0.5;
+      var tl = gsap.timeline({ paused: true });
+      tl.to('#chartTitle', { opacity: 1, y: -10, duration: 0.6, ease: 'power2.out' }, 0);
+      tl.from('.y-axis', { scaleY: 0, duration: 0.5, ease: 'power2.out' }, 0.3);
+      tl.from('.x-axis', { scaleX: 0, duration: 0.5, ease: 'power2.out' }, 0.5);
+      tl.to('#chart', { opacity: 1, duration: 0.3 }, 0.3);
+      tl.from('#potentialLine', { scaleX: 0, duration: 0.8, ease: 'power2.inOut' }, 1.0);
+      tl.from('#performanceLine', { scaleX: 0, duration: 0.8, ease: 'power2.inOut' }, 1.2);
+      tl.from('#potentialDot', { scale: 0, opacity: 0, duration: 0.4, ease: 'back.out(1.7)' }, 2.0);
+      tl.from('#labelPotential', { opacity: 0, x: 20, duration: 0.5, ease: 'power2.out' }, 2.2);
+      tl.from('#performanceDot', { scale: 0, opacity: 0, duration: 0.4, ease: 'back.out(1.7)' }, 2.6);
+      tl.from('#labelPerformance', { opacity: 0, x: 20, duration: 0.5, ease: 'power2.out' }, 2.8);
+      tl.from('#gapArea', { opacity: 0, scale: 0.9, duration: 0.6, ease: 'power2.out' }, 3.3);
+      tl.from('#labelGap', { opacity: 0, scale: 0.5, duration: 0.5, ease: 'back.out(1.7)' }, 3.5);
+      tl.from('#legend', { opacity: 0, y: 20, duration: 0.5, ease: 'power2.out' }, 4.2);
+      tl.fromTo('#el-fade', { opacity: 0 }, { opacity: 1, duration: 0.5, ease: 'power2.in' }, TOTAL - 0.5);
+      tl.set('#el-fade', { opacity: 1 }, TOTAL);
+      document.querySelector('[data-composition-id="gap-analysis"]').setAttribute('data-duration', TOTAL);
+      window.__timelines = window.__timelines || {};
+      window.__timelines['gap-analysis'] = tl;
+    </script>
+  </div>
+</body>
+</html>

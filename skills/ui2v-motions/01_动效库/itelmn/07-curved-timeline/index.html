@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en" data-composition-variables='[
+  {"id":"title","type":"string","label":"Title","default":"Curved Timeline"},
+  {"id":"milestones","type":"string","label":"Milestones (JSON)","default":"[{\"year\":\"2026\",\"label\":\"Project Launch\",\"desc\":\"The initiative was launched with a clear vision and initial seed funding. Core team assembled and foundational research began.\",\"x\":5,\"y\":75},{\"year\":\"2027\",\"label\":\"Prototype Development\",\"desc\":\"First working prototype completed and tested with early adopters. Key feedback incorporated into the product roadmap.\",\"x\":30,\"y\":42},{\"year\":\"2028\",\"label\":\"Market Entry\",\"desc\":\"Public launch with full feature set. Customer acquisition exceeded targets by 40%. Established partnerships with three major distributors.\",\"x\":55,\"y\":30},{\"year\":\"2029\",\"label\":\"Scale & Expansion\",\"desc\":\"Expanded to five new markets internationally. Team grew to 120+. Revenue doubled year-over-year.\",\"x\":80,\"y\":38},{\"year\":\"2030\",\"label\":\"Future Vision\",\"desc\":\"Positioned as market leader. New product lines in development. Sustainability and AI integration are the next frontiers.\",\"x\":95,\"y\":18}]"},
+  {"id":"curveColor","type":"color","label":"Curve Color","default":"#285f9f"},
+  {"id":"dotColor","type":"color","label":"Active Dot Color","default":"#cd5746"},
+  {"id":"bgColor","type":"color","label":"Background","default":"#f5f2ea"},
+  {"id":"basePlateImage","type":"string","label":"Base Plate Image","default":"v2-base-blue.png"},
+  {"id":"durationPerMilestone","type":"number","label":"Seconds per Milestone","default":3.5,"min":2,"max":8,"step":0.5}
+]'>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=block">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root { --curve: #285f9f; --dot: #cd5746; --bg: #f5f2ea; --base-plate: url("v2-base-blue.png"); }
+    body { width: 1920px; height: 1080px; background-color: var(--bg); background-image: var(--base-plate); background-size: 1920px 1080px; background-position: 0 0; background-repeat: no-repeat; font-family: 'Inter', Arial, Helvetica, sans-serif; overflow: hidden; position: relative; }
+    [data-composition-id] { position: absolute; inset: 0; width: 1920px; height: 1080px; overflow: hidden; }
+    [data-composition-id] > * { z-index: 1; }
+    #el-fade { position: absolute; inset: 0; background: #000; opacity: 0; z-index: 99; pointer-events: none; }
+    .timeline-area { position: absolute; left: 0; top: 0; width: 1050px; height: 100%; }
+    .timeline-svg { position: absolute; left: 25px; top: 190px; width: 1000px; height: 700px; opacity: 0; }
+    .milestone-dot { position: absolute; width: 16px; height: 16px; border-radius: 50%; background: var(--curve); transform: translate(-50%, -50%); z-index: 5; }
+    .milestone-year { position: absolute; font-size: 24px; font-weight: 800; color: var(--curve); transform: translate(-50%, -50%); }
+    .info-panel { position: absolute; right: 80px; top: 150px; width: 780px; opacity: 0; }
+    .info-inner { position: relative; }
+    .info-block { position: absolute; inset: 0; opacity: 0; }
+    .info-block:first-child { position: relative; opacity: 1; }
+    .info-card { position: relative; isolation: isolate; overflow: visible; background: #fffdfa; border-radius: 24px; padding: 52px 60px 60px; box-shadow: 0 8px 40px rgba(0,0,0,0.06); }
+    .info-year { position: absolute; top: 18px; left: 60px; z-index: 1; font-size: 86px; font-weight: 800; color: var(--curve); opacity: 1; line-height: 1; }
+    .info-label { position: relative; z-index: 2; font-size: 32px; font-weight: 700; color: var(--curve); margin: 112px 0 24px; }
+    .info-desc { position: relative; z-index: 2; font-size: 20px; line-height: 1.7; color: #5a6e78; }
+  </style>
+</head>
+<body>
+  <div data-composition-id="curved-timeline" data-width="1920" data-height="1080" data-duration="17.5" data-start="0">
+    <div id="el-fade"></div>
+    <div class="timeline-area" id="timelineArea">
+      <svg class="timeline-svg" viewBox="0 0 1000 700" preserveAspectRatio="none">
+        <path d="M50,520 C200,500 300,410 410,285 C510,180 610,205 700,270 C790,335 875,270 950,145" fill="none" stroke="var(--curve)" stroke-width="3" stroke-linecap="round" opacity="0.68"/>
+      </svg>
+    </div>
+    <div class="info-panel" id="infoPanel">
+      <div class="info-inner" id="infoInner"></div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      var vars = __hyperframes.getVariables();
+      var milestones = JSON.parse(vars.milestones || '[]');
+      var curveColor = vars.curveColor || '#285f9f';
+      var dotColor = vars.dotColor || '#cd5746';
+      var bgColor = vars.bgColor || '#f5f2ea';
+      var basePlateImage = vars.basePlateImage || 'v2-base-blue.png';
+      var durPer = Number(vars.durationPerMilestone) || 3.5;
+      var root = document.documentElement;
+      root.style.setProperty('--curve', curveColor);
+      root.style.setProperty('--dot', dotColor);
+      root.style.setProperty('--bg', bgColor);
+      root.style.setProperty('--base-plate', 'url("' + basePlateImage + '")');
+
+      var timelineArea = document.getElementById('timelineArea');
+      var infoInner = document.getElementById('infoInner');
+      var svgEl = document.querySelector('.timeline-svg');
+      var dots = [], yearEls = [], infoPanels = [];
+
+      milestones.forEach(function(m, i) {
+        var px = (m.x / 100) * 950 + 75;
+        var py = (m.y / 100) * 640 + 220;
+        var dot = document.createElement('div');
+        dot.className = 'milestone-dot';
+        dot.style.left = px + 'px'; dot.style.top = py + 'px';
+        timelineArea.appendChild(dot); dots.push(dot);
+        var yr = document.createElement('div');
+        yr.className = 'milestone-year';
+        yr.style.left = px + 'px'; yr.style.top = (py - 36) + 'px';
+        yr.textContent = m.year;
+        timelineArea.appendChild(yr); yearEls.push(yr);
+
+        var panel = document.createElement('div');
+        var cardDiv = document.createElement('div'); cardDiv.className = 'info-card';
+        cardDiv.innerHTML = '<div class="info-year">' + m.year + '</div><div class="info-label">' + m.label + '</div><div class="info-desc">' + m.desc + '</div>';
+        panel.appendChild(cardDiv);
+        if (i === 0) { panel.style.position = 'relative'; panel.style.opacity = '1'; }
+        else { panel.className = 'info-block'; }
+        infoInner.appendChild(panel);
+        infoPanels.push(panel);
+        if (i !== 0) gsap.set(panel, { opacity: 0 });
+      });
+
+      gsap.set(dots[0], { backgroundColor: dotColor, width: 24, height: 24, boxShadow: '0 0 0 10px ' + dotColor + '25' });
+      gsap.set(yearEls[0], { color: dotColor, fontSize: '30px' });
+
+      var TOTAL = milestones.length * durPer + 1;
+      var tl = gsap.timeline({ paused: true });
+      tl.to(svgEl, { opacity: 1, duration: 0.8 }, 0);
+      tl.to(dots, { opacity: 1, duration: 0.3, stagger: 0.12 }, 0.4);
+      tl.to(yearEls, { opacity: 1, duration: 0.3, stagger: 0.12 }, 0.5);
+      tl.to('#infoPanel', { opacity: 1, x: -20, duration: 0.5 }, 0.9);
+
+      for (var i = 1; i < milestones.length; i++) {
+        (function(idx) {
+          var t = idx * durPer + 0.5;
+          var prev = idx - 1;
+          tl.to(infoPanels[prev], { opacity: 0, duration: 0.2 }, t);
+          tl.to(infoPanels[idx], { opacity: 1, duration: 0.4, ease: 'power2.out' }, t + 0.25);
+          tl.to(dots[prev], { backgroundColor: curveColor, width: 16, height: 16, boxShadow: 'none', duration: 0.3 }, t);
+          tl.to(dots[idx], { backgroundColor: dotColor, width: 24, height: 24, boxShadow: '0 0 0 10px ' + dotColor + '25', duration: 0.3 }, t + 0.1);
+          tl.to(yearEls[prev], { color: curveColor, fontSize: '24px', duration: 0.3 }, t);
+          tl.to(yearEls[idx], { color: dotColor, fontSize: '30px', duration: 0.3 }, t + 0.1);
+          tl.to('#infoPanel', { scale: 0.97, duration: 0.12 }, t + 0.15);
+          tl.to('#infoPanel', { scale: 1, duration: 0.45, ease: 'back.out(1.3)' }, t + 0.27);
+        })(i);
+      }
+
+      tl.fromTo('#el-fade', { opacity: 0 }, { opacity: 1, duration: 0.5, ease: 'power2.in' }, TOTAL - 0.5);
+      tl.set('#el-fade', { opacity: 1 }, TOTAL);
+      document.querySelector('[data-composition-id="curved-timeline"]').setAttribute('data-duration', TOTAL);
+      window.__timelines = window.__timelines || {};
+      window.__timelines['curved-timeline'] = tl;
+    </script>
+  </div>
+</body>
+</html>

@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1080, height=1920" />
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<style>
+/* @brand:start */
+:root {
+  --ground: #0C0D0F; --ground-lift: #14161A;
+  --ink: #EDEAE4; --ink-mid: #9AA0A6; --ink-dim: #8B9198; --ink-ghost: #3A3E42;
+  --rule: #23272A; --rule-bright: #3D4348; --hair: 1.5px;
+  --authoritative: #C9A227; --stale: #E0533D; --lost: #6A6F74;
+  --boundary: #4E8C7D; --pressure: #B4623A; --counterfactual: #7A8086;
+  --font-value: "IBM Plex Mono", ui-monospace, monospace;
+  --font-label: "IBM Plex Sans Condensed", "IBM Plex Sans", system-ui, sans-serif;
+  --t-hero: 200px; --t-value: 64px; --t-body: 36px; --t-label: 26px; --track-label: 0.18em;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { overflow: hidden; background: var(--ground); color: var(--ink); font-family: var(--font-label); }
+.label { font-family: var(--font-label); font-size: var(--t-label); letter-spacing: var(--track-label);
+         text-transform: uppercase; color: var(--ink-dim); font-weight: 500; }
+.value { font-family: var(--font-value); font-variant-numeric: tabular-nums; font-weight: 600; }
+/* @brand:end */
+
+html, body { width: 1080px; height: 1920px; }
+#stage { position: absolute; inset: 0; }
+/* CAMERA — #world is the moved thing. Nothing else knows the camera exists. */
+#world { position: absolute; inset: 0; will-change: transform; }
+
+/* ---------------------------------------------------------------------------
+   SPATIAL SYSTEM — a ROUTE, not zones. One channel, stations along it.
+   Deliberately unlike A01's zone system: here the frame is a journey, and the
+   subject is what is (and is not) mounted across the path.
+
+     x 300 .. 780   the channel the request travels down
+     x  90 .. 280   station names
+     x 820 .. 1060  what each station decided
+--------------------------------------------------------------------------- */
+.rail { position: absolute; top: 240px; width: var(--hair); height: 1260px;
+        background: var(--rule-bright); transform-origin: top center; }
+#railL { left: 300px; } #railR { left: 780px; }
+
+.stn      { position: absolute; left: 90px; width: 190px; }
+.stn b    { display: block; font-family: var(--font-label); font-size: 26px;
+            letter-spacing: var(--track-label); text-transform: uppercase; color: var(--ink-mid); font-weight: 600; }
+.stn span { display: block; font-family: var(--font-label); font-size: 26px;
+            letter-spacing: var(--track-label); text-transform: uppercase; color: var(--ink-dim); }
+
+/* station one: a gate that is actually there */
+#gate1 { position: absolute; left: 300px; top: 520px; width: 480px; height: 3px;
+         background: var(--ink-mid); transform-origin: center; }
+
+/* station two: the mounting points exist. the gate does not. */
+#gate2      { position: absolute; left: 300px; top: 880px; width: 480px; height: 3px; }
+#gate2 i    { position: absolute; top: 0; height: 3px; background: var(--boundary); }
+#gate2 .l   { left: 0;   width: 44px; }
+#gate2 .r   { right: 0;  width: 44px; }
+#neverAsked { position: absolute; left: 368px; top: 908px; color: var(--stale); }
+
+/* the store */
+#storeRule { position: absolute; left: 300px; top: 1300px; width: 480px; height: var(--hair);
+             background: var(--rule-bright); transform-origin: left center; }
+#storeList { position: absolute; left: 320px; top: 1358px; }
+#storeList div { font-family: var(--font-value); font-size: 28px; color: var(--lost); line-height: 1.55; }
+#storeList .other { color: var(--ink-dim); }
+
+/* the request in flight — an object, so it gets an outline. radius 0, no shadow. */
+#pod       { position: absolute; left: 320px; top: 280px; width: 440px; height: 200px; }
+#request   { position: absolute; left: 0; top: 0; width: 440px; height: 122px;
+             border: var(--hair) solid var(--ink-mid); padding: 20px 22px 18px; }
+#request .m{ font-family: var(--font-value); font-size: 30px; color: var(--ink); white-space: nowrap; }
+.tagrow    { display: flex; align-items: baseline; gap: 12px; margin-top: 12px; }
+.tagk      { font-family: var(--font-label); font-size: 22px; letter-spacing: var(--track-label);
+             text-transform: uppercase; color: var(--ink-dim); }
+.tagv      { font-family: var(--font-value); font-size: 26px; color: var(--ink-mid); }
+
+/* what the request is carrying home */
+#ev-lookup { position: absolute; left: 0; top: 122px; width: 440px;
+             border: var(--hair) solid var(--stale); border-top: none; padding: 16px 22px 16px; }
+#ev-lookup .m { font-family: var(--font-value); font-size: 28px; color: var(--ink); }
+
+/* verdicts, right column */
+.verdict     { position: absolute; left: 820px; width: 240px; }
+.verdict b   { display: block; font-family: var(--font-label); font-size: 26px;
+               letter-spacing: var(--track-label); text-transform: uppercase; font-weight: 600; }
+.verdict span{ display: block; font-family: var(--font-value); font-size: 26px; color: var(--ink-dim); margin-top: 6px; }
+#ev-authn   b { color: var(--boundary); }
+#ev-respond b { color: var(--ink-mid); }
+
+/* the payoff: two tenant tags in one hand that do not match */
+#mismatch      { position: absolute; left: 320px; top: 486px; width: 440px; }
+#mismatch .bar { width: 100%; height: var(--hair); background: var(--stale); transform-origin: left center; }
+#mismatch .cmp { display: flex; align-items: baseline; gap: 26px; margin-top: 18px;
+                 font-family: var(--font-value); font-size: 34px; color: var(--ink); }
+#mismatch .cmp b { color: var(--stale); font-weight: 600; }
+#mismatch .k   { display: block; margin-top: 12px; color: var(--stale); }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="main" data-start="0" data-duration="13"
+     data-width="1080" data-height="1920">
+  <div id="stage" class="clip" data-start="0" data-duration="13" data-track-index="0">
+  <div id="world">
+
+    <div class="rail" id="railL"></div>
+    <div class="rail" id="railR"></div>
+
+    <div class="stn" id="stn1" style="top: 476px;"><b>gate 1</b><span>identity</span></div>
+    <div class="stn" id="stn2" style="top: 836px;"><b>gate 2</b><span>ownership</span></div>
+
+    <div id="gate1"></div>
+    <div id="gate2"><i class="l"></i><i class="r"></i></div>
+    <div id="neverAsked" class="label">never asked</div>
+
+    <div id="storeRule"></div>
+    <div id="storeList">
+      <div class="mine">#7301   acme</div>
+      <div class="other">#8842   globex</div>
+      <div class="mine">#9114   initech</div>
+    </div>
+
+    <div id="pod">
+      <div id="request">
+        <div class="m">GET /invoices/8842</div>
+        <div class="tagrow"><span class="tagk">caller</span><span class="tagv" id="callerTag">acme</span></div>
+      </div>
+      <div id="ev-lookup"><div class="m">#8842 &nbsp; <span style="color:var(--stale)">globex</span></div></div>
+    </div>
+
+    <div class="verdict" id="ev-authn"   style="top: 470px;"><b>pass</b><span>token valid</span></div>
+    <div class="verdict" id="ev-respond" style="top: 250px;"><b>200 ok</b><span>body returned</span></div>
+
+    <div id="mismatch">
+      <div class="bar"></div>
+      <div class="cmp"><span>acme</span><b>&ne;</b><span>globex</span></div>
+      <span class="k label">tenant mismatch</span>
+    </div>
+
+  </div>
+  </div>
+</div>
+
+<script>
+window.__timelines = window.__timelines || {};
+const tl = gsap.timeline({ paused: true });
+const R = 'power3.out', T = 'power2.inOut';
+
+gsap.set(['#request', '#ev-lookup', '#ev-authn', '#ev-respond', '#neverAsked', '#mismatch',
+          '#stn1', '#stn2', '#storeList'], { opacity: 0 });
+gsap.set(['#railL', '#railR'], { scaleY: 0 });
+gsap.set(['#gate1', '#storeRule'], { scaleX: 0 });
+gsap.set('#gate2', { opacity: 0 });
+gsap.set('#mismatch .bar', { scaleX: 0 });
+
+/* ---- 0.0–1.1  the route exists, and so does the gap ---------------------
+   The empty slot at station two is drawn in the first second. The viewer gets
+   ten seconds to notice it before anything names it.                        */
+tl.to(['#railL', '#railR'], { scaleY: 1, duration: .80, ease: R }, 0.05)
+  .to('#gate1',    { scaleX: 1, duration: .45, ease: R }, 0.45)
+  .to('#gate2',    { opacity: 1, duration: .40, ease: R }, 0.60)
+  .to('#stn1',     { opacity: 1, duration: .35, ease: R }, 0.50)
+  .to('#stn2',     { opacity: 1, duration: .35, ease: R }, 0.66)
+  .to('#storeRule',{ scaleX: 1, duration: .45, ease: R }, 0.72)
+  .to('#storeList',{ opacity: 1, duration: .40, ease: R }, 0.86);
+
+/* ---- 1.2–2.8  the request arrives and comes down to the first gate ------ */
+tl.fromTo('#request', { opacity: 0 }, { opacity: 1, duration: .50, ease: R }, 1.20)
+  .fromTo('#pod', { y: -30 }, { y: 0, duration: .50, ease: R }, 1.20)
+  .to('#pod', { y: 100, duration: .90, ease: T }, 1.90);
+
+/* ---- 3.04  IDENTITY is checked, and the gate opens --------------------- */
+tl.to('#ev-authn', { opacity: 1, duration: .35, ease: R }, 3.04)
+  .to('#gate1', { scaleX: 0, duration: .45, ease: R }, 3.16);
+
+/* ---- 3.8–5.6  one continuous descent past BOTH stations ----------------
+   There is no pause at station two, because nothing there asks anything. The
+   absence of a beat is the evidence.                                       */
+tl.to('#pod', { y: 840, duration: 1.80, ease: T }, 3.80)
+  /* the stubs register contact with a request they cannot examine */
+  .to('#gate2 i', { backgroundColor: '#EDEAE4', duration: .18 }, 4.66)
+  .to('#gate2 i', { backgroundColor: '#4E8C7D', duration: .35 }, 4.90);
+
+/* ---- 5.8–7.0  the record is found by primary key ---------------------- */
+tl.to('#storeList .other', { color: 'var(--stale)', duration: .45, ease: R }, 5.84)
+  /* what it is carrying: another tenant's row, attached to an acme request */
+  .fromTo('#ev-lookup', { opacity: 0, y: -18 }, { opacity: 1, y: 0, duration: .45, ease: R }, 7.02);
+
+/* ---- 7.6–10.0  it carries the row back out, past both stations -------- */
+tl.to('#pod', { y: 0, duration: 2.40, ease: T }, 7.62);
+
+/* ---- 10.63  delivered ------------------------------------------------- */
+tl.to('#ev-respond', { opacity: 1, duration: .38, ease: R }, 10.63);
+
+/* ---- 10.9–12.0  the payoff: one object, two tenants ------------------- */
+tl.to('#callerTag', { color: 'var(--ink)', duration: .30 }, 10.92)
+  .to('#mismatch', { opacity: 1, duration: .30, ease: R }, 11.02)
+  .to('#mismatch .bar', { scaleX: 1, duration: .55, ease: R }, 11.06);
+
+/* ---- 12.1–13.0  and only now is the missing gate named ---------------- */
+tl.to('#neverAsked', { opacity: 1, duration: .42, ease: R }, 12.10)
+  .to('#stn2 b', { color: 'var(--stale)', duration: .42 }, 12.10);
+
+/* ---------------------------------------------------------------------------
+   CAMERA — push_in / global_to_root_cause
+
+   ONE move, and it is timed to the event rather than to the edit. The request
+   crosses station two at 4.66s; the push-in runs 4.10-5.00 so the frame is already
+   leaning in when it happens, holds while it passes through nothing, then pulls
+   back at 5.80 to follow it down to the store.
+
+   The close frame is bounded by MEANING, not by taste: it must contain both the
+   station's own name (world x 90) and the far mounting stub (world x 780), or the
+   close-up shows a gap with nothing to say what kind of gap it is. That span plus
+   40px margins is 730px, so s = 1080/730 = 1.48 and no larger.
+
+   The end of the shot is deliberately left at base scale. The payoff there is a
+   COMPARISON — a foreign tenant tag up top against the empty slot below — and a
+   comparison needs both things in one frame. Pushing in again would have looked
+   like a flourish and cost the shot its argument.
+--------------------------------------------------------------------------- */
+gsap.set('#world', { transformOrigin: '0 0' });
+const cam = (px, py, s) => ({ x: 540 - px * s, y: 960 - py * s, scale: s });
+
+const WHOLE = cam(540, 960, 1.0);    // the route: every station at once
+const SLOT  = cam(455, 889, 1.48);   // station two, its name, and the gap
+
+gsap.set('#world', WHOLE);
+tl.to('#world', { ...SLOT,  duration: .90, ease: T }, 4.10)
+  .to('#world', { ...WHOLE, duration: .90, ease: T }, 5.80);
+
+window.__timelines['main'] = tl;
+</script>
+</body>
+</html>

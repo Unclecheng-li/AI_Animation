@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en" data-composition-variables='[
+  {"id":"title","type":"string","label":"Title","default":"Executive Summary"},
+  {"id":"metrics","type":"string","label":"Metrics (JSON)","default":"[{\"value\":\"$2.4M\",\"label\":\"Revenue\",\"trend\":\"+12%\",\"detail\":\"Quarterly revenue exceeded targets across all business units. Growth was driven by new product launches and expanded market reach.\"},{\"value\":\"847\",\"label\":\"New Customers\",\"trend\":\"+18%\",\"detail\":\"Customer acquisition accelerated through improved digital marketing and referral programs. Retention rate remained above 92%.\"},{\"value\":\"94%\",\"label\":\"Satisfaction\",\"trend\":\"+3pts\",\"detail\":\"Customer satisfaction scores reached an all-time high. Net Promoter Score improved following the service experience overhaul.\"},{\"value\":\"$890K\",\"label\":\"Cost Savings\",\"trend\":\"+22%\",\"detail\":\"Operational efficiency initiatives delivered significant savings. Supply chain optimisation and automation were key contributors.\"}]"},
+  {"id":"accentColor","type":"color","label":"Accent Color","default":"#285f9f"},
+  {"id":"bgColor","type":"color","label":"Background","default":"#f5f2ea"},
+  {"id":"basePlateImage","type":"string","label":"Base Plate Image","default":"v2-base-blue.png"},
+  {"id":"durationPerMetric","type":"number","label":"Seconds per Metric","default":3,"min":2,"max":8,"step":0.5}
+]'>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=block">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root { --accent: #285f9f; --bg: #f5f2ea; --base-plate: url("v2-base-blue.png"); }
+    body { width: 1920px; height: 1080px; background-color: var(--bg); background-image: var(--base-plate); background-size: 1920px 1080px; background-position: 0 0; background-repeat: no-repeat; font-family: 'Inter', Arial, Helvetica, sans-serif; overflow: hidden; position: relative; }
+    [data-composition-id] { position: absolute; inset: 0; width: 1920px; height: 1080px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    [data-composition-id] > * { z-index: 1; }
+    #el-fade { position: absolute; inset: 0; background: #000; opacity: 0; z-index: 99; pointer-events: none; }
+    .main-title { position: absolute; top: 40px; left: 50%; transform: translateX(-50%); font-size: 18px; font-weight: 700; color: var(--accent); letter-spacing: 3px; text-transform: uppercase; opacity: 0; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; width: 1600px; opacity: 0; }
+    .card { background: #fffdfa; border-radius: 20px; padding: 40px 50px; box-shadow: 0 4px 24px rgba(0,0,0,0.05); position: relative; }
+    .card .val { font-size: 56px; font-weight: 800; color: var(--accent); }
+    .card .lbl { font-size: 18px; font-weight: 600; color: #5a6e78; margin: 6px 0; }
+    .card .trend { font-size: 20px; font-weight: 700; color: #2f765f; }
+    .card .detail { font-size: 17px; line-height: 1.6; color: #5a6e78; margin-top: 16px; opacity: 0; max-height: 0; overflow: hidden; }
+    .card.active { transform: scale(1.04); box-shadow: 0 12px 48px rgba(0,0,0,0.1); z-index: 2; }
+    .card.active .detail { opacity: 1; max-height: 120px; }
+    .card.active .val { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div data-composition-id="executive-summary" data-width="1920" data-height="1080" data-duration="12" data-start="0">
+    <div id="el-fade"></div>
+    <div class="main-title" id="mainTitle"></div>
+    <div class="grid" id="grid"></div>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      var vars = __hyperframes.getVariables();
+      var metrics = JSON.parse(vars.metrics || '[]');
+      var activeM = Number(vars.activeMetric) || 0;
+      var accent = vars.accentColor || '#285f9f';
+      var bgColor = vars.bgColor || '#f5f2ea';
+      var basePlateImage = vars.basePlateImage || 'v2-base-blue.png';
+      var dur = Number(vars.durationPerMetric) || 3;
+      document.documentElement.style.setProperty('--accent', accent);
+      document.documentElement.style.setProperty('--bg', bgColor);
+      document.documentElement.style.setProperty('--base-plate', 'url("' + basePlateImage + '")');
+      document.getElementById('mainTitle').textContent = vars.title || 'Executive Summary';
+
+      var grid = document.getElementById('grid');
+      var cards = [];
+      metrics.forEach(function(m, i) {
+        var c = document.createElement('div');
+        c.className = 'card' + (i === activeM ? ' active' : '');
+       c.innerHTML = '<div class="val">' + m.value + '</div><div class="lbl">' + m.label + '</div><div class="trend">' + m.trend + '</div><div class="detail">' + (m.detail || m.desc || '') + '</div>';
+        grid.appendChild(c); cards.push(c);
+      });
+
+      var TOTAL = metrics.length * dur + 1;
+      var tl = gsap.timeline({ paused: true });
+      tl.to('#mainTitle', { opacity: 1, duration: 0.5 }, 0);
+      tl.to('#grid', { opacity: 1, y: -10, duration: 0.5 }, 0.3);
+
+      for (var i = 1; i < metrics.length; i++) {
+        (function(idx) {
+          var t = idx * dur;
+          var prev = idx - 1;
+          tl.to(cards[prev], { scale: 1, boxShadow: '0 4px 24px rgba(0,0,0,0.05)', duration: 0.3 }, t);
+          tl.to(cards[idx], { scale: 1.04, boxShadow: '0 12px 48px rgba(0,0,0,0.10)', duration: 0.4, ease: 'power2.out' }, t + 0.1);
+          cards.forEach(function(c, j) {
+            if (j === prev) tl.set(c, { className: 'card' }, t + 0.05);
+            if (j === idx) tl.set(c, { className: 'card active' }, t + 0.05);
+          });
+        })(i);
+      }
+
+      tl.fromTo('#el-fade', { opacity: 0 }, { opacity: 1, duration: 0.5, ease: 'power2.in' }, TOTAL - 0.5);
+      tl.set('#el-fade', { opacity: 1 }, TOTAL);
+      document.querySelector('[data-composition-id="executive-summary"]').setAttribute('data-duration', TOTAL);
+      window.__timelines = window.__timelines || {};
+      window.__timelines['executive-summary'] = tl;
+    </script>
+  </div>
+</body>
+</html>

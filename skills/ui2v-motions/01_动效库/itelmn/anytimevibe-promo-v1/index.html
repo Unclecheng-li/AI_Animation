@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1920, height=1080" />
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <style>
+    @font-face { font-family: "Microsoft YaHei"; src: local("Microsoft YaHei"); }
+    @font-face { font-family: "Cascadia Code"; src: local("Cascadia Code"); }
+    @font-face { font-family: "Rockwell"; src: local("Rockwell"); }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: #f2eadb; color: #17211b; font-family: "Microsoft YaHei", sans-serif; }
+    .clip { position: absolute; inset: 0; overflow: hidden; }
+    .scene { position: relative; width: 100%; height: 100%; padding: 82px 112px; overflow: hidden; }
+    .paper { background: #f2eadb; }
+    .ink { background: #17211b; color: #fffaf0; }
+    .grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(242,234,219,.06) 1px, rgba(242,234,219,0) 1px), linear-gradient(90deg, rgba(242,234,219,.06) 1px, rgba(242,234,219,0) 1px); background-size: 64px 64px; }
+    .grain { position: absolute; inset: 0; opacity: .16; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.22'/%3E%3C/svg%3E"); }
+    .ghost { position: absolute; right: -38px; bottom: -30px; font: 900 300px/.8 Rockwell, serif; opacity: .035; }
+    .eyebrow { font: 700 21px/1 "Cascadia Code", monospace; letter-spacing: .18em; color: #e25832; text-transform: uppercase; }
+    .panel { background: #fffaf0; border: 2px solid rgba(23,33,27,.14); border-radius: 28px; box-shadow: 0 32px 82px rgba(23,33,27,.15); }
+    .vendor-logo { display: block; flex: 0 0 auto; object-fit: cover; border-radius: 10px; background: #fff; box-shadow: 0 0 0 1px rgba(23,33,27,.12); }
+    .badge { display: inline-flex; align-items: center; gap: 9px; padding: 9px 14px; border-radius: 999px; background: #dcefe4; color: #17633f; font: 700 16px "Cascadia Code", monospace; }
+    .badge i { width: 9px; height: 9px; border-radius: 50%; background: #4db77d; }
+    .wipe { position: absolute; inset: -4%; z-index: 20; background: #e25832; transform-origin: left; }
+
+    .intro { position: relative; display: flex; flex-direction: column; justify-content: center; height: 100%; }
+    .hero { max-width: 1700px; margin: 34px 0 0; font-size: 105px; font-weight: 900; line-height: 1.04; letter-spacing: 0; }
+    .intro-sub { margin: 30px 0 0; font-size: 31px; color: #cbd5cc; }
+    .intro-engines { display: flex; gap: 18px; margin-top: 48px; }
+    .intro-engine { display: flex; align-items: center; gap: 13px; min-width: 240px; padding: 15px 18px; border: 1px solid rgba(242,234,219,.22); border-radius: 18px; background: rgba(255,255,255,.045); font: 700 19px "Cascadia Code", monospace; }
+    .intro-prompt { display: flex; align-items: center; gap: 16px; margin-top: 48px; font: 700 20px "Cascadia Code", monospace; }
+    .intro-prompt i { width: 14px; height: 14px; border-radius: 50%; background: #4db77d; box-shadow: 0 0 0 10px rgba(77,183,125,.13); }
+
+    .scene-heading { display: flex; align-items: end; justify-content: space-between; gap: 40px; height: 104px; }
+    .scene-heading h2 { margin: 14px 0 0; font-size: 64px; line-height: 1; letter-spacing: 0; }
+    .scene-note { max-width: 520px; color: #5f6b63; font-size: 22px; line-height: 1.45; text-align: right; }
+    .engine-layout { display: grid; grid-template-columns: .94fr 1.06fr; gap: 64px; align-items: center; height: 780px; }
+    .task-form { padding: 28px; height: 650px; }
+    .form-top { display: flex; justify-content: space-between; align-items: center; padding-bottom: 18px; border-bottom: 1px solid rgba(23,33,27,.13); }
+    .form-top strong { font-size: 24px; }
+    .engine-label { margin: 22px 0 12px; font-size: 18px; font-weight: 900; }
+    .engine-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .engine-card { display: grid; place-items: center; gap: 8px; min-height: 118px; border: 1px solid rgba(23,33,27,.15); border-radius: 17px; background: #fffdf7; font-size: 15px; font-weight: 900; text-align: center; }
+    .engine-card small { color: #6d756e; font: 13px "Cascadia Code", monospace; }
+    .engine-card.selected { border: 3px solid #2d7653; background: #edf5ef; box-shadow: 0 0 0 5px rgba(45,118,83,.08); }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 17px; }
+    .field { padding: 14px 16px; border: 1px solid rgba(23,33,27,.14); border-radius: 14px; background: #fff; }
+    .field span { display: block; color: #747b74; font-size: 13px; margin-bottom: 6px; }
+    .field strong { font-size: 17px; }
+    .task-prompt { margin-top: 15px; padding: 17px; border-radius: 15px; background: #fff; border: 1px solid rgba(23,33,27,.14); font-size: 17px; line-height: 1.45; }
+    .start-button { margin-top: 15px; padding: 16px; border-radius: 14px; background: #e25832; color: #fff; text-align: center; font-size: 18px; font-weight: 900; }
+    .host-panel { height: 650px; padding: 28px; }
+    .host-top { display: flex; align-items: center; justify-content: space-between; padding-bottom: 18px; border-bottom: 1px solid rgba(23,33,27,.13); }
+    .host-top strong { font-size: 23px; }
+    .ready-strip { display: flex; gap: 12px; margin-top: 20px; }
+    .ready-item { display: flex; align-items: center; gap: 7px; flex: 1; min-width: 0; padding: 9px; border-radius: 13px; background: rgba(45,118,83,.08); font: 12px "Cascadia Code", monospace; }
+    .terminal { margin-top: 20px; height: 450px; padding: 25px; border-radius: 19px; background: #17211b; color: #dce7dd; font: 19px/1.67 "Cascadia Code", monospace; }
+    .terminal-label { color: #eaa186; letter-spacing: .12em; font-size: 15px; }
+    .terminal-task { margin: 15px 0; padding: 15px; border-left: 4px solid #e25832; background: rgba(226,88,50,.1); font-family: "Microsoft YaHei"; line-height: 1.45; }
+    .green { color: #6dd99d; }
+    .orange { color: #f07b54; }
+    .dispatch-pill { position: absolute; left: 858px; top: 560px; z-index: 5; width: 250px; padding: 18px; border-radius: 18px; background: #e25832; color: #fff; box-shadow: 0 22px 46px rgba(226,88,50,.28); text-align: center; font-size: 20px; font-weight: 900; }
+
+    .relay-layout { display: grid; grid-template-columns: .7fr .18fr 1.06fr; gap: 30px; align-items: center; height: 760px; }
+    .relay-task { height: 540px; padding: 26px; border: 14px solid #17211b; border-radius: 46px; background: #f2eadb; }
+    .relay-task-head { display: flex; align-items: center; justify-content: space-between; padding-bottom: 16px; border-bottom: 1px solid rgba(23,33,27,.13); }
+    .relay-engine { display: flex; align-items: center; gap: 10px; font-weight: 900; }
+    .relay-card { margin-top: 22px; padding: 22px; border-radius: 18px; background: #fffaf0; border: 1px solid rgba(23,33,27,.13); }
+    .relay-card h3 { margin: 0; font-size: 24px; }
+    .relay-card code { display: block; margin: 10px 0 18px; color: #2d7653; font-size: 14px; }
+    .relay-step { display: flex; align-items: center; gap: 11px; margin-top: 15px; font-size: 17px; }
+    .relay-step i { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #2d7653; color: #fff; font-style: normal; font-size: 12px; }
+    .handoff-button { margin-top: 22px; padding: 16px; border-radius: 14px; background: #e25832; color: #fff; text-align: center; font-weight: 900; }
+    .handoff-arrow { text-align: center; color: #e25832; }
+    .handoff-arrow b { display: block; font: 900 88px Rockwell, serif; }
+    .handoff-arrow span { font: 700 14px/1.45 "Cascadia Code", monospace; }
+    .relay-cli { height: 525px; padding: 28px; border-radius: 26px; background: #17211b; color: #dce7dd; box-shadow: 0 32px 82px rgba(23,33,27,.18); font: 19px/1.72 "Cascadia Code", monospace; }
+    .cli-head { display: flex; justify-content: space-between; align-items: center; padding-bottom: 16px; margin-bottom: 20px; border-bottom: 1px solid rgba(220,231,221,.18); font-size: 15px; }
+    .sync-back { margin-top: 25px; padding: 16px 18px; border-radius: 14px; background: rgba(109,217,157,.11); color: #8de5b4; font-family: "Microsoft YaHei"; font-weight: 900; }
+    .cursor { display: inline-block; width: 11px; height: 22px; background: #e25832; vertical-align: -4px; }
+
+    .queue-layout { display: grid; grid-template-columns: .78fr 1.22fr; gap: 70px; align-items: center; height: 100%; }
+    .queue-copy h2, .permission-copy h2 { margin: 27px 0; font-size: 86px; line-height: 1.06; letter-spacing: 0; }
+    .queue-copy p, .permission-copy p { color: #657069; font-size: 27px; line-height: 1.5; }
+    .queue { padding: 28px; }
+    .queue-row { display: grid; grid-template-columns: 54px 1fr auto; gap: 17px; align-items: center; padding: 18px 8px; border-bottom: 1px solid rgba(23,33,27,.12); }
+    .queue-row strong { display: block; font-size: 21px; }
+    .queue-row small { display: block; margin-top: 5px; color: #727a72; font: 13px "Cascadia Code", monospace; }
+    .status { padding: 8px 13px; border-radius: 999px; font: 700 14px "Cascadia Code", monospace; }
+    .status.run { background: #dcefe4; color: #17633f; }
+    .status.wait { background: #f5eabf; color: #806311; }
+    .status.done { background: #e2edf8; color: #315e8e; }
+    .processing { display: flex; align-items: center; gap: 16px; margin-top: 22px; padding: 20px; border-radius: 17px; background: rgba(45,118,83,.09); }
+    .spinner { width: 31px; height: 31px; border: 5px solid rgba(45,118,83,.2); border-top-color: #2d7653; border-radius: 50%; }
+
+    .permission-layout { display: grid; grid-template-columns: .74fr 1.26fr; gap: 70px; align-items: center; height: 100%; }
+    .permission-stack { display: grid; gap: 12px; }
+    .permission-card { display: grid; grid-template-columns: 56px 1fr auto; gap: 16px; align-items: center; padding: 17px 21px; }
+    .permission-card h3 { margin: 0; font-size: 22px; }
+    .permission-card small { display: block; margin-top: 6px; color: #707870; font: 13px "Cascadia Code", monospace; }
+    .permission-mode { padding: 10px 14px; border: 2px solid #2d7653; border-radius: 12px; background: #edf5ef; color: #17633f; font-size: 16px; font-weight: 900; }
+    .security-boundary { display: flex; justify-content: space-between; margin-top: 16px; padding: 19px 22px; border: 2px dashed rgba(23,33,27,.25); border-radius: 16px; font: 16px "Cascadia Code", monospace; }
+    .security-boundary b { color: #2d7653; }
+
+    .final { display: grid; place-items: center; align-content: center; height: 100%; text-align: center; }
+    .final > img { width: 158px; height: 158px; }
+    .final h2 { margin: 23px 0 10px; font-size: 108px; letter-spacing: 0; }
+    .final p { margin: 0; color: #cbd5cc; font-size: 32px; }
+    .final-engines { display: flex; gap: 18px; margin-top: 34px; }
+    .final-engine { display: flex; align-items: center; gap: 10px; min-width: 205px; padding: 13px 16px; border: 1px solid rgba(242,234,219,.23); border-radius: 16px; font: 700 16px "Cascadia Code", monospace; }
+    .cta { margin-top: 38px; padding: 16px 27px; border: 1px solid rgba(242,234,219,.3); border-radius: 999px; font: 700 18px "Cascadia Code", monospace; }
+  </style>
+</head>
+<body>
+  <div id="root" data-composition-id="main" data-start="0" data-duration="30" data-width="1920" data-height="1080">
+    <section id="scene1" class="clip" data-start="0" data-duration="5" data-track-index="1">
+      <div class="scene ink"><div class="grid"></div><div class="grain"></div><div class="ghost">4×</div>
+        <div class="intro">
+          <div class="eyebrow s1-e">MULTI-ENGINE REMOTE CODING</div>
+          <h1 class="hero s1-h">一个入口，接住四种 AI 编程引擎。</h1>
+          <p class="intro-sub s1-s">Codex、Claude Code、Grok Build、Cursor Agent，离开电脑也能继续。</p>
+          <div class="intro-engines">
+            <div class="intro-engine s1-engine"><img class="vendor-logo" src="assets/codex.png" width="42" height="42" />Codex</div>
+            <div class="intro-engine s1-engine"><img class="vendor-logo" src="assets/claude.png" width="42" height="42" />Claude Code</div>
+            <div class="intro-engine s1-engine"><img class="vendor-logo" src="assets/grok.png" width="42" height="42" />Grok Build</div>
+            <div class="intro-engine s1-engine"><img class="vendor-logo" src="assets/cursor.png" width="42" height="42" />Cursor Agent</div>
+          </div>
+          <div class="intro-prompt s1-p"><i></i>4 ENGINES · 1 REMOTE WORKSPACE</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="scene2" class="clip" data-start="5" data-duration="5" data-track-index="1">
+      <div class="scene paper">
+        <div class="scene-heading s2-heading"><div><div class="eyebrow">NEW REMOTE TASK</div><h2>选引擎，发到电脑执行。</h2></div><p class="scene-note">只显示当前主机已检测为可用的编码 CLI。</p></div>
+        <div class="engine-layout">
+          <div class="task-form panel s2-form">
+            <div class="form-top"><strong>向「开发主机」下发任务</strong><span class="badge"><i></i>在线</span></div>
+            <div class="engine-label">编码引擎</div>
+            <div class="engine-grid">
+              <div class="engine-card s2-engine"><img class="vendor-logo" src="assets/codex.png" width="38" height="38" /><b>Codex</b><small>0.144.1</small></div>
+              <div class="engine-card s2-engine"><img class="vendor-logo" src="assets/claude.png" width="38" height="38" /><b>Claude Code</b><small>2.1.12</small></div>
+              <div class="engine-card s2-engine"><img class="vendor-logo" src="assets/grok.png" width="38" height="38" /><b>Grok Build</b><small>0.8.3</small></div>
+              <div class="engine-card selected s2-engine selected-engine"><img class="vendor-logo" src="assets/cursor.png" width="38" height="38" /><b>Cursor Agent</b><small>2026.07</small></div>
+            </div>
+            <div class="form-row"><div class="field"><span>权限模式</span><strong>全自动写盘</strong></div><div class="field"><span>工作区</span><strong>anytimevibe</strong></div></div>
+            <div class="task-prompt">更新移动端任务切换，并运行完整测试。</div>
+            <div class="start-button">开始 Cursor Agent 任务</div>
+          </div>
+          <div class="host-panel panel s2-host">
+            <div class="host-top"><strong>开发主机 · Windows</strong><span class="badge"><i></i>4 个引擎可用</span></div>
+            <div class="ready-strip">
+              <div class="ready-item"><img class="vendor-logo" src="assets/codex.png" width="27" height="27" />READY</div>
+              <div class="ready-item"><img class="vendor-logo" src="assets/claude.png" width="27" height="27" />READY</div>
+              <div class="ready-item"><img class="vendor-logo" src="assets/grok.png" width="27" height="27" />READY</div>
+              <div class="ready-item"><img class="vendor-logo" src="assets/cursor.png" width="27" height="27" />READY</div>
+            </div>
+            <div class="terminal"><div class="terminal-label">REMOTE HOST · CURSOR AGENT</div><div><span class="orange">›</span> 收到 Web 任务</div><div class="terminal-task">更新移动端任务切换，并运行完整测试。</div><div class="green">✓ 权限映射 · --force --trust</div><div>▶ Cursor 会话初始化</div><div>… 正在读取项目结构</div></div>
+          </div>
+        </div>
+        <div class="dispatch-pill s2-dispatch">选中 Cursor Agent<br />电脑立即执行</div>
+      </div>
+    </section>
+
+    <section id="scene3" class="clip" data-start="10" data-duration="5" data-track-index="1">
+      <div class="scene paper">
+        <div class="scene-heading s3-heading"><div><div class="eyebrow">NATIVE CLI HANDOFF</div><h2>同一引擎，原生 CLI 接力。</h2></div><p class="scene-note">任务所属引擎、权限和 provider session 全部保留。</p></div>
+        <div class="relay-layout">
+          <div class="relay-task s3-task"><div class="relay-task-head"><div class="relay-engine"><img class="vendor-logo" src="assets/cursor.png" width="34" height="34" />Cursor Agent</div><span class="badge"><i></i>进行中</span></div><div class="relay-card"><h3>更新移动端任务切换</h3><code>session_7f2 · --force</code><div class="relay-step"><i>✓</i>Web 已下发到远程电脑</div><div class="relay-step"><i>✓</i>流式回复正在同步</div><div class="relay-step"><i>→</i>准备在桌面继续</div></div><div class="handoff-button">在电脑上接力</div></div>
+          <div class="handoff-arrow s3-arrow"><b>→</b><span>PROVIDER<br />SESSION</span></div>
+          <div class="relay-cli s3-cli"><div class="cli-head"><span>CURSOR AGENT · DESKTOP</span><span class="green">--force</span></div><div><span class="orange">›</span> agent --resume session_7f2</div><div class="green">✓ 原生会话上下文已恢复</div><div class="green">✓ 权限模式已继承</div><div>继续修改并运行测试…</div><div>$ pnpm test <span class="cursor"></span></div><div class="sync-back s3-sync">← 阶段日志、回复与结果继续同步到 Web</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="scene4" class="clip" data-start="15" data-duration="5" data-track-index="1">
+      <div class="scene paper"><div class="queue-layout"><div class="queue-copy"><div class="eyebrow s4-e">UNIFIED TASK STREAM</div><h2 class="s4-h">四种引擎，一条任务流。</h2><p class="s4-p">不同 CLI 的任务、状态和回复，在同一个 Web 工作台统一查看。</p></div><div class="queue panel s4-queue">
+        <div class="queue-row"><img class="vendor-logo" src="assets/claude.png" width="42" height="42" /><div><strong>修复移动端返回逻辑</strong><small>CLAUDE · session_7f2</small></div><span class="status run">进行中</span></div>
+        <div class="queue-row"><img class="vendor-logo" src="assets/codex.png" width="42" height="42" /><div><strong>审查加密授权流程</strong><small>CODEX · thread_8f2</small></div><span class="status wait">队列中</span></div>
+        <div class="queue-row"><img class="vendor-logo" src="assets/grok.png" width="42" height="42" /><div><strong>重构客户端更新逻辑</strong><small>GROK · session_b91</small></div><span class="status wait">队列中</span></div>
+        <div class="queue-row"><img class="vendor-logo" src="assets/cursor.png" width="42" height="42" /><div><strong>构建 Windows 安装包</strong><small>CURSOR · session_3ad</small></div><span class="status done">已完成</span></div>
+        <div class="processing"><div class="spinner"></div><div><strong>多引擎状态实时同步</strong><div>简洁模式可隐藏阶段日志，只保留回复与结果</div></div></div>
+      </div></div></div>
+    </section>
+
+    <section id="scene5" class="clip" data-start="20" data-duration="5" data-track-index="1">
+      <div class="scene paper"><div class="permission-layout"><div class="permission-copy"><div class="eyebrow s5-e">ENGINE-AWARE PERMISSIONS</div><h2 class="s5-h">权限，按引擎准确映射。</h2><p class="s5-p">每种 CLI 使用自己的权限参数，Web 只展示可用选项。</p></div><div><div class="permission-stack s5-stack">
+        <div class="permission-card panel"><img class="vendor-logo" src="assets/codex.png" width="46" height="46" /><div><h3>Codex</h3><small>approvalPolicy: never · danger-full-access</small></div><span class="permission-mode">Full Access</span></div>
+        <div class="permission-card panel"><img class="vendor-logo" src="assets/claude.png" width="46" height="46" /><div><h3>Claude Code</h3><small>--permission-mode bypassPermissions</small></div><span class="permission-mode">跳过权限确认</span></div>
+        <div class="permission-card panel"><img class="vendor-logo" src="assets/grok.png" width="46" height="46" /><div><h3>Grok Build</h3><small>--always-approve</small></div><span class="permission-mode">全自动批准</span></div>
+        <div class="permission-card panel"><img class="vendor-logo" src="assets/cursor.png" width="46" height="46" /><div><h3>Cursor Agent</h3><small>--force --trust</small></div><span class="permission-mode">全自动写盘</span></div>
+      </div><div class="security-boundary s5-security"><span>源码与引擎凭据</span><b>始终留在本机</b><span>Relay</span><b>只转发密文</b></div></div></div></div>
+    </section>
+
+    <section id="scene6" class="clip" data-start="25" data-duration="5" data-track-index="1">
+      <div class="scene ink"><div class="grid"></div><div class="grain"></div><div class="final"><img class="s6-logo" src="assets/icon-final.svg" /><h2 class="s6-title">随码</h2><p class="s6-sub">四种引擎，一个远程工作台。随时续上你的代码。</p><div class="final-engines"><div class="final-engine s6-engine"><img class="vendor-logo" src="assets/codex.png" width="36" height="36" />Codex</div><div class="final-engine s6-engine"><img class="vendor-logo" src="assets/claude.png" width="36" height="36" />Claude Code</div><div class="final-engine s6-engine"><img class="vendor-logo" src="assets/grok.png" width="36" height="36" />Grok Build</div><div class="final-engine s6-engine"><img class="vendor-logo" src="assets/cursor.png" width="36" height="36" />Cursor Agent</div></div><div class="cta s6-cta">4 ENGINES · ONE REMOTE WORKSPACE</div></div></div>
+    </section>
+
+    <div id="wipe1" class="clip wipe" data-start="4.55" data-duration=".9" data-track-index="8"></div>
+    <div id="wipe2" class="clip wipe" data-start="9.55" data-duration=".9" data-track-index="8"></div>
+    <div id="wipe3" class="clip wipe" data-start="14.55" data-duration=".9" data-track-index="8"></div>
+    <div id="wipe4" class="clip wipe" data-start="19.55" data-duration=".9" data-track-index="8"></div>
+    <div id="wipe5" class="clip wipe" data-start="24.55" data-duration=".9" data-track-index="8"></div>
+    <audio id="bgm" src="assets/bgm-product-intro.mp3" data-start="0" data-duration="30" data-track-index="10" data-volume=".52"></audio>
+  </div>
+
+  <script>
+    window.__timelines = window.__timelines || {};
+    const tl = gsap.timeline({ paused: true });
+    tl.from('.s1-e', { x: -75, opacity: 0, duration: .52, ease: 'expo.out' }, .2)
+      .from('.s1-h', { y: 65, opacity: 0, duration: .78, ease: 'power4.out' }, .4)
+      .from('.s1-s', { x: 36, opacity: 0, duration: .48, ease: 'sine.out' }, .82)
+      .from('.s1-engine', { y: 28, scale: .92, opacity: 0, duration: .42, stagger: .11, ease: 'back.out(1.45)' }, 1.05)
+      .from('.s1-p', { scale: .88, opacity: 0, duration: .4, ease: 'expo.out' }, 1.48)
+      .to('.s1-p i', { scale: 1.45, opacity: .42, duration: .7, repeat: 3, yoyo: true, ease: 'sine.inOut' }, 1.85);
+    tl.from('.s2-heading', { y: -30, opacity: 0, duration: .48, ease: 'power3.out' }, 5.18)
+      .from('.s2-form', { x: -105, opacity: 0, duration: .68, ease: 'expo.out' }, 5.34)
+      .from('.s2-host', { x: 105, opacity: 0, duration: .72, ease: 'power4.out' }, 5.42)
+      .from('.s2-engine', { y: 24, opacity: 0, duration: .34, stagger: .09, ease: 'back.out(1.35)' }, 5.9)
+      .from('.s2-dispatch', { scale: .55, rotation: -4, opacity: 0, duration: .5, ease: 'back.out(1.8)' }, 6.3)
+      .to('.selected-engine', { scale: 1.04, duration: .32, repeat: 2, yoyo: true, ease: 'sine.inOut' }, 6.55);
+    tl.from('.s3-heading', { x: -60, opacity: 0, duration: .45, ease: 'expo.out' }, 10.18)
+      .from('.s3-task', { x: -90, rotation: -2, opacity: 0, duration: .65, ease: 'power3.out' }, 10.46)
+      .from('.s3-arrow', { scale: .42, opacity: 0, duration: .42, ease: 'back.out(2)' }, 10.9)
+      .from('.s3-cli', { x: 115, opacity: 0, duration: .72, ease: 'power4.out' }, 10.62)
+      .from('.s3-sync', { x: 34, opacity: 0, duration: .46, ease: 'sine.out' }, 11.62)
+      .to('.cursor', { opacity: .14, duration: .42, repeat: 6, yoyo: true, ease: 'steps(1)' }, 11.45);
+    tl.from('.s4-e', { x: -58, opacity: 0, duration: .44, ease: 'expo.out' }, 15.2)
+      .from('.s4-h', { y: 52, opacity: 0, duration: .62, ease: 'power4.out' }, 15.36)
+      .from('.s4-p', { x: 32, opacity: 0, duration: .48, ease: 'sine.out' }, 15.66)
+      .from('.s4-queue', { x: 95, opacity: 0, duration: .68, ease: 'power3.out' }, 15.27)
+      .from('.queue-row', { y: 26, opacity: 0, duration: .36, stagger: .09, ease: 'back.out(1.28)' }, 15.78)
+      .to('.spinner', { rotation: 720, duration: 3.1, ease: 'none' }, 16.2);
+    tl.from('.s5-e', { x: -68, opacity: 0, duration: .46, ease: 'expo.out' }, 20.2)
+      .from('.s5-h', { scale: .91, opacity: 0, duration: .65, ease: 'power4.out' }, 20.38)
+      .from('.s5-p', { y: 28, opacity: 0, duration: .48, ease: 'sine.out' }, 20.68)
+      .from('.permission-card', { x: 92, rotation: 1.5, opacity: 0, duration: .58, stagger: .12, ease: 'back.out(1.25)' }, 20.42)
+      .from('.s5-security', { scaleX: .8, opacity: 0, duration: .48, ease: 'power3.out' }, 21.35);
+    tl.from('.s6-logo', { scale: .35, rotation: -12, opacity: 0, duration: .76, ease: 'back.out(1.7)' }, 25.25)
+      .from('.s6-title', { y: 50, opacity: 0, duration: .66, ease: 'power4.out' }, 25.58)
+      .from('.s6-sub', { x: 42, opacity: 0, duration: .58, ease: 'sine.out' }, 25.88)
+      .from('.s6-engine', { y: 24, opacity: 0, duration: .38, stagger: .1, ease: 'back.out(1.4)' }, 26.1)
+      .from('.s6-cta', { scale: .86, opacity: 0, duration: .48, ease: 'expo.out' }, 26.55)
+      .to('.final', { opacity: 0, duration: .8, ease: 'power2.in' }, 29.05);
+    ['#wipe1', '#wipe2', '#wipe3', '#wipe4', '#wipe5'].forEach((id, index) => {
+      const time = 4.55 + index * 5;
+      tl.fromTo(id, { scaleX: 0, transformOrigin: 'left' }, { scaleX: 1, duration: .42, ease: 'power4.in', overwrite: 'auto' }, time)
+        .to(id, { scaleX: 0, transformOrigin: 'right', duration: .42, ease: 'power4.out', overwrite: 'auto' }, time + .45);
+    });
+    window.__timelines.main = tl;
+  </script>
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en" data-composition-variables='[
+  {"id":"title","type":"string","label":"Title","default":"Terms & Definitions"},
+  {"id":"subtitle","type":"string","label":"Subtitle","default":"Here are some important terms you need to know."},
+  {"id":"terms","type":"string","label":"Terms (JSON array)","default":"[{\"word\":\"COMPASS\",\"pronunciation\":\"COM·PASS\",\"type\":\"noun\",\"definition\":\"An instrument containing a magnetised pointer that shows the direction of magnetic north and bearings from it.\",\"icon\":\"🧭\"},{\"word\":\"LANTERN\",\"pronunciation\":\"LAN·TERN\",\"type\":\"noun\",\"definition\":\"A lamp with a transparent case protecting the flame or electric bulb, and typically having a handle by which it can be carried or hung.\",\"icon\":\"🏮\"},{\"word\":\"RAFT\",\"pronunciation\":\"RAFT\",\"type\":\"noun\",\"definition\":\"A buoyant structure made of timber, rubber, or other materials fastened together, used as a boat or a floating platform.\",\"icon\":\"🪣\"},{\"word\":\"BACKPACK\",\"pronunciation\":\"BACK·PACK\",\"type\":\"noun\",\"definition\":\"A bag with shoulder straps that allow it to be carried on ones back.\",\"icon\":\"🎒\"}]"},
+  {"id":"accentColor","type":"color","label":"Accent Color","default":"#285f9f"},
+  {"id":"bgColor","type":"color","label":"Background","default":"#f5f2ea"},
+  {"id":"basePlateImage","type":"string","label":"Base Plate Image","default":"v2-base-blue.png"},
+  {"id":"durationPerTerm","type":"number","label":"Seconds per Term","default":4,"min":2,"max":10,"step":0.5}
+]'>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=block">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root { --accent: #285f9f; --icon-bg: #dce8f5; --bg: #f5f2ea; --base-plate: url("v2-base-blue.png"); }
+    body {
+      width: 1920px; height: 1080px;
+      background-color: var(--bg);
+      background-image: var(--base-plate);
+      background-size: 1920px 1080px; background-position: 0 0; background-repeat: no-repeat;
+      font-family: 'Inter', Arial, Helvetica, sans-serif;
+      overflow: hidden; position: relative;
+    }
+    [data-composition-id] { position: absolute; inset: 0; width: 1920px; height: 1080px; overflow: hidden; }
+    [data-composition-id] > * { z-index: 1; }
+    #el-fade { position: absolute; inset: 0; background: #000; opacity: 0; z-index: 99; pointer-events: none; }
+    .left-panel { position: absolute; left: 0; top: 0; width: 620px; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 40px; }
+    .panel-title { font-size: 17px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 3px; margin-bottom: 40px; opacity: 0; }
+    .term-row { display: flex; align-items: center; gap: 24px; opacity: 0; margin-bottom: 16px; }
+    .term-icon { width: 80px; height: 80px; border-radius: 50%; background: var(--icon-bg); display: flex; align-items: center; justify-content: center; font-size: 36px; }
+    .term-label { font-size: 15px; font-weight: 600; color: #5a6e78; text-align: center; }
+    .subtitle-el { font-size: 16px; color: #5a6e78; margin-top: 30px; opacity: 0; }
+    .right-panel { position: absolute; right: 0; top: 0; width: 1300px; height: 100%; display: flex; align-items: center; justify-content: center; padding: 80px 100px 80px 40px; }
+    .def-card { position: relative; z-index: 2; background: #fffdfa; border-radius: 24px; padding: 70px 80px; width: 100%; box-shadow: 0 8px 40px rgba(0,0,0,0.05); opacity: 0; }
+    .def-inner { position: relative; }
+    .def-block { position: absolute; inset: 0; opacity: 0; }
+    .def-block:first-child { position: relative; opacity: 1; }
+    .def-word { font-size: 52px; font-weight: 800; color: var(--accent); letter-spacing: 2px; margin-bottom: 6px; }
+    .def-pronunciation { font-size: 22px; color: #8a9ba8; margin-bottom: 4px; }
+    .def-type { font-size: 18px; color: #aaa; font-style: italic; margin-bottom: 28px; }
+    .def-divider { width: 50px; height: 3px; background: var(--accent); border-radius: 2px; margin-bottom: 28px; }
+    .def-text { font-size: 24px; line-height: 1.7; color: #182026; }
+  </style>
+</head>
+<body>
+  <div data-composition-id="terms-definitions" data-width="1920" data-height="1080" data-duration="16" data-start="0">
+    <div id="el-fade"></div>
+    <div class="left-panel">
+      <div class="panel-title" id="panelTitle"></div>
+      <div id="termIcons"></div>
+      <div class="subtitle-el" id="subtitleEl"></div>
+    </div>
+    <div class="right-panel">
+      <div class="def-card" id="defCard">
+        <div class="def-inner" id="defInner"></div>
+      </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      var vars = __hyperframes.getVariables();
+      var terms = JSON.parse(vars.terms || '[]');
+      var accentColor = vars.accentColor || '#285f9f';
+      var iconBgColor = accentColor + '22';
+      var bgColor = vars.bgColor || '#f5f2ea';
+      var basePlateImage = vars.basePlateImage || 'v2-base-blue.png';
+      var durPerTerm = Number(vars.durationPerTerm) || 4;
+      var root = document.documentElement;
+      root.style.setProperty('--accent', accentColor);
+      root.style.setProperty('--bg', bgColor);
+      root.style.setProperty('--base-plate', 'url("' + basePlateImage + '")');
+      document.getElementById('panelTitle').textContent = vars.title || 'Terms & Definitions';
+      document.getElementById('subtitleEl').textContent = vars.subtitle || '';
+
+      var termIconsEl = document.getElementById('termIcons');
+      var defInner = document.getElementById('defInner');
+      var iconEls = [], defPanels = [];
+
+     terms.forEach(function(term, i) {
+       var termWord = term.word || term.label || '';
+       var termPronunciation = term.pronunciation || '';
+       var termType = term.type || '';
+       var row = document.createElement('div'); row.className = 'term-row';
+       row.innerHTML = '<div class="term-icon" id="icon' + i + '">' + term.icon + '</div><span class="term-label">' + termWord + '</span>';
+       termIconsEl.appendChild(row);
+       iconEls.push(row.querySelector('.term-icon'));
+
+       var panel = document.createElement('div');
+       panel.innerHTML = '<div class="def-word">' + termWord + '</div>' +
+         '<div class="def-pronunciation">' + termPronunciation + '</div>' +
+         '<div class="def-type">' + termType + '</div>' +
+          '<div class="def-divider"></div>' +
+          '<div class="def-text">' + term.definition + '</div>';
+        if (i === 0) { panel.style.position = 'relative'; panel.style.opacity = '1'; }
+        else { panel.className = 'def-block'; }
+        defInner.appendChild(panel);
+        defPanels.push(panel);
+        if (i !== 0) gsap.set(panel, { opacity: 0 });
+      });
+
+      gsap.set(iconEls[0], { backgroundColor: accentColor, scale: 1.15, boxShadow: '0 4px 16px ' + accentColor + '55' });
+
+      var TOTAL = terms.length * durPerTerm + 1;
+      var tl = gsap.timeline({ paused: true });
+      tl.to('#panelTitle', { opacity: 1, duration: 0.5 }, 0);
+      tl.to('.term-row', { opacity: 1, y: -10, duration: 0.4, stagger: 0.12, ease: 'power2.out' }, 0.2);
+      tl.to('#subtitleEl', { opacity: 1, duration: 0.4 }, 0.5);
+      tl.to('#defCard', { opacity: 1, x: -30, duration: 0.6, ease: 'power2.out' }, 0.5);
+
+      for (var i = 1; i < terms.length; i++) {
+        (function(idx) {
+          var t = idx * durPerTerm;
+          var prev = idx - 1;
+          tl.to(defPanels[prev], { opacity: 0, duration: 0.2 }, t);
+          tl.to(defPanels[idx], { opacity: 1, duration: 0.45, ease: 'power2.out' }, t + 0.25);
+          tl.to(iconEls[prev], { backgroundColor: '#d8d2c8', scale: 1, boxShadow: 'none', duration: 0.3 }, t);
+          tl.to(iconEls[idx], { backgroundColor: accentColor, scale: 1.15, boxShadow: '0 4px 16px ' + accentColor + '55', duration: 0.3 }, t + 0.1);
+          tl.to('#defCard', { scale: 0.97, duration: 0.15 }, t + 0.2);
+          tl.to('#defCard', { scale: 1, duration: 0.5, ease: 'back.out(1.3)' }, t + 0.35);
+        })(i);
+      }
+
+      tl.fromTo('#el-fade', { opacity: 0 }, { opacity: 1, duration: 0.5, ease: 'power2.in' }, TOTAL - 0.5);
+      tl.set('#el-fade', { opacity: 1 }, TOTAL);
+      document.querySelector('[data-composition-id="terms-definitions"]').setAttribute('data-duration', TOTAL);
+      window.__timelines = window.__timelines || {};
+      window.__timelines['terms-definitions'] = tl;
+    </script>
+  </div>
+</body>
+</html>

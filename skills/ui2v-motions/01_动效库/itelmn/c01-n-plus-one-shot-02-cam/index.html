@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1080, height=1920" />
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<style>
+/* @brand:start */
+:root {
+  --ground: #0C0D0F; --ground-lift: #14161A;
+  --ink: #EDEAE4; --ink-mid: #9AA0A6; --ink-dim: #8B9198; --ink-ghost: #3A3E42;
+  --rule: #23272A; --rule-bright: #3D4348; --hair: 1.5px;
+  --authoritative: #C9A227; --stale: #E0533D; --lost: #6A6F74;
+  --boundary: #4E8C7D; --pressure: #B4623A; --counterfactual: #7A8086;
+  --font-value: "IBM Plex Mono", ui-monospace, monospace;
+  --font-label: "IBM Plex Sans Condensed", "IBM Plex Sans", system-ui, sans-serif;
+  --t-hero: 200px; --t-value: 64px; --t-body: 36px; --t-label: 26px; --track-label: 0.18em;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { overflow: hidden; background: var(--ground); color: var(--ink); font-family: var(--font-label); }
+.label { font-family: var(--font-label); font-size: var(--t-label); letter-spacing: var(--track-label);
+         text-transform: uppercase; color: var(--ink-dim); font-weight: 500; }
+/* @brand:end */
+
+html, body { width: 1080px; height: 1920px; }
+#stage { position: absolute; inset: 0; }
+/* CAMERA — #world is the moved thing. Nothing else knows the camera exists. */
+#world { position: absolute; inset: 0; will-change: transform; }
+
+/* ---------------------------------------------------------------------------
+   SPATIAL SYSTEM — an EMITTER and its FIELD. Not zones (A01), not a route (B01).
+   Source text at the top emits marks downward into an accumulation field, and
+   the field's density is the argument.
+
+   Two glyph families, deliberately unalike, because conflating them IS the
+   misconception this shot exists to break:
+     row tick    thin vertical line   what you asked for
+     query mark  filled square        what you paid
+--------------------------------------------------------------------------- */
+#code      { position: absolute; left: 100px; top: 336px; }
+#code div  { font-family: var(--font-value); font-size: 40px; line-height: 1.6;
+             color: var(--ink); white-space: pre; }
+
+#rowsLabel { position: absolute; left: 100px; top: 584px; }
+#rows      { position: absolute; left: 100px; top: 628px; width: 880px; height: 30px; }
+#rows i    { position: absolute; top: 0; width: 2px; height: 30px; background: var(--ink-mid); }
+
+#qLabel    { position: absolute; left: 100px; top: 734px; }
+#field     { position: absolute; left: 100px; top: 782px; width: 880px; height: 500px; }
+#field i   { position: absolute; width: 20px; height: 20px; background: var(--pressure); }
+
+/* the tally: evidence first (the field), interpretation second (this row) */
+#ev-render     { position: absolute; left: 100px; top: 1384px; display: flex; align-items: baseline; gap: 22px; }
+#ev-render .n  { font-family: var(--font-value); font-weight: 600; font-size: 110px; line-height: 1;
+                 letter-spacing: -.02em; color: var(--pressure); }
+#ev-render .k  { font-family: var(--font-label); font-size: 28px; letter-spacing: var(--track-label);
+                 text-transform: uppercase; color: var(--ink-dim); }
+#enough        { display: flex; align-items: baseline; gap: 22px; margin-left: 120px; }
+#enough .n     { color: var(--counterfactual) !important; }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="main" data-start="0" data-duration="13"
+     data-width="1080" data-height="1920">
+  <div id="stage" class="clip" data-start="0" data-duration="13" data-track-index="0">
+  <div id="world">
+
+    <div id="code">
+      <div id="c1">users = User.page(1)</div>
+      <div id="c2">for u in users:</div>
+      <div id="c3">    u.profile.name</div>
+    </div>
+
+    <div id="rowsLabel" class="label">rows returned</div>
+    <div id="rows"></div>
+
+    <div id="qLabel" class="label">round trips</div>
+    <div id="field"></div>
+
+    <div id="ev-render">
+      <span class="n">101</span><span class="k">queries</span>
+      <span id="enough"><span class="n">2</span><span class="k">would do</span></span>
+    </div>
+
+  </div>
+  </div>
+</div>
+
+<script>
+/* The field is BUILT here, synchronously, before the timeline is defined. This is
+   the payoff of a code runtime over a template library: a hundred and one marks is
+   a loop, not a hundred and one hand-authored elements. Still fully deterministic
+   — no Math.random, no Date.now, no rAF, no network. */
+const ROWS = 100, COLS = 14, PITCH = 62;
+
+const rows = document.getElementById('rows');
+for (let i = 0; i < ROWS; i++) {
+  const t = document.createElement('i');
+  t.style.left = (i * 8.8) + 'px';
+  rows.appendChild(t);
+}
+
+const field = document.getElementById('field');
+const marks = [];
+for (let i = 0; i < ROWS + 1; i++) {           // one for the page, then one per row
+  const m = document.createElement('i');
+  m.style.left = ((i % COLS) * PITCH) + 'px';
+  m.style.top  = (Math.floor(i / COLS) * PITCH) + 'px';
+  if (i === 0) m.id = 'ev-page';               // the query the first statement cost
+  if (i === 1) m.id = 'ev-loop';               // the first query the loop cost
+  field.appendChild(m);
+  marks.push(m);
+}
+
+window.__timelines = window.__timelines || {};
+const tl = gsap.timeline({ paused: true });
+const R = 'power3.out';
+
+gsap.set(['#c1', '#c2', '#c3', '#rowsLabel', '#qLabel', '#ev-render', '#enough'], { opacity: 0 });
+gsap.set('#rows i', { opacity: 0 });
+gsap.set('#field i', { opacity: 0 });
+
+/* ---- 0.2–1.1  one statement, alone on the ground ----------------------- */
+tl.fromTo('#c1', { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: .50, ease: R }, 0.20);
+
+/* ---- 1.18  THE STATEMENT EMITS ITS OWN COST ---------------------------
+   The query mark comes first and the rows arrive after it, because that is the
+   order it actually happens in. One trip out, a hundred rows back.         */
+tl.to('#rowsLabel', { opacity: 1, duration: .30, ease: R }, 0.62)
+  .to('#qLabel',    { opacity: 1, duration: .30, ease: R }, 0.80)
+  .to('#ev-page',   { opacity: 1, duration: .22, ease: R }, 1.18)
+  .to('#rows i',    { opacity: 1, duration: .16, stagger: .006, ease: 'none' }, 1.42);
+
+/* ---- 2.2–3.4  the loop ------------------------------------------------- */
+tl.fromTo('#c2', { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: .42, ease: R }, 2.20)
+  .fromTo('#c3', { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: .42, ease: R }, 2.90);
+
+/* ---- 3.78–9.40  ONE MARK PER ROW, in lockstep -------------------------
+   Five and a half seconds of it. The tedium is the information: this is not a
+   diagram of amplification, it is the amplification taking its actual time.
+   Each row tick turns as its own query fires, so the one-to-one mapping is
+   visible in two places at once instead of asserted in a caption.          */
+tl.to(marks.slice(1), { opacity: 1, duration: .18, stagger: .0555, ease: 'none' }, 3.78)
+  .to('#rows i', { backgroundColor: '#B4623A', duration: .14, stagger: .0555, ease: 'none' }, 3.78);
+
+/* ---- 10.87  what the page cost ---------------------------------------- */
+tl.to('#ev-render', { opacity: 1, duration: .45, ease: R }, 10.87);
+
+/* ---- 11.4–12.3  ninety-nine of them did not need to exist -------------- */
+tl.to(marks.slice(2), { backgroundColor: '#6A6F74', duration: .70, ease: 'none' }, 11.40)
+  .to('#enough', { opacity: 1, duration: .45, ease: R }, 11.80);
+
+/* ---- 12.4  and this is the line that chose it -------------------------- */
+tl.to('#c3', { color: '#B4623A', duration: .40, ease: R }, 12.40);
+
+/* ---------------------------------------------------------------------------
+   CAMERA — pull_back / one_to_many
+
+   cam(px, py, s) puts world point (px,py) at the centre of the canvas at scale s.
+   transform-origin is the world origin so the maths stays a plain affine map.
+
+   Two rules this shot obeys:
+     - it ENDS at scale 1.0. A pull-back that goes below 1 shrinks type past the
+       26px floor, so "wide" is the base frame, never smaller than it.
+     - the camera moves ONLY across the accumulation (3.78-9.40). Before and after
+       it is locked, because the reveal beats and the tally both need a still frame
+       to be read in.
+--------------------------------------------------------------------------- */
+gsap.set('#world', { transformOrigin: '0 0' });
+const cam = (px, py, s) => ({ x: 540 - px * s, y: 960 - py * s, scale: s });
+
+const CLOSE = cam(340, 569, 2.0);   // the statement and the one mark it costs.
+                                    // s=2.0 is not a taste call: it is the widest
+                                    // zoom that still leaves 60px beside the code.
+const WIDE  = cam(540, 960, 1.0);   // the base frame: everything, at readable size
+
+gsap.set('#world', CLOSE);
+
+/* linear on purpose — this is the one place the brand's no-linear rule is wrong.
+   The cascade adds one query per constant interval, so a constant-rate pull-back
+   is what makes the grid grow evenly. An eased camera would imply the cost was
+   accelerating or easing off, and it does neither. */
+tl.to('#world', { ...WIDE, duration: 5.62, ease: 'none' }, 3.78);
+
+window.__timelines['main'] = tl;
+</script>
+</body>
+</html>

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en" data-composition-variables='[
+  {"id":"title","type":"string","label":"Title","default":"Frequently Asked Questions"},
+  {"id":"questions","type":"string","label":"Questions (JSON array)","default":"[{\"q\":\"Do I need an account to place an order?\",\"a\":\"You do need an account to place an order. The benefit of creating an account means you can track and view all your orders, save payment methods, and get personalised recommendations.\"},{\"q\":\"How do I use my promo code?\",\"a\":\"When you checkout, enter the promotional code and click Apply. You can enter up to two promo codes per checkout.\"},{\"q\":\"What if the item I want is out of stock?\",\"a\":\"If an item is out of stock, you can select the Notify Me When Available option to receive re-stocking product updates.\"},{\"q\":\"How long will it take to ship my order?\",\"a\":\"You can select a shipping speed at checkout. Standard shipping is the default checkout setting. Expect your items within 5-7 business days.\"},{\"q\":\"Do you ship internationally?\",\"a\":\"Yes! We ship internationally. Shipping rates vary depending on location. The customer is responsible for taxes and fees associated with international orders.\"},{\"q\":\"What is your return policy?\",\"a\":\"If you are dissatisfied with your purchase, you may return your item in its original packaging within 30 days of receipt for a full refund.\"}]"},
+  {"id":"accentColor","type":"color","label":"Accent Color","default":"#285f9f"},
+  {"id":"bgColor","type":"color","label":"Background Color","default":"#f5f2ea"},
+  {"id":"basePlateImage","type":"string","label":"Base Plate Image","default":"v2-base-blue.png"},
+  {"id":"durationPerQA","type":"number","label":"Seconds per Q&A","default":4,"min":2,"max":10,"step":0.5}
+]'>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=block">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root { --accent: #285f9f; --bg: #f5f2ea; --base-plate: url("v2-base-blue.png"); }
+    body { width: 1920px; height: 1080px; background-color: var(--bg); background-image: var(--base-plate); background-size: 1920px 1080px; background-position: 0 0; background-repeat: no-repeat; font-family: 'Inter', Arial, Helvetica, sans-serif; overflow: hidden; position: relative; }
+    [data-composition-id] { position: absolute; inset: 0; width: 1920px; height: 1080px; display: flex; flex-direction: row; overflow: hidden; }
+    [data-composition-id] > * { z-index: 1; }
+    #el-fade { position: absolute; inset: 0; background: #000; opacity: 0; z-index: 99; pointer-events: none; }
+    .sidebar { width: 580px; height: 100%; background: var(--accent); padding: 80px 50px; display: flex; flex-direction: column; justify-content: center; opacity: 0; flex-shrink: 0; }
+    .sidebar .s-title { font-size: 48px; font-weight: 700; color: #fff; line-height: 1.2; margin-bottom: 40px; }
+    .q-list { display: flex; flex-direction: column; gap: 14px; }
+    .q-item { font-size: 16px; color: rgba(255,255,255,0.6); padding: 10px 16px; border-radius: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .q-item.active { color: #fff; background: rgba(255,255,255,0.15); font-weight: 600; }
+    .main { flex: 1; display: flex; align-items: center; justify-content: center; padding: 80px 100px; }
+    .answer-card { background: #fffdfa; border-radius: 20px; padding: 80px; width: 100%; box-shadow: 0 8px 40px rgba(0,0,0,0.06); opacity: 0; position: relative; }
+    .answer-inner { position: relative; }
+    .answer-block { position: absolute; inset: 0; opacity: 0; }
+    .answer-block:first-child { position: relative; opacity: 1; }
+    .q-text { font-size: 36px; font-weight: 700; color: var(--accent); margin-bottom: 30px; line-height: 1.3; }
+    .a-text { font-size: 24px; line-height: 1.7; color: #182026; opacity: 0.88; }
+    .divider { width: 60px; height: 4px; background: var(--accent); border-radius: 2px; margin-bottom: 30px; }
+    .progress-dots { position: absolute; bottom: 50px; right: 120px; display: flex; gap: 10px; }
+    .progress-dot { width: 10px; height: 10px; border-radius: 50%; background: #d8d2c8; }
+  </style>
+</head>
+<body>
+  <div data-composition-id="faqs" data-width="1920" data-height="1080" data-duration="24" data-start="0">
+    <div id="el-fade"></div>
+    <div class="sidebar" id="sidebar">
+      <div class="s-title" id="sidebarTitle"></div>
+      <div class="q-list" id="qList"></div>
+    </div>
+    <div class="main">
+      <div class="answer-card" id="answerCard">
+        <div class="answer-inner" id="answerInner"></div>
+      </div>
+    </div>
+    <div class="progress-dots" id="progressDots"></div>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      var vars = __hyperframes.getVariables();
+      var questions = JSON.parse(vars.questions || '[]');
+      var accentColor = vars.accentColor || '#285f9f';
+      var bgColor = vars.bgColor || '#f5f2ea';
+      var basePlateImage = vars.basePlateImage || 'v2-base-blue.png';
+      var durPerQA = Number(vars.durationPerQA) || 4;
+      document.documentElement.style.setProperty('--accent', accentColor);
+      document.documentElement.style.setProperty('--bg', bgColor);
+      document.documentElement.style.setProperty('--base-plate', 'url("' + basePlateImage + '")');
+      document.getElementById('sidebarTitle').textContent = vars.title || 'Frequently Asked Questions';
+
+      var qList = document.getElementById('qList');
+      var answerInner = document.getElementById('answerInner');
+      var progressDots = document.getElementById('progressDots');
+      var qItemEls = [], answerPanels = [], dotEls = [];
+
+      questions.forEach(function(qa, i) {
+        var item = document.createElement('div');
+        item.className = 'q-item' + (i === 0 ? ' active' : '');
+        item.textContent = qa.q;
+        qList.appendChild(item); qItemEls.push(item);
+
+        var panel = document.createElement('div');
+        panel.innerHTML = '<div class="divider"></div><div class="q-text">' + qa.q + '</div><div class="a-text">' + qa.a + '</div>';
+        if (i === 0) { panel.style.position = 'relative'; panel.style.opacity = '1'; }
+        else { panel.className = 'answer-block'; }
+        answerInner.appendChild(panel); answerPanels.push(panel);
+        if (i !== 0) gsap.set(panel, { opacity: 0 });
+
+        var dot = document.createElement('div');
+        dot.className = 'progress-dot';
+        if (i === 0) dot.style.background = accentColor;
+        progressDots.appendChild(dot); dotEls.push(dot);
+      });
+
+      var TOTAL = questions.length * durPerQA + 1;
+      var tl = gsap.timeline({ paused: true });
+      tl.to('#sidebar', { opacity: 1, x: -30, duration: 0.6, ease: 'power2.out' }, 0);
+      tl.to('#answerCard', { opacity: 1, y: -20, duration: 0.5, ease: 'power2.out' }, 0.3);
+
+      for (var i = 1; i < questions.length; i++) {
+        (function(idx) {
+          var t = idx * durPerQA;
+          var prev = idx - 1;
+          tl.to(answerPanels[prev], { opacity: 0, duration: 0.25 }, t);
+          tl.to(answerPanels[idx], { opacity: 1, duration: 0.4, ease: 'power2.out' }, t + 0.3);
+          tl.to(qItemEls[prev], { color: 'rgba(255,255,255,0.6)', backgroundColor: 'transparent', fontWeight: 'normal', duration: 0.2 }, t);
+          tl.to(qItemEls[idx], { color: '#fff', backgroundColor: 'rgba(255,255,255,0.15)', fontWeight: '600', duration: 0.2 }, t + 0.1);
+          tl.to(dotEls[prev], { backgroundColor: '#d8d2c8', duration: 0.2 }, t);
+          tl.to(dotEls[idx], { backgroundColor: accentColor, duration: 0.2 }, t + 0.1);
+          tl.to('#answerCard', { scale: 0.98, duration: 0.15 }, t + 0.2);
+          tl.to('#answerCard', { scale: 1, duration: 0.5, ease: 'back.out(1.3)' }, t + 0.35);
+        })(i);
+      }
+
+      tl.fromTo('#el-fade', { opacity: 0 }, { opacity: 1, duration: 0.5, ease: 'power2.in' }, TOTAL - 0.5);
+      tl.set('#el-fade', { opacity: 1 }, TOTAL);
+      document.querySelector('[data-composition-id="faqs"]').setAttribute('data-duration', TOTAL);
+      window.__timelines = window.__timelines || {};
+      window.__timelines['faqs'] = tl;
+    </script>
+  </div>
+</body>
+</html>

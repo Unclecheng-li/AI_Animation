@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1080, height=1920" />
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<style>
+/* @brand:start  ——  canonical source: brand/tokens.css · sync with `node tools/brand.mjs`
+   Brand is typography, colour SEMANTICS, stroke language and motion timing.
+   Brand is NOT geometry. Nothing here positions anything. */
+:root {
+  /* ground — near-black with a trace of warm ink, so off-white reads as printed */
+  --ground:      #0C0D0F;
+  --ground-lift: #14161A;   /* the only permitted "panel" value, used sparingly */
+
+  /* ink */
+  --ink:      #EDEAE4;      /* primary. warm off-white, never #FFF */
+  --ink-mid:  #9AA0A6;
+  --ink-dim:  #8B9198;   /* raised from #6E7378: 3.8:1 failed AA on this ground */
+  --ink-ghost:#3A3E42;
+
+  /* structure — hairlines and rules carry the layout, not boxes */
+  --rule:       #23272A;
+  --rule-bright:#3D4348;
+  --hair: 1.5px;
+
+  /* COLOUR IS SEMANTIC. Each of these means one thing for the whole channel. */
+  --authoritative: #C9A227;  /* the value of record — the committed truth */
+  --stale:         #E0533D;  /* derived from a value that has since changed */
+  --lost:          #6A6F74;  /* work that was discarded — 3.6:1, recessive but legible */
+  --boundary:      #4E8C7D;  /* a trust / ownership / tenancy edge */
+  --pressure:      #B4623A;  /* accumulation, backlog, amplification */
+  --counterfactual:#7A8086;  /* the value that SHOULD have existed — expected vs actual */
+
+  /* type — two families, one voice. Values are monospace because they are data. */
+  --font-value: "IBM Plex Mono", ui-monospace, monospace;
+  --font-label: "IBM Plex Sans Condensed", "IBM Plex Sans", system-ui, sans-serif;
+
+  --t-hero:  200px;  /* a number that is the subject of the frame */
+  --t-value:  64px;
+  --t-body:   36px;
+  --t-label:  26px;  /* floor for a phone. nothing smaller ships. */
+  --track-label: 0.18em;
+
+  /* motion personality: fast attack, long settle. nothing bounces, nothing glows. */
+  --e-reveal: power3.out;
+  --e-travel: power2.inOut;
+  --d-reveal: 0.45;
+  --d-travel: 0.9;
+  --d-hold:   0.8;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  overflow: hidden;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-label);
+  /* no border-radius anywhere by default; no box-shadow; no filter: blur/glow */
+}
+
+.label {
+  font-family: var(--font-label);
+  font-size: var(--t-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  font-weight: 500;
+}
+.value { font-family: var(--font-value); font-variant-numeric: tabular-nums; font-weight: 600; }
+.rule  { background: var(--rule); }
+/* @brand:end */
+
+html, body { width: 1080px; height: 1920px; }
+#stage { position: absolute; inset: 0; }
+/* CAMERA — #world is the moved thing. Nothing else knows the camera exists. */
+#world { position: absolute; inset: 0; will-change: transform; }
+
+/* ---------------------------------------------------------------------------
+   SPATIAL SYSTEM — two hairlines, three zones that mean something:
+
+     y <  560     THE ROW        what is stored, and what it used to be
+     560 – 1380   IN FLIGHT      values that have left the row and are being
+                                 computed on. Reads descend on rails; writes
+                                 press back up against the boundary.
+     y > 1380     THE RECKONING  what this cost
+
+   Nothing crosses a boundary invisibly. Left margin 120px throughout.
+   Caption band below y=1574 stays clear.
+--------------------------------------------------------------------------- */
+#boundary { position: absolute; left: 120px; top: 560px;  width: 840px; height: var(--hair);
+            background: var(--rule-bright); transform-origin: left center; }
+#reckon   { position: absolute; left: 120px; top: 1380px; width: 840px; height: var(--hair);
+            background: var(--rule); transform-origin: left center; }
+
+#rowLabel { position: absolute; left: 120px; top: 140px; }
+
+/* --- the row's value: one slot, three successive occupants ---------------- */
+#ledger { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; }
+.lv    { position: absolute; left: 120px; top: 220px; display: flex; align-items: flex-end;
+         gap: 26px; transform-origin: left top; }
+.lv .n { font-family: var(--font-value); font-weight: 600; font-size: var(--t-hero);
+         line-height: 1; letter-spacing: -.02em; color: var(--authoritative); }
+.lv .v { font-family: var(--font-value); font-size: 26px; color: var(--ink-dim); padding-bottom: 18px; }
+
+#supLabel  { position: absolute; left: 120px; top: 482px; }
+#neverRead { position: absolute; left: 812px; top: 482px; color: var(--stale); }
+
+/* --- a read is a rail: the route a copy took out of the row --------------- */
+.read       { position: absolute; width: 13px; }  /* needs a real box: a 0x0 wrapper never counts as visible */
+.read .node { position: absolute; left: -6px; top: -6px; width: 13px; height: 13px; background: var(--ink-mid); }
+.read .rail { position: absolute; left: 0; top: 0; width: var(--hair);
+              background: var(--rule-bright); transform-origin: top center; }
+
+/* --- a value in flight ---------------------------------------------------- */
+.site      { position: absolute; }
+.site .who { position: absolute; top: -74px; left: 0; white-space: nowrap; }
+.roll      { position: relative; height: 112px; }
+.rv        { position: absolute; left: 0; top: 0; font-family: var(--font-value); font-weight: 600;
+             font-size: 96px; line-height: 1; letter-spacing: -.02em; color: var(--ink); }
+.basis     { position: absolute; top: 128px; left: 0; font-family: var(--font-value);
+             font-size: 26px; color: var(--ink-dim); white-space: nowrap; }
+.op        { position: absolute; font-family: var(--font-value); font-size: 48px; color: var(--ink-mid); }
+
+/* --- the reckoning -------------------------------------------------------- */
+.tally        { position: absolute; top: 1456px; display: flex; align-items: flex-end; gap: 20px; }
+.tally .n     { font-family: var(--font-value); font-weight: 600; font-size: 72px; line-height: 1; }
+.tally .k     { position: absolute; top: -48px; left: 0; white-space: nowrap; }
+#should   .n  { color: var(--counterfactual); }
+#lostMark .n  { color: var(--lost); }
+#lostMark .tag{ font-family: var(--font-label); font-size: 26px; letter-spacing: var(--track-label);
+                text-transform: uppercase; color: var(--stale); padding-bottom: 10px; }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="main" data-start="0" data-duration="12.5"
+     data-width="1080" data-height="1920">
+  <div id="stage" class="clip" data-start="0" data-duration="12.5" data-track-index="0">
+  <div id="world">
+
+    <div id="boundary"></div>
+    <div id="reckon"></div>
+    <div id="rowLabel" class="label">inventory &middot; row 4471</div>
+
+    <div id="ledger">
+      <div class="lv" id="ledgerV0"><span class="n">100</span><span class="v">v0</span></div>
+      <div class="lv" id="ev-a_write"><span class="n">90</span><span class="v">v1</span></div>
+      <div class="lv" id="ev-b_write"><span class="n">80</span><span class="v">v2</span></div>
+    </div>
+
+    <div id="supLabel"  class="label">superseded</div>
+    <div id="neverRead" class="label">never read</div>
+
+    <!-- two rails from beneath one figure. that is the whole shot. -->
+    <div class="read" id="ev-a_read" style="left: 170px; top: 560px; height: 140px;">
+      <span class="node"></span><span class="rail" style="height: 140px"></span>
+    </div>
+    <div class="read" id="ev-b_read" style="left: 340px; top: 560px; height: 510px;">
+      <span class="node"></span><span class="rail" style="height: 510px"></span>
+    </div>
+
+    <div class="site" id="copyA" style="left: 120px; top: 580px;">
+      <div class="who label">request a</div>
+      <div class="roll" data-layout-allow-overlap>
+        <div class="rv" id="a-v100">100</div>
+        <div class="rv" id="a-v90">90</div>
+      </div>
+      <div class="basis" id="a-basis">read at v0</div>
+      <div class="op" id="a-op" style="left: 262px; top: 30px;">&minus;10</div>
+    </div>
+
+    <div class="site" id="copyB" style="left: 310px; top: 580px;">
+      <div class="who label">request b</div>
+      <div class="roll" data-layout-allow-overlap>
+        <div class="rv" id="b-v100">100</div>
+        <div class="rv" id="b-v80">80</div>
+      </div>
+      <div class="basis" id="b-basis">read at v0</div>
+      <div class="op" id="b-op" style="left: 262px; top: 30px;">&minus;20</div>
+    </div>
+
+    <div class="tally" id="should"   style="left: 120px;">
+      <span class="k label">should be</span><span class="n">70</span>
+    </div>
+    <div class="tally" id="lostMark" style="left: 560px;">
+      <span class="k label">work discarded</span><span class="n">&minus;10</span><span class="tag">lost</span>
+    </div>
+
+  </div>
+  </div>
+</div>
+
+<script>
+/* Deterministic by construction: every visual state is a tween on a paused
+   timeline, so any seek reconstructs the frame exactly. No rAF, no Date.now, and
+   no textContent mutation from a callback — a callback does not re-fire on seek,
+   so stacked elements plus opacity is the only safe way to change a value. */
+window.__timelines = window.__timelines || {};
+const tl = gsap.timeline({ paused: true });
+const R = 'power3.out', T = 'power2.inOut';
+
+gsap.set(['#ev-a_write', '#ev-b_write', '#ev-a_read', '#ev-b_read', '#supLabel', '#neverRead',
+          '#a-v90', '#b-v80', '#a-op', '#b-op', '#should', '#lostMark',
+          '#copyA', '#copyB', '#copyA .who', '#copyB .who', '#rowLabel'], { opacity: 0 });
+gsap.set(['#boundary', '#reckon'], { scaleX: 0 });
+gsap.set(['#ev-a_read .rail', '#ev-b_read .rail'], { scaleY: 0 });
+
+/* ---- 0.0–1.0  the row, and the frame it lives in ------------------------ */
+tl.to('#boundary', { scaleX: 1, duration: .70, ease: R }, 0.10)
+  .to('#reckon',   { scaleX: 1, duration: .70, ease: R }, 0.30)
+  .to('#rowLabel', { opacity: 1, duration: .40, ease: R }, 0.20)
+  .fromTo('#ledgerV0', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: .55, ease: R }, 0.40);
+
+/* ---- 1.24  A READS ------------------------------------------------------
+   The node on the boundary is the event. The rail is the route out.        */
+tl.to('#ev-a_read', { opacity: 1, duration: .25, ease: R }, 1.24)
+  .to('#ev-a_read .rail', { scaleY: 1, duration: .40, ease: R }, 1.26)
+  .to('#copyA .who', { opacity: 1, duration: .30, ease: R }, 1.52)
+  .to('#copyA', { opacity: 1, duration: .30, ease: 'none' }, 1.60)
+  .to('#copyA', { y: 210, duration: .62, ease: T }, 1.60);
+
+/* ---- 3.15  B READS — a second rail from beneath the same figure --------- */
+tl.to('#ev-b_read', { opacity: 1, duration: .25, ease: R }, 3.15)
+  .to('#ev-b_read .rail', { scaleY: 1, duration: .58, ease: R }, 3.17)
+  .to('#copyB .who', { opacity: 1, duration: .30, ease: R }, 3.55)
+  .to('#copyB', { opacity: 1, duration: .30, ease: 'none' }, 3.80)
+  .to('#copyB', { y: 580, duration: .95, ease: T }, 3.62);
+
+/* 4.6–5.0  THE CENTRAL IMAGE: three figures reading 100, all of them true. */
+
+/* ---- 5.0–5.7  A computes on its own copy -------------------------------- */
+tl.to('#a-op',   { opacity: 1, duration: .30, ease: R }, 5.00)
+  .to('#a-v100', { opacity: 0, y: -36, duration: .42, ease: R }, 5.22)
+  .fromTo('#a-v90', { opacity: 0, y: 36 }, { opacity: 1, y: 0, duration: .42, ease: R }, 5.30)
+  .to('#a-op',   { opacity: 0, duration: .30 }, 5.74);
+
+/* ---- 6.0–6.9  A WRITES: the copy presses up against the boundary --------
+   It never enters the row's slot. Reaching the boundary IS landing.        */
+tl.to('#copyA', { y: 0, duration: .70, ease: T }, 6.02)
+  .to('#copyA .who', { opacity: 0, duration: .28 }, 6.34)
+  .to('#copyA', { opacity: 0, scale: .90, duration: .20, ease: 'power2.in' }, 6.74)
+  /* the old occupant clears the slot SIDEWAYS first, then drops into the
+     superseded run — so two 200px figures are never stacked on each other.
+     The first cut of this shot did stack them and was unreadable.          */
+  .to('#ledgerV0', { x: 400, scale: .28, duration: .26, ease: T }, 6.72)
+  .to('#ledgerV0', { y: 250, duration: .30, ease: T }, 7.00)
+  .to('#ledgerV0 .n', { color: 'var(--lost)', duration: .34 }, 6.72)
+  .to('#ledgerV0 .v', { opacity: 0, duration: .30 }, 7.04)
+  .to('#ev-a_read', { opacity: 0, duration: .45 }, 6.88)
+  .to('#supLabel', { opacity: 1, duration: .35, ease: R }, 7.24)
+  .fromTo('#ev-a_write', { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: .40, ease: R }, 6.98);
+
+/* ---- 7.6  THE CONTRADICTION --------------------------------------------
+   The row reads 90 at v1. B is still holding 100, read at v0. Both figures
+   are on screen and they disagree. Nothing is annotated; it is just true.  */
+tl.to('#b-basis', { color: 'var(--stale)', duration: .45, ease: R }, 7.60)
+  .to('#b-v100',  { color: 'var(--stale)', duration: .45, ease: R }, 7.60);
+
+/* ---- 8.0–8.8  B computes on a value that has already moved -------------- */
+tl.to('#b-op',   { opacity: 1, duration: .30, ease: R }, 7.98)
+  .to('#b-v100', { opacity: 0, y: -36, duration: .42, ease: R }, 8.26)
+  .fromTo('#b-v80', { opacity: 0, y: 36 }, { opacity: 1, y: 0, duration: .42, ease: R }, 8.34)
+  .to('#b-op',   { opacity: 0, duration: .30 }, 8.76);
+
+/* ---- 8.9–10.1  B WRITES over A ----------------------------------------- */
+tl.to('#copyB', { y: 0, duration: .80, ease: T }, 8.92)
+  .to('#copyB .who', { opacity: 0, duration: .28 }, 9.26)
+  .to('#copyB', { opacity: 0, scale: .90, duration: .20, ease: 'power2.in' }, 9.66)
+  .to('#ev-a_write', { x: 580, scale: .28, duration: .26, ease: T }, 9.72)
+  .to('#ev-a_write', { y: 250, duration: .30, ease: T }, 10.00)
+  .to('#ev-a_write .n', { color: 'var(--lost)', duration: .34 }, 9.72)
+  .to('#ev-a_write .v', { opacity: 0, duration: .30 }, 10.04)
+  .to('#ev-b_read', { opacity: 0, duration: .45 }, 9.86)
+  .fromTo('#ev-b_write', { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: .40, ease: R }, 9.98);
+
+/* ---- 10.7  THE LOSS is named -------------------------------------------
+   Both 100 and 90 were superseded. Only one of them was never read by
+   anybody — which is the difference between a version and a loss.          */
+tl.to('#ev-a_write .n', { color: 'var(--stale)', duration: .40, ease: R }, 10.70)
+  .to('#neverRead', { opacity: 1, duration: .38, ease: R }, 10.86)
+  ;
+
+/* ---- 11.1–12.5  the reckoning ------------------------------------------ */
+tl.fromTo('#lostMark', { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: .48, ease: R }, 11.10)
+  .fromTo('#should',   { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: .52, ease: R }, 11.62);
+
+/* ---------------------------------------------------------------------------
+   CAMERA — widen / single_actor_to_concurrency
+
+   The close frame is not chosen by eye. It is the tightest frame that still holds
+   everything belonging to request A — the row label, the ledger figure and its
+   version stamp, A's rail, A's value and A's basis line — with real margin, AND
+   whose bottom edge stays clear of the caption band at y=1574.
+
+     A's content spans world y 140..946 and x 120..535.
+     s = 1.6 is the largest scale where 946*s + y still lands above 1574.
+
+   That last constraint is worth stating: a camera can push content INTO the
+   caption band even though the composition never placed anything there. Zoom is
+   not free of the layout rules; it is subject to them.
+--------------------------------------------------------------------------- */
+gsap.set('#world', { transformOrigin: '0 0' });
+const cam = (px, py, s) => ({ x: 540 - px * s, y: 960 - py * s, scale: s });
+
+const ONE  = cam(337.5, 575, 1.6);   // request A, alone, and no hint of a second
+const BOTH = cam(540, 960, 1.0);     // the base frame: the whole mechanism
+
+gsap.set('#world', ONE);
+
+/* The widen lands just before B reads. It has to: an event the camera is hiding
+   still satisfies appearsBy (opacity is all that assertion sees), so hiding one
+   would be a lie the gate cannot catch. The camera withholds the SPACE, never
+   the event. */
+tl.to('#world', { ...BOTH, duration: 1.0, ease: T }, 3.20);
+
+window.__timelines['main'] = tl;
+</script>
+</body>
+</html>

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html data-composition-id="ai-orb" data-width="720" data-height="1280">
+<head>
+  <meta charset="utf-8">
+  <title>HyperFrames — AI Orb</title>
+  <link rel="stylesheet" href="shared/styles.css">
+  <style>
+    .orb-w { display: flex; flex-direction: column; align-items: center; gap: 24px;
+      will-change: transform, opacity; }
+    .orb-rings { position: relative; width: 280px; height: 280px; }
+    .orb-ring { position: absolute; border-radius: 50%;
+      left: 50%; top: 50%; transform: translate(-50%, -50%);
+      will-change: transform, opacity; }
+    .orb-core { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      width: 100px; height: 100px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      will-change: transform, opacity; }
+    .orb-core-icon { font-size: 44px; }
+    .orb-label { font-size: 24px; font-weight: 700; text-align: center; }
+    .orb-sublabel { font-size: 17px; color: var(--hf-muted); text-align: center; }
+    /* Ambient glow behind the whole orb */
+    .orb-ambient { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      width: 320px; height: 320px; border-radius: 50%;
+      filter: blur(60px); opacity: 0.25; z-index: -1; }
+  </style>
+</head>
+<body>
+  <div class="hf-center orb-w" id="orbW" data-composition-id="ai-orb" data-start="0" data-duration="3.5" data-track-index="0">
+    <div class="orb-rings" id="rings">
+      <div class="orb-ambient" id="ambient"></div>
+      <div class="orb-ring" id="r1"></div>
+      <div class="orb-ring" id="r2"></div>
+      <div class="orb-ring" id="r3"></div>
+      <div class="orb-core" id="core"><span class="orb-core-icon" id="coreIcon"></span></div>
+    </div>
+    <div class="orb-label hf-text-heading" id="label"></div>
+    <div class="orb-sublabel hf-text-body" id="sublabel"></div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script>
+    const v = window.__hyperframes?.getVariables?.() ?? {};
+    const accentColor = v.accentColor ?? '#9f75ff';
+    const yPos = v.yPos ?? 50;
+    const icon = v.icon ?? '🤖';
+    const label = v.label ?? 'AI Processing';
+    const sublabel = v.sublabel ?? 'Analyzing your data';
+
+    document.getElementById('orbW').style.top = yPos + '%';
+    document.getElementById('coreIcon').textContent = icon;
+    document.getElementById('label').textContent = label;
+    document.getElementById('sublabel').textContent = sublabel;
+
+    // Ambient glow
+    const ambient = document.getElementById('ambient');
+    ambient.style.background = accentColor;
+
+    // Core — thick border, solid-ish fill, glow
+    const core = document.getElementById('core');
+    core.style.background = `radial-gradient(circle, ${accentColor}88, ${accentColor}33)`;
+    core.style.border = `2px solid ${accentColor}aa`;
+    core.style.boxShadow = `0 0 30px ${accentColor}55, 0 0 60px ${accentColor}22, inset 0 0 20px ${accentColor}33`;
+
+    // Rings — thick, visible, glowing
+    const rings = [
+      { el: document.getElementById('r1'), size: 150, border: 3, opacity: 0.5, delay: 0 },
+      { el: document.getElementById('r2'), size: 200, border: 2, opacity: 0.35, delay: 0.1 },
+      { el: document.getElementById('r3'), size: 250, border: 2, opacity: 0.25, delay: 0.2 }
+    ];
+    for (const ring of rings) {
+      ring.el.style.width = ring.size + 'px';
+      ring.el.style.height = ring.size + 'px';
+      ring.el.style.border = `${ring.border}px solid ${accentColor}`;
+      ring.el.style.opacity = ring.opacity;
+      ring.el.style.boxShadow = `0 0 12px ${accentColor}44, inset 0 0 12px ${accentColor}22`;
+    }
+
+    const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+    tl.fromTo('#orbW', { opacity: 0, scale: 0.85 }, { opacity: 1, scale: 1, duration: 0.5, ease: 'back.out(1.3)' }, 0);
+    for (const ring of rings) {
+      tl.fromTo(ring.el, { opacity: 0, scale: 0.5 }, { opacity: ring.opacity, scale: 1, duration: 0.4, ease: 'back.out(1.2)' }, 0.1 + ring.delay);
+    }
+    tl.fromTo('#core', { opacity: 0, scale: 0 }, { opacity: 1, scale: 1, duration: 0.4, ease: 'elastic.out(1, 0.5)' }, 0.2);
+    tl.fromTo('#label', { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.3 }, 0.4);
+    tl.fromTo('#sublabel', { opacity: 0 }, { opacity: 1, duration: 0.25 }, 0.5);
+
+    // Continuous ring rotation
+    gsap.to('#r1', { rotation: 360, duration: 8, repeat: -1, ease: 'none', transformOrigin: 'center center' });
+    gsap.to('#r2', { rotation: -360, duration: 12, repeat: -1, ease: 'none', transformOrigin: 'center center' });
+    gsap.to('#r3', { rotation: 360, duration: 16, repeat: -1, ease: 'none', transformOrigin: 'center center' });
+    // Core pulse
+    gsap.to('#core', { scale: 1.1, duration: 1.5, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    // Ambient glow pulse
+    gsap.to('#ambient', { opacity: 0.35, duration: 2, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+
+    const dur = parseFloat(v.timingDuration ?? 3.5);
+    tl.to('#orbW', { opacity: 0, scale: 0.9, duration: 0.3, ease: 'power2.in' }, Math.max(dur - 0.5, 0.6));
+  </script>
+</body>
+</html>
+

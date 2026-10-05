@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="stylesheet" href="../assets/theme.css" />
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+</head>
+<body>
+  <div
+    id="root-hook"
+    data-composition-id="hook"
+    data-start="0"
+    data-duration="5.266"
+    data-width="1920"
+    data-height="1080"
+    data-layout-allow-overflow="true"
+    style="width:1920px;height:1080px;background:var(--c-bg);position:relative;overflow:hidden;font-family:var(--f-zh);"
+  >
+    <!--
+      ==========================================================
+      Hook —— 5.266s 片头（V8a：字体修复 + hero/chips 同步交接）
+      口播节奏（来自 SRT）：
+        0.03-2.87  "不会写代码的人怎么把 Claude Code 用到极致"
+        2.87-5.27  "三个月每天 8 小时 我留下这 19 招"
+
+      V8a 修复：
+        1. hero-cue1 inline 加 background-position: 0% 0（默认深色），删 sweep
+           → 修字体在米色背景上对比度低看不见的 bug
+        2. hero-cue2 节奏前压 + chips 入场延后到 2.55s 同步交接
+           → 修 cue2 "极致" 与 chips 在中央 y=50% 重叠
+
+      时间表：
+        0-0.18    黑屏闪
+        0.20+     scatter 19 招淡入 + 全程朝中央 drift（黑洞引力）
+        0.15-1.0  hero-cue1 "不会写代码的人" char stagger 砸入（深色清晰）
+        1.0-1.65  hero-cue1 hold 0.65s
+        1.65-2.05 hero-cue1 上滑出
+        1.85-2.20 hero-cue2 滑入（duration 0.35s）
+        2.0-2.50  圆环 collapse
+        2.10-2.50 极致 zoom 0.6→1.2（"极致" 在 1.2 scale 定格）
+        2.55      hero 让位 + chips 起飞（同步交接）
+        2.55-3.25 chip-month 飞入；2.65-3.35 chip-hour 飞入
+        3.25-4.0  chips 慢飞 ±15→±10 + halo pulse
+        4.0-5.266 chips 缩淡到 backdrop + cue4-line X/Y 居中
+      ==========================================================
+    -->
+
+    <!-- Wavy turbulence filter -->
+    <svg width="0" height="0" style="position:absolute; pointer-events:none;" aria-hidden="true">
+      <defs>
+        <filter id="wavy-distort-hook" x="-5%" y="-5%" width="110%" height="110%">
+          <feTurbulence type="fractalNoise"
+                        baseFrequency="0.010 0.014"
+                        numOctaves="2"
+                        seed="3"
+                        id="wavy-turb-hook"/>
+          <feDisplacementMap in="SourceGraphic" scale="22"/>
+        </filter>
+      </defs>
+    </svg>
+
+    <!-- 全程纹理三件套 -->
+    <div class="perspective-grid wavy" id="grid"></div>
+    <div class="crosshair-overlay">
+      <span class="crosshair" style="left:340px; top:200px;">+</span>
+      <span class="crosshair" style="right:340px; top:200px;">+</span>
+      <span class="crosshair" style="left:340px; bottom:200px;">+</span>
+      <span class="crosshair" style="right:340px; bottom:200px;">+</span>
+    </div>
+    <div class="vignette-strong" id="vignette"></div>
+
+    <!-- 0-0.18s 黑屏闪 -->
+    <div id="black-flash"
+         style="position:absolute; inset:0; background:#14110a; opacity:1; pointer-events:none; z-index:50;"></div>
+
+    <!-- ===== Brand watermark ===== -->
+    <div id="brand-watermark"
+         style="position:absolute; right:64px; top:60px; opacity:0;
+                display:flex; align-items:center; gap:14px; z-index:40;">
+      <img src="../assets/claude-code-logo.png"
+           style="width:64px; height:64px; border-radius:14px; image-rendering:pixelated;
+                  background:#2A2826;
+                  box-shadow:0 6px 18px rgba(43,38,34,0.18), 0 0 0 1px rgba(43,38,34,0.08);" />
+      <span style="font-family:var(--f-mono); font-size:18px; letter-spacing:0.20em;
+                   text-transform:uppercase; color:var(--c-muted); font-weight:600;">
+        Claude Code Tips
+      </span>
+    </div>
+
+    <!-- ===== Cue 1 + Cue 2 共用 hero-block ===== -->
+    <div id="hero-block" style="position:absolute; inset:0; pointer-events:none;">
+      <!-- Cue 2 圆环 -->
+      <div id="extreme-ring"
+           style="position:absolute; left:50%; top:50%;
+                  margin-top:60px;
+                  width:800px; height:800px;
+                  border:1.5px solid rgba(217, 119, 87, 0.55);
+                  border-radius:50%;
+                  opacity:0; pointer-events:none;"></div>
+
+      <!-- Cue 1: "不会写代码的人"
+           V10: 删 .hc span 包装（避免 inline-block stacking context 让 chrome-text
+                background-clip:text 失效），整体淡入与 cue2 同款 -->
+      <h1 id="hero-cue1" class="chrome-text"
+          style="position:absolute; left:50%; top:50%;
+                 font-family:var(--f-zh); font-weight:900;
+                 font-size:152px; line-height:1.1; letter-spacing:0;
+                 white-space:nowrap; margin:0; padding:8px 0;
+                 background-position: 0% 0;">不会写代码的人</h1>
+
+      <!-- Cue 2: "怎么把 Claude Code 用到 / 极致" -->
+      <div id="hero-cue2"
+           style="position:absolute; left:50%; top:50%; opacity:0;
+                  display:flex; flex-direction:column; align-items:center; gap:18px;
+                  white-space:nowrap;">
+        <div id="hero-cue2-row" style="display:flex; align-items:baseline; gap:28px;">
+          <span id="hero-w-zenmeba" class="chrome-text"
+                style="font-size:120px; font-weight:800; line-height:1; padding:6px 0;">怎么把</span>
+          <span id="hero-w-cc" class="chrome-text-hot"
+                style="font-family:var(--f-en); font-size:120px; font-weight:900;
+                       line-height:1; padding:6px 0; letter-spacing:-0.01em;">Claude Code</span>
+          <span id="hero-w-yongdao" class="chrome-text"
+                style="font-size:120px; font-weight:800; line-height:1; padding:6px 0;">用到</span>
+        </div>
+        <h2 id="hero-extreme" class="chrome-text-hot"
+            style="font-family:var(--f-zh); font-size:240px; font-weight:900;
+                   line-height:0.95; margin:0; padding:8px 0; letter-spacing:0;">极致</h2>
+      </div>
+    </div>
+
+    <!-- ===== chips（V6/V8a：从远端 ±300 飞向中央，同步 hero 让位时刻起飞） ===== -->
+    <div id="chips-block" style="position:absolute; inset:0; pointer-events:none; z-index:20;">
+      <div id="chips-row"
+           style="position:absolute; left:50%; top:50%;
+                  display:flex; align-items:flex-end; gap:56px;">
+        <div class="hook-chip" id="chip-month">
+          <div class="hook-chip-num">3</div>
+          <div class="hook-chip-label">个月</div>
+        </div>
+        <div class="hook-chip" id="chip-hour">
+          <div class="hook-chip-num">8</div>
+          <div class="hook-chip-label">小时 / 天</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== scatter：19 招关键词散布在外圈（黑洞引力外圈恒星） ===== -->
+    <div id="scatter" style="position:absolute; inset:0; pointer-events:none; z-index:10;">
+      <!-- 顶部 6 -->
+      <span class="scatter-word mono" style="left:7%;  top:18%;">/statusline</span>
+      <span class="scatter-word mono" style="left:22%; top:12%;">git commit</span>
+      <span class="scatter-word mono" style="left:41%; top:8%;">/clear</span>
+      <span class="scatter-word mono" style="left:60%; top:12%;">Shift+Tab</span>
+      <span class="scatter-word zh"   style="left:78%; top:16%;">具体需求</span>
+      <span class="scatter-word mono" style="left:92%; top:22%;">/init</span>
+
+      <!-- 左 4 -->
+      <span class="scatter-word zh"   style="left:4%;  top:38%;">主动追问</span>
+      <span class="scatter-word zh"   style="left:18%; top:50%;">顾问视角</span>
+      <span class="scatter-word mono" style="left:6%;  top:64%;">Hooks</span>
+      <span class="scatter-word mono" style="left:14%; top:76%;">ESC × 2</span>
+
+      <!-- 右 4 -->
+      <span class="scatter-word zh"   style="left:82%; top:42%;">Todo 自检</span>
+      <span class="scatter-word zh"   style="left:96%; top:52%;">ESC 止损</span>
+      <span class="scatter-word mono" style="left:84%; top:64%;">worktree</span>
+      <span class="scatter-word mono" style="left:92%; top:76%;">API &gt; MCP</span>
+
+      <!-- 底 5 -->
+      <span class="scatter-word zh"   style="left:12%; top:88%;">📱 远程</span>
+      <span class="scatter-word mono" style="left:28%; top:82%;">⚡ think</span>
+      <span class="scatter-word zh"   style="left:46%; top:92%;">📷 图喂</span>
+      <span class="scatter-word mono" style="left:62%; top:84%;">@teams</span>
+      <span class="scatter-word mono" style="left:78%; top:88%;">/skill</span>
+    </div>
+
+    <!-- ===== Cue 4: "我留下这 19 招" X/Y 完全居中 ===== -->
+    <div id="cue4-line"
+         style="position:absolute; left:50%; top:50%; opacity:0; z-index:30;
+                display:flex; align-items:baseline; gap:24px; white-space:nowrap;">
+      <span id="cue4-w-leave" class="chrome-text"
+            style="font-size:88px; font-weight:800; line-height:1; padding:6px 0;">我留下这</span>
+      <span id="cue4-19" class="chrome-text-hot"
+            style="font-family:var(--f-en); font-size:240px; font-weight:900;
+                   line-height:0.95; padding:6px 0; letter-spacing:-0.02em;">19</span>
+      <span id="cue4-w-zhao" class="chrome-text"
+            style="font-size:88px; font-weight:800; line-height:1; padding:6px 0;">招</span>
+    </div>
+  </div>
+
+  <script>
+    window.__timelines = window.__timelines || {};
+    (function () {
+      const root = '[data-composition-id="hook"]';
+      const tl = gsap.timeline({ paused: true });
+      const SLOT = 5.266;
+
+      // ===== 居中：用 GSAP xPercent/yPercent =====
+      gsap.set(root + ' #hero-cue1',     { xPercent: -50, yPercent: -50 });
+      gsap.set(root + ' #hero-cue2',     { xPercent: -50, yPercent: -50 });
+      gsap.set(root + ' #extreme-ring',  { xPercent: -50, yPercent: -50 });
+      gsap.set(root + ' #chips-row',     { xPercent: -50, yPercent: -50 });
+      gsap.set(root + ' #cue4-line',     { xPercent: -50, yPercent: -50 });
+      gsap.set(root + ' #scatter .scatter-word', { xPercent: -50, yPercent: -50 });
+
+      // ===== chips 默认 opacity:0（自身控制入场） =====
+      gsap.set([root + ' #chip-month', root + ' #chip-hour'], { opacity: 0 });
+
+      // ===== 全程层呼吸 =====
+      tl.to(root + ' #grid', { backgroundPositionY: '+=24px', duration: SLOT, ease: 'none' }, 0);
+
+      const wavyProxy = { freq: 0.010 };
+      tl.to(wavyProxy, {
+        freq: 0.014, duration: 2.6, repeat: 1, yoyo: true, ease: 'sine.inOut',
+        onUpdate: () => {
+          const turb = document.querySelector('#wavy-turb-hook');
+          if (turb) {
+            turb.setAttribute('baseFrequency',
+              wavyProxy.freq.toFixed(4) + ' ' + (wavyProxy.freq * 1.4).toFixed(4));
+          }
+        }
+      }, 0);
+
+      tl.to(root + ' #vignette',
+        { opacity: 0.95, duration: 2.6, repeat: 1, yoyo: true, ease: 'sine.inOut' }, 0);
+
+      tl.to(root + ' .crosshair', {
+        opacity: 0.7, duration: 1.6, repeat: 2, yoyo: true, ease: 'sine.inOut',
+        stagger: { each: 0.15, from: 'random' }
+      }, 0);
+
+      // ===== 0-0.18s 黑屏闪 =====
+      tl.to(root + ' #black-flash',
+        { opacity: 0, duration: 0.18, ease: 'power3.out' },
+        0);
+
+      // ============================================================
+      // scatter 黑洞引力 drift（全程朝中央慢速线性飞）
+      // ============================================================
+      const wordEls = document.querySelectorAll(root + ' #scatter .scatter-word');
+      wordEls.forEach(function (el) {
+        const startX = parseFloat(el.style.left);
+        const startY = parseFloat(el.style.top);
+        const moveX = (50 - startX) * 0.18 * 19.2;
+        const moveY = (50 - startY) * 0.18 * 10.8;
+        tl.to(el, {
+          x: moveX, y: moveY,
+          duration: SLOT - 0.20,
+          ease: 'none'
+        }, 0.20);
+      });
+
+      // scatter 入场（cue1 早期 0.20s, stagger random）
+      tl.fromTo(root + ' #scatter .scatter-word',
+        { opacity: 0, scale: 1.3, filter: 'blur(6px)' },
+        { opacity: 0.30, scale: 1, filter: 'blur(0px)',
+          duration: 0.4, ease: 'power3.out',
+          stagger: { each: 0.04, from: 'random' },
+          immediateRender: false },
+        0.20);
+
+      // ============================================================
+      // Cue 1 (0-1.4s)：「不会写代码的人」整体 fadeIn（cue2 同款）+ hold + 上滑出
+      //   V10: 删 char stagger，改整体 fromTo opacity+y（与 cue2 入场参数一致）
+      //        起步 0s，duration 0.55s，hold 0.45s，上滑出 1.0-1.4s
+      // ============================================================
+      tl.fromTo(root + ' #hero-cue1',
+        { opacity: 0, y: 50 },
+        { opacity: 1, y: 0, duration: 0.55, ease: 'power3.out',
+          immediateRender: false },
+        0);
+
+      tl.fromTo(root + ' #brand-watermark',
+        { opacity: 0, x: 12 },
+        { opacity: 0.78, x: 0, duration: 0.5, ease: 'power3.out',
+          immediateRender: false },
+        0.45);
+
+      // hero-cue1 上滑出 1.0s 起，与 cue2 入场起步同步（ghost reveal 0.4s 重叠）
+      tl.to(root + ' #hero-cue1',
+        { y: -60, opacity: 0.0, duration: 0.4, ease: 'power2.in' },
+        1.0);
+
+      // ============================================================
+      // Cue 2 (1.0-2.55s)：hero-cue2 滑入 + 圆环 + 极致 zoom
+      //   V9: hero-cue2 起步 1.85 → 1.0（与口播"怎么把..."同步），duration 0.55s
+      //       与 hero-cue1（顶部 y=27%）同屏显示 1.0-1.85s，cue1 在 1.85s 起上滑离场
+      //       所有 sub-tween 时间码相应前移
+      // ============================================================
+      tl.fromTo(root + ' #hero-cue2',
+        { opacity: 0, y: 50 },
+        { opacity: 1, y: 0, duration: 0.55, ease: 'power3.out',
+          immediateRender: false },
+        1.0);
+
+      tl.fromTo(root + ' #hero-cue2-row > span',
+        { backgroundPosition: '100% 0' },
+        { backgroundPosition: '0% 0', duration: 0.55, ease: 'power2.out',
+          stagger: 0.04, immediateRender: false },
+        1.15);
+
+      tl.fromTo(root + ' #extreme-ring',
+        { opacity: 0, scale: 1.0 },
+        { opacity: 0.7, scale: 0.4, duration: 0.5, ease: 'power2.out',
+          immediateRender: false },
+        1.95);
+      tl.to(root + ' #extreme-ring',
+        { opacity: 0, scale: 0.34, duration: 0.32, ease: 'power2.in' },
+        2.45);
+
+      // 极致 zoom 0.6 → 1.2（"极致" 在 1.2 scale 定格，无 settle）
+      tl.fromTo(root + ' #hero-extreme',
+        { scale: 0.6, opacity: 0, backgroundPosition: '100% 0' },
+        { scale: 1.2, opacity: 1, backgroundPosition: '0% 0',
+          duration: 0.40, ease: 'power3.out',
+          immediateRender: false },
+        2.05);
+
+      // ============================================================
+      // 同步交接 @ 2.55s：hero 让位 → chips 起飞
+      // ============================================================
+      // hero-block 整体淡出（"极致"在 1.2 scale 状态被淡出）
+      tl.to(root + ' #hero-block',
+        { opacity: 0, y: -30, filter: 'blur(8px)', duration: 0.4, ease: 'power2.in' },
+        2.55);
+
+      // chip-month 飞入：远端 -300 → -15（power3.out, 2.55-3.25s）
+      tl.fromTo(root + ' #chip-month',
+        { x: -300, opacity: 0, scale: 0.6 },
+        { x: -15, opacity: 1, scale: 1, duration: 0.7, ease: 'power3.out',
+          immediateRender: false },
+        2.55);
+      // chip-month 慢飞 hold（3.25-4.0s, 0.75s）
+      tl.to(root + ' #chip-month',
+        { x: -10, duration: 0.75, ease: 'power2.out' },
+        3.25);
+      // chip-month 缩淡到 backdrop（4.0-5.266s）
+      tl.to(root + ' #chip-month',
+        { x: -8, opacity: 0.30, scale: 0.55, duration: 1.266, ease: 'power2.out' },
+        4.0);
+
+      // chip-hour 对称（延后 0.10s）
+      tl.fromTo(root + ' #chip-hour',
+        { x: 300, opacity: 0, scale: 0.6 },
+        { x: 15, opacity: 1, scale: 1, duration: 0.7, ease: 'power3.out',
+          immediateRender: false },
+        2.65);
+      tl.to(root + ' #chip-hour',
+        { x: 10, duration: 0.65, ease: 'power2.out' },
+        3.35);
+      tl.to(root + ' #chip-hour',
+        { x: 8, opacity: 0.30, scale: 0.55, duration: 1.266, ease: 'power2.out' },
+        4.0);
+
+      // chip halo pulse（飞入完成后）
+      tl.fromTo(root + ' #chip-month',
+        { boxShadow:
+            '0 12px 36px rgba(43, 38, 34, 0.10),' +
+            ' inset 0 1px 0 rgba(255,255,255,0.40),' +
+            ' 0 0 0 0 rgba(217, 119, 87, 0.0)' },
+        { boxShadow:
+            '0 12px 36px rgba(43, 38, 34, 0.10),' +
+            ' inset 0 1px 0 rgba(255,255,255,0.40),' +
+            ' 0 0 0 14px rgba(217, 119, 87, 0.32)',
+          duration: 0.4, yoyo: true, repeat: 1, ease: 'power2.out',
+          immediateRender: false },
+        2.95);
+      tl.fromTo(root + ' #chip-hour',
+        { boxShadow:
+            '0 12px 36px rgba(43, 38, 34, 0.10),' +
+            ' inset 0 1px 0 rgba(255,255,255,0.40),' +
+            ' 0 0 0 0 rgba(217, 119, 87, 0.0)' },
+        { boxShadow:
+            '0 12px 36px rgba(43, 38, 34, 0.10),' +
+            ' inset 0 1px 0 rgba(255,255,255,0.40),' +
+            ' 0 0 0 14px rgba(217, 119, 87, 0.32)',
+          duration: 0.4, yoyo: true, repeat: 1, ease: 'power2.out',
+          immediateRender: false },
+        3.05);
+
+      // ============================================================
+      // Cue 4 (4.0-5.266s)：cue4-line X/Y 居中入场 + scatter callback
+      // ============================================================
+      tl.fromTo(root + ' #cue4-line',
+        { opacity: 0, scale: 0.9 },
+        { opacity: 1, scale: 1, duration: 0.6, ease: 'power3.out',
+          immediateRender: false },
+        4.05);
+
+      tl.fromTo([root + ' #cue4-w-leave', root + ' #cue4-w-zhao'],
+        { backgroundPosition: '100% 0' },
+        { backgroundPosition: '0% 0', duration: 0.6, ease: 'power2.out',
+          stagger: 0.05, immediateRender: false },
+        4.15);
+
+      tl.fromTo(root + ' #cue4-19',
+        { scale: 0.6, opacity: 0, backgroundPosition: '100% 0' },
+        { scale: 1, opacity: 1, backgroundPosition: '0% 0',
+          duration: 0.7, ease: 'power3.out',
+          immediateRender: false },
+        4.25);
+
+      // scatter callback：/statusline (1) + ESC 止损 (12)
+      tl.to([
+          root + ' #scatter .scatter-word:nth-child(1)',
+          root + ' #scatter .scatter-word:nth-child(12)'
+        ],
+        { color: '#D97757', opacity: 0.65,
+          duration: 0.30, yoyo: true, repeat: 1, ease: 'power2.inOut' },
+        4.6);
+
+      // ===== Pad timeline =====
+      tl.to({}, { duration: SLOT }, 0);
+      window.__timelines["hook"] = tl;
+    })();
+  </script>
+</body>
+</html>

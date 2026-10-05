@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en" data-composition-variables='[
+  {"id":"title","type":"string","label":"Course Title","default":"Medical Starter Template"},
+  {"id":"tabs","type":"string","label":"Tabs (JSON)","default":"[{\"label\":\"Anatomy\",\"heading\":\"Human Anatomy Basics\",\"body\":\"Understanding the structure of the human body is fundamental to medical education. This module covers the major organ systems, skeletal structure, and the relationship between anatomical form and physiological function.\"},{\"label\":\"Diagnosis\",\"heading\":\"Diagnostic Methods\",\"body\":\"Learn systematic approaches to patient diagnosis. Covers history-taking techniques, physical examination methods, and how to select and interpret common diagnostic tests and imaging studies.\"},{\"label\":\"Treatment\",\"heading\":\"Treatment Planning\",\"body\":\"Develop evidence-based treatment plans tailored to individual patient needs. Explore pharmacological and non-pharmacological interventions, and understand the principles of shared decision-making with patients.\"}]"},
+  {"id":"activeTab","type":"number","label":"Active Tab (0-based)","default":0,"min":0,"max":2},
+  {"id":"primaryColor","type":"color","label":"Primary Color","default":"#285f9f"},
+  {"id":"bgColor","type":"color","label":"Background","default":"#f5f2ea"},
+  {"id":"basePlateImage","type":"string","label":"Base Plate Image","default":"v2-base-blue.png"},
+  {"id":"durationPerTab","type":"number","label":"Seconds per Tab","default":4,"min":2,"max":8,"step":0.5}
+]'>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=block">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root { --primary: #285f9f; --bg: #f5f2ea; --base-plate: url("v2-base-blue.png"); }
+    body { width: 1920px; height: 1080px; background-color: var(--bg); background-image: var(--base-plate); background-size: 1920px 1080px; background-position: 0 0; background-repeat: no-repeat; font-family: 'Inter', Arial, Helvetica, sans-serif; overflow: hidden; position: relative; }
+    [data-composition-id] { position: absolute; inset: 0; width: 1920px; height: 1080px; overflow: hidden; }
+    [data-composition-id] > * { z-index: 1; }
+    #el-fade { position: absolute; inset: 0; background: #000; opacity: 0; z-index: 99; pointer-events: none; }
+    .header { position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: center; padding: 40px 0; gap: 0; opacity: 0; }
+    .tab-btn { padding: 16px 40px; font-size: 18px; font-weight: 600; color: #5a6e78; border-bottom: 3px solid transparent; }
+    .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+    .content-area { position: absolute; top: 100px; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; }
+    .card { background: #fffdfa; border-radius: 24px; padding: 60px 80px; max-width: 1000px; width: 100%; box-shadow: 0 8px 40px rgba(0,0,0,0.05); opacity: 0; }
+    .card-inner { position: relative; }
+    .tab-block { position: absolute; inset: 0; opacity: 0; }
+    .tab-block:first-child { position: relative; opacity: 1; }
+    .c-divider { width: 50px; height: 3px; background: var(--primary); border-radius: 2px; margin-bottom: 20px; }
+    .c-heading { font-size: 36px; font-weight: 700; color: var(--primary); margin-bottom: 20px; }
+    .c-body { font-size: 22px; line-height: 1.7; color: #5a6e78; }
+  </style>
+</head>
+<body>
+  <div data-composition-id="medical-tabs" data-width="1920" data-height="1080" data-duration="12" data-start="0">
+    <div id="el-fade"></div>
+    <div class="header" id="header"></div>
+    <div class="content-area">
+      <div class="card" id="card">
+        <div class="card-inner" id="cardInner"></div>
+      </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      var vars = __hyperframes.getVariables();
+      var tabs = JSON.parse(vars.tabs || '[]');
+      var activeTab = Number(vars.activeTab) || 0;
+      var pc = vars.primaryColor || '#285f9f';
+      var bgColor = vars.bgColor || '#f5f2ea';
+      var basePlateImage = vars.basePlateImage || 'v2-base-blue.png';
+      var dur = Number(vars.durationPerTab) || 4;
+      document.documentElement.style.setProperty('--primary', pc);
+      document.documentElement.style.setProperty('--bg', bgColor);
+      document.documentElement.style.setProperty('--base-plate', 'url("' + basePlateImage + '")');
+
+      var header = document.getElementById('header');
+      var cardInner = document.getElementById('cardInner');
+      var btnEls = [], tabPanels = [];
+
+      tabs.forEach(function(t, i) {
+        var b = document.createElement('div');
+        b.className = 'tab-btn' + (i === activeTab ? ' active' : '');
+        b.textContent = t.label;
+        header.appendChild(b); btnEls.push(b);
+
+        var panel = document.createElement('div');
+        panel.innerHTML = '<div class="c-divider"></div><div class="c-heading">' + t.heading + '</div><div class="c-body">' + t.body + '</div>';
+        if (i === activeTab) { panel.style.position = 'relative'; panel.style.opacity = '1'; }
+        else { panel.className = 'tab-block'; }
+        cardInner.appendChild(panel); tabPanels.push(panel);
+        if (i !== activeTab) gsap.set(panel, { opacity: 0 });
+      });
+
+      var TOTAL = tabs.length * dur + 1;
+      var tl = gsap.timeline({ paused: true });
+      tl.to('#header', { opacity: 1, y: -10, duration: 0.5 }, 0);
+      tl.to('#card', { opacity: 1, y: -20, duration: 0.5, ease: 'power2.out' }, 0.3);
+
+      for (var i = 1; i < tabs.length; i++) {
+        (function(idx) {
+          var t = idx * dur;
+          var prev = idx - 1;
+          tl.to(tabPanels[prev], { opacity: 0, duration: 0.2 }, t);
+          tl.to(tabPanels[idx], { opacity: 1, duration: 0.4, ease: 'power2.out' }, t + 0.25);
+          tl.to(btnEls[prev], { color: '#5a6e78', borderBottomColor: 'transparent', duration: 0.2 }, t);
+          tl.to(btnEls[idx], { color: pc, borderBottomColor: pc, duration: 0.2 }, t + 0.1);
+          tl.to('#card', { scale: 0.97, duration: 0.12 }, t + 0.1);
+          tl.to('#card', { scale: 1, duration: 0.45, ease: 'back.out(1.3)' }, t + 0.22);
+        })(i);
+      }
+
+      tl.fromTo('#el-fade', { opacity: 0 }, { opacity: 1, duration: 0.5, ease: 'power2.in' }, TOTAL - 0.5);
+      tl.set('#el-fade', { opacity: 1 }, TOTAL);
+      document.querySelector('[data-composition-id="medical-tabs"]').setAttribute('data-duration', TOTAL);
+      window.__timelines = window.__timelines || {};
+      window.__timelines['medical-tabs'] = tl;
+    </script>
+  </div>
+</body>
+</html>
