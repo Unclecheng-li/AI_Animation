@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html data-composition-id="sparkline-chart" data-width="720" data-height="1280">
+<head>
+  <meta charset="utf-8">
+  <title>HyperFrames — Sparkline Chart</title>
+  <link rel="stylesheet" href="shared/styles.css">
+  <style>
+    .sc-w { width: min(600px, 62vw); display: flex; flex-direction: column; gap: 12px;
+      will-change: transform, opacity; }
+    .sc-panel { background: rgba(0,0,0,0.45); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px; padding: 20px; backdrop-filter: blur(16px); }
+    .sc-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+    .sc-title { font-size: 16px; font-weight: 700; color: var(--hf-fg); }
+    .sc-trend { font-size: 18px; font-weight: 700; font-family: 'Geist Mono', monospace; }
+    .sc-svg { width: 100%; height: 80px; overflow: visible; }
+    .sc-line { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+    .sc-area { opacity: 0.12; }
+    .sc-dot { r: 4; }
+  </style>
+</head>
+<body>
+  <div class="hf-center sc-w" id="scW" data-composition-id="sparkline-chart" data-start="0" data-duration="3" data-track-index="0">
+    <div class="sc-panel">
+      <div class="sc-header">
+        <div class="sc-title hf-text-heading" id="scTitle"></div>
+        <div class="sc-trend" id="scTrend"></div>
+      </div>
+      <svg class="sc-svg" id="scSvg" viewBox="0 0 560 80" preserveAspectRatio="none">
+        <path class="sc-area" id="scArea"/>
+        <path class="sc-line" id="scLine"/>
+        <circle class="sc-dot" id="scDot"/>
+      </svg>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script>
+    const v = window.__hyperframes?.getVariables?.() ?? {};
+    const accentColor = v.accentColor ?? '#9f75ff';
+    const yPos = v.yPos ?? 50;
+    const data = v.data ?? [30, 45, 35, 60, 55, 70, 65, 80];
+    const trend = v.trend ?? '+12%';
+    const label = v.label ?? 'Trend';
+
+    document.getElementById('scW').style.top = yPos + '%';
+    document.getElementById('scTitle').textContent = label;
+    const trendEl = document.getElementById('scTrend');
+    trendEl.textContent = trend;
+    trendEl.style.color = trend.startsWith('+') ? '#4ade80' : trend.startsWith('-') ? '#fb7185' : accentColor;
+
+    const line = document.getElementById('scLine');
+    const area = document.getElementById('scArea');
+    const dot = document.getElementById('scDot');
+    line.style.stroke = accentColor;
+    line.style.filter = `drop-shadow(0 0 4px ${accentColor})`;
+    area.style.fill = accentColor;
+
+    const max = Math.max(...data);
+    const min = Math.min(...data);
+    const range = max - min || 1;
+    const pad = 10;
+    const w = 560, h = 80;
+
+    const points = data.map((d, i) => ({
+      x: (i / (data.length - 1)) * w,
+      y: pad + (1 - (d - min) / range) * (h - pad * 2)
+    }));
+
+    const linePath = 'M ' + points.map(p => `${p.x} ${p.y}`).join(' L ');
+    const areaPath = linePath + ` L ${w} ${h} L 0 ${h} Z`;
+
+    line.setAttribute('d', linePath);
+    area.setAttribute('d', areaPath);
+
+    const lastPt = points[points.length - 1];
+    dot.setAttribute('cx', lastPt.x);
+    dot.setAttribute('cy', lastPt.y);
+    dot.setAttribute('fill', accentColor);
+
+    const totalLen = line.getTotalLength();
+    line.style.strokeDasharray = totalLen;
+    line.style.strokeDashoffset = totalLen;
+
+    const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+    tl.fromTo('#scW', { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.4, ease: 'back.out(1.2)' }, 0);
+    tl.to(line, { strokeDashoffset: 0, duration: 0.8, ease: 'power2.out' }, 0.1);
+    tl.fromTo('#scDot', { opacity: 0, scale: 0 }, { opacity: 1, scale: 1, duration: 0.3 }, 0.7);
+
+    const dur = parseFloat(v.timingDuration ?? 3);
+    tl.to('#scW', { opacity: 0, y: -12, duration: 0.3, ease: 'power2.in' }, Math.max(dur - 0.5, 0.6));
+  </script>
+</body>
+</html>
+

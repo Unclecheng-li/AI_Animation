@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Plotbeat — Stacked-area Story</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script src="./generated/data.js"></script>
+    <script src="./runtime/plotbeat-styles.js"></script>
+    <style>
+      :root {
+        --bg: #07100f;
+        --panel: #0d1817;
+        --fg: #f4f7f2;
+        --muted: #88928e;
+        --grid: #21312e;
+        --accent: #b8ed50;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { width: 1920px; height: 1080px; margin: 0; overflow: hidden; }
+      body { background: var(--bg); color: var(--fg); font-family: Inter, sans-serif; }
+      #root, .scene, .clip { position: absolute; inset: 0; width: 1920px; height: 1080px; overflow: hidden; }
+
+      .ambient {
+        position: absolute;
+        left: 170px;
+        top: 38px;
+        width: 1320px;
+        height: 900px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(71, 215, 207, 0.11), rgba(7, 16, 15, 0) 67%);
+        filter: blur(18px);
+      }
+
+      header { position: absolute; left: 82px; right: 82px; top: 58px; display: flex; align-items: flex-start; justify-content: space-between; }
+      .eyebrow { color: var(--accent); font-size: 16px; font-weight: 900; letter-spacing: 0.18em; text-transform: uppercase; }
+      h1 { width: 1250px; margin: 9px 0 0; font-size: 62px; font-weight: 900; line-height: 0.98; letter-spacing: -0.045em; }
+      .mode-chip { margin-top: 8px; padding: 12px 17px 11px; border: 1px solid #385049; color: #c7d1cd; font-size: 15px; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; }
+
+      #stack-live-frame { position: absolute; inset: 0; transform-origin: 50% 50%; }
+      #plot-wrap { position: absolute; left: 56px; top: 202px; width: 1350px; height: 720px; overflow: visible; }
+      #stack-chart { width: 1350px; height: 720px; overflow: visible; }
+      .grid-line { stroke: var(--grid); stroke-width: 2; }
+      .grid-label, .date-label { fill: var(--muted); font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+      .area-band { stroke: rgba(7, 16, 15, 0.72); stroke-width: 2; stroke-linejoin: round; }
+      .top-line { fill: none; stroke: rgba(244, 247, 242, 0.76); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+      #live-line { stroke: rgba(244, 247, 242, 0.48); stroke-width: 2; stroke-dasharray: 6 9; }
+      #stack-endpoint-halo { fill: rgba(184, 237, 80, 0.18); }
+      #stack-endpoint { fill: var(--accent); stroke: #07100f; stroke-width: 4; }
+
+      #date-chip { position: absolute; min-width: 125px; padding: 9px 13px 8px; background: var(--accent); color: #07100f; font-size: 18px; font-weight: 900; text-align: center; font-variant-numeric: tabular-nums; transform: translateX(-50%); }
+      #total-readout { position: absolute; display: grid; gap: 3px; transform: translate(-50%, -100%); text-align: center; white-space: nowrap; }
+      #total-readout span { color: #aeb8b4; font-size: 13px; font-weight: 900; letter-spacing: 0.14em; text-transform: uppercase; }
+      #total-readout b { color: var(--fg); font-size: 30px; font-weight: 900; font-variant-numeric: tabular-nums; }
+
+      #mix-panel { position: absolute; left: 1440px; top: 224px; width: 398px; min-height: 644px; padding: 26px 26px 24px; border: 1px solid #243a35; background: rgba(13, 24, 23, 0.82); }
+      .panel-kicker { color: #75827d; font-size: 14px; font-weight: 900; letter-spacing: 0.17em; text-transform: uppercase; }
+      #mix-date { margin-top: 10px; font-size: 38px; font-weight: 900; letter-spacing: -0.04em; }
+      #mix-total { margin-top: 2px; color: var(--accent); font-size: 19px; font-weight: 800; }
+      #mix-list { display: grid; gap: 15px; margin-top: 27px; }
+      .mix-row { display: grid; grid-template-columns: 15px minmax(0, 1fr) auto; align-items: center; column-gap: 11px; }
+      .mix-row i { width: 12px; height: 12px; border-radius: 50%; }
+      .mix-row strong { overflow: hidden; font-size: 20px; font-weight: 850; text-overflow: ellipsis; white-space: nowrap; }
+      .mix-number { text-align: right; font-variant-numeric: tabular-nums; }
+      .mix-number b { display: block; font-size: 19px; font-weight: 900; }
+      .mix-number small { display: block; margin-top: 2px; color: #87948f; font-size: 13px; font-weight: 800; }
+      .mix-track { grid-column: 2 / 4; height: 3px; margin-top: 8px; background: #1e2d2a; }
+      .mix-track span { display: block; width: 0; height: 3px; transform-origin: left center; }
+
+      footer { position: absolute; left: 82px; right: 82px; bottom: 42px; display: flex; align-items: center; justify-content: space-between; color: #75817d; font-size: 16px; font-weight: 700; }
+      .footer-mark { color: var(--accent); font-weight: 900; letter-spacing: 0.14em; text-transform: uppercase; }
+      #finish-chip { position: absolute; right: 82px; bottom: 108px; padding: 10px 14px; border: 1px solid rgba(184, 237, 80, 0.46); color: var(--accent); font-size: 14px; font-weight: 900; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0; }
+
+      #transition-overlay { position: absolute; inset: 0; z-index: 20; pointer-events: none; }
+      .transition-panel { position: absolute; left: 0; width: 1920px; height: 544px; background: var(--bg); }
+      #transition-top { top: 0; }
+      #transition-bottom { bottom: 0; }
+      #transition-seam { position: absolute; left: 250px; top: 539px; width: 1420px; height: 2px; background: linear-gradient(90deg, transparent, var(--accent) 28%, #f4f7f2 50%, var(--accent) 72%, transparent); box-shadow: 0 0 24px rgba(184, 237, 80, 0.42); opacity: 0; }
+    </style>
+  </head>
+  <body>
+    <main id="root" data-composition-id="main" data-start="0" data-duration="18" data-width="1920" data-height="1080">
+      <section id="stack-scene" class="scene clip" data-start="0" data-duration="18" data-track-index="1">
+        <div class="ambient"></div>
+        <div id="stack-live-frame">
+          <header>
+            <div>
+              <div class="eyebrow">Composition over time</div>
+              <h1 id="stack-title">How the total changed — and who moved it</h1>
+            </div>
+            <div id="mode-chip" class="mode-chip">Absolute total</div>
+          </header>
+
+          <div id="plot-wrap" data-layout-allow-overflow>
+            <svg id="stack-chart" viewBox="0 0 1350 720" role="img" aria-label="Animated stacked-area chart">
+              <defs>
+                <clipPath id="area-reveal"><rect id="reveal-rect" x="82" y="24" width="0" height="590"></rect></clipPath>
+              </defs>
+              <g id="grid-layer"></g>
+              <g id="area-layer" clip-path="url(#area-reveal)"></g>
+              <path id="top-line" class="top-line" clip-path="url(#area-reveal)"></path>
+              <line id="live-line" x1="82" x2="82" y1="24" y2="614"></line>
+              <circle id="stack-endpoint-halo" cx="82" cy="614" r="18"></circle>
+              <circle id="stack-endpoint" cx="82" cy="614" r="8"></circle>
+              <g id="date-layer"></g>
+            </svg>
+            <div id="date-chip">Jan 2023</div>
+            <div id="total-readout"><span>Total</span><b>0</b></div>
+          </div>
+
+          <aside id="mix-panel">
+            <div class="panel-kicker">Live composition</div>
+            <div id="mix-date">Jan 2023</div>
+            <div id="mix-total">Total · 0</div>
+            <div id="mix-list"></div>
+          </aside>
+
+          <div id="finish-chip">Composition complete</div>
+          <footer><span id="source-label">Source · Demonstration dataset</span><span class="footer-mark">Plotbeat · For HyperFrames</span></footer>
+        </div>
+      </section>
+
+      <audio id="background-music" src="./assets/audio/upbeat-data-loop.mp3" preload="auto" data-start="0" data-duration="18" data-track-index="2" data-volume="0.56" aria-label="Upbeat electronic background music"></audio>
+
+      <section id="transition-overlay" class="clip" data-start="0" data-duration="18" data-track-index="3" data-layout-ignore>
+        <div id="transition-top" class="transition-panel"></div>
+        <div id="transition-bottom" class="transition-panel"></div>
+        <div id="transition-seam"></div>
+      </section>
+    </main>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      window.PlotbeatStyles.apply(window.HF_VIDEO_SPEC.style);
+
+      const data = window.HF_DATA;
+      const spec = window.HF_VIDEO_SPEC;
+      const series = data.series;
+      const pointCount = series[0].points.length;
+      const percentMode = spec.stackMode === "percent";
+      const chart = { left: 82, top: 24, width: 1198, height: 590 };
+      const svgNs = "http://www.w3.org/2000/svg";
+      const totals = Array.from({ length: pointCount }, (_, pointIndex) =>
+        series.reduce((sum, entry) => sum + entry.points[pointIndex].value, 0));
+      const domainMax = percentMode ? 100 : Math.max(...totals) * 1.08;
+
+      function xFor(index) {
+        return chart.left + (index / Math.max(1, pointCount - 1)) * chart.width;
+      }
+
+      function yFor(value) {
+        return chart.top + chart.height - (value / domainMax) * chart.height;
+      }
+
+      function compact(value) {
+        const absolute = Math.abs(value);
+        if (absolute >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+        if (absolute >= 1000) return `${(value / 1000).toFixed(1)}K`;
+        return value.toFixed(spec.valueDecimals ?? 0);
+      }
+
+      function formattedValue(value) {
+        if (percentMode) return `${value.toFixed(1)}%`;
+        return data.unit ? `${compact(value)} ${data.unit}` : compact(value);
+      }
+
+      function formattedDate(raw) {
+        const [year, month] = String(raw).split("-");
+        const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        return `${months[Math.max(0, Math.min(11, Number(month) - 1))]} ${year}`;
+      }
+
+      function valuesAtPoint(pointIndex) {
+        const raw = series.map((entry) => entry.points[pointIndex].value);
+        if (!percentMode) return raw;
+        const total = raw.reduce((sum, value) => sum + value, 0) || 1;
+        return raw.map((value) => (value / total) * 100);
+      }
+
+      function stacksAtPoint(pointIndex) {
+        const values = valuesAtPoint(pointIndex);
+        let cursor = 0;
+        return values.map((value) => {
+          const bottom = cursor;
+          cursor += value;
+          return { bottom, top: cursor };
+        });
+      }
+
+      const stackTable = Array.from({ length: pointCount }, (_, index) => stacksAtPoint(index));
+
+      function bandPath(seriesIndex) {
+        const top = stackTable.map((stack, pointIndex) => `${xFor(pointIndex)},${yFor(stack[seriesIndex].top)}`);
+        const bottom = stackTable.map((stack, pointIndex) => `${xFor(pointIndex)},${yFor(stack[seriesIndex].bottom)}`).reverse();
+        return `M${top.join(" L")} L${bottom.join(" L")} Z`;
+      }
+
+      function topPath() {
+        const points = stackTable.map((stack, pointIndex) => `${xFor(pointIndex)},${yFor(stack[series.length - 1].top)}`);
+        return `M${points.join(" L")}`;
+      }
+
+      const gridLayer = document.getElementById("grid-layer");
+      for (let index = 0; index <= 4; index += 1) {
+        const fraction = index / 4;
+        const y = chart.top + chart.height - fraction * chart.height;
+        const line = document.createElementNS(svgNs, "line");
+        line.setAttribute("class", "grid-line");
+        line.setAttribute("x1", chart.left);
+        line.setAttribute("x2", chart.left + chart.width);
+        line.setAttribute("y1", y);
+        line.setAttribute("y2", y);
+        gridLayer.appendChild(line);
+        const label = document.createElementNS(svgNs, "text");
+        label.setAttribute("class", "grid-label");
+        label.setAttribute("x", chart.left - 15);
+        label.setAttribute("y", y + 6);
+        label.setAttribute("text-anchor", "end");
+        label.textContent = percentMode ? `${Math.round(fraction * 100)}%` : compact(fraction * domainMax);
+        gridLayer.appendChild(label);
+      }
+
+      const dateLayer = document.getElementById("date-layer");
+      [0, Math.floor((pointCount - 1) / 2), pointCount - 1].forEach((pointIndex) => {
+        const label = document.createElementNS(svgNs, "text");
+        label.setAttribute("class", "date-label");
+        label.setAttribute("x", xFor(pointIndex));
+        label.setAttribute("y", chart.top + chart.height + 38);
+        label.setAttribute("text-anchor", pointIndex === 0 ? "start" : pointIndex === pointCount - 1 ? "end" : "middle");
+        label.textContent = formattedDate(series[0].points[pointIndex].date);
+        dateLayer.appendChild(label);
+      });
+
+      const areaLayer = document.getElementById("area-layer");
+      series.forEach((entry, seriesIndex) => {
+        const path = document.createElementNS(svgNs, "path");
+        path.setAttribute("class", "area-band");
+        path.setAttribute("d", bandPath(seriesIndex));
+        path.setAttribute("fill", entry.color);
+        path.setAttribute("fill-opacity", String(0.83 + seriesIndex * 0.025));
+        areaLayer.appendChild(path);
+      });
+      document.getElementById("top-line").setAttribute("d", topPath());
+
+      const mixRows = series.map((entry) => {
+        const row = document.createElement("div");
+        row.className = "mix-row";
+        const dot = document.createElement("i");
+        dot.style.background = entry.color;
+        const label = document.createElement("strong");
+        label.textContent = entry.label;
+        const number = document.createElement("span");
+        number.className = "mix-number";
+        const primary = document.createElement("b");
+        const secondary = document.createElement("small");
+        number.append(primary, secondary);
+        const track = document.createElement("span");
+        track.className = "mix-track";
+        const fill = document.createElement("span");
+        fill.style.background = entry.color;
+        track.appendChild(fill);
+        row.append(dot, label, number, track);
+        document.getElementById("mix-list").appendChild(row);
+        return { primary, secondary, fill };
+      });
+
+      document.getElementById("stack-title").textContent = data.title;
+      document.getElementById("source-label").textContent = `Source · ${data.source}`;
+      document.getElementById("mode-chip").textContent = percentMode ? "100% composition" : "Absolute total";
+
+      const revealRect = document.getElementById("reveal-rect");
+      const liveLine = document.getElementById("live-line");
+      const endpoint = document.getElementById("stack-endpoint");
+      const endpointHalo = document.getElementById("stack-endpoint-halo");
+      const dateChip = document.getElementById("date-chip");
+      const totalReadout = document.getElementById("total-readout");
+      const totalNumber = totalReadout.querySelector("b");
+
+      function interpolate(progress) {
+        const scaled = progress * (pointCount - 1);
+        const lower = Math.floor(scaled);
+        const upper = Math.min(pointCount - 1, lower + 1);
+        const mix = scaled - lower;
+        const raw = series.map((entry) => entry.points[lower].value + (entry.points[upper].value - entry.points[lower].value) * mix);
+        const rawTotal = raw.reduce((sum, value) => sum + value, 0);
+        const plotted = percentMode && rawTotal ? raw.map((value) => (value / rawTotal) * 100) : raw;
+        return { lower, upper, mix, raw, rawTotal, plotted };
+      }
+
+      function renderProgress(progress) {
+        const safe = Math.max(0, Math.min(1, progress));
+        const current = interpolate(safe);
+        const x = chart.left + chart.width * safe;
+        const plottedTotal = current.plotted.reduce((sum, value) => sum + value, 0);
+        const y = yFor(plottedTotal);
+        const date = formattedDate(series[0].points[current.mix < 0.5 ? current.lower : current.upper].date);
+
+        revealRect.setAttribute("width", Math.max(1, chart.width * safe));
+        liveLine.setAttribute("x1", x);
+        liveLine.setAttribute("x2", x);
+        endpoint.setAttribute("cx", x);
+        endpoint.setAttribute("cy", y);
+        endpointHalo.setAttribute("cx", x);
+        endpointHalo.setAttribute("cy", y);
+        dateChip.style.left = `${x}px`;
+        dateChip.style.top = `${chart.top + chart.height + 56}px`;
+        dateChip.textContent = date;
+        totalReadout.style.left = `${Math.max(chart.left + 126, x)}px`;
+        totalReadout.style.top = `${Math.max(chart.top + 74, y - 22)}px`;
+        totalNumber.textContent = percentMode ? "100%" : formattedValue(current.rawTotal);
+        document.getElementById("mix-date").textContent = date;
+        document.getElementById("mix-total").textContent = percentMode ? `Total · ${formattedValue(current.rawTotal)}` : `Total · ${formattedValue(current.rawTotal)}`;
+
+        current.raw.forEach((rawValue, index) => {
+          const share = current.rawTotal ? (rawValue / current.rawTotal) * 100 : 0;
+          mixRows[index].primary.textContent = percentMode ? `${share.toFixed(1)}%` : formattedValue(rawValue);
+          mixRows[index].secondary.textContent = `${share.toFixed(1)}% of total`;
+          mixRows[index].fill.style.transform = `scaleX(${Math.max(0.02, share / 100)})`;
+        });
+      }
+
+      renderProgress(0);
+
+      const duration = Number(document.getElementById("root").dataset.duration);
+      const driver = { progress: 0 };
+      const backgroundMusic = document.getElementById("background-music");
+      const tl = gsap.timeline({ paused: true });
+
+      tl.set("#stack-live-frame", { opacity: 1, scale: 1 }, 0);
+      tl.set("#transition-top, #transition-bottom", { yPercent: 0 }, 0);
+      tl.set("#transition-seam", { opacity: 0, scaleX: 0.35 }, 0);
+      tl.to("#transition-seam", { opacity: 1, scaleX: 1, duration: 0.34, ease: "power2.out" }, 0.12);
+      tl.to("#transition-top", { yPercent: -100, duration: 0.78, ease: "power3.inOut" }, 0.34);
+      tl.to("#transition-bottom", { yPercent: 100, duration: 0.78, ease: "power3.inOut" }, 0.34);
+      tl.to("#transition-seam", { opacity: 0, duration: 0.24, ease: "power2.out" }, 0.62);
+      tl.fromTo("header", { y: 34, opacity: 0 }, { y: 0, opacity: 1, duration: 0.72, ease: "power3.out" }, 0.78);
+      tl.fromTo("#plot-wrap", { y: 28 }, { y: 0, duration: 0.74, ease: "power3.out" }, 0.9);
+      tl.fromTo("#mix-panel", { x: 38, opacity: 0 }, { x: 0, opacity: 1, duration: 0.72, ease: "power3.out" }, 0.98);
+      tl.to(driver, { progress: 1, duration: 12.6, ease: "none", onUpdate: () => renderProgress(driver.progress) }, 1.22);
+      tl.fromTo("#finish-chip", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 14.05);
+      tl.to("#stack-endpoint-halo", { attr: { r: 27 }, opacity: 0.38, duration: 0.45, repeat: 1, yoyo: true, ease: "power2.inOut" }, 14.05);
+      tl.to("#stack-live-frame", { scale: 0.992, duration: 0.7, ease: "power2.inOut" }, 16.7);
+      tl.set("#transition-seam", { opacity: 0, scaleX: 0.4 }, 16.82);
+      tl.to("#transition-top", { yPercent: 0, duration: 0.82, ease: "power3.inOut" }, 17.02);
+      tl.to("#transition-bottom", { yPercent: 0, duration: 0.82, ease: "power3.inOut" }, 17.02);
+      tl.to("#transition-seam", { opacity: 1, scaleX: 1, duration: 0.33, ease: "power2.out" }, 17.42);
+      tl.fromTo(backgroundMusic, { volume: 0 }, { volume: 0.56, duration: 0.8, ease: "power2.out" }, 0);
+      tl.to(backgroundMusic, { volume: 0, duration: 1.15, ease: "power2.inOut" }, Math.max(0, duration - 1.15));
+      tl.seek(0);
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

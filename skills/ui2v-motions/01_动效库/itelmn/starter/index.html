@@ -1,0 +1,94 @@
+<!doctype html>
+<!--
+	Root composition of the starter film (HyperFrames: HTML + GSAP rendered to MP4).
+
+	This file owns three things and nothing else:
+	  1. the load order of the scripts (gsap, vo-data, plan, engine, ui, scenes),
+	  2. the cut list, window.SCENES = [[sceneId, start], ...] (times come from PLAN, never typed here),
+	  3. the build: run every scene builder, add captions and grain, then E.mount().
+	Motion lives in the scene files, timing in plan.js, look in assets/css. See README.md.
+
+	data-duration on #root must equal PLAN.duration (E.mount warns if it drifts). HyperFrames reads it
+	before any script runs, so it has to be a literal here.
+-->
+<html lang="en" data-resolution="landscape">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=1920, height=1080" />
+		<title>Acme launch film</title>
+		<style>
+			/* Fonts are bundled in assets/fonts (SIL Open Font License, see OFL-*.txt) so a render never
+			   touches the network and every machine draws the same glyphs. font-display: block means a
+			   frame is never captured in a fallback font while the real one is still loading. */
+			@font-face {
+				font-family: 'Archivo';
+				src: url('assets/fonts/archivo-variable.woff2') format('woff2');
+				font-weight: 100 900;
+				font-stretch: 62% 125%;
+				font-display: block;
+			}
+			@font-face {
+				font-family: 'Inter';
+				src: url('assets/fonts/inter-variable.woff2') format('woff2');
+				font-weight: 100 900;
+				font-display: block;
+			}
+		</style>
+		<link rel="stylesheet" href="assets/css/base.css" />
+		<link rel="stylesheet" href="assets/css/ui.css" />
+		<link rel="stylesheet" href="assets/css/s1-hook.css" />
+		<script src="assets/vendor/gsap.min.js"></script>
+		<script src="assets/js/vo-data.js"></script>
+		<script src="assets/js/plan.js"></script>
+		<script src="assets/js/engine.js"></script>
+		<script src="assets/js/ui.js"></script>
+		<script src="assets/js/s1-hook.js"></script>
+		<script src="assets/js/s2-product.js"></script>
+	</head>
+	<body>
+		<div id="root" data-composition-id="main" data-start="0" data-duration="9.6" data-width="1920" data-height="1080">
+			<!-- one element per entry in window.SCENES; the engine shows exactly one per frame -->
+			<div id="s1" class="scene"></div>
+			<div id="s2" class="scene"></div>
+		</div>
+		<script>
+			(function () {
+				const PLAN = window.PLAN;
+				const VOICE = PLAN.voice;
+				const root = document.getElementById('root');
+
+				// The cut list. s2 starts on the music hit: cut on the score, not on a round number.
+				window.SCENES = [
+					['s1', 0],
+					['s2', PLAN.music.hit]
+				];
+
+				// Build every scene onto the one timeline (order does not matter: all times are absolute).
+				[window.buildHook, window.buildProduct].forEach((build) => build(E, VOICE));
+
+				// Captions for the lines marked cap: true in plan.js (the hook's words are already on screen).
+				E.captions(
+					root,
+					VOICE,
+					PLAN.vo.filter((line) => line[2] && line[2].cap)
+				);
+
+				// Grain: boils on the pose grid while actors move on twos, then runs on ones, lighter,
+				// once motion turns smooth. [start, end, opacity, onOnes]
+				const smooth = E.smoothFrom();
+				E.grain(root, [
+					[0, smooth, 0.13, false],
+					[smooth, PLAN.duration + 1, 0.09, true]
+				]);
+
+				// Seals the timeline at PLAN.duration, exports #film-data for the mixer, draws frame 0.
+				E.mount(root);
+				// Register only after the build is complete (the key must match data-composition-id).
+				// HyperFrames creates window.__timelines itself; the fallback keeps the page working when
+				// it is opened in a plain browser (render.ts reads #film-data that way).
+				window.__timelines = window.__timelines || {};
+				window.__timelines['main'] = E.tl;
+			})();
+		</script>
+	</body>
+</html>

@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=720, height=1280" />
+    <title>SleepRadar — Contact-free vitals</title>
+    <script src="/assets/gsap.min.js"></script>
+    <style>
+      @font-face {
+        font-family: "Inter";
+        src: url("/assets/inter-latin-wght-normal.woff2") format("woff2-variations");
+        font-style: normal;
+        font-weight: 100 900;
+        font-display: block;
+      }
+
+      :root {
+        --sr-bg: #101112;
+        --sr-surface: #1b1c1e;
+        --sr-border: #2b2d31;
+        --sr-text: #e8e8ea;
+        --sr-muted: #9a9da3;
+        --sr-blue: #5aa2ff;
+        --sr-blue-deep: #2758d8;
+        --sr-heart: #ff4d57;
+        --sr-estimate: #f5a623;
+        --sr-unknown: #747982;
+      }
+
+      * { box-sizing: border-box; }
+
+      html,
+      body {
+        width: 720px;
+        height: 1280px;
+        margin: 0;
+        overflow: hidden;
+        background: #101112;
+      }
+
+      body { font-family: Inter, sans-serif; }
+
+      #stage,
+      #vitals-clip {
+        position: relative;
+        width: 720px;
+        height: 1280px;
+        overflow: hidden;
+      }
+
+      .frame-bg {
+        position: absolute;
+        inset: 0;
+        background: var(--sr-bg);
+      }
+
+      .scene-content {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        color: var(--sr-text);
+      }
+
+      #hook {
+        position: absolute;
+        top: 118px;
+        left: 56px;
+        width: 608px;
+        margin: 0;
+        color: var(--sr-text);
+        font-size: 56px;
+        font-weight: 650;
+        line-height: 1.04;
+        letter-spacing: 0;
+        text-align: center;
+      }
+
+      #hook span { display: block; }
+      #hook .accent {
+        margin-top: 6px;
+        color: var(--sr-blue);
+        letter-spacing: -1.25px;
+        white-space: nowrap;
+      }
+
+      #hero {
+        position: absolute;
+        top: 336px;
+        left: 56px;
+        width: 608px;
+        height: 650px;
+      }
+
+      #mark-shell {
+        position: absolute;
+        top: 0;
+        left: 224px;
+        width: 160px;
+        height: 160px;
+        opacity: 0.48;
+        transform-origin: 50% 50%;
+        will-change: transform, opacity;
+      }
+
+      #mark-shell img {
+        position: absolute;
+        top: 16px;
+        left: 16px;
+        width: 128px;
+        height: 128px;
+        display: block;
+      }
+
+      .pulse-ring {
+        position: absolute;
+        inset: 12px;
+        border: 2px solid var(--sr-blue);
+        border-radius: 50%;
+        opacity: 0;
+        transform: scale(0.55);
+        transform-origin: 50% 50%;
+        will-change: transform, opacity;
+      }
+
+      .card-stack {
+        position: absolute;
+        top: 210px;
+        left: 0;
+        width: 608px;
+        display: grid;
+        gap: 24px;
+      }
+
+      .sensor-card {
+        width: 608px;
+        height: 126px;
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        padding: 0 24px;
+        border: 1px solid var(--sr-border);
+        border-radius: 14px;
+        background: var(--sr-surface);
+        color: var(--sr-text);
+        transform-origin: 50% 50%;
+        will-change: transform, opacity, border-color;
+      }
+
+      .signal-rail {
+        width: 6px;
+        height: 54px;
+        flex: 0 0 auto;
+        border-radius: 3px;
+        background: var(--sr-unknown);
+      }
+
+      .card-copy {
+        min-width: 0;
+        display: grid;
+        gap: 5px;
+      }
+
+      .card-context {
+        color: var(--sr-muted);
+        font-size: 13px;
+        font-weight: 500;
+        line-height: 1;
+      }
+
+      .card-label {
+        font-size: 25px;
+        font-weight: 650;
+        line-height: 1;
+      }
+
+      .card-meta {
+        color: var(--sr-muted);
+        font-size: 16px;
+        font-weight: 500;
+        line-height: 1;
+      }
+
+      .status-chip {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 10px 13px;
+        border: 1px solid var(--sr-border);
+        border-radius: 999px;
+        color: var(--sr-muted);
+        font-size: 15px;
+        font-weight: 650;
+        line-height: 1;
+      }
+
+      .status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--sr-unknown);
+        transform-origin: 50% 50%;
+        will-change: transform;
+      }
+
+      #unknown-heart,
+      #unknown-breathing { opacity: 0.64; }
+
+      #payoff { opacity: 0; }
+      #active-breathing { opacity: 0; }
+
+      #active-heart .signal-rail,
+      #active-heart .status-dot { background: var(--sr-heart); }
+
+      #active-heart .card-meta,
+      #active-heart .status-chip { color: var(--sr-heart); }
+
+      #active-breathing .signal-rail,
+      #active-breathing .status-dot { background: var(--sr-blue); }
+
+      #active-breathing .card-meta,
+      #active-breathing .status-chip { color: var(--sr-blue); }
+    </style>
+  </head>
+  <body>
+    <div id="stage" data-composition-id="sleepradar-contact-free-vitals" data-start="0" data-duration="6" data-fps="30" data-width="720" data-height="1280">
+      <div id="vitals-clip" class="clip" data-start="0" data-duration="6" data-track-index="0">
+        <div class="frame-bg" aria-hidden="true"></div>
+        <div class="scene-content">
+          <h1 id="hook">
+            <span>Heart + breathing.</span>
+            <span class="accent">Measured contact-free.</span>
+          </h1>
+
+          <div id="hero" aria-label="SleepRadar mark and two Home Assistant sensor cards">
+            <div id="mark-shell">
+              <div id="pulse-one" class="pulse-ring" aria-hidden="true"></div>
+              <div id="pulse-two" class="pulse-ring" aria-hidden="true"></div>
+              <div id="pulse-three" class="pulse-ring" aria-hidden="true"></div>
+              <img src="/assets/sleepradar-mark.svg" alt="SleepRadar" />
+            </div>
+
+            <div id="unknown-cards" class="card-stack" aria-label="Unknown sensor states">
+              <div id="unknown-heart" class="sensor-card" data-layout-allow-overlap data-layout-allow-occlusion>
+                <span class="signal-rail" aria-hidden="true"></span>
+                <div class="card-copy">
+                  <div class="card-context">Home Assistant sensor</div>
+                  <div class="card-label">Heart rate</div>
+                  <div class="card-meta">bpm</div>
+                </div>
+                <div class="status-chip"><span class="status-dot" aria-hidden="true"></span>unknown</div>
+              </div>
+              <div id="unknown-breathing" class="sensor-card" data-layout-allow-overlap data-layout-allow-occlusion>
+                <span class="signal-rail" aria-hidden="true"></span>
+                <div class="card-copy">
+                  <div class="card-context">Home Assistant sensor</div>
+                  <div class="card-label">Breathing</div>
+                  <div class="card-meta">br/min</div>
+                </div>
+                <div class="status-chip"><span class="status-dot" aria-hidden="true"></span>unknown</div>
+              </div>
+            </div>
+
+            <div id="payoff" class="card-stack" aria-label="Heart rate and breathing measured contact-free">
+              <div id="active-heart" class="sensor-card" data-layout-allow-overlap data-layout-allow-occlusion>
+                <span class="signal-rail" aria-hidden="true"></span>
+                <div class="card-copy">
+                  <div class="card-context">Home Assistant sensor</div>
+                  <div class="card-label">Heart rate</div>
+                  <div class="card-meta">bpm</div>
+                </div>
+                <div class="status-chip"><span id="heart-dot" class="status-dot" aria-hidden="true"></span>measured</div>
+              </div>
+              <div id="active-breathing" class="sensor-card" data-layout-allow-overlap data-layout-allow-occlusion>
+                <span class="signal-rail" aria-hidden="true"></span>
+                <div class="card-copy">
+                  <div class="card-context">Home Assistant sensor</div>
+                  <div class="card-label">Breathing</div>
+                  <div class="card-meta">br/min</div>
+                </div>
+                <div class="status-chip"><span id="breathing-dot" class="status-dot" aria-hidden="true"></span>measured</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const slug = "sleepradar-contact-free-vitals";
+      const tl = gsap.timeline({ paused: true });
+
+      const pulse = (selector, start) => {
+        tl.fromTo(selector, { scale: 0.55, opacity: 0 }, { scale: 1, opacity: 0.38, duration: 0.16, ease: "power2.out" }, start);
+        tl.to(selector, { scale: 2.15, opacity: 0, duration: 0.68, ease: "power2.out" }, start + 0.16);
+      };
+
+      tl.addLabel("activate", 0.8);
+      tl.fromTo("#mark-shell", { scale: 0.94, opacity: 0.48 }, { scale: 1, opacity: 1, duration: 0.55, ease: "power2.out" }, "activate");
+      pulse("#pulse-one", 0.8);
+      pulse("#pulse-two", 0.98);
+      pulse("#pulse-three", 1.16);
+
+      tl.fromTo("#payoff", { opacity: 0 }, { opacity: 1, duration: 0.34, ease: "power2.out" }, 1.08);
+      tl.to("#unknown-heart", { y: -8, opacity: 0, duration: 0.46, ease: "power2.inOut" }, 1.08);
+      tl.fromTo("#active-heart", { y: 8, scale: 0.985 }, { y: 0, scale: 1, borderColor: "#ff4d57", duration: 0.58, ease: "power3.out" }, 1.08);
+      tl.to("#heart-dot", { scale: 1.18, duration: 0.18, ease: "power2.out" }, 1.62);
+      tl.to("#heart-dot", { scale: 1, duration: 0.28, ease: "power2.inOut" }, 1.8);
+
+      tl.to("#unknown-breathing", { y: -8, opacity: 0, duration: 0.5, ease: "power2.inOut" }, 1.75);
+      tl.fromTo("#active-breathing", { y: 8, scale: 0.985, opacity: 0 }, { y: 0, scale: 1, opacity: 1, borderColor: "#5aa2ff", duration: 0.72, ease: "power3.out" }, 1.75);
+      tl.to("#breathing-dot", { scale: 1.18, duration: 0.24, ease: "power2.out" }, 2.47);
+      tl.to("#breathing-dot", { scale: 1, duration: 0.29, ease: "power2.inOut" }, 2.71);
+
+      tl.addLabel("return", 5.25);
+      tl.to("#active-breathing", { y: 8, scale: 0.985, opacity: 0, borderColor: "#2b2d31", duration: 0.24, ease: "power2.in" }, "return");
+      tl.to("#unknown-breathing", { y: 0, opacity: 0.64, duration: 0.24, ease: "power2.out" }, "return");
+      tl.to("#active-heart", { y: 8, scale: 0.985, borderColor: "#2b2d31", duration: 0.24, ease: "power2.in" }, 5.48);
+      tl.to("#unknown-heart", { y: 0, opacity: 0.64, duration: 0.24, ease: "power2.out" }, 5.48);
+      tl.to("#payoff", { opacity: 0, duration: 0.17, ease: "power1.in" }, 5.65);
+      tl.to("#mark-shell", { scale: 0.94, opacity: 0.48, duration: 0.3, ease: "power2.inOut" }, 5.55);
+
+      tl.set(["#pulse-one", "#pulse-two", "#pulse-three"], { scale: 0.55, opacity: 0 }, 5.9);
+      tl.set("#mark-shell", { scale: 0.94, opacity: 0.48 }, 5.9);
+      tl.set("#payoff", { opacity: 0 }, 5.9);
+      tl.set("#active-heart", { y: 8, scale: 0.985, borderColor: "#2b2d31" }, 5.9);
+      tl.set("#active-breathing", { y: 8, scale: 0.985, opacity: 0, borderColor: "#2b2d31" }, 5.9);
+      tl.set(["#heart-dot", "#breathing-dot"], { scale: 1 }, 5.9);
+      tl.set(["#unknown-heart", "#unknown-breathing"], { y: 0, opacity: 0.64 }, 5.9);
+
+      window.__timelines[slug] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

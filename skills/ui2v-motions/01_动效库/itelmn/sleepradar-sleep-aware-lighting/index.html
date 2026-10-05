@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=720, height=1280" />
+    <title>SleepRadar — Sleep-aware lighting</title>
+    <script src="/assets/gsap.min.js"></script>
+    <style>
+      @font-face {
+        font-family: "Inter";
+        src: url("/assets/inter-latin-wght-normal.woff2") format("woff2-variations");
+        font-style: normal;
+        font-weight: 100 900;
+        font-display: block;
+      }
+
+      :root {
+        --sr-bg: #101112;
+        --sr-surface: #1b1c1e;
+        --sr-border: #2b2d31;
+        --sr-text: #e8e8ea;
+        --sr-muted: #9a9da3;
+        --sr-blue: #5aa2ff;
+        --sr-blue-dark: #2758d8;
+        --sr-heart: #ff4d57;
+        --sr-estimate: #f5a623;
+        --sr-unknown: #747982;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 720px;
+        height: 1280px;
+        margin: 0;
+        overflow: hidden;
+        background: #000;
+      }
+
+      body {
+        font-family: Inter, sans-serif;
+      }
+
+      #stage,
+      #lighting-clip {
+        position: relative;
+        width: 720px;
+        height: 1280px;
+        overflow: hidden;
+      }
+
+      #stage {
+        isolation: isolate;
+      }
+
+      .frame-bg {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        background: var(--sr-bg);
+      }
+
+      #scene {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        height: 100%;
+        color: var(--sr-text);
+      }
+
+      #hook {
+        position: absolute;
+        top: 118px;
+        left: 56px;
+        width: 608px;
+        margin: 0;
+        color: var(--sr-text);
+        font-size: 56px;
+        font-weight: 650;
+        line-height: 1.04;
+        letter-spacing: 0;
+        text-align: center;
+      }
+
+      #hook span {
+        display: block;
+      }
+
+      #hook .accent {
+        margin-top: 6px;
+        color: var(--sr-blue);
+      }
+
+      #chain {
+        position: absolute;
+        top: 350px;
+        left: 56px;
+        width: 608px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .node {
+        position: relative;
+        width: 608px;
+        height: 104px;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 0 24px;
+        border: 1px solid var(--sr-border);
+        border-radius: 14px;
+        background: var(--sr-surface);
+        transform-origin: 50% 50%;
+        will-change: transform, background-color, border-color;
+      }
+
+      .status-dot {
+        flex: 0 0 auto;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--sr-unknown);
+        transform-origin: 50% 50%;
+        will-change: transform, background-color;
+      }
+
+      .node-copy {
+        min-width: 0;
+        flex: 1;
+      }
+
+      .eyebrow {
+        margin-bottom: 7px;
+        color: var(--sr-muted);
+        font-size: 13px;
+        font-weight: 650;
+        line-height: 1;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        will-change: color;
+      }
+
+      .node-main {
+        min-width: 0;
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 18px;
+        color: var(--sr-text);
+        font-size: 24px;
+        font-weight: 650;
+        line-height: 1.05;
+        white-space: nowrap;
+      }
+
+      .node-state {
+        flex: 0 0 auto;
+        color: var(--sr-muted);
+        font-size: 21px;
+        font-weight: 600;
+        will-change: color;
+      }
+
+      .connector {
+        position: relative;
+        width: 2px;
+        height: 26px;
+        overflow: hidden;
+        background: var(--sr-border);
+      }
+
+      .flow-fill {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        background: var(--sr-blue);
+        opacity: 0;
+        transform-origin: top center;
+        will-change: transform, opacity;
+      }
+
+      .state-slot {
+        position: relative;
+        flex: 0 0 82px;
+        width: 82px;
+        height: 28px;
+      }
+
+      .state-slot span {
+        position: absolute;
+        top: 0;
+        right: 0;
+        display: block;
+        transform-origin: 100% 50%;
+        will-change: transform, opacity, color;
+      }
+
+      #output-dash {
+        color: var(--sr-muted);
+        opacity: 1;
+      }
+
+      #payoff-20 {
+        color: var(--sr-blue);
+        opacity: 0;
+      }
+
+      #example-note {
+        position: absolute;
+        top: 888px;
+        left: 56px;
+        width: 608px;
+        margin: 0;
+        color: var(--sr-muted);
+        font-size: 17px;
+        font-weight: 500;
+        line-height: 1.2;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="stage"
+      data-composition-id="sleepradar-sleep-aware-lighting"
+      data-start="0"
+      data-duration="6"
+      data-fps="30"
+      data-width="720"
+      data-height="1280"
+    >
+      <div
+        id="lighting-clip"
+        class="clip"
+        data-start="0"
+        data-duration="6"
+        data-track-index="0"
+      >
+        <div class="frame-bg" aria-hidden="true"></div>
+        <main id="scene">
+          <h1 id="hook">
+            <span>Asleep?</span>
+            <span class="accent">Lights cap at 20%.</span>
+          </h1>
+
+          <section id="chain" aria-label="Optional Home Assistant comfort automation">
+            <div id="node-trigger" class="node">
+              <span id="dot-trigger" class="status-dot" aria-hidden="true"></span>
+              <div class="node-copy">
+                <div class="eyebrow">Trigger</div>
+                <div class="node-main">
+                  <span>Bedroom light</span>
+                  <span id="trigger-state" class="node-state">· on</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="connector" aria-hidden="true">
+              <span id="flow-one" class="flow-fill"></span>
+            </div>
+
+            <div id="node-condition" class="node">
+              <span id="dot-condition" class="status-dot" aria-hidden="true"></span>
+              <div class="node-copy">
+                <div class="eyebrow">Condition</div>
+                <div class="node-main">
+                  <span>FP2 Asleep</span>
+                  <span id="condition-state" class="node-state">· on</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="connector" aria-hidden="true">
+              <span id="flow-two" class="flow-fill"></span>
+            </div>
+
+            <div id="node-automation" class="node">
+              <span id="dot-automation" class="status-dot" aria-hidden="true"></span>
+              <div class="node-copy">
+                <div id="automation-qualifier" class="eyebrow">comfort automation</div>
+                <div class="node-main">
+                  <span>Cap light brightness</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="connector" aria-hidden="true">
+              <span id="flow-three" class="flow-fill"></span>
+            </div>
+
+            <div id="node-output" class="node">
+              <span id="dot-output" class="status-dot" aria-hidden="true"></span>
+              <div class="node-copy">
+                <div class="eyebrow">Response</div>
+                <div class="node-main">
+                  <span>Brightness ·</span>
+                  <span class="state-slot" aria-label="Brightness state" data-layout-allow-overlap>
+                    <span id="output-dash">—</span>
+                    <span id="payoff-20">20%</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <p id="example-note">Optional Home Assistant example</p>
+        </main>
+      </div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+
+      const tl = gsap.timeline({ paused: true });
+      const SURFACE = "#1b1c1e";
+      const BORDER = "#2b2d31";
+      const MUTED = "#9a9da3";
+      const BLUE = "#5aa2ff";
+      const BLUE_DARK = "#2758d8";
+      const UNKNOWN = "#747982";
+
+      const activateNode = (node, dot, state, at) => {
+        tl.to(
+          node,
+          {
+            scale: 1.012,
+            backgroundColor: BORDER,
+            borderColor: BLUE,
+            duration: 0.18,
+            ease: "power2.out",
+          },
+          at,
+        );
+        tl.to(
+          node,
+          {
+            scale: 1,
+            backgroundColor: SURFACE,
+            borderColor: BLUE_DARK,
+            duration: 0.24,
+            ease: "power2.inOut",
+          },
+          at + 0.18,
+        );
+        tl.to(dot, { scale: 1.18, backgroundColor: BLUE, duration: 0.18, ease: "power2.out" }, at);
+        tl.to(dot, { scale: 1, duration: 0.2, ease: "power2.inOut" }, at + 0.18);
+        if (state) {
+          tl.to(state, { color: BLUE, duration: 0.24, ease: "power2.out" }, at);
+        }
+      };
+
+      const resetNode = (node, dot, state, at, duration) => {
+        tl.to(
+          node,
+          {
+            scale: 1,
+            backgroundColor: SURFACE,
+            borderColor: BORDER,
+            duration,
+            ease: "power2.inOut",
+          },
+          at,
+        );
+        tl.to(dot, { scale: 1, backgroundColor: UNKNOWN, duration, ease: "power2.inOut" }, at);
+        if (state) {
+          tl.to(state, { color: MUTED, duration, ease: "power2.inOut" }, at);
+        }
+      };
+
+      tl.addLabel("activate", 0.8);
+      activateNode("#node-trigger", "#dot-trigger", "#trigger-state", 0.8);
+      tl.fromTo(
+        "#flow-one",
+        { scaleY: 0, opacity: 0 },
+        { scaleY: 1, opacity: 1, duration: 0.22, ease: "power2.out", immediateRender: false },
+        1.08,
+      );
+      activateNode("#node-condition", "#dot-condition", "#condition-state", 1.3);
+      tl.fromTo(
+        "#flow-two",
+        { scaleY: 0, opacity: 0 },
+        { scaleY: 1, opacity: 1, duration: 0.22, ease: "power2.out", immediateRender: false },
+        1.58,
+      );
+      activateNode("#node-automation", "#dot-automation", "#automation-qualifier", 1.82);
+      tl.fromTo(
+        "#flow-three",
+        { scaleY: 0, opacity: 0 },
+        { scaleY: 1, opacity: 1, duration: 0.24, ease: "power2.out", immediateRender: false },
+        2.16,
+      );
+      activateNode("#node-output", "#dot-output", null, 2.42);
+
+      tl.addLabel("payoff", 2.52);
+      tl.to("#output-dash", { opacity: 0, scale: 0.94, duration: 0.2, ease: "power2.in" }, "payoff");
+      tl.fromTo(
+        "#payoff-20",
+        { opacity: 0, scale: 0.94 },
+        { opacity: 1, scale: 1, duration: 0.34, ease: "power3.out", immediateRender: false },
+        "payoff+=0.08",
+      );
+
+      tl.addLabel("return", 5.25);
+      tl.to("#payoff-20", { opacity: 0, scale: 0.94, duration: 0.16, ease: "power2.in" }, "return");
+      tl.to("#output-dash", { opacity: 1, scale: 1, duration: 0.18, ease: "power2.out" }, "return+=0.06");
+      resetNode("#node-output", "#dot-output", null, 5.27, 0.2);
+      tl.to("#flow-three", { scaleY: 0, opacity: 0, duration: 0.18, ease: "power2.in" }, 5.39);
+      resetNode("#node-automation", "#dot-automation", "#automation-qualifier", 5.45, 0.18);
+      tl.to("#flow-two", { scaleY: 0, opacity: 0, duration: 0.16, ease: "power2.in" }, 5.52);
+      resetNode("#node-condition", "#dot-condition", "#condition-state", 5.59, 0.16);
+      tl.to("#flow-one", { scaleY: 0, opacity: 0, duration: 0.14, ease: "power2.in" }, 5.66);
+      resetNode("#node-trigger", "#dot-trigger", "#trigger-state", 5.72, 0.16);
+
+      tl.set(".node", { scale: 1, backgroundColor: SURFACE, borderColor: BORDER }, 5.9);
+      tl.set(".status-dot", { scale: 1, backgroundColor: UNKNOWN }, 5.9);
+      tl.set(["#trigger-state", "#condition-state", "#automation-qualifier"], { color: MUTED }, 5.9);
+      tl.set(".flow-fill", { scaleY: 1, opacity: 0 }, 5.9);
+      tl.set("#output-dash", { opacity: 1, scale: 1, color: MUTED }, 5.9);
+      tl.set("#payoff-20", { opacity: 0, scale: 1, color: BLUE }, 5.9);
+
+      window.__timelines["sleepradar-sleep-aware-lighting"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

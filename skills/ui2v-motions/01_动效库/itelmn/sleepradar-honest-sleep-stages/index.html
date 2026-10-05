@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=720, height=1280" />
+    <script src="/assets/gsap.min.js"></script>
+    <style>
+      @font-face {
+        font-family: "Inter";
+        src: url("/assets/inter-latin-wght-normal.woff2") format("woff2-variations");
+        font-style: normal;
+        font-weight: 100 900;
+        font-display: block;
+      }
+
+      :root {
+        --sr-bg: #101112;
+        --sr-surface: #1b1c1e;
+        --sr-border: #2b2d31;
+        --sr-text: #e8e8ea;
+        --sr-muted: #9a9da3;
+        --sr-blue: #5aa2ff;
+        --sr-blue-deep: #2758d8;
+        --sr-heart: #ff4d57;
+        --sr-estimate: #f5a623;
+        --sr-unknown: #747982;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 720px;
+        height: 1280px;
+        margin: 0;
+        overflow: hidden;
+        background: #000;
+      }
+
+      body {
+        font-family: "Inter", sans-serif;
+      }
+
+      #stage,
+      #stage-clip {
+        position: relative;
+        width: 720px;
+        height: 1280px;
+        overflow: hidden;
+      }
+
+      #stage {
+        isolation: isolate;
+      }
+
+      .frame-bg {
+        position: absolute;
+        inset: 0;
+        background: var(--sr-bg);
+      }
+
+      .scene-content {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        color: var(--sr-text);
+      }
+
+      #hook {
+        position: absolute;
+        top: 118px;
+        left: 56px;
+        width: 608px;
+        margin: 0;
+        color: var(--sr-text);
+        font-size: 56px;
+        font-weight: 650;
+        line-height: 1.04;
+        letter-spacing: 0;
+        text-align: center;
+      }
+
+      #hook span {
+        display: block;
+      }
+
+      #hook .accent {
+        margin-top: 6px;
+        color: var(--sr-blue);
+        letter-spacing: -1.5px;
+        white-space: nowrap;
+      }
+
+      #stage-card {
+        position: absolute;
+        top: 494px;
+        left: 56px;
+        width: 608px;
+        height: 332px;
+        padding: 30px 30px 28px;
+        border: 1px solid var(--sr-border);
+        border-radius: 18px;
+        background: var(--sr-surface);
+        color: var(--sr-text);
+        overflow: hidden;
+      }
+
+      .card-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .card-label {
+        color: var(--sr-text);
+        font-size: 24px;
+        font-weight: 650;
+        line-height: 1.05;
+      }
+
+      .card-context {
+        color: var(--sr-muted);
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1;
+      }
+
+      #stage-values {
+        position: relative;
+        width: 100%;
+        height: 176px;
+        margin-top: 14px;
+        overflow: hidden;
+      }
+
+      .stage-value {
+        position: absolute;
+        top: 40px;
+        left: 0;
+        width: 100%;
+        height: 96px;
+        display: flex;
+        align-items: center;
+        color: var(--sr-text);
+        font-size: 64px;
+        font-weight: 650;
+        line-height: 1;
+        opacity: 0;
+        will-change: transform, opacity;
+      }
+
+      #stage-empty {
+        color: var(--sr-muted);
+        opacity: 1;
+      }
+
+      #estimate-chip {
+        display: inline-flex;
+        align-items: center;
+        height: 38px;
+        padding: 0 15px;
+        border: 1px solid var(--sr-estimate);
+        border-radius: 19px;
+        background: var(--sr-surface);
+        color: var(--sr-estimate);
+        font-size: 15px;
+        font-weight: 650;
+        line-height: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="stage"
+      data-composition-id="sleepradar-honest-sleep-stages"
+      data-start="0"
+      data-duration="6"
+      data-fps="30"
+      data-width="720"
+      data-height="1280"
+    >
+      <div
+        id="stage-clip"
+        class="clip"
+        data-start="0"
+        data-duration="6"
+        data-track-index="0"
+      >
+        <div class="frame-bg" aria-hidden="true"></div>
+        <main class="scene-content">
+          <h1 id="hook">
+            <span>Sleep stages.</span>
+            <span class="accent">The sensor’s best guess.</span>
+          </h1>
+
+          <section
+            id="stage-card"
+            aria-label="Home Assistant current stage, sensor estimate"
+          >
+            <div class="card-heading">
+              <div class="card-label">Current stage</div>
+              <div class="card-context">Home Assistant</div>
+            </div>
+            <div id="stage-values" aria-hidden="true">
+              <div id="stage-empty" class="stage-value">—</div>
+              <div id="stage-rem" class="stage-value">REM</div>
+              <div id="stage-light-pass" class="stage-value">Light sleep</div>
+              <div id="stage-deep" class="stage-value">Deep sleep</div>
+              <div id="payoff" class="stage-value">Light sleep</div>
+            </div>
+            <div id="estimate-chip">sensor estimate</div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+
+      const tl = gsap.timeline({ paused: true });
+
+      function forwardStage(current, next, start, duration) {
+        const halfDuration = duration / 2;
+        tl.to(
+          current,
+          {
+            y: -18,
+            opacity: 0,
+            duration: halfDuration,
+            ease: "power2.inOut",
+          },
+          start,
+        );
+        tl.set(next, { y: 18, opacity: 0 }, start + halfDuration);
+        tl.to(
+          next,
+          {
+            y: 0,
+            opacity: 1,
+            duration: halfDuration,
+            ease: "power2.inOut",
+          },
+          start + halfDuration,
+        );
+      }
+
+      function reverseStage(current, previous, start, duration) {
+        const halfDuration = duration / 2;
+        tl.to(
+          current,
+          {
+            y: 18,
+            opacity: 0,
+            duration: halfDuration,
+            ease: "power2.inOut",
+          },
+          start,
+        );
+        tl.set(previous, { y: -18, opacity: 0 }, start + halfDuration);
+        tl.to(
+          previous,
+          {
+            y: 0,
+            opacity: 1,
+            duration: halfDuration,
+            ease: "power2.inOut",
+          },
+          start + halfDuration,
+        );
+      }
+
+      forwardStage("#stage-empty", "#stage-rem", 0.8, 0.28);
+      forwardStage("#stage-rem", "#stage-light-pass", 1.35, 0.28);
+      forwardStage("#stage-light-pass", "#stage-deep", 1.9, 0.28);
+      forwardStage("#stage-deep", "#payoff", 2.45, 0.55);
+
+      reverseStage("#payoff", "#stage-deep", 5.25, 0.1625);
+      reverseStage("#stage-deep", "#stage-light-pass", 5.4125, 0.1625);
+      reverseStage("#stage-light-pass", "#stage-rem", 5.575, 0.1625);
+      reverseStage("#stage-rem", "#stage-empty", 5.7375, 0.1625);
+
+      tl.set("#stage-empty", { y: 0, opacity: 1 }, 5.9);
+      tl.set(
+        ["#stage-rem", "#stage-light-pass", "#stage-deep", "#payoff"],
+        { y: 0, opacity: 0 },
+        5.9,
+      );
+
+      window.__timelines["sleepradar-honest-sleep-stages"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=720, height=1280" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root {
+        --sr-bg: #101112;
+        --sr-surface: #1b1c1e;
+        --sr-border: #2b2d31;
+        --sr-text: #e8e8ea;
+        --sr-muted: #9a9da3;
+        --sr-blue: #5aa2ff;
+        --sr-heart: #ff4d57;
+        --sr-rem: #f5a623;
+        --sr-unknown: #747982;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 720px;
+        height: 1280px;
+        margin: 0;
+        overflow: hidden;
+        background: #000;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter",
+          "Segoe UI", sans-serif;
+      }
+
+      #stage {
+        position: relative;
+        width: 720px;
+        height: 1280px;
+        overflow: hidden;
+        isolation: isolate;
+      }
+
+      #pilot-clip {
+        position: relative;
+        width: 720px;
+        height: 1280px;
+        overflow: hidden;
+      }
+
+      .frame-bg {
+        position: absolute;
+        inset: 0;
+        background: var(--sr-bg);
+        z-index: 0;
+      }
+
+      .scene-content {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        color: var(--sr-text);
+        z-index: 1;
+      }
+
+      #hook {
+        position: absolute;
+        top: 118px;
+        left: 56px;
+        width: 608px;
+        margin: 0;
+        color: var(--sr-text);
+        font-size: 56px;
+        font-weight: 650;
+        line-height: 1.04;
+        letter-spacing: 0;
+        text-align: center;
+        transform-origin: 50% 50%;
+        will-change: transform;
+      }
+
+      #hook .lead,
+      #hook .accent {
+        display: block;
+      }
+
+      #hook .accent {
+        margin-top: 6px;
+        color: var(--sr-blue);
+      }
+
+      .entity-card {
+        position: absolute;
+        left: 56px;
+        width: 608px;
+        height: 92px;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 0 24px;
+        border: 1px solid var(--sr-border);
+        border-radius: 14px;
+        background: var(--sr-surface);
+        color: var(--sr-text);
+      }
+
+      #origin-presence {
+        top: 658px;
+        transform-origin: 50% 50%;
+        will-change: transform, opacity;
+      }
+
+      .status-dot {
+        flex: 0 0 auto;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--sr-unknown);
+        will-change: transform, background-color;
+      }
+
+      .card-copy {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+
+      .card-label {
+        color: var(--sr-text);
+        font-size: 24px;
+        font-weight: 650;
+        line-height: 1.05;
+        white-space: nowrap;
+      }
+
+      .card-kind {
+        color: var(--sr-muted);
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1;
+        white-space: nowrap;
+      }
+
+      #origin-presence .card-kind {
+        color: var(--sr-muted);
+      }
+
+      .signal-card {
+        opacity: 0;
+        transform-origin: 50% 50%;
+        will-change: transform, opacity;
+      }
+
+      #card-heart {
+        top: 434px;
+      }
+
+      #card-breathing {
+        top: 546px;
+      }
+
+      #card-stage {
+        top: 658px;
+      }
+
+      #card-movement {
+        top: 770px;
+      }
+
+      #card-illuminance {
+        top: 882px;
+      }
+
+      .micro-readout {
+        margin-left: auto;
+        width: 82px;
+        height: 28px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: flex-end;
+        gap: 6px;
+        opacity: 0.25;
+        transform: translateX(-8px);
+        will-change: transform, opacity;
+      }
+
+      .micro-readout span {
+        display: block;
+        width: 10px;
+        border-radius: 5px;
+        background: currentColor;
+      }
+
+      .micro-readout span:nth-child(1) {
+        height: 11px;
+      }
+
+      .micro-readout span:nth-child(2) {
+        height: 20px;
+      }
+
+      .micro-readout span:nth-child(3) {
+        height: 15px;
+      }
+
+      #micro-heart {
+        color: var(--sr-heart);
+      }
+
+      #micro-breathing,
+      #micro-movement,
+      #micro-illuminance {
+        color: var(--sr-blue);
+      }
+
+      #micro-stage {
+        color: var(--sr-rem);
+      }
+
+      #scan-mask {
+        position: absolute;
+        top: 418px;
+        left: 40px;
+        width: 640px;
+        height: 580px;
+        overflow: hidden;
+        pointer-events: none;
+        z-index: 4;
+      }
+
+      #scan-line {
+        position: absolute;
+        top: 0;
+        left: 16px;
+        width: 608px;
+        height: 2px;
+        background: var(--sr-blue);
+        opacity: 0;
+        will-change: transform, opacity;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="stage"
+      data-composition-id="sleepradar-more-than-presence"
+      data-start="0"
+      data-duration="6"
+      data-fps="30"
+      data-width="720"
+      data-height="1280"
+    >
+      <div
+        id="pilot-clip"
+        class="clip"
+        data-start="0"
+        data-duration="6"
+        data-track-index="0"
+      >
+        <div class="frame-bg" aria-hidden="true"></div>
+
+        <div class="scene-content">
+          <h1 id="hook">
+            <span class="lead">Same sensor.</span>
+            <span class="accent">Now 5 sleep signals.</span>
+          </h1>
+
+          <div id="origin-presence" class="entity-card">
+            <span class="status-dot" aria-hidden="true"></span>
+            <div class="card-copy">
+              <div class="card-label">Presence</div>
+              <div class="card-kind">Home Assistant</div>
+            </div>
+          </div>
+
+          <div id="card-heart" class="entity-card signal-card">
+            <span id="dot-heart" class="status-dot" aria-hidden="true"></span>
+            <div class="card-copy">
+              <div class="card-label">Heart rate</div>
+              <div class="card-kind">measured</div>
+            </div>
+            <div id="micro-heart" class="micro-readout" aria-hidden="true">
+              <span></span><span></span><span></span>
+            </div>
+          </div>
+
+          <div id="card-breathing" class="entity-card signal-card">
+            <span id="dot-breathing" class="status-dot" aria-hidden="true"></span>
+            <div class="card-copy">
+              <div class="card-label">Breathing</div>
+              <div class="card-kind">measured</div>
+            </div>
+            <div id="micro-breathing" class="micro-readout" aria-hidden="true">
+              <span></span><span></span><span></span>
+            </div>
+          </div>
+
+          <div id="card-stage" class="entity-card signal-card">
+            <span id="dot-stage" class="status-dot" aria-hidden="true"></span>
+            <div class="card-copy">
+              <div class="card-label">Sleep stage</div>
+              <div class="card-kind">sensor estimate</div>
+            </div>
+            <div id="micro-stage" class="micro-readout" aria-hidden="true">
+              <span></span><span></span><span></span>
+            </div>
+          </div>
+
+          <div id="card-movement" class="entity-card signal-card">
+            <span id="dot-movement" class="status-dot" aria-hidden="true"></span>
+            <div class="card-copy">
+              <div class="card-label">Body movement</div>
+              <div class="card-kind">measured</div>
+            </div>
+            <div id="micro-movement" class="micro-readout" aria-hidden="true">
+              <span></span><span></span><span></span>
+            </div>
+          </div>
+
+          <div id="card-illuminance" class="entity-card signal-card">
+            <span id="dot-illuminance" class="status-dot" aria-hidden="true"></span>
+            <div class="card-copy">
+              <div class="card-label">Illuminance</div>
+              <div class="card-kind">measured</div>
+            </div>
+            <div id="micro-illuminance" class="micro-readout" aria-hidden="true">
+              <span></span><span></span><span></span>
+            </div>
+          </div>
+
+          <div id="scan-mask" aria-hidden="true">
+            <div id="scan-line"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+
+      const tl = gsap.timeline({ paused: true });
+      const UNKNOWN = "#747982";
+
+      const cards = [
+        {
+          card: "#card-heart",
+          dot: "#dot-heart",
+          micro: "#micro-heart",
+          accent: "#ff4d57",
+          originY: 224,
+          enterAt: 0.8,
+          exitAt: 5.49,
+          enterDuration: 0.34,
+        },
+        {
+          card: "#card-breathing",
+          dot: "#dot-breathing",
+          micro: "#micro-breathing",
+          accent: "#5aa2ff",
+          originY: 112,
+          enterAt: 1.2,
+          exitAt: 5.43,
+          enterDuration: 0.34,
+        },
+        {
+          card: "#card-stage",
+          dot: "#dot-stage",
+          micro: "#micro-stage",
+          accent: "#f5a623",
+          originY: 0,
+          enterAt: 1.6,
+          exitAt: 5.37,
+          enterDuration: 0.34,
+        },
+        {
+          card: "#card-movement",
+          dot: "#dot-movement",
+          micro: "#micro-movement",
+          accent: "#5aa2ff",
+          originY: -112,
+          enterAt: 2.0,
+          exitAt: 5.31,
+          enterDuration: 0.34,
+        },
+        {
+          card: "#card-illuminance",
+          dot: "#dot-illuminance",
+          micro: "#micro-illuminance",
+          accent: "#5aa2ff",
+          originY: -224,
+          enterAt: 2.4,
+          exitAt: 5.25,
+          enterDuration: 0.2,
+        },
+      ];
+
+      tl.fromTo(
+        ["#hook", "#origin-presence"],
+        { scale: 0.985 },
+        { scale: 1, duration: 0.3, ease: "power2.out" },
+        0,
+      );
+
+      cards.forEach((item) => {
+        tl.fromTo(
+          item.card,
+          {
+            y: item.originY,
+            scale: 0.97,
+            autoAlpha: 0,
+          },
+          {
+            y: 0,
+            scale: 1,
+            autoAlpha: 1,
+            duration: item.enterDuration,
+            ease: "power2.out",
+          },
+          item.enterAt,
+        );
+      });
+
+      tl.to(
+        "#origin-presence",
+        {
+          scale: 0.94,
+          autoAlpha: 0,
+          duration: 0.3,
+          ease: "power2.in",
+        },
+        0.8,
+      );
+
+      tl.fromTo(
+        "#scan-line",
+        { y: -12, autoAlpha: 0 },
+        {
+          y: 568,
+          autoAlpha: 0.65,
+          duration: 0.36,
+          ease: "none",
+        },
+        2.8,
+      );
+      tl.to("#scan-line", { autoAlpha: 0, duration: 0.09, ease: "power1.in" }, 3.16);
+
+      cards.forEach((item, index) => {
+        const activateAt = 2.84 + index * 0.075;
+        tl.to(
+          item.dot,
+          {
+            backgroundColor: item.accent,
+            scale: 1.25,
+            duration: 0.1,
+            ease: "power2.out",
+          },
+          activateAt,
+        );
+        tl.to(
+          item.dot,
+          { scale: 1, duration: 0.16, ease: "power2.inOut" },
+          activateAt + 0.1,
+        );
+        tl.to(
+          item.micro,
+          {
+            opacity: 0.9,
+            x: 0,
+            duration: 0.16,
+            ease: "power2.out",
+          },
+          activateAt,
+        );
+      });
+
+      cards.forEach((item, index) => {
+        const pulseAt = 3.55 + index * 0.06;
+        tl.to(
+          item.dot,
+          {
+            scale: 1.12,
+            duration: 0.16,
+            ease: "sine.inOut",
+            yoyo: true,
+            repeat: 1,
+          },
+          pulseAt,
+        );
+      });
+
+      cards.forEach((item) => {
+        tl.to(
+          item.dot,
+          {
+            backgroundColor: UNKNOWN,
+            scale: 1,
+            duration: 0.16,
+            ease: "power1.inOut",
+          },
+          5.25,
+        );
+        tl.to(
+          item.micro,
+          {
+            opacity: 0.25,
+            x: -8,
+            duration: 0.16,
+            ease: "power1.inOut",
+          },
+          5.25,
+        );
+        tl.to(
+          item.card,
+          {
+            y: item.originY,
+            scale: 0.97,
+            autoAlpha: 0,
+            duration: 0.24,
+            ease: "power2.in",
+          },
+          item.exitAt,
+        );
+      });
+
+      tl.to(
+        "#origin-presence",
+        {
+          scale: 0.985,
+          autoAlpha: 1,
+          duration: 0.18,
+          ease: "power2.out",
+        },
+        5.72,
+      );
+      tl.to("#hook", { scale: 0.985, duration: 0.18, ease: "power2.inOut" }, 5.72);
+
+      tl.set("#scan-line", { y: -12, autoAlpha: 0 }, 5.9);
+      cards.forEach((item) => {
+        tl.set(
+          item.card,
+          { y: item.originY, scale: 0.97, autoAlpha: 0 },
+          5.9,
+        );
+        tl.set(
+          item.dot,
+          { backgroundColor: UNKNOWN, scale: 1 },
+          5.9,
+        );
+        tl.set(
+          item.micro,
+          { opacity: 0.25, x: -8 },
+          5.9,
+        );
+      });
+      tl.set("#origin-presence", { scale: 0.985, autoAlpha: 1 }, 5.9);
+      tl.set("#hook", { scale: 0.985, autoAlpha: 1 }, 5.9);
+
+      window.__timelines["sleepradar-more-than-presence"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
