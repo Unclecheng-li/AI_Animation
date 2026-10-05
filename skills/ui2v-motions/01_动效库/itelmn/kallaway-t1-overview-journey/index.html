@@ -1,0 +1,442 @@
+<!doctype html>
+<!--
+  KALLAWAY · tier1 · overview · JOURNEY
+  Full-screen takeover. A user-journey path: a drawn glowing curved SVG line
+  (winding left-to-right across the canvas) with 4 glowing stop nodes + labels.
+  The path draws via stroke-dashoffset; nodes pop on as the line reaches them;
+  labels blur-in. Title glides first. A subtle "progress" feel — bottom of frame.
+  Slots: title, stop1_label, stop1_body, stop2_label, stop2_body,
+                stop3_label, stop3_body, stop4_label, stop4_body.
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+/* ============================================================================
+   KALLAWAY — style tokens
+   Single source of palette / type / motion / texture for every card in this
+   style. Cards reference these vars and never hardcode colors, fonts, easings,
+   glows, or textures. Tweak here, all cards update.
+   See DESIGN.md for the why.
+   Aesthetic: premium dark motion-graphics — near-black cool canvas, a blue
+   "aurora" glow blooming from below, glassmorphism cards, edge-lit neon
+   elements, gradient glow text, focus-stack blur, smooth After-Effects easing.
+   Palette is the AIS brand (blue is the hero glow). The opposite of Vox in
+   every axis: smooth not choppy, dark not paper, glow not ink.
+   ============================================================================ */
+
+/* Type. The HyperFrames compiler embeds supported fonts by name at render time;
+   this @import is what makes standalone / browser preview show the right faces. */
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500;1,600&family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Space+Mono:wght@400;700&display=swap");
+
+:root {
+  /* --- palette (mirror style.json + DESIGN.md). AIS brand, dark. ----------- */
+  --canvas:       #0A0E14;   /* main near-black cool background */
+  --canvas-deep:  #07121C;   /* deeper navy — vignette / depth wells */
+  --ink:          #2A251F;   /* dark text for the rare light/cream surface */
+  --paper:        #F0EEE9;   /* warm white surface (light glass / chips) */
+  --white:        #FFFFFF;
+
+  --text:         #F0EEE9;   /* primary text on dark */
+  --text-dim:     rgba(240, 238, 233, 0.62);  /* secondary copy */
+  --text-faint:   rgba(240, 238, 233, 0.34);  /* metadata, fine print */
+
+  --accent:       #37BDF8;   /* AIS blue — THE hero glow (where refs used purple) */
+  --accent-2:     #F5D82A;   /* yellow — secondary pop / highlight numerals */
+  --alert:        #FF3B30;   /* red — alarm, negative delta, "lie" */
+  --warm:         #FF8A5C;   /* orange — warm secondary accent */
+
+  /* rgb triplets for building rgba() glows in cards without re-typing hex */
+  --accent-rgb:   55, 189, 248;
+  --accent2-rgb:  245, 216, 42;
+  --alert-rgb:    255, 59, 48;
+  --warm-rgb:     255, 138, 92;
+
+  /* semantic aliases the blueprint contract expects */
+  --bg:     var(--canvas);
+  --fg:     var(--text);
+  --muted:  var(--text-dim);
+
+  /* --- typography ---------------------------------------------------------- */
+  /* Plus Jakarta Sans = the voice (headlines, big numbers, glow text): geometric,
+     premium, rounds to match the glass radii, heavy at 800. Inter = body / labels /
+     captions, recedes. Space Mono = data chips, timestamps, %s — the "interface"
+     voice. No serif anywhere (that's Vox). */
+  --font-display: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  --font-body:    "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono:    "Space Mono", ui-monospace, "SF Mono", monospace;
+  /* contract aliases */
+  --font-label:   var(--font-body);
+  --font-hand:    var(--font-body);
+
+  --wt-reg:    400;
+  --wt-med:    500;
+  --wt-semi:   600;
+  --wt-bold:   700;
+  --wt-black:  800;
+
+  /* video sizes for 1920x1080 (big — readable in 2s) */
+  --size-mega:     300px;   /* hero stat number */
+  --size-display:  140px;   /* takeover headline */
+  --size-title:    84px;    /* section title */
+  --size-headline: 54px;    /* card headline */
+  --size-body:     32px;    /* supporting copy */
+  --size-label:    24px;    /* kicker / metadata */
+  --size-tiny:     19px;    /* credits, fine print, timestamps */
+
+  --track-tight: -0.02em;   /* display tracking */
+  --track-snug:  -0.01em;
+  --track-wide:  0.18em;    /* uppercase label tracking */
+
+  /* --- glow — the signature. Soft, layered, never a hard ring. ------------- */
+  --glow-accent-sm: 0 0 10px rgba(var(--accent-rgb), 0.55);
+  --glow-accent:    0 0 22px rgba(var(--accent-rgb), 0.55), 0 0 56px rgba(var(--accent-rgb), 0.30);
+  --glow-accent-lg: 0 0 40px rgba(var(--accent-rgb), 0.60), 0 0 120px rgba(var(--accent-rgb), 0.32);
+  --glow-white:     0 0 16px rgba(255, 255, 255, 0.50), 0 0 46px rgba(255, 255, 255, 0.26);
+  --glow-white-lg:  0 0 30px rgba(255, 255, 255, 0.55), 0 0 90px rgba(255, 255, 255, 0.30);
+  /* text glow (set as text-shadow): white core that lifts off the dark canvas */
+  --textglow:       0 0 18px rgba(255, 255, 255, 0.45), 0 0 40px rgba(var(--accent-rgb), 0.30);
+  --textglow-accent:0 0 18px rgba(var(--accent-rgb), 0.65), 0 0 48px rgba(var(--accent-rgb), 0.35);
+
+  /* --- glass — frosted surfaces. Two tints: light (bright) + dark (recede). - */
+  --glass-bg:      rgba(255, 255, 255, 0.055);
+  --glass-bg-dark: rgba(16, 22, 34, 0.55);
+  --glass-border:  rgba(255, 255, 255, 0.14);
+  --glass-hi:      rgba(255, 255, 255, 0.22);  /* top inner-highlight edge */
+  --glass-blur:    blur(22px) saturate(135%);
+  --glass-shadow:  0 24px 70px rgba(0, 0, 0, 0.50);
+
+  /* --- shape --------------------------------------------------------------- */
+  --radius:     28px;       /* glass cards, pills — generously rounded */
+  --radius-sm:  16px;       /* chips, small tiles */
+  --radius-lg:  40px;       /* phone frames, large surfaces */
+  --pad:        80px;       /* canvas safe-area inset */
+  --stroke:     1.5px;      /* hairline neon edge weight */
+
+  /* --- motion — smooth, premium, breathing. The anti-Vox. ------------------ */
+  /* Long expo/quint glides; spring overshoot for cards; blur-in for focus pull.
+     NEVER steps()/choppy — that is Vox's signature, not ours. */
+  --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);   /* expo-out — the default glide */
+  --ease-inout:  cubic-bezier(0.65, 0, 0.35, 1);   /* symmetric, for drifts */
+  --ease-soft:   cubic-bezier(0.33, 1, 0.68, 1);   /* gentle settle */
+  /* GSAP string eases (used in card timelines) */
+  --gsap-glide:  power4.out;
+  --gsap-expo:   expo.out;
+  --gsap-spring: back.out(1.4);
+  --dur-in:   0.8s;    /* entrances breathe */
+  --dur-out:  0.5s;
+
+  /* --- textures (deterministic) ------------------------------------------- */
+  /* Aurora bloom — blue light rising from the bottom-center. The hero ambience.
+     Compose these as background layers under content; animate opacity/scale. */
+  --bloom-bottom: radial-gradient(120% 85% at 50% 118%,
+                    rgba(var(--accent-rgb), 0.45) 0%,
+                    rgba(var(--accent-rgb), 0.16) 32%,
+                    transparent 62%);
+  --bloom-corner: radial-gradient(90% 90% at 88% 12%,
+                    rgba(var(--accent-rgb), 0.30) 0%,
+                    transparent 55%);
+
+  /* Vignette — pulls the eye to center, deepens the canvas edges. */
+  --vignette: radial-gradient(125% 125% at 50% 45%, transparent 52%, rgba(0,0,0,0.55) 100%);
+
+  /* Faint dot grid (the refs' subtle technical texture). Low contrast. */
+  --dot:      radial-gradient(circle at center, rgba(255,255,255,0.06) 1px, transparent 1.4px);
+  --dot-size: 46px 46px;
+
+  /* Fine film grain over everything — keeps the dark from banding. */
+  --tex-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+</style>
+    <style>
+      html, body { margin: 0; }
+
+      #t1-ov-journey {
+        position: absolute; inset: 0; width: 1920px; height: 1080px;
+        background: var(--canvas); color: var(--text);
+        font-family: var(--font-display); overflow: hidden;
+      }
+
+      #t1-ov-journey .bloom {
+        position: absolute; inset: 0; background: var(--bloom-bottom); z-index: 1;
+      }
+      #t1-ov-journey .grid {
+        position: absolute; inset: 0; z-index: 1;
+        background-image: var(--dot); background-size: var(--dot-size); opacity: 0.40;
+        -webkit-mask-image: radial-gradient(120% 100% at 50% 55%, #000 28%, transparent 80%);
+                mask-image: radial-gradient(120% 100% at 50% 55%, #000 28%, transparent 80%);
+      }
+
+      /* Title */
+      #t1-ov-journey .title-row {
+        position: absolute; left: 0; right: 0; top: 68px; text-align: center; z-index: 5;
+      }
+      #t1-ov-journey .title {
+        font-family: var(--font-display); font-weight: var(--wt-bold);
+        font-size: var(--size-title); letter-spacing: var(--track-snug); line-height: 1.06;
+        color: var(--white); text-shadow: var(--textglow);
+        max-width: 1400px; margin: 0 auto;
+      }
+      #t1-ov-journey .title em {
+        font-style: normal; color: var(--accent); text-shadow: var(--textglow-accent);
+      }
+
+      /* SVG layer for the winding path */
+      #t1-ov-journey .journey-svg {
+        position: absolute; left: 0; top: 0; width: 1920px; height: 1080px;
+        z-index: 3; pointer-events: none; overflow: visible;
+      }
+
+      /* The glowing winding path */
+      .journey-path {
+        fill: none;
+        stroke: rgba(var(--accent-rgb), 0.65);
+        stroke-width: 3;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        filter: drop-shadow(0 0 12px rgba(55,189,248,0.55));
+      }
+      /* Ghost / backdrop path (thicker, darker — depth) */
+      .journey-path-ghost {
+        fill: none;
+        stroke: rgba(var(--accent-rgb), 0.08);
+        stroke-width: 12;
+        stroke-linecap: round;
+      }
+
+      /* Stop nodes (absolutely positioned) */
+      #t1-ov-journey .stop-wrap {
+        position: absolute; z-index: 5;
+        transform: translate(-50%, -50%);
+      }
+      /* Outer glow ring */
+      #t1-ov-journey .stop-ring {
+        position: absolute; inset: -14px; border-radius: 50%;
+        background: radial-gradient(circle, rgba(var(--accent-rgb), 0.28) 0%, transparent 70%);
+      }
+      /* Node circle */
+      #t1-ov-journey .stop-dot {
+        width: 28px; height: 28px; border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 20px rgba(var(--accent-rgb), 0.80), 0 0 50px rgba(var(--accent-rgb), 0.35);
+        position: relative; z-index: 1;
+      }
+
+      /* Label card (glass chip) floating above/below the node */
+      #t1-ov-journey .stop-card {
+        position: absolute; left: 50%; transform: translateX(-50%);
+        background: var(--glass-bg-dark);
+        border: var(--stroke) solid rgba(var(--accent-rgb), 0.30);
+        border-radius: var(--radius-sm);
+        box-shadow: var(--glass-shadow), 0 0 28px rgba(var(--accent-rgb), 0.10);
+        backdrop-filter: var(--glass-blur);
+        -webkit-backdrop-filter: var(--glass-blur);
+        padding: 22px 28px 20px;
+        min-width: 280px; max-width: 320px;
+        text-align: center;
+        position: absolute; left: 50%;
+        transform: translateX(-50%);
+      }
+      #t1-ov-journey .stop-card::before {
+        content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+        background: linear-gradient(90deg, transparent, var(--glass-hi) 30%, var(--glass-hi) 70%, transparent);
+      }
+      /* Above nodes — label appears above */
+      #t1-ov-journey .stop-card.above { bottom: 42px; }
+      /* Below nodes — label appears below */
+      #t1-ov-journey .stop-card.below { top: 42px; }
+
+      #t1-ov-journey .stop-num {
+        font-family: var(--font-mono); font-size: 16px; font-weight: var(--wt-bold);
+        color: var(--accent); text-shadow: var(--textglow-accent);
+        letter-spacing: 0.12em; margin-bottom: 8px;
+      }
+      #t1-ov-journey .stop-label {
+        font-family: var(--font-display); font-weight: var(--wt-bold);
+        font-size: 30px; letter-spacing: var(--track-snug); line-height: 1.2;
+        color: var(--white); text-shadow: var(--textglow);
+        margin-bottom: 8px;
+      }
+      #t1-ov-journey .stop-body {
+        font-family: var(--font-body); font-size: 20px; line-height: 1.45;
+        color: var(--text-dim);
+      }
+
+      /* Start / end arrow markers */
+      .journey-start-cap, .journey-end-arrow {
+        fill: rgba(var(--accent-rgb), 0.90);
+        filter: drop-shadow(0 0 6px rgba(55,189,248,0.60));
+      }
+
+      #t1-ov-journey .vignette {
+        position: absolute; inset: 0; pointer-events: none; z-index: 6;
+        background: var(--vignette);
+      }
+      #t1-ov-journey .grain {
+        position: absolute; inset: -40px; background: var(--tex-grain);
+        background-size: 200px 200px; mix-blend-mode: overlay; opacity: 0.10;
+        pointer-events: none; z-index: 7;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      Path geometry (1920×1080):
+      The journey winds in a gentle S-curve across the bottom third of the frame.
+      Stop positions (node center):
+        Stop 1:  x=240,  y=740  (lower)
+        Stop 2:  x=720,  y=560  (upper)
+        Stop 3:  x=1200, y=740  (lower)
+        Stop 4:  x=1680, y=560  (upper)
+      Cubic bezier path approximating the winding curve.
+      Approximate path length ≈ 1640px → dasharray = 1640.
+    -->
+    <div id="t1-ov-journey" data-composition-id="t1-ov-journey" data-start="0" data-width="1920" data-height="1080" class="clip" data-duration="5">
+      <div class="bloom"></div>
+      <div class="grid"></div>
+
+      <div class="title-row">
+        <div class="title" data-slot="title">The <em>User Journey</em> Mapped</div>
+      </div>
+
+      <svg class="journey-svg" viewBox="0 0 1920 1080" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="jrn-glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="4" result="b"/>
+            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <!-- Arrowhead marker for path end -->
+          <marker id="jrn-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M 0 0 L 6 3 L 0 6 Z" fill="rgba(55,189,248,0.90)"/>
+          </marker>
+        </defs>
+
+        <!-- Ghost backdrop -->
+        <path class="journey-path-ghost" id="jrn-ghost"
+          d="M 80 740 C 200 740 180 560 720 560 C 1000 560 980 740 1200 740 C 1420 740 1400 560 1680 560 C 1780 560 1840 560 1860 555"/>
+
+        <!-- Main glowing path — drawn via dashoffset -->
+        <path class="journey-path" id="jrn-path" filter="url(#jrn-glow)"
+          d="M 80 740 C 200 740 180 560 720 560 C 1000 560 980 740 1200 740 C 1420 740 1400 560 1680 560 C 1780 560 1840 560 1860 555"
+          stroke-dasharray="1840" stroke-dashoffset="1840"
+          marker-end="url(#jrn-arrow)"/>
+
+        <!-- Start cap circle -->
+        <circle class="journey-start-cap" cx="80" cy="740" r="7" opacity="0" id="jrn-start-cap"/>
+      </svg>
+
+      <!-- Stop 1 — x=240, y=740 — label above -->
+      <div class="stop-wrap" style="left:240px; top:740px;" id="jrn-s1">
+        <div class="stop-ring"></div>
+        <div class="stop-dot"></div>
+        <div class="stop-card above">
+          <div class="stop-num">01</div>
+          <div class="stop-label" data-slot="stop1_label">Awareness</div>
+          <div class="stop-body" data-slot="stop1_body">First contact — they hear about you.</div>
+        </div>
+      </div>
+
+      <!-- Stop 2 — x=720, y=560 — label below -->
+      <div class="stop-wrap" style="left:720px; top:560px;" id="jrn-s2">
+        <div class="stop-ring"></div>
+        <div class="stop-dot"></div>
+        <div class="stop-card below">
+          <div class="stop-num">02</div>
+          <div class="stop-label" data-slot="stop2_label">Consideration</div>
+          <div class="stop-body" data-slot="stop2_body">They weigh options and dig in.</div>
+        </div>
+      </div>
+
+      <!-- Stop 3 — x=1200, y=740 — label above -->
+      <div class="stop-wrap" style="left:1200px; top:740px;" id="jrn-s3">
+        <div class="stop-ring"></div>
+        <div class="stop-dot"></div>
+        <div class="stop-card above">
+          <div class="stop-num">03</div>
+          <div class="stop-label" data-slot="stop3_label">Decision</div>
+          <div class="stop-body" data-slot="stop3_body">The moment they commit — or don't.</div>
+        </div>
+      </div>
+
+      <!-- Stop 4 — x=1680, y=560 — label below -->
+      <div class="stop-wrap" style="left:1680px; top:560px;" id="jrn-s4">
+        <div class="stop-ring"></div>
+        <div class="stop-dot"></div>
+        <div class="stop-card below">
+          <div class="stop-num">04</div>
+          <div class="stop-label" data-slot="stop4_label">Loyalty</div>
+          <div class="stop-body" data-slot="stop4_body">They return and bring others with them.</div>
+        </div>
+      </div>
+
+      <div class="vignette"></div>
+      <div class="grain"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      /* grain flicker */
+      tl.fromTo("#t1-ov-journey .grain",
+        { backgroundPosition: "0px 0px" },
+        { backgroundPosition: "105px 72px", duration: 0.6, ease: "none", repeat: 11, yoyo: true }, 0);
+
+      /* environment */
+      tl.from("#t1-ov-journey .bloom", { autoAlpha: 0, scale: 0.91, transformOrigin: "50% 120%", duration: 1.4, ease: "expo.out" }, 0)
+        .from("#t1-ov-journey .grid",  { autoAlpha: 0, duration: 1.2, ease: "power2.out" }, 0.2)
+
+        /* title */
+        .from("#t1-ov-journey .title", { autoAlpha: 0, y: 28, filter: "blur(14px)", duration: 1.0, ease: "power4.out" }, 0.5)
+
+        /* ghost path fades in first (barely visible, just gives depth) */
+        .from("#jrn-ghost", { autoAlpha: 0, duration: 0.8, ease: "power2.out" }, 0.9)
+
+        /* start cap glows on */
+        .to("#jrn-start-cap", { autoAlpha: 1, duration: 0.4, ease: "power2.out" }, 1.0)
+
+        /* main path draws — dashoffset 1840 → 0 over 2.2s */
+        .to("#jrn-path", { strokeDashoffset: 0, duration: 2.4, ease: "power2.inOut" }, 1.1)
+
+        /* stops pop on as the line "arrives" — timed to path draw progress */
+        /* Stop 1 ≈ 13% along path (x=240) → tl pos ≈ 1.1 + 0.13*2.4 = 1.41 */
+        .from("#jrn-s1", { autoAlpha: 0, scale: 0.70, transformOrigin: "50% 50%",
+          filter: "blur(8px)", duration: 0.50, ease: "back.out(2)" }, 1.45)
+        .from("#jrn-s1 .stop-card", { autoAlpha: 0, y: 12, filter: "blur(6px)",
+          duration: 0.45, ease: "power3.out" }, 1.75)
+
+        /* Stop 2 ≈ 40% → pos ≈ 1.1 + 0.40*2.4 = 2.06 */
+        .from("#jrn-s2", { autoAlpha: 0, scale: 0.70, transformOrigin: "50% 50%",
+          filter: "blur(8px)", duration: 0.50, ease: "back.out(2)" }, 2.1)
+        .from("#jrn-s2 .stop-card", { autoAlpha: 0, y: -12, filter: "blur(6px)",
+          duration: 0.45, ease: "power3.out" }, 2.40)
+
+        /* Stop 3 ≈ 65% → pos ≈ 2.67 */
+        .from("#jrn-s3", { autoAlpha: 0, scale: 0.70, transformOrigin: "50% 50%",
+          filter: "blur(8px)", duration: 0.50, ease: "back.out(2)" }, 2.70)
+        .from("#jrn-s3 .stop-card", { autoAlpha: 0, y: 12, filter: "blur(6px)",
+          duration: 0.45, ease: "power3.out" }, 3.00)
+
+        /* Stop 4 ≈ 90% → pos ≈ 3.26 */
+        .from("#jrn-s4", { autoAlpha: 0, scale: 0.70, transformOrigin: "50% 50%",
+          filter: "blur(8px)", duration: 0.50, ease: "back.out(2)" }, 3.30)
+        .from("#jrn-s4 .stop-card", { autoAlpha: 0, y: -12, filter: "blur(6px)",
+          duration: 0.45, ease: "power3.out" }, 3.60)
+
+        /* breathing glow on final stop node — finite */
+        .to("#jrn-s4 .stop-dot", {
+          boxShadow: "0 0 36px rgba(55,189,248,0.90), 0 0 80px rgba(55,189,248,0.45)",
+          duration: 1.2, ease: "sine.inOut", repeat: 2, yoyo: true }, 4.3)
+
+        /* subtle path glow pulse — finite */
+        .to("#jrn-path", { attr: { stroke: "rgba(55,189,248,0.90)" },
+          duration: 1.0, ease: "sine.inOut", repeat: 1, yoyo: true }, 4.6)
+
+        .set({}, {}, 7);
+
+      window.__timelines["t1-ov-journey"] = tl;
+    </script>
+  </body>
+</html>

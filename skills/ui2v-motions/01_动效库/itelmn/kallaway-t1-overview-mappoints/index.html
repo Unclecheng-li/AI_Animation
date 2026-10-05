@@ -1,0 +1,440 @@
+<!doctype html>
+<!--
+  KALLAWAY · tier1 · overview · MAPPOINTS
+  Abstract map panel: a faint glass continent/region SVG shape + a dot grid
+  background. Three glowing location points pop on with labels. Aurora bloom.
+  Slots: title, p1-name, p1-val, p2-name, p2-val, p3-name, p3-val.
+  Knobs: data-cx / data-cy on each .map-point (SVG viewBox 1640x760,
+         defaults: p1=520,310  p2=860,480  p3=1180,220).
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+/* ============================================================================
+   KALLAWAY — style tokens
+   Single source of palette / type / motion / texture for every card in this
+   style. Cards reference these vars and never hardcode colors, fonts, easings,
+   glows, or textures. Tweak here, all cards update.
+   See DESIGN.md for the why.
+   Aesthetic: premium dark motion-graphics — near-black cool canvas, a blue
+   "aurora" glow blooming from below, glassmorphism cards, edge-lit neon
+   elements, gradient glow text, focus-stack blur, smooth After-Effects easing.
+   Palette is the AIS brand (blue is the hero glow). The opposite of Vox in
+   every axis: smooth not choppy, dark not paper, glow not ink.
+   ============================================================================ */
+
+/* Type. The HyperFrames compiler embeds supported fonts by name at render time;
+   this @import is what makes standalone / browser preview show the right faces. */
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500;1,600&family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Space+Mono:wght@400;700&display=swap");
+
+:root {
+  /* --- palette (mirror style.json + DESIGN.md). AIS brand, dark. ----------- */
+  --canvas:       #0A0E14;   /* main near-black cool background */
+  --canvas-deep:  #07121C;   /* deeper navy — vignette / depth wells */
+  --ink:          #2A251F;   /* dark text for the rare light/cream surface */
+  --paper:        #F0EEE9;   /* warm white surface (light glass / chips) */
+  --white:        #FFFFFF;
+
+  --text:         #F0EEE9;   /* primary text on dark */
+  --text-dim:     rgba(240, 238, 233, 0.62);  /* secondary copy */
+  --text-faint:   rgba(240, 238, 233, 0.34);  /* metadata, fine print */
+
+  --accent:       #37BDF8;   /* AIS blue — THE hero glow (where refs used purple) */
+  --accent-2:     #F5D82A;   /* yellow — secondary pop / highlight numerals */
+  --alert:        #FF3B30;   /* red — alarm, negative delta, "lie" */
+  --warm:         #FF8A5C;   /* orange — warm secondary accent */
+
+  /* rgb triplets for building rgba() glows in cards without re-typing hex */
+  --accent-rgb:   55, 189, 248;
+  --accent2-rgb:  245, 216, 42;
+  --alert-rgb:    255, 59, 48;
+  --warm-rgb:     255, 138, 92;
+
+  /* semantic aliases the blueprint contract expects */
+  --bg:     var(--canvas);
+  --fg:     var(--text);
+  --muted:  var(--text-dim);
+
+  /* --- typography ---------------------------------------------------------- */
+  /* Plus Jakarta Sans = the voice (headlines, big numbers, glow text): geometric,
+     premium, rounds to match the glass radii, heavy at 800. Inter = body / labels /
+     captions, recedes. Space Mono = data chips, timestamps, %s — the "interface"
+     voice. No serif anywhere (that's Vox). */
+  --font-display: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  --font-body:    "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono:    "Space Mono", ui-monospace, "SF Mono", monospace;
+  /* contract aliases */
+  --font-label:   var(--font-body);
+  --font-hand:    var(--font-body);
+
+  --wt-reg:    400;
+  --wt-med:    500;
+  --wt-semi:   600;
+  --wt-bold:   700;
+  --wt-black:  800;
+
+  /* video sizes for 1920x1080 (big — readable in 2s) */
+  --size-mega:     300px;   /* hero stat number */
+  --size-display:  140px;   /* takeover headline */
+  --size-title:    84px;    /* section title */
+  --size-headline: 54px;    /* card headline */
+  --size-body:     32px;    /* supporting copy */
+  --size-label:    24px;    /* kicker / metadata */
+  --size-tiny:     19px;    /* credits, fine print, timestamps */
+
+  --track-tight: -0.02em;   /* display tracking */
+  --track-snug:  -0.01em;
+  --track-wide:  0.18em;    /* uppercase label tracking */
+
+  /* --- glow — the signature. Soft, layered, never a hard ring. ------------- */
+  --glow-accent-sm: 0 0 10px rgba(var(--accent-rgb), 0.55);
+  --glow-accent:    0 0 22px rgba(var(--accent-rgb), 0.55), 0 0 56px rgba(var(--accent-rgb), 0.30);
+  --glow-accent-lg: 0 0 40px rgba(var(--accent-rgb), 0.60), 0 0 120px rgba(var(--accent-rgb), 0.32);
+  --glow-white:     0 0 16px rgba(255, 255, 255, 0.50), 0 0 46px rgba(255, 255, 255, 0.26);
+  --glow-white-lg:  0 0 30px rgba(255, 255, 255, 0.55), 0 0 90px rgba(255, 255, 255, 0.30);
+  /* text glow (set as text-shadow): white core that lifts off the dark canvas */
+  --textglow:       0 0 18px rgba(255, 255, 255, 0.45), 0 0 40px rgba(var(--accent-rgb), 0.30);
+  --textglow-accent:0 0 18px rgba(var(--accent-rgb), 0.65), 0 0 48px rgba(var(--accent-rgb), 0.35);
+
+  /* --- glass — frosted surfaces. Two tints: light (bright) + dark (recede). - */
+  --glass-bg:      rgba(255, 255, 255, 0.055);
+  --glass-bg-dark: rgba(16, 22, 34, 0.55);
+  --glass-border:  rgba(255, 255, 255, 0.14);
+  --glass-hi:      rgba(255, 255, 255, 0.22);  /* top inner-highlight edge */
+  --glass-blur:    blur(22px) saturate(135%);
+  --glass-shadow:  0 24px 70px rgba(0, 0, 0, 0.50);
+
+  /* --- shape --------------------------------------------------------------- */
+  --radius:     28px;       /* glass cards, pills — generously rounded */
+  --radius-sm:  16px;       /* chips, small tiles */
+  --radius-lg:  40px;       /* phone frames, large surfaces */
+  --pad:        80px;       /* canvas safe-area inset */
+  --stroke:     1.5px;      /* hairline neon edge weight */
+
+  /* --- motion — smooth, premium, breathing. The anti-Vox. ------------------ */
+  /* Long expo/quint glides; spring overshoot for cards; blur-in for focus pull.
+     NEVER steps()/choppy — that is Vox's signature, not ours. */
+  --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);   /* expo-out — the default glide */
+  --ease-inout:  cubic-bezier(0.65, 0, 0.35, 1);   /* symmetric, for drifts */
+  --ease-soft:   cubic-bezier(0.33, 1, 0.68, 1);   /* gentle settle */
+  /* GSAP string eases (used in card timelines) */
+  --gsap-glide:  power4.out;
+  --gsap-expo:   expo.out;
+  --gsap-spring: back.out(1.4);
+  --dur-in:   0.8s;    /* entrances breathe */
+  --dur-out:  0.5s;
+
+  /* --- textures (deterministic) ------------------------------------------- */
+  /* Aurora bloom — blue light rising from the bottom-center. The hero ambience.
+     Compose these as background layers under content; animate opacity/scale. */
+  --bloom-bottom: radial-gradient(120% 85% at 50% 118%,
+                    rgba(var(--accent-rgb), 0.45) 0%,
+                    rgba(var(--accent-rgb), 0.16) 32%,
+                    transparent 62%);
+  --bloom-corner: radial-gradient(90% 90% at 88% 12%,
+                    rgba(var(--accent-rgb), 0.30) 0%,
+                    transparent 55%);
+
+  /* Vignette — pulls the eye to center, deepens the canvas edges. */
+  --vignette: radial-gradient(125% 125% at 50% 45%, transparent 52%, rgba(0,0,0,0.55) 100%);
+
+  /* Faint dot grid (the refs' subtle technical texture). Low contrast. */
+  --dot:      radial-gradient(circle at center, rgba(255,255,255,0.06) 1px, transparent 1.4px);
+  --dot-size: 46px 46px;
+
+  /* Fine film grain over everything — keeps the dark from banding. */
+  --tex-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+</style>
+    <style>
+      html, body { margin: 0; }
+
+      #t1-ov-map {
+        position: absolute; inset: 0; width: 1920px; height: 1080px;
+        background: var(--canvas); color: var(--text);
+        font-family: var(--font-display); overflow: hidden;
+      }
+
+      #t1-ov-map .bloom {
+        position: absolute; inset: 0; background: var(--bloom-bottom); z-index: 1;
+      }
+      #t1-ov-map .dot-grid {
+        position: absolute; inset: 0; z-index: 1;
+        background-image: var(--dot); background-size: var(--dot-size); opacity: 0.42;
+        -webkit-mask-image: radial-gradient(115% 100% at 50% 60%, #000 30%, transparent 80%);
+                mask-image: radial-gradient(115% 100% at 50% 60%, #000 30%, transparent 80%);
+      }
+
+      /* Title */
+      #t1-ov-map .title-row {
+        position: absolute; left: 0; right: 0; top: 72px;
+        text-align: center; z-index: 4;
+      }
+      #t1-ov-map .title {
+        font-family: var(--font-display); font-weight: var(--wt-bold);
+        font-size: var(--size-title); letter-spacing: var(--track-snug); line-height: 1.06;
+        color: var(--white); text-shadow: var(--textglow);
+        max-width: 1400px; margin: 0 auto;
+      }
+      #t1-ov-map .title em {
+        font-style: normal; color: var(--accent); text-shadow: var(--textglow-accent);
+      }
+
+      /* Map panel glass frame */
+      #t1-ov-map .map-panel {
+        position: absolute; left: 140px; right: 140px;
+        top: 228px; bottom: 72px;
+        background: var(--glass-bg-dark);
+        border: var(--stroke) solid var(--glass-border);
+        border-radius: var(--radius);
+        box-shadow: var(--glass-shadow);
+        backdrop-filter: var(--glass-blur);
+        -webkit-backdrop-filter: var(--glass-blur);
+        overflow: hidden; z-index: 4;
+      }
+      #t1-ov-map .map-panel::before {
+        content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+        background: linear-gradient(90deg, transparent, var(--glass-hi) 20%, var(--glass-hi) 80%, transparent);
+      }
+
+      /* SVG map container */
+      #t1-ov-map .map-svg {
+        position: absolute; inset: 0; width: 100%; height: 100%;
+      }
+
+      /* Location point label callouts (HTML overlaid) */
+      #t1-ov-map .point-labels {
+        position: absolute; inset: 0; pointer-events: none;
+      }
+      .map-label-box {
+        position: absolute;
+        display: flex; flex-direction: column; gap: 4px;
+        pointer-events: none;
+      }
+      .map-label-name {
+        font-family: var(--font-display); font-weight: var(--wt-semi);
+        font-size: 32px; letter-spacing: var(--track-snug); line-height: 1.2;
+        color: var(--white); text-shadow: var(--textglow);
+        white-space: nowrap;
+      }
+      .map-label-val {
+        font-family: var(--font-mono); font-size: var(--size-label);
+        font-weight: var(--wt-bold); letter-spacing: 0.06em;
+        color: var(--accent); text-shadow: var(--textglow-accent);
+        white-space: nowrap;
+      }
+
+      /* Vignette + grain */
+      #t1-ov-map .vignette {
+        position: absolute; inset: 0; pointer-events: none; z-index: 6;
+        background: var(--vignette);
+      }
+      #t1-ov-map .grain {
+        position: absolute; inset: -40px; background: var(--tex-grain);
+        background-size: 200px 200px; mix-blend-mode: overlay; opacity: 0.10;
+        pointer-events: none; z-index: 7;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="t1-ov-map" data-composition-id="t1-ov-map" data-start="0" data-width="1920" data-height="1080" class="clip" data-duration="5">
+      <div class="bloom"></div>
+      <div class="dot-grid"></div>
+
+      <div class="title-row">
+        <div class="title" data-slot="title">Global <em>Reach</em></div>
+      </div>
+
+      <div class="map-panel" id="map-panel">
+        <!-- Abstract map SVG — simplified continent-like shapes + grid lines + points -->
+        <svg class="map-svg" id="map-svg" viewBox="0 0 1640 780" fill="none"
+             preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+
+          <defs>
+            <filter id="mapGlow" x="-30%" y="-30%" width="160%" height="160%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur"/>
+              <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+            </filter>
+            <filter id="ptGlow" x="-200%" y="-200%" width="500%" height="500%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="blur"/>
+              <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+            </filter>
+          </defs>
+
+          <!-- Subtle latitude/longitude grid lines -->
+          <line x1="0" y1="195" x2="1640" y2="195" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+          <line x1="0" y1="390" x2="1640" y2="390" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+          <line x1="0" y1="585" x2="1640" y2="585" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+          <line x1="328" y1="0" x2="328" y2="780" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+          <line x1="656" y1="0" x2="656" y2="780" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+          <line x1="984" y1="0" x2="984" y2="780" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+          <line x1="1312" y1="0" x2="1312" y2="780" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+
+          <!-- Faint abstract continent outlines (simplified polygon shapes) -->
+          <!-- Americas rough shape -->
+          <path id="map-landmass-1"
+            d="M200,120 C230,100 280,95 310,130 C340,165 330,210 350,260
+               C370,310 395,330 390,380 C385,430 360,460 340,490
+               C320,520 295,530 270,520 C245,510 230,480 215,450
+               C200,420 195,380 190,340 C185,300 175,270 170,230
+               C165,190 170,145 200,120Z"
+            fill="rgba(55,189,248,0.06)" stroke="rgba(55,189,248,0.14)" stroke-width="1.5"
+            opacity="0"/>
+
+          <!-- Europe/Africa rough shape -->
+          <path id="map-landmass-2"
+            d="M700,80 C740,70 790,75 820,110 C850,145 845,185 860,230
+               C875,275 900,300 895,360 C890,420 865,470 845,520
+               C825,570 790,610 760,620 C730,630 700,610 685,580
+               C670,550 675,510 665,470 C655,430 640,400 645,350
+               C650,300 645,260 650,210 C655,160 665,95 700,80Z"
+            fill="rgba(55,189,248,0.06)" stroke="rgba(55,189,248,0.14)" stroke-width="1.5"
+            opacity="0"/>
+
+          <!-- Asia rough shape -->
+          <path id="map-landmass-3"
+            d="M1000,70 C1060,55 1140,60 1200,95 C1260,130 1290,180 1310,240
+               C1330,300 1340,360 1330,420 C1320,480 1290,520 1260,550
+               C1230,580 1190,590 1150,580 C1110,570 1075,545 1045,510
+               C1015,475 995,430 990,375 C985,320 990,270 1000,210
+               C1010,150 990,90 1000,70Z"
+            fill="rgba(55,189,248,0.06)" stroke="rgba(55,189,248,0.14)" stroke-width="1.5"
+            opacity="0"/>
+
+          <!-- Point 1 — North America -->
+          <g id="map-pt1" data-cx="520" data-cy="310" opacity="0">
+            <!-- outer pulse ring -->
+            <circle id="map-pt1-ring" cx="520" cy="310" r="28"
+              stroke="rgba(55,189,248,0.35)" stroke-width="1.5" fill="none"/>
+            <!-- inner glow dot -->
+            <circle cx="520" cy="310" r="10"
+              fill="rgba(55,189,248,0.90)"
+              style="filter:drop-shadow(0 0 14px rgba(55,189,248,0.90));"/>
+            <!-- connector tick up -->
+            <line id="map-pt1-tick" x1="520" y1="280" x2="520" y2="240"
+              stroke="rgba(55,189,248,0.55)" stroke-width="1.5" stroke-dasharray="4 4"
+              stroke-dashoffset="0"/>
+          </g>
+
+          <!-- Point 2 — Europe -->
+          <g id="map-pt2" data-cx="860" data-cy="480" opacity="0">
+            <circle id="map-pt2-ring" cx="860" cy="480" r="28"
+              stroke="rgba(55,189,248,0.35)" stroke-width="1.5" fill="none"/>
+            <circle cx="860" cy="480" r="10"
+              fill="rgba(55,189,248,0.90)"
+              style="filter:drop-shadow(0 0 14px rgba(55,189,248,0.90));"/>
+            <line id="map-pt2-tick" x1="860" y1="450" x2="860" y2="410"
+              stroke="rgba(55,189,248,0.55)" stroke-width="1.5" stroke-dasharray="4 4"/>
+          </g>
+
+          <!-- Point 3 — Asia -->
+          <g id="map-pt3" data-cx="1180" data-cy="220" opacity="0">
+            <circle id="map-pt3-ring" cx="1180" cy="220" r="28"
+              stroke="rgba(55,189,248,0.35)" stroke-width="1.5" fill="none"/>
+            <circle cx="1180" cy="220" r="10"
+              fill="rgba(55,189,248,0.90)"
+              style="filter:drop-shadow(0 0 14px rgba(55,189,248,0.90));"/>
+            <line id="map-pt3-tick" x1="1180" y1="190" x2="1180" y2="150"
+              stroke="rgba(55,189,248,0.55)" stroke-width="1.5" stroke-dasharray="4 4"/>
+          </g>
+
+        </svg>
+
+        <!-- HTML label overlays, positioned as % of panel -->
+        <div class="point-labels">
+          <!-- P1 label — above pt1 tick -->
+          <div class="map-label-box" id="map-label-1"
+               style="left:27.5%; bottom:58%; transform:translateX(-50%); opacity:0; text-align:center;">
+            <div class="map-label-name" data-slot="p1-name">North America</div>
+            <div class="map-label-val" data-slot="p1-val">4,200 students</div>
+          </div>
+          <!-- P2 label -->
+          <div class="map-label-box" id="map-label-2"
+               style="left:52.5%; bottom:34%; transform:translateX(-50%); opacity:0; text-align:center;">
+            <div class="map-label-name" data-slot="p2-name">Europe</div>
+            <div class="map-label-val" data-slot="p2-val">3,100 students</div>
+          </div>
+          <!-- P3 label -->
+          <div class="map-label-box" id="map-label-3"
+               style="left:72%; bottom:67%; transform:translateX(-50%); opacity:0; text-align:center;">
+            <div class="map-label-name" data-slot="p3-name">Asia-Pacific</div>
+            <div class="map-label-val" data-slot="p3-val">5,500 students</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="vignette"></div>
+      <div class="grain"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      /* grain flicker */
+      tl.fromTo("#t1-ov-map .grain",
+        { backgroundPosition: "0px 0px" },
+        { backgroundPosition: "88px 66px", duration: 0.6, ease: "none", repeat: 11, yoyo: true }, 0);
+
+      /* environment */
+      tl.from("#t1-ov-map .bloom",
+          { autoAlpha: 0, scale: 0.90, transformOrigin: "50% 120%", duration: 1.4, ease: "expo.out" }, 0)
+        .from("#t1-ov-map .dot-grid",
+          { autoAlpha: 0, duration: 1.1, ease: "power2.out" }, 0.2)
+
+        /* title */
+        .from("#t1-ov-map .title",
+          { autoAlpha: 0, y: 28, filter: "blur(14px)", duration: 1.0, ease: "power4.out" }, 0.45)
+
+        /* map panel */
+        .from("#map-panel",
+          { autoAlpha: 0, scale: 0.96, transformOrigin: "50% 50%",
+            filter: "blur(14px)", duration: 1.0, ease: "expo.out" }, 0.85)
+
+        /* landmasses fade in */
+        .to(["#map-landmass-1", "#map-landmass-2", "#map-landmass-3"],
+          { opacity: 1, duration: 1.0, ease: "power2.out", stagger: 0.18 }, 1.1);
+
+      /* points pop on staggered — use autoAlpha only */
+      tl.to("#map-pt1",
+          { autoAlpha: 1, scale: 1, duration: 0.5, ease: "back.out(2.0)",
+            transformOrigin: "520px 310px" }, 1.65)
+        .to("#map-pt2",
+          { autoAlpha: 1, scale: 1, duration: 0.5, ease: "back.out(2.0)",
+            transformOrigin: "860px 480px" }, 1.90)
+        .to("#map-pt3",
+          { autoAlpha: 1, scale: 1, duration: 0.5, ease: "back.out(2.0)",
+            transformOrigin: "1180px 220px" }, 2.15);
+
+      /* Set initial scale for spring effect */
+      gsap.set(["#map-pt1", "#map-pt2", "#map-pt3"], { scale: 0.5 });
+
+      /* labels appear after points */
+      tl.to("#map-label-1",
+          { autoAlpha: 1, y: 0, duration: 0.5, ease: "power3.out" }, 2.0)
+        .to("#map-label-2",
+          { autoAlpha: 1, y: 0, duration: 0.5, ease: "power3.out" }, 2.25)
+        .to("#map-label-3",
+          { autoAlpha: 1, y: 0, duration: 0.5, ease: "power3.out" }, 2.50);
+
+      gsap.set(["#map-label-1", "#map-label-2", "#map-label-3"], { y: 14 });
+
+      /* pulse rings breathe (scale + autoAlpha — no filter) */
+      tl.to(["#map-pt1-ring", "#map-pt2-ring", "#map-pt3-ring"],
+        { scale: 1.6, autoAlpha: 0,
+          transformOrigin: "center center",
+          duration: 1.2, ease: "power2.out", repeat: 2, yoyo: false,
+          stagger: 0.3 }, 2.6);
+
+      /* slow drift */
+      tl.to("#map-panel",
+        { y: -8, duration: 5.0, ease: "sine.inOut" }, 2.0);
+
+      tl.set({}, {}, 7);
+      window.__timelines["t1-ov-map"] = tl;
+    </script>
+  </body>
+</html>

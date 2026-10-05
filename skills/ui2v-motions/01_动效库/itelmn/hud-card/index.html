@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html data-composition-id="hud-card" data-width="720" data-height="1280">
+<head>
+  <meta charset="utf-8">
+  <title>HyperFrames — HUD Card</title>
+  <link rel="stylesheet" href="shared/styles.css">
+  <style>
+    .hud { width: min(820px, 78vw); position: relative; padding: 32px 36px; border-radius: 12px;
+      background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.10);
+      box-shadow: 0 0 40px rgba(0,0,0,0.5); will-change: transform, opacity;
+      backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); }
+    /* Corner brackets */
+    .hud::before, .hud::after { content: ''; position: absolute; width: 28px; height: 28px;
+      border-style: solid; pointer-events: none; }
+    .hud::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; border-radius: 6px 0 0 0; }
+    .hud::after { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; border-radius: 0 0 6px 0; }
+    /* Scanlines */
+    .hud-scan { position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.02) 2px, rgba(255,255,255,0.02) 4px); }
+    /* Top status bar */
+    .hud-status { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--hf-muted); }
+    .hud-status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+      margin-right: 6px; vertical-align: middle; }
+    .hud-title { font-size: 32px; font-weight: 700; line-height: 1.2; margin-bottom: 6px; }
+    .hud-desc { font-size: 18px; color: var(--hf-muted); line-height: 1.4; }
+    .hud-metrics { display: flex; gap: 24px; margin-top: 16px; padding-top: 16px;
+      border-top: 1px solid rgba(255,255,255,0.08); }
+    .hud-metric-val { font-size: 22px; font-weight: 700; }
+    .hud-metric-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--hf-muted); margin-top: 2px; }
+    /* Animated scan line */
+    .hud-scanline { position: absolute; left: 0; right: 0; height: 1px; pointer-events: none;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+      will-change: top; }
+  </style>
+</head>
+<body>
+  <div class="hf-center hud" id="hud" data-composition-id="hud-card" data-start="0" data-duration="4" data-track-index="0">
+    <div class="hud-scan"></div>
+    <div class="hud-scanline" id="scanline"></div>
+    <div class="hud-status">
+      <span><span class="hud-status-dot" id="dot"></span><span id="statusText">SYSTEM ACTIVE</span></span>
+      <span id="statusRight">v2.4.1</span>
+    </div>
+    <div class="hud-title hf-text-heading" id="title"></div>
+    <div class="hud-desc hf-text-body" id="desc"></div>
+    <div class="hud-metrics" id="metrics"></div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script>
+    const v = window.__hyperframes?.getVariables?.() ?? {};
+    const accentColor = v.accentColor ?? '#9f75ff';
+    const yPos = v.yPos ?? 50;
+    const title = v.title ?? 'AI Agent Deployed';
+    const desc = v.description ?? 'All systems operational';
+    const metrics = v.metrics ?? [{ value: '99.9%', label: 'Uptime' }, { value: '12ms', label: 'Latency' }];
+    const statusText = v.statusText ?? 'SYSTEM ACTIVE';
+
+    const hudEl = document.getElementById('hud');
+    hudEl.style.top = yPos + '%';
+    hudEl.style.borderColor = accentColor + '22';
+    hudEl.querySelector('.hud::before')?.style && (hudEl.style.setProperty('--c', accentColor));
+    document.querySelectorAll('.hud::before, .hud::after');
+    const style = document.createElement('style');
+    style.textContent = `.hud::before, .hud::after { border-color: ${accentColor}; }`;
+    document.head.appendChild(style);
+    document.getElementById('dot').style.background = accentColor;
+    document.getElementById('statusText').textContent = statusText;
+    document.getElementById('title').textContent = title;
+    document.getElementById('desc').textContent = desc;
+
+    const metricsEl = document.getElementById('metrics');
+    for (const m of metrics) {
+      const div = document.createElement('div');
+      div.innerHTML = `<div class="hud-metric-val hf-text-heading" style="color:${accentColor}">${m.value}</div><div class="hud-metric-label">${m.label}</div>`;
+      metricsEl.appendChild(div);
+    }
+
+    const scanline = document.getElementById('scanline');
+    const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+    tl.fromTo('#hud', { opacity: 0, y: 24, scale: 0.95 }, { opacity: 1, y: 0, scale: 1, duration: 0.4, ease: 'back.out(1.2)' }, 0);
+    tl.fromTo(scanline, { top: '0%' }, { top: '100%', duration: 0.8, ease: 'none' }, 0.1);
+    tl.fromTo('#title', { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.3 }, 0.2);
+    tl.fromTo('#desc', { opacity: 0 }, { opacity: 1, duration: 0.25 }, 0.3);
+    tl.fromTo('.hud-metrics > div', { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.25, stagger: 0.08 }, 0.35);
+
+    const dur = parseFloat(v.timingDuration ?? 4);
+    tl.to('#hud', { opacity: 0, y: -16, duration: 0.3, ease: 'power2.in' }, Math.max(dur - 0.5, 0.6));
+  </script>
+</body>
+</html>
+

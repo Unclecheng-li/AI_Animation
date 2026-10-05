@@ -1,0 +1,551 @@
+<!doctype html>
+<!--
+  KALLAWAY · tier1 · overview · DASHBOARD
+  Mixed-widget dashboard. Four glass tiles in a 2x2 layout: big number (counts up),
+  mini-bar chart, mini ring, sparkline. Each labeled. Aurora bloom, glassmorphism,
+  staggered spring build-in, finite glow pulses.
+  Slots: title, w1-label, w1-value, w2-label, w3-label, w3-pct, w4-label.
+  Knobs: data-val on #dash-w1-num (big number, default 2847),
+         data-bars on #dash-w2-bars (comma-separated heights 0-100, default "42,68,55,80,61,90,73"),
+         data-pct on #dash-w3-ring (ring fill, default 74),
+         data-points on #dash-w4-spark (comma-sep y-values 0-100, default "30,45,38,60,52,71,65,80,70,88").
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+/* ============================================================================
+   KALLAWAY — style tokens
+   Single source of palette / type / motion / texture for every card in this
+   style. Cards reference these vars and never hardcode colors, fonts, easings,
+   glows, or textures. Tweak here, all cards update.
+   See DESIGN.md for the why.
+   Aesthetic: premium dark motion-graphics — near-black cool canvas, a blue
+   "aurora" glow blooming from below, glassmorphism cards, edge-lit neon
+   elements, gradient glow text, focus-stack blur, smooth After-Effects easing.
+   Palette is the AIS brand (blue is the hero glow). The opposite of Vox in
+   every axis: smooth not choppy, dark not paper, glow not ink.
+   ============================================================================ */
+
+/* Type. The HyperFrames compiler embeds supported fonts by name at render time;
+   this @import is what makes standalone / browser preview show the right faces. */
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500;1,600&family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Space+Mono:wght@400;700&display=swap");
+
+:root {
+  /* --- palette (mirror style.json + DESIGN.md). AIS brand, dark. ----------- */
+  --canvas:       #0A0E14;   /* main near-black cool background */
+  --canvas-deep:  #07121C;   /* deeper navy — vignette / depth wells */
+  --ink:          #2A251F;   /* dark text for the rare light/cream surface */
+  --paper:        #F0EEE9;   /* warm white surface (light glass / chips) */
+  --white:        #FFFFFF;
+
+  --text:         #F0EEE9;   /* primary text on dark */
+  --text-dim:     rgba(240, 238, 233, 0.62);  /* secondary copy */
+  --text-faint:   rgba(240, 238, 233, 0.34);  /* metadata, fine print */
+
+  --accent:       #37BDF8;   /* AIS blue — THE hero glow (where refs used purple) */
+  --accent-2:     #F5D82A;   /* yellow — secondary pop / highlight numerals */
+  --alert:        #FF3B30;   /* red — alarm, negative delta, "lie" */
+  --warm:         #FF8A5C;   /* orange — warm secondary accent */
+
+  /* rgb triplets for building rgba() glows in cards without re-typing hex */
+  --accent-rgb:   55, 189, 248;
+  --accent2-rgb:  245, 216, 42;
+  --alert-rgb:    255, 59, 48;
+  --warm-rgb:     255, 138, 92;
+
+  /* semantic aliases the blueprint contract expects */
+  --bg:     var(--canvas);
+  --fg:     var(--text);
+  --muted:  var(--text-dim);
+
+  /* --- typography ---------------------------------------------------------- */
+  /* Plus Jakarta Sans = the voice (headlines, big numbers, glow text): geometric,
+     premium, rounds to match the glass radii, heavy at 800. Inter = body / labels /
+     captions, recedes. Space Mono = data chips, timestamps, %s — the "interface"
+     voice. No serif anywhere (that's Vox). */
+  --font-display: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  --font-body:    "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono:    "Space Mono", ui-monospace, "SF Mono", monospace;
+  /* contract aliases */
+  --font-label:   var(--font-body);
+  --font-hand:    var(--font-body);
+
+  --wt-reg:    400;
+  --wt-med:    500;
+  --wt-semi:   600;
+  --wt-bold:   700;
+  --wt-black:  800;
+
+  /* video sizes for 1920x1080 (big — readable in 2s) */
+  --size-mega:     300px;   /* hero stat number */
+  --size-display:  140px;   /* takeover headline */
+  --size-title:    84px;    /* section title */
+  --size-headline: 54px;    /* card headline */
+  --size-body:     32px;    /* supporting copy */
+  --size-label:    24px;    /* kicker / metadata */
+  --size-tiny:     19px;    /* credits, fine print, timestamps */
+
+  --track-tight: -0.02em;   /* display tracking */
+  --track-snug:  -0.01em;
+  --track-wide:  0.18em;    /* uppercase label tracking */
+
+  /* --- glow — the signature. Soft, layered, never a hard ring. ------------- */
+  --glow-accent-sm: 0 0 10px rgba(var(--accent-rgb), 0.55);
+  --glow-accent:    0 0 22px rgba(var(--accent-rgb), 0.55), 0 0 56px rgba(var(--accent-rgb), 0.30);
+  --glow-accent-lg: 0 0 40px rgba(var(--accent-rgb), 0.60), 0 0 120px rgba(var(--accent-rgb), 0.32);
+  --glow-white:     0 0 16px rgba(255, 255, 255, 0.50), 0 0 46px rgba(255, 255, 255, 0.26);
+  --glow-white-lg:  0 0 30px rgba(255, 255, 255, 0.55), 0 0 90px rgba(255, 255, 255, 0.30);
+  /* text glow (set as text-shadow): white core that lifts off the dark canvas */
+  --textglow:       0 0 18px rgba(255, 255, 255, 0.45), 0 0 40px rgba(var(--accent-rgb), 0.30);
+  --textglow-accent:0 0 18px rgba(var(--accent-rgb), 0.65), 0 0 48px rgba(var(--accent-rgb), 0.35);
+
+  /* --- glass — frosted surfaces. Two tints: light (bright) + dark (recede). - */
+  --glass-bg:      rgba(255, 255, 255, 0.055);
+  --glass-bg-dark: rgba(16, 22, 34, 0.55);
+  --glass-border:  rgba(255, 255, 255, 0.14);
+  --glass-hi:      rgba(255, 255, 255, 0.22);  /* top inner-highlight edge */
+  --glass-blur:    blur(22px) saturate(135%);
+  --glass-shadow:  0 24px 70px rgba(0, 0, 0, 0.50);
+
+  /* --- shape --------------------------------------------------------------- */
+  --radius:     28px;       /* glass cards, pills — generously rounded */
+  --radius-sm:  16px;       /* chips, small tiles */
+  --radius-lg:  40px;       /* phone frames, large surfaces */
+  --pad:        80px;       /* canvas safe-area inset */
+  --stroke:     1.5px;      /* hairline neon edge weight */
+
+  /* --- motion — smooth, premium, breathing. The anti-Vox. ------------------ */
+  /* Long expo/quint glides; spring overshoot for cards; blur-in for focus pull.
+     NEVER steps()/choppy — that is Vox's signature, not ours. */
+  --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);   /* expo-out — the default glide */
+  --ease-inout:  cubic-bezier(0.65, 0, 0.35, 1);   /* symmetric, for drifts */
+  --ease-soft:   cubic-bezier(0.33, 1, 0.68, 1);   /* gentle settle */
+  /* GSAP string eases (used in card timelines) */
+  --gsap-glide:  power4.out;
+  --gsap-expo:   expo.out;
+  --gsap-spring: back.out(1.4);
+  --dur-in:   0.8s;    /* entrances breathe */
+  --dur-out:  0.5s;
+
+  /* --- textures (deterministic) ------------------------------------------- */
+  /* Aurora bloom — blue light rising from the bottom-center. The hero ambience.
+     Compose these as background layers under content; animate opacity/scale. */
+  --bloom-bottom: radial-gradient(120% 85% at 50% 118%,
+                    rgba(var(--accent-rgb), 0.45) 0%,
+                    rgba(var(--accent-rgb), 0.16) 32%,
+                    transparent 62%);
+  --bloom-corner: radial-gradient(90% 90% at 88% 12%,
+                    rgba(var(--accent-rgb), 0.30) 0%,
+                    transparent 55%);
+
+  /* Vignette — pulls the eye to center, deepens the canvas edges. */
+  --vignette: radial-gradient(125% 125% at 50% 45%, transparent 52%, rgba(0,0,0,0.55) 100%);
+
+  /* Faint dot grid (the refs' subtle technical texture). Low contrast. */
+  --dot:      radial-gradient(circle at center, rgba(255,255,255,0.06) 1px, transparent 1.4px);
+  --dot-size: 46px 46px;
+
+  /* Fine film grain over everything — keeps the dark from banding. */
+  --tex-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+</style>
+    <style>
+      html, body { margin: 0; }
+
+      #t1-ov-dash {
+        position: absolute; inset: 0; width: 1920px; height: 1080px;
+        background: var(--canvas); color: var(--text);
+        font-family: var(--font-display); overflow: hidden;
+      }
+
+      #t1-ov-dash .bloom {
+        position: absolute; inset: 0; background: var(--bloom-bottom); z-index: 1;
+      }
+      #t1-ov-dash .bloom-corner {
+        position: absolute; inset: 0; background: var(--bloom-corner); z-index: 1;
+      }
+      #t1-ov-dash .dot-grid {
+        position: absolute; inset: 0; z-index: 1;
+        background-image: var(--dot); background-size: var(--dot-size); opacity: 0.45;
+        -webkit-mask-image: radial-gradient(115% 100% at 50% 60%, #000 30%, transparent 78%);
+                mask-image: radial-gradient(115% 100% at 50% 60%, #000 30%, transparent 78%);
+      }
+
+      /* Title */
+      #t1-ov-dash .title-row {
+        position: absolute; left: 0; right: 0; top: 72px;
+        text-align: center; z-index: 4;
+      }
+      #t1-ov-dash .title {
+        font-family: var(--font-display); font-weight: var(--wt-bold);
+        font-size: var(--size-title); letter-spacing: var(--track-snug); line-height: 1.06;
+        color: var(--white); text-shadow: var(--textglow);
+        max-width: 1400px; margin: 0 auto;
+      }
+      #t1-ov-dash .title em {
+        font-style: normal; color: var(--accent); text-shadow: var(--textglow-accent);
+      }
+
+      /* 2x2 tile grid */
+      #t1-ov-dash .tiles {
+        position: absolute; left: 140px; right: 140px; top: 230px; bottom: 72px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 1fr 1fr;
+        gap: 28px; z-index: 4;
+      }
+
+      /* Base glass tile */
+      #t1-ov-dash .tile {
+        background: var(--glass-bg-dark);
+        border: var(--stroke) solid var(--glass-border);
+        border-radius: var(--radius);
+        box-shadow: var(--glass-shadow);
+        backdrop-filter: var(--glass-blur);
+        -webkit-backdrop-filter: var(--glass-blur);
+        padding: 44px 52px 40px;
+        position: relative; overflow: hidden;
+        display: flex; flex-direction: column;
+      }
+      #t1-ov-dash .tile::before {
+        content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+        background: linear-gradient(90deg, transparent, var(--glass-hi) 20%, var(--glass-hi) 80%, transparent);
+      }
+
+      /* Tile label */
+      #t1-ov-dash .tile-label {
+        font-family: var(--font-mono); font-size: var(--size-label);
+        font-weight: var(--wt-bold); letter-spacing: var(--track-wide);
+        text-transform: uppercase; color: var(--accent);
+        text-shadow: var(--textglow-accent); margin-bottom: 28px;
+      }
+
+      /* W1 — big number */
+      #t1-ov-dash .w1-num {
+        font-family: var(--font-display); font-weight: var(--wt-black);
+        font-size: 160px; line-height: 1; letter-spacing: var(--track-tight);
+        background: linear-gradient(150deg, #ffffff 20%, rgba(var(--accent-rgb), 0.80) 85%);
+        -webkit-background-clip: text; background-clip: text;
+        -webkit-text-fill-color: transparent; text-fill-color: transparent;
+        filter: drop-shadow(0 0 28px rgba(var(--accent-rgb), 0.50));
+        margin-top: auto; line-height: 0.95;
+      }
+      #t1-ov-dash .w1-unit {
+        font-family: var(--font-body); font-size: var(--size-body);
+        font-weight: var(--wt-med); color: var(--text-dim);
+        margin-top: 12px;
+      }
+
+      /* W2 — mini bar chart */
+      #t1-ov-dash .bar-chart {
+        display: flex; align-items: flex-end; gap: 10px;
+        height: 160px; margin-top: auto;
+      }
+      #t1-ov-dash .bar-wrap {
+        flex: 1; display: flex; flex-direction: column;
+        align-items: center; justify-content: flex-end;
+        height: 100%;
+      }
+      #t1-ov-dash .bar {
+        width: 100%; border-radius: 6px 6px 3px 3px;
+        background: linear-gradient(180deg, rgba(var(--accent-rgb), 0.90) 0%, rgba(var(--accent-rgb), 0.30) 100%);
+        box-shadow: 0 0 12px rgba(var(--accent-rgb), 0.35);
+        transform-origin: bottom center;
+      }
+
+      /* W3 — mini ring */
+      #t1-ov-dash .ring-wrap {
+        display: flex; align-items: center; gap: 36px;
+        margin-top: auto;
+      }
+      #t1-ov-dash .mini-ring-container {
+        position: relative; width: 160px; height: 160px; flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center;
+      }
+      #t1-ov-dash .mini-ring-glow {
+        position: absolute; inset: -20px; border-radius: 50%;
+        background: radial-gradient(circle, rgba(var(--accent-rgb), 0.20) 0%, transparent 65%);
+      }
+      #t1-ov-dash .mini-ring-svg { width: 160px; height: 160px; position: relative; z-index: 2; }
+      #t1-ov-dash .mini-ring-center {
+        position: absolute; inset: 0; z-index: 3;
+        display: flex; align-items: center; justify-content: center;
+      }
+      #t1-ov-dash .mini-ring-pct {
+        font-family: var(--font-display); font-weight: var(--wt-black);
+        font-size: 38px; line-height: 1; letter-spacing: var(--track-tight);
+        background: linear-gradient(150deg, #fff 10%, rgba(var(--accent-rgb), 0.85) 80%);
+        -webkit-background-clip: text; background-clip: text;
+        -webkit-text-fill-color: transparent; text-fill-color: transparent;
+      }
+      #t1-ov-dash .ring-aside {
+        display: flex; flex-direction: column; gap: 10px;
+      }
+      #t1-ov-dash .ring-aside-label {
+        font-family: var(--font-body); font-size: var(--size-body);
+        font-weight: var(--wt-med); color: var(--text-dim); line-height: 1.4;
+      }
+      #t1-ov-dash .ring-aside-label em {
+        font-style: normal; color: var(--text); text-shadow: var(--textglow);
+      }
+
+      /* W4 — sparkline */
+      #t1-ov-dash .spark-wrap {
+        margin-top: auto; display: flex; flex-direction: column; gap: 12px;
+      }
+      #t1-ov-dash .spark-svg {
+        width: 100%; height: 120px;
+        overflow: visible;
+      }
+
+      /* Vignette + grain */
+      #t1-ov-dash .vignette {
+        position: absolute; inset: 0; pointer-events: none; z-index: 6;
+        background: var(--vignette);
+      }
+      #t1-ov-dash .grain {
+        position: absolute; inset: -40px; background: var(--tex-grain);
+        background-size: 200px 200px; mix-blend-mode: overlay; opacity: 0.10;
+        pointer-events: none; z-index: 7;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="t1-ov-dash" data-composition-id="t1-ov-dash" data-start="0" data-width="1920" data-height="1080" class="clip" data-duration="5">
+      <div class="bloom"></div>
+      <div class="bloom-corner"></div>
+      <div class="dot-grid"></div>
+
+      <div class="title-row">
+        <div class="title" data-slot="title">Platform <em>at a Glance</em></div>
+      </div>
+
+      <div class="tiles">
+
+        <!-- W1: Big Number -->
+        <div class="tile" id="dash-w1">
+          <div class="tile-label" data-slot="w1-label">ACTIVE LEARNERS</div>
+          <div class="w1-num" id="dash-w1-num" data-val="2847" data-slot="w1-value">0</div>
+          <div class="w1-unit">enrolled this month</div>
+        </div>
+
+        <!-- W2: Mini bar chart -->
+        <div class="tile" id="dash-w2">
+          <div class="tile-label" data-slot="w2-label">WEEKLY COMPLETIONS</div>
+          <div class="bar-chart" id="dash-w2-bars" data-bars="42,68,55,80,61,90,73">
+            <!-- bars injected by JS -->
+          </div>
+        </div>
+
+        <!-- W3: Mini ring + aside -->
+        <div class="tile" id="dash-w3">
+          <div class="tile-label" data-slot="w3-label">COMPLETION RATE</div>
+          <div class="ring-wrap">
+            <div class="mini-ring-container">
+              <div class="mini-ring-glow"></div>
+              <svg class="mini-ring-svg" id="dash-w3-ring" data-pct="74"
+                   viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="80" cy="80" r="66"
+                  stroke="rgba(255,255,255,0.08)" stroke-width="14" stroke-linecap="round"/>
+                <circle id="dash-w3-arc" cx="80" cy="80" r="66"
+                  stroke="url(#dashRingGrad)" stroke-width="14" stroke-linecap="round"
+                  fill="none" transform="rotate(-90 80 80)"/>
+                <defs>
+                  <linearGradient id="dashRingGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#37BDF8" stop-opacity="1"/>
+                    <stop offset="100%" stop-color="#ffffff" stop-opacity="0.9"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+              <div class="mini-ring-center">
+                <div class="mini-ring-pct" id="dash-w3-pct" data-slot="w3-pct">0%</div>
+              </div>
+            </div>
+            <div class="ring-aside">
+              <div class="ring-aside-label" data-slot="w3-aside">learners who start <em>finish the course</em> within 30 days</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- W4: Sparkline -->
+        <div class="tile" id="dash-w4">
+          <div class="tile-label" data-slot="w4-label">REVENUE TREND · 10W</div>
+          <div class="spark-wrap">
+            <svg class="spark-svg" id="dash-w4-spark" data-points="30,45,38,60,52,71,65,80,70,88"
+                 viewBox="0 0 700 120" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="rgba(55,189,248,0.35)"/>
+                  <stop offset="100%" stop-color="rgba(55,189,248,0.00)"/>
+                </linearGradient>
+              </defs>
+              <!-- area fill + line injected by JS -->
+            </svg>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="vignette"></div>
+      <div class="grain"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      /* ---- build bar chart ---- */
+      (function() {
+        const barsEl = document.getElementById("dash-w2-bars");
+        const vals = (barsEl.getAttribute("data-bars") || "42,68,55,80,61,90,73")
+          .split(",").map(Number);
+        vals.forEach((v, i) => {
+          const wrap = document.createElement("div");
+          wrap.className = "bar-wrap";
+          const bar = document.createElement("div");
+          bar.className = "bar";
+          bar.style.height = "0%";
+          bar.dataset.target = v;
+          bar.id = "dash-bar-" + i;
+          wrap.appendChild(bar);
+          barsEl.appendChild(wrap);
+        });
+      })();
+
+      /* ---- build sparkline ---- */
+      (function() {
+        const svgEl = document.getElementById("dash-w4-spark");
+        const pts = (svgEl.getAttribute("data-points") || "30,45,38,60,52,71,65,80,70,88")
+          .split(",").map(Number);
+        const W = 700, H = 120, pad = 6;
+        const xs = pts.map((_, i) => (i / (pts.length - 1)) * (W - pad * 2) + pad);
+        const ys = pts.map(v => H - pad - ((v / 100) * (H - pad * 2)));
+
+        const lineCoords = xs.map((x, i) => `${i === 0 ? "M" : "L"}${x},${ys[i]}`).join(" ");
+        const areaCoords = lineCoords + ` L${xs[xs.length-1]},${H} L${xs[0]},${H} Z`;
+
+        const area = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        area.setAttribute("d", areaCoords);
+        area.setAttribute("fill", "url(#sparkFill)");
+        area.setAttribute("stroke", "none");
+        svgEl.appendChild(area);
+
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        line.setAttribute("d", lineCoords);
+        line.setAttribute("fill", "none");
+        line.setAttribute("stroke", "#37BDF8");
+        line.setAttribute("stroke-width", "3");
+        line.setAttribute("stroke-linecap", "round");
+        line.setAttribute("stroke-linejoin", "round");
+        line.style.filter = "drop-shadow(0 0 6px rgba(55,189,248,0.70))";
+        svgEl.appendChild(line);
+
+        /* animate stroke-dasharray draw */
+        const len = line.getTotalLength ? line.getTotalLength() : 700;
+        line.style.strokeDasharray = len;
+        line.style.strokeDashoffset = len;
+        line.id = "dash-spark-line";
+        area.id = "dash-spark-area";
+        area.style.opacity = "0";
+      })();
+
+      /* ---- ring setup ---- */
+      const ringEl = document.getElementById("dash-w3-ring");
+      const ringPct = parseFloat(ringEl.getAttribute("data-pct")) || 74;
+      const r3 = 66;
+      const circ3 = 2 * Math.PI * r3;
+      const arcEl3 = document.getElementById("dash-w3-arc");
+      const pctEl3 = document.getElementById("dash-w3-pct");
+      arcEl3.style.strokeDasharray = circ3;
+      arcEl3.style.strokeDashoffset = circ3;
+
+      /* ---- GSAP timeline ---- */
+
+      /* grain flicker */
+      tl.fromTo("#t1-ov-dash .grain",
+        { backgroundPosition: "0px 0px" },
+        { backgroundPosition: "100px 75px", duration: 0.6, ease: "none", repeat: 11, yoyo: true }, 0);
+
+      /* environment */
+      tl.from("#t1-ov-dash .bloom",
+          { autoAlpha: 0, scale: 0.90, transformOrigin: "50% 120%", duration: 1.4, ease: "expo.out" }, 0)
+        .from("#t1-ov-dash .bloom-corner",
+          { autoAlpha: 0, duration: 1.2, ease: "power2.out" }, 0.2)
+        .from("#t1-ov-dash .dot-grid",
+          { autoAlpha: 0, duration: 1.1, ease: "power2.out" }, 0.2)
+
+        /* title glide in */
+        .from("#t1-ov-dash .title",
+          { autoAlpha: 0, y: 28, filter: "blur(14px)", duration: 1.0, ease: "power4.out" }, 0.45)
+
+        /* tiles stagger in with spring */
+        .from("#dash-w1",
+          { autoAlpha: 0, y: 44, scale: 0.92, transformOrigin: "50% 50%",
+            filter: "blur(12px)", duration: 0.82, ease: "back.out(1.4)" }, 1.0)
+        .from("#dash-w2",
+          { autoAlpha: 0, y: 44, scale: 0.92, transformOrigin: "50% 50%",
+            filter: "blur(12px)", duration: 0.82, ease: "back.out(1.4)" }, 1.14)
+        .from("#dash-w3",
+          { autoAlpha: 0, y: 44, scale: 0.92, transformOrigin: "50% 50%",
+            filter: "blur(12px)", duration: 0.82, ease: "back.out(1.4)" }, 1.28)
+        .from("#dash-w4",
+          { autoAlpha: 0, y: 44, scale: 0.92, transformOrigin: "50% 50%",
+            filter: "blur(12px)", duration: 0.82, ease: "back.out(1.4)" }, 1.42);
+
+      /* W1 big number count-up */
+      const numEl = document.getElementById("dash-w1-num");
+      const targetVal = parseInt(numEl.getAttribute("data-val")) || 2847;
+      tl.to({ val: 0 }, {
+        val: targetVal,
+        duration: 1.6, ease: "power2.out",
+        onUpdate: function() {
+          numEl.textContent = Math.round(this.targets()[0].val).toLocaleString();
+        }
+      }, 1.45);
+
+      /* W2 bars grow up */
+      document.querySelectorAll("#dash-w2-bars .bar").forEach((bar, i) => {
+        const target = parseFloat(bar.dataset.target) || 50;
+        tl.to({ h: 0 }, {
+          h: target,
+          duration: 0.7, ease: "power3.out",
+          onUpdate: function() {
+            bar.style.height = this.targets()[0].h + "%";
+          }
+        }, 1.28 + i * 0.06);
+      });
+
+      /* W3 ring count-up + fill */
+      tl.to({ val: 0 }, {
+        val: ringPct,
+        duration: 1.5, ease: "power2.out",
+        onUpdate: function() {
+          const v = this.targets()[0].val;
+          arcEl3.style.strokeDashoffset = circ3 - (v / 100) * circ3;
+          pctEl3.textContent = Math.round(v) + "%";
+        }
+      }, 1.55);
+
+      /* W4 sparkline draw */
+      tl.to("#dash-spark-line", {
+        strokeDashoffset: 0, duration: 1.4, ease: "power2.inOut"
+      }, 1.65)
+        .to("#dash-spark-area", { opacity: 1, duration: 0.8, ease: "power2.out" }, 1.9);
+
+      /* breathing glow pulse on ring glow (autoAlpha+scale only, no filter) */
+      tl.to("#dash-w3 .mini-ring-glow",
+        { opacity: 0.45, scale: 1.12, transformOrigin: "50% 50%",
+          duration: 1.4, ease: "sine.inOut", repeat: 2, yoyo: true }, 3.0);
+
+      /* slow hold drift */
+      tl.to("#t1-ov-dash .tiles",
+        { y: -8, duration: 5.0, ease: "sine.inOut" }, 2.0);
+
+      tl.set({}, {}, 7);
+      window.__timelines["t1-ov-dash"] = tl;
+    </script>
+  </body>
+</html>

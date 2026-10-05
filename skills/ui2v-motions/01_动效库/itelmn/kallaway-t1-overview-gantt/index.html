@@ -1,0 +1,427 @@
+<!doctype html>
+<!--
+  KALLAWAY · tier1 · overview · GANTT
+  Full-screen takeover. Simple Gantt chart: 4 rows, each with a row label (left)
+  and a glowing accent bar that scaleX-animates in at its horizontal offset/length.
+  Week ticks across the top. Bars stagger in after axis draws.
+  Slots: title, r1_label, r2_label, r3_label, r4_label.
+  data-* attrs control bar position: data-bar-start (0–1 fraction), data-bar-len (0–1 fraction).
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+/* ============================================================================
+   KALLAWAY — style tokens
+   Single source of palette / type / motion / texture for every card in this
+   style. Cards reference these vars and never hardcode colors, fonts, easings,
+   glows, or textures. Tweak here, all cards update.
+   See DESIGN.md for the why.
+   Aesthetic: premium dark motion-graphics — near-black cool canvas, a blue
+   "aurora" glow blooming from below, glassmorphism cards, edge-lit neon
+   elements, gradient glow text, focus-stack blur, smooth After-Effects easing.
+   Palette is the AIS brand (blue is the hero glow). The opposite of Vox in
+   every axis: smooth not choppy, dark not paper, glow not ink.
+   ============================================================================ */
+
+/* Type. The HyperFrames compiler embeds supported fonts by name at render time;
+   this @import is what makes standalone / browser preview show the right faces. */
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500;1,600&family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Space+Mono:wght@400;700&display=swap");
+
+:root {
+  /* --- palette (mirror style.json + DESIGN.md). AIS brand, dark. ----------- */
+  --canvas:       #0A0E14;   /* main near-black cool background */
+  --canvas-deep:  #07121C;   /* deeper navy — vignette / depth wells */
+  --ink:          #2A251F;   /* dark text for the rare light/cream surface */
+  --paper:        #F0EEE9;   /* warm white surface (light glass / chips) */
+  --white:        #FFFFFF;
+
+  --text:         #F0EEE9;   /* primary text on dark */
+  --text-dim:     rgba(240, 238, 233, 0.62);  /* secondary copy */
+  --text-faint:   rgba(240, 238, 233, 0.34);  /* metadata, fine print */
+
+  --accent:       #37BDF8;   /* AIS blue — THE hero glow (where refs used purple) */
+  --accent-2:     #F5D82A;   /* yellow — secondary pop / highlight numerals */
+  --alert:        #FF3B30;   /* red — alarm, negative delta, "lie" */
+  --warm:         #FF8A5C;   /* orange — warm secondary accent */
+
+  /* rgb triplets for building rgba() glows in cards without re-typing hex */
+  --accent-rgb:   55, 189, 248;
+  --accent2-rgb:  245, 216, 42;
+  --alert-rgb:    255, 59, 48;
+  --warm-rgb:     255, 138, 92;
+
+  /* semantic aliases the blueprint contract expects */
+  --bg:     var(--canvas);
+  --fg:     var(--text);
+  --muted:  var(--text-dim);
+
+  /* --- typography ---------------------------------------------------------- */
+  /* Plus Jakarta Sans = the voice (headlines, big numbers, glow text): geometric,
+     premium, rounds to match the glass radii, heavy at 800. Inter = body / labels /
+     captions, recedes. Space Mono = data chips, timestamps, %s — the "interface"
+     voice. No serif anywhere (that's Vox). */
+  --font-display: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  --font-body:    "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono:    "Space Mono", ui-monospace, "SF Mono", monospace;
+  /* contract aliases */
+  --font-label:   var(--font-body);
+  --font-hand:    var(--font-body);
+
+  --wt-reg:    400;
+  --wt-med:    500;
+  --wt-semi:   600;
+  --wt-bold:   700;
+  --wt-black:  800;
+
+  /* video sizes for 1920x1080 (big — readable in 2s) */
+  --size-mega:     300px;   /* hero stat number */
+  --size-display:  140px;   /* takeover headline */
+  --size-title:    84px;    /* section title */
+  --size-headline: 54px;    /* card headline */
+  --size-body:     32px;    /* supporting copy */
+  --size-label:    24px;    /* kicker / metadata */
+  --size-tiny:     19px;    /* credits, fine print, timestamps */
+
+  --track-tight: -0.02em;   /* display tracking */
+  --track-snug:  -0.01em;
+  --track-wide:  0.18em;    /* uppercase label tracking */
+
+  /* --- glow — the signature. Soft, layered, never a hard ring. ------------- */
+  --glow-accent-sm: 0 0 10px rgba(var(--accent-rgb), 0.55);
+  --glow-accent:    0 0 22px rgba(var(--accent-rgb), 0.55), 0 0 56px rgba(var(--accent-rgb), 0.30);
+  --glow-accent-lg: 0 0 40px rgba(var(--accent-rgb), 0.60), 0 0 120px rgba(var(--accent-rgb), 0.32);
+  --glow-white:     0 0 16px rgba(255, 255, 255, 0.50), 0 0 46px rgba(255, 255, 255, 0.26);
+  --glow-white-lg:  0 0 30px rgba(255, 255, 255, 0.55), 0 0 90px rgba(255, 255, 255, 0.30);
+  /* text glow (set as text-shadow): white core that lifts off the dark canvas */
+  --textglow:       0 0 18px rgba(255, 255, 255, 0.45), 0 0 40px rgba(var(--accent-rgb), 0.30);
+  --textglow-accent:0 0 18px rgba(var(--accent-rgb), 0.65), 0 0 48px rgba(var(--accent-rgb), 0.35);
+
+  /* --- glass — frosted surfaces. Two tints: light (bright) + dark (recede). - */
+  --glass-bg:      rgba(255, 255, 255, 0.055);
+  --glass-bg-dark: rgba(16, 22, 34, 0.55);
+  --glass-border:  rgba(255, 255, 255, 0.14);
+  --glass-hi:      rgba(255, 255, 255, 0.22);  /* top inner-highlight edge */
+  --glass-blur:    blur(22px) saturate(135%);
+  --glass-shadow:  0 24px 70px rgba(0, 0, 0, 0.50);
+
+  /* --- shape --------------------------------------------------------------- */
+  --radius:     28px;       /* glass cards, pills — generously rounded */
+  --radius-sm:  16px;       /* chips, small tiles */
+  --radius-lg:  40px;       /* phone frames, large surfaces */
+  --pad:        80px;       /* canvas safe-area inset */
+  --stroke:     1.5px;      /* hairline neon edge weight */
+
+  /* --- motion — smooth, premium, breathing. The anti-Vox. ------------------ */
+  /* Long expo/quint glides; spring overshoot for cards; blur-in for focus pull.
+     NEVER steps()/choppy — that is Vox's signature, not ours. */
+  --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);   /* expo-out — the default glide */
+  --ease-inout:  cubic-bezier(0.65, 0, 0.35, 1);   /* symmetric, for drifts */
+  --ease-soft:   cubic-bezier(0.33, 1, 0.68, 1);   /* gentle settle */
+  /* GSAP string eases (used in card timelines) */
+  --gsap-glide:  power4.out;
+  --gsap-expo:   expo.out;
+  --gsap-spring: back.out(1.4);
+  --dur-in:   0.8s;    /* entrances breathe */
+  --dur-out:  0.5s;
+
+  /* --- textures (deterministic) ------------------------------------------- */
+  /* Aurora bloom — blue light rising from the bottom-center. The hero ambience.
+     Compose these as background layers under content; animate opacity/scale. */
+  --bloom-bottom: radial-gradient(120% 85% at 50% 118%,
+                    rgba(var(--accent-rgb), 0.45) 0%,
+                    rgba(var(--accent-rgb), 0.16) 32%,
+                    transparent 62%);
+  --bloom-corner: radial-gradient(90% 90% at 88% 12%,
+                    rgba(var(--accent-rgb), 0.30) 0%,
+                    transparent 55%);
+
+  /* Vignette — pulls the eye to center, deepens the canvas edges. */
+  --vignette: radial-gradient(125% 125% at 50% 45%, transparent 52%, rgba(0,0,0,0.55) 100%);
+
+  /* Faint dot grid (the refs' subtle technical texture). Low contrast. */
+  --dot:      radial-gradient(circle at center, rgba(255,255,255,0.06) 1px, transparent 1.4px);
+  --dot-size: 46px 46px;
+
+  /* Fine film grain over everything — keeps the dark from banding. */
+  --tex-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+</style>
+    <style>
+      html, body { margin: 0; }
+
+      #t1-ov-gantt {
+        position: absolute; inset: 0; width: 1920px; height: 1080px;
+        background: var(--canvas); color: var(--text);
+        font-family: var(--font-display); overflow: hidden;
+      }
+
+      #t1-ov-gantt .bloom {
+        position: absolute; inset: 0; background: var(--bloom-bottom); z-index: 1;
+      }
+      #t1-ov-gantt .grid {
+        position: absolute; inset: 0; z-index: 1;
+        background-image: var(--dot); background-size: var(--dot-size); opacity: 0.40;
+        -webkit-mask-image: radial-gradient(120% 100% at 50% 55%, #000 28%, transparent 78%);
+                mask-image: radial-gradient(120% 100% at 50% 55%, #000 28%, transparent 78%);
+      }
+
+      /* Title */
+      #t1-ov-gantt .title-row {
+        position: absolute; left: 0; right: 0; top: 68px; text-align: center; z-index: 5;
+      }
+      #t1-ov-gantt .title {
+        font-family: var(--font-display); font-weight: var(--wt-bold);
+        font-size: var(--size-title); letter-spacing: var(--track-snug); line-height: 1.06;
+        color: var(--white); text-shadow: var(--textglow);
+        max-width: 1400px; margin: 0 auto;
+      }
+      #t1-ov-gantt .title em {
+        font-style: normal; color: var(--accent); text-shadow: var(--textglow-accent);
+      }
+
+      /* Gantt container */
+      #t1-ov-gantt .gantt-wrap {
+        position: absolute; left: 96px; right: 96px; top: 218px; bottom: 72px;
+        display: flex; flex-direction: column; gap: 0; z-index: 4;
+      }
+
+      /* Week header row */
+      #t1-ov-gantt .header-row {
+        display: flex; align-items: center;
+        padding-bottom: 18px;
+        border-bottom: 1.5px solid rgba(var(--accent-rgb), 0.18);
+        margin-bottom: 10px;
+      }
+      #t1-ov-gantt .row-label-col {
+        width: 340px; flex-shrink: 0;
+      }
+      #t1-ov-gantt .header-ticks {
+        flex: 1; display: flex; gap: 0;
+        font-family: var(--font-mono); font-size: 20px;
+        color: var(--text-faint); letter-spacing: 0.08em;
+      }
+      #t1-ov-gantt .tick {
+        flex: 1; text-align: center;
+        position: relative;
+      }
+      /* Vertical tick hairline */
+      #t1-ov-gantt .tick::after {
+        content: ""; position: absolute; bottom: -18px; left: 50%;
+        width: 1px; height: 10px;
+        background: rgba(var(--accent-rgb), 0.22);
+      }
+
+      /* Row */
+      #t1-ov-gantt .gantt-row {
+        display: flex; align-items: center;
+        padding: 18px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        flex: 1;
+      }
+
+      /* Row label */
+      #t1-ov-gantt .row-label {
+        width: 340px; flex-shrink: 0;
+        font-family: var(--font-display); font-weight: var(--wt-semi);
+        font-size: 34px; letter-spacing: var(--track-snug);
+        color: var(--text); text-shadow: var(--textglow);
+        padding-right: 32px;
+      }
+
+      /* Bar track (the full-width background lane) */
+      #t1-ov-gantt .bar-track {
+        flex: 1; height: 100%; display: flex; align-items: center;
+        position: relative;
+      }
+      /* Faint lane background */
+      #t1-ov-gantt .bar-track::before {
+        content: ""; position: absolute; inset: 0;
+        background: rgba(255,255,255,0.02);
+        border-radius: 8px;
+      }
+
+      /* The glowing accent bar — JS sets left/width from data-* attrs */
+      #t1-ov-gantt .bar {
+        position: absolute; height: 56px;
+        border-radius: 12px;
+        /* Gradient: leading edge brightest, trailing edge fades */
+        background: linear-gradient(90deg,
+          rgba(var(--accent-rgb), 0.90) 0%,
+          rgba(var(--accent-rgb), 0.65) 70%,
+          rgba(var(--accent-rgb), 0.30) 100%);
+        box-shadow: 0 0 24px rgba(var(--accent-rgb), 0.45), 0 0 60px rgba(var(--accent-rgb), 0.18);
+        transform-origin: left center;
+        /* initial state set by GSAP */
+      }
+      /* Bar inner top highlight */
+      #t1-ov-gantt .bar::before {
+        content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+        background: rgba(255,255,255,0.55); border-radius: 12px 12px 0 0;
+      }
+      /* Milestone dot at bar end */
+      #t1-ov-gantt .bar-end-dot {
+        position: absolute; right: -7px; top: 50%; transform: translateY(-50%);
+        width: 14px; height: 14px; border-radius: 50%;
+        background: var(--white);
+        box-shadow: 0 0 12px rgba(var(--accent-rgb), 0.80), 0 0 30px rgba(var(--accent-rgb), 0.40);
+      }
+
+      /* Duration label beside bar */
+      #t1-ov-gantt .bar-duration {
+        position: absolute; right: -92px; top: 50%; transform: translateY(-50%);
+        font-family: var(--font-mono); font-size: 20px;
+        color: var(--text-faint); white-space: nowrap;
+      }
+
+      #t1-ov-gantt .vignette {
+        position: absolute; inset: 0; pointer-events: none; z-index: 6;
+        background: var(--vignette);
+      }
+      #t1-ov-gantt .grain {
+        position: absolute; inset: -40px; background: var(--tex-grain);
+        background-size: 200px 200px; mix-blend-mode: overlay; opacity: 0.10;
+        pointer-events: none; z-index: 7;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="t1-ov-gantt" data-composition-id="t1-ov-gantt" data-start="0" data-width="1920" data-height="1080" class="clip" data-duration="5">
+      <div class="bloom"></div>
+      <div class="grid"></div>
+
+      <div class="title-row">
+        <div class="title" data-slot="title">Project <em>Timeline at a Glance</em></div>
+      </div>
+
+      <div class="gantt-wrap" id="gantt-body">
+
+        <!-- Week header -->
+        <div class="header-row" id="gantt-header">
+          <div class="row-label-col"></div>
+          <div class="header-ticks" id="gantt-ticks">
+            <div class="tick">Wk 1</div>
+            <div class="tick">Wk 2</div>
+            <div class="tick">Wk 3</div>
+            <div class="tick">Wk 4</div>
+            <div class="tick">Wk 5</div>
+            <div class="tick">Wk 6</div>
+            <div class="tick">Wk 7</div>
+            <div class="tick">Wk 8</div>
+          </div>
+        </div>
+
+        <!--
+          Bars: data-bar-start and data-bar-len are fractions (0–1) of the track width.
+          JS reads them and sets left/width as percentages.
+        -->
+
+        <!-- Row 1: Research — wk1-2 (0.000 → 0.250) -->
+        <div class="gantt-row" id="gantt-r1">
+          <div class="row-label" data-slot="r1_label">Research</div>
+          <div class="bar-track">
+            <div class="bar" id="bar1" data-bar-start="0.00" data-bar-len="0.25">
+              <div class="bar-end-dot"></div>
+              <div class="bar-duration">2 wks</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 2: Design — wk2-4 (0.125 → 0.375) -->
+        <div class="gantt-row" id="gantt-r2">
+          <div class="row-label" data-slot="r2_label">Design</div>
+          <div class="bar-track">
+            <div class="bar" id="bar2" data-bar-start="0.125" data-bar-len="0.375">
+              <div class="bar-end-dot"></div>
+              <div class="bar-duration">3 wks</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 3: Build — wk4-7 (0.375 → 0.500) -->
+        <div class="gantt-row" id="gantt-r3">
+          <div class="row-label" data-slot="r3_label">Build</div>
+          <div class="bar-track">
+            <div class="bar" id="bar3" data-bar-start="0.375" data-bar-len="0.500">
+              <div class="bar-end-dot"></div>
+              <div class="bar-duration">4 wks</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 4: Launch — wk7-8 (0.75 → 0.25) -->
+        <div class="gantt-row" id="gantt-r4">
+          <div class="row-label" data-slot="r4_label">Launch</div>
+          <div class="bar-track">
+            <div class="bar" id="bar4" data-bar-start="0.75" data-bar-len="0.25">
+              <div class="bar-end-dot"></div>
+              <div class="bar-duration">2 wks</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="vignette"></div>
+      <div class="grain"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      /* ---- position bars from data-* attributes ---- */
+      document.querySelectorAll("#t1-ov-gantt .bar").forEach(bar => {
+        const s = parseFloat(bar.dataset.barStart);
+        const l = parseFloat(bar.dataset.barLen);
+        bar.style.left  = (s * 100) + "%";
+        bar.style.width = (l * 100) + "%";
+      });
+
+      /* grain flicker */
+      tl.fromTo("#t1-ov-gantt .grain",
+        { backgroundPosition: "0px 0px" },
+        { backgroundPosition: "85px 60px", duration: 0.6, ease: "none", repeat: 11, yoyo: true }, 0);
+
+      /* environment */
+      tl.from("#t1-ov-gantt .bloom", { autoAlpha: 0, scale: 0.91, transformOrigin: "50% 120%", duration: 1.4, ease: "expo.out" }, 0)
+        .from("#t1-ov-gantt .grid",  { autoAlpha: 0, duration: 1.2, ease: "power2.out" }, 0.2)
+
+        /* title */
+        .from("#t1-ov-gantt .title", { autoAlpha: 0, y: 28, filter: "blur(14px)", duration: 1.0, ease: "power4.out" }, 0.5)
+
+        /* header + ticks draw in */
+        .from("#gantt-header", { autoAlpha: 0, y: 16, duration: 0.7, ease: "power3.out" }, 0.9)
+        .from("#gantt-ticks .tick", { autoAlpha: 0, y: 8, duration: 0.5, ease: "power2.out", stagger: 0.06 }, 1.1)
+
+        /* row labels slide in */
+        .from("#gantt-r1 .row-label", { autoAlpha: 0, x: -24, duration: 0.65, ease: "power3.out" }, 1.3)
+        .from("#gantt-r2 .row-label", { autoAlpha: 0, x: -24, duration: 0.65, ease: "power3.out" }, 1.45)
+        .from("#gantt-r3 .row-label", { autoAlpha: 0, x: -24, duration: 0.65, ease: "power3.out" }, 1.60)
+        .from("#gantt-r4 .row-label", { autoAlpha: 0, x: -24, duration: 0.65, ease: "power3.out" }, 1.75)
+
+        /* bars scaleX in from left — staggered */
+        .from("#bar1", { scaleX: 0, autoAlpha: 0, transformOrigin: "left center", duration: 0.70, ease: "power3.out" }, 1.55)
+        .from("#bar2", { scaleX: 0, autoAlpha: 0, transformOrigin: "left center", duration: 0.75, ease: "power3.out" }, 1.75)
+        .from("#bar3", { scaleX: 0, autoAlpha: 0, transformOrigin: "left center", duration: 0.85, ease: "power3.out" }, 1.95)
+        .from("#bar4", { scaleX: 0, autoAlpha: 0, transformOrigin: "left center", duration: 0.60, ease: "power3.out" }, 2.15)
+
+        /* milestone dots pop on after bar finishes */
+        .from("#t1-ov-gantt .bar-end-dot", { autoAlpha: 0, scale: 0, transformOrigin: "50% 50%",
+          duration: 0.35, ease: "back.out(2)", stagger: 0.18 }, 2.3)
+
+        /* breathing glow on bar3 (longest bar) — finite */
+        .to("#bar3", { boxShadow: "0 0 40px rgba(55,189,248,0.65), 0 0 90px rgba(55,189,248,0.25)",
+          duration: 1.4, ease: "sine.inOut", repeat: 2, yoyo: true }, 3.2)
+
+        /* slow upward drift */
+        .to("#t1-ov-gantt .gantt-wrap", { y: -10, duration: 5.0, ease: "sine.inOut" }, 2.2)
+
+        .set({}, {}, 7);
+
+      window.__timelines["t1-ov-gantt"] = tl;
+    </script>
+  </body>
+</html>
