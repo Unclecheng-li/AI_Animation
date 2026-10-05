@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](./LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](#contributing)
-[![Skills count](https://img.shields.io/badge/Skills-11-orange?style=flat-square)](#skills-gallery)
+[![Skills count](https://img.shields.io/badge/Skills-12-orange?style=flat-square)](#skills-gallery)
 [![Spec](https://img.shields.io/badge/Spec-SKILL.md-black?style=flat-square)](https://agentskills.io)
 
 🌐 **中文版**: [`README.md`](README.md)
@@ -31,6 +31,7 @@ One sentence is all it takes:
 - 🗂️ **Stacked data cards** — argument cards pop in from the bottom while used ones stack to the left as a deck: line-drawing, count-ups, gauges and more cascade in on a millisecond timeline synced to the voiceover — fullscreen-record it and it's a finished cut
 - 🖥️ **Windows 11 simulation** — a "real PC" rebuilt 1:1: Explorer, Start menu, system dialogs and the blue repair screen shot by shot, with a performing cursor leading the viewer and teaching markers layered on top
 - 📐 **Swiss-style chart demos** — editorial-grade typography on paper-and-ink: every shot gets one content-matched visualization (timelines, loops, flow chains, heat matrices… 20 vocab types) with a single accent orange
+- 🎞️ **UI2V motions library** — a full offline mirror of 1,262 GSAP motion packages (ui2v.com/motions, 641MB): lookup-by-shot-purpose indexes + a recipe for hanging paused timelines onto cue axes — plug-and-play visuals for demo pages
 
 <div align="center">
 
@@ -102,6 +103,13 @@ One sentence is all it takes:
 <a href="#swiss-shot-demos"><img width="2560" height="1440" alt="swiss-shot-demos" src="./skills/swiss-shot-demos/assets/preview/main.png" /></a>
 <br/><a href="#swiss-shot-demos"><strong>swiss-shot-demos</strong></a>
 <br/><sub>Swiss-style chart demos / editorial typography</sub>
+</td>
+</tr>
+<tr>
+<td colspan="4" valign="top" align="center">
+<a href="#ui2v-motions"><img width="2560" height="1440" alt="ui2v-motions" src="./skills/ui2v-motions/assets-preview/main.png" /></a>
+<br/><a href="#ui2v-motions"><strong>ui2v-motions</strong></a>
+<br/><sub>UI motion library / 1,262 GSAP motion packages</sub>
 </td>
 </tr>
 </table>
@@ -553,6 +561,51 @@ Links: [README](./skills/swiss-shot-demos/README.md) · [SKILL.md](./skills/swis
 
 <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
 
+#### `ui2v-motions`
+
+<a href="./skills/ui2v-motions">
+<img width="2560" height="1440" alt="ui2v-motions preview" src="./skills/ui2v-motions/assets-preview/main.png" />
+</a>
+
+**Category:** UI motion library / plug-and-play visuals for demos
+**For:** video demo pages, product pages and landing pages that need high-quality UI motion (chart entrances, list scrolls, card flips, typographic编排, count-ups, timeline reveals…) — a warehouse of motions the AI can look up by "what you're trying to say".
+
+`ui2v-motions` is a **full offline mirror** of the `illli-studio/motions` repository behind ui2v.com (2026-10-05, 9,669 files / 641MB, zero-miss verified): **1,262 motion packages**, each a single-file HTML plus one *paused* GSAP timeline (1,150 of them 1920×1080). Paused-by-default is a feature — the caller owns the pacing, which is exactly the same architecture as this repo's demo skills (virtual clock / cue axis): map the whole motion across a voiceover span with `TL.time(p*duration)`, or seek sentence by sentence. Ships with a 25-category lookup-by-purpose overview, a 1,262-row use table, and per-master short lists.
+
+Highlights:
+- 1,262 packages fully offline (registry-item.json metadata everywhere); look up by purpose: purpose overview + programmable CSV + per-master short lists
+- Paused GSAP timelines share the demo chassis architecture; ready-made integration recipe (whole-span mapping or per-line seeking)
+- Four hard constraints documented: localize GSAP (43 packages bundle a copy), no iframes, pause on entry, scale 720p ×1.5
+- Red lines: terminal packages contribute frames only (no fake output), never copy sample figures, re-skin to host tokens, verify licensing at the source before publishing
+- Official CLI and bilingual docs included
+
+<table>
+<tr>
+<td align="center" width="16.6%"><a href="./skills/ui2v-motions/01_动效库/itelmn/cartoon00/index.html"><img width="2560" height="1440" alt="cartoon00" src="./skills/ui2v-motions/assets-preview/shot-cartoon.png" /></a></td>
+<td align="center" width="16.6%"><a href="./skills/ui2v-motions/01_动效库/itelmn/agent-immune-codex-workflow/index.html"><img width="2560" height="1440" alt="workflow" src="./skills/ui2v-motions/assets-preview/shot-workflow.png" /></a></td>
+<td align="center" width="16.6%"><a href="./skills/ui2v-motions/01_动效库/itelmn/03-postgres/index.html"><img width="2560" height="1440" alt="postgres" src="./skills/ui2v-motions/assets-preview/shot-pg.png" /></a></td>
+<td align="center" width="16.6%"><a href="./skills/ui2v-motions/01_动效库/itelmn/06-tres-caminos/index.html"><img width="2560" height="1440" alt="tres caminos" src="./skills/ui2v-motions/assets-preview/shot-paths.png" /></a></td>
+<td align="center" width="16.6%"><a href="./skills/ui2v-motions/01_动效库/itelmn/02-archivero/index.html"><img width="2560" height="1440" alt="archivero" src="./skills/ui2v-motions/assets-preview/shot-arch.png" /></a></td>
+<td align="center" width="16.6%"><a href="./skills/ui2v-motions/01_动效库/itelmn/04b-frontera/index.html"><img width="2560" height="1440" alt="frontera" src="./skills/ui2v-motions/assets-preview/shot-border.png" /></a></td>
+</tr>
+<tr>
+<td align="center"><sub><code>cartoon00</code><br />illustrated layout</sub></td>
+<td align="center"><sub><code>codex-workflow</code><br />workflow choreography</sub></td>
+<td align="center"><sub><code>03-postgres</code><br />data explainer</sub></td>
+<td align="center"><sub><code>tres-caminos</code><br />three-way branch</sub></td>
+<td align="center"><sub><code>archivero</code><br />archive list</sub></td>
+<td align="center"><sub><code>frontera</code><br />boundary sketch</sub></td>
+</tr>
+</table>
+
+<sub>↑ 6 of 1,262 motion packages — <a href="./skills/ui2v-motions/README.md"><b>open the lookup indexes & integration recipe</b></a>.</sub>
+
+Links: [README](./skills/ui2v-motions/README.md) · [SKILL.md](./skills/ui2v-motions/SKILL.md)
+
+---
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
 ### Installation
 
 | # | Method | Best for | Pin a version? |
@@ -577,6 +630,8 @@ npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/ca
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/video-shot-demos
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/stacked-data-cards
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/win11-ui-demos
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/swiss-shot-demos
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/ui2v-motions
 ```
 
 > **Installs the latest `main` by default.** The CLI reads each skill's latest `SKILL.md` straight from the source tree.
@@ -652,6 +707,10 @@ Use win11-ui-demos to turn this Windows tutorial's operations into cursor-driven
 Use swiss-shot-demos to turn this video's voiceover script into demo animations: Swiss style, chart-first — show me the chart-selection storyboard first
 ```
 
+```
+Pick 2-3 ui2v-motions packages suited to a "three-way comparison" and show me; then wire the chosen one onto my demo page's cue axis
+```
+
 ### Directory Structure
 
 ```text
@@ -718,6 +777,12 @@ ai-animation-skills/
 │       ├── README.md
 │       ├── references/          ← swiss-system tokens / chart-vocabulary / production-spec
 │       └── assets/              ← Swiss starter template + 68-shot example + previews
+│   ├── ui2v-motions/
+│       ├── SKILL.md             ← pick→integrate recipe + hard constraints
+│       ├── README.md / _先看这里.md (mirror guide)
+│       ├── 01_动效库/itelmn/    ← 1,262 motion packages (641MB full mirror)
+│       ├── 02 CLI & docs / 03 indexes / 04 preview / 05 crawl logs
+│       └── assets-preview/      ← frame captures
 ├── web_animation/               ← Original example HTML (historical archive)
 ├── UI/                          ← UI design reference images
 ├── prompt.md                    ← Prompt template collection

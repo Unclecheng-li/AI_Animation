@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](./LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](#贡献与许可)
-[![Skills count](https://img.shields.io/badge/Skills-11-orange?style=flat-square)](#skills-gallery)
+[![Skills count](https://img.shields.io/badge/Skills-12-orange?style=flat-square)](#skills-gallery)
 [![Spec](https://img.shields.io/badge/Spec-SKILL.md-black?style=flat-square)](https://agentskills.io)
 
 🌐 **English version**: [`README_EN.md`](README_EN.md)
@@ -31,6 +31,7 @@
 - 🗂️ **叠放数据卡** — 论点卡从底部依次弹入、旧卡左叠成牌堆：折线描边 / 数字滚动 / 环形仪表按毫秒级时间线级联入场，自动播放对齐口播，录屏即成片
 - 🖥️ **仿 Win11 系统仿真** — 1:1 还原真电脑：资源管理器、开始菜单、系统弹窗、蓝屏修复逐镜头呈现，光标演出引导操作 + 教学标记层，全屏录屏即成片
 - 📐 **瑞士风格图表演示** — 纸底墨字发丝线的编辑部级排版：每页一张匹配内容的可视化图表（时间线/循环环/流程链/热力矩阵…20 种词汇），唯一强调橙，一镜一 HTML
+- 🎞️ **UI2V 动效库** — 1,262 个 GSAP 动效包全量离线镜像（ui2v.com/motions，641MB）：按镜头用途查件的索引 + paused 时间轴挂 cue 的接入配方，演示页画面层即插即用
 
 <div align="center">
 
@@ -102,6 +103,13 @@
 <a href="#swiss-shot-demos"><img width="2560" height="1440" alt="swiss-shot-demos" src="./skills/swiss-shot-demos/assets/preview/main.png" /></a>
 <br/><a href="#swiss-shot-demos"><strong>swiss-shot-demos</strong></a>
 <br/><sub>瑞士风格图表演示 / 编辑级排版动画</sub>
+</td>
+</tr>
+<tr>
+<td colspan="4" valign="top" align="center">
+<a href="#ui2v-motions"><img width="2560" height="1440" alt="ui2v-motions" src="./skills/ui2v-motions/assets-preview/main.png" /></a>
+<br/><a href="#ui2v-motions"><strong>ui2v-motions</strong></a>
+<br/><sub>UI 动效素材库 / 1,262 个 GSAP 动效包</sub>
 </td>
 </tr>
 </table>
@@ -553,6 +561,51 @@ Links: [README](./skills/swiss-shot-demos/README.md) · [SKILL.md](./skills/swis
 
 <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
 
+#### `ui2v-motions`
+
+<a href="./skills/ui2v-motions">
+<img width="2560" height="1440" alt="ui2v-motions preview" src="./skills/ui2v-motions/assets-preview/main.png" />
+</a>
+
+**分类:** UI 动效素材库 / 演示画面层即插即用
+**适用于:** 视频演示页、产品页、落地页需要高质量 UI 动效（图表入场/列表滚动/卡片翻转/文字编排/数字滚动/时间线展开…）——给 AI 一座按"你要讲什么"查件的动效仓库。
+
+`ui2v-motions` 是 ui2v.com（UI-to-video 动效社区）背后 `illli-studio/motions` 仓库的**全量离线镜像**（2026-10-05，9,669 文件 / 641MB，校验零缺失）：**1,262 个动效包**，每个 = 单文件 HTML + 一条 paused 的 GSAP 时间轴（1,150 个 1920×1080）。默认暂停不是缺陷——节奏由调用方决定，恰与本仓库各演示技能的虚拟时钟/cue 时间轴同构：`TL.time(p*duration)` 整段摊进口播时长，或逐句拆拍 seek。配套按镜头用途的 25 类总览 + 1,262 条用途表 + 母版映射索引。
+
+亮点:
+- 1,262 包全量离线（元数据 registry-item.json 齐全），按"你要讲什么"查件：镜头用途总览 + CSV 可编程筛 + 母版短名单
+- paused GSAP 时间轴与演示底盘同构，接入配方现成（整段映射/逐句拆拍两种模式）
+- 四条硬约束已文档化：GSAP 本地化（库内 43 包自带副本）、禁 iframe、进来先 pause、720p×1.5
+- 红线清单：terminal 类只借外框弃打字、示例数字不照搬、配色字体按宿主重刷、对外发布前回原站确认授权
+- 官方 CLI 与双语文档随包
+
+<table>
+<tr>
+<td align="center" width="16.6%"><a href="./skills/ui2v-motions/01_动效库/itelmn/cartoon00/index.html"><img width="2560" height="1440" alt="cartoon00" src="./skills/ui2v-motions/assets-preview/shot-cartoon.png" /></a></td>
+<td align="center" width="16.6%"><a href="./skills/ui2v-motions/01_动效库/itelmn/agent-immune-codex-workflow/index.html"><img width="2560" height="1440" alt="workflow" src="./skills/ui2v-motions/assets-preview/shot-workflow.png" /></a></td>
+<td align="center" width="16.6%"><a href="./skills/ui2v-motions/01_动效库/itelmn/03-postgres/index.html"><img width="2560" height="1440" alt="postgres" src="./skills/ui2v-motions/assets-preview/shot-pg.png" /></a></td>
+<td align="center" width="16.6%"><a href="./skills/ui2v-motions/01_动效库/itelmn/06-tres-caminos/index.html"><img width="2560" height="1440" alt="tres caminos" src="./skills/ui2v-motions/assets-preview/shot-paths.png" /></a></td>
+<td align="center" width="16.6%"><a href="./skills/ui2v-motions/01_动效库/itelmn/02-archivero/index.html"><img width="2560" height="1440" alt="archivero" src="./skills/ui2v-motions/assets-preview/shot-arch.png" /></a></td>
+<td align="center" width="16.6%"><a href="./skills/ui2v-motions/01_动效库/itelmn/04b-frontera/index.html"><img width="2560" height="1440" alt="frontera" src="./skills/ui2v-motions/assets-preview/shot-border.png" /></a></td>
+</tr>
+<tr>
+<td align="center"><sub><code>cartoon00</code><br />插画编排</sub></td>
+<td align="center"><sub><code>codex-workflow</code><br />工作流编排</sub></td>
+<td align="center"><sub><code>03-postgres</code><br />数据图解</sub></td>
+<td align="center"><sub><code>tres-caminos</code><br />三路分支</sub></td>
+<td align="center"><sub><code>archivero</code><br />档案列表</sub></td>
+<td align="center"><sub><code>frontera</code><br />边界示意</sub></td>
+</tr>
+</table>
+
+<sub>↑ 6 / 1,262 个动效包截帧 — <a href="./skills/ui2v-motions/README.md"><b>打开选型索引与接入配方</b></a>。</sub>
+
+Links: [README](./skills/ui2v-motions/README.md) · [SKILL.md](./skills/ui2v-motions/SKILL.md)
+
+---
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
 ### 安装
 
 | # | 方式 | 适用于 | 指定版本? |
@@ -578,6 +631,7 @@ npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/vi
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/phone-ui-demos
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/win11-ui-demos
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/swiss-shot-demos
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/ui2v-motions
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/stacked-data-cards
 ```
 
@@ -654,6 +708,10 @@ git clone https://github.com/Unclecheng-li/AI_Animation.git
 用 swiss-shot-demos 把这期视频的口播稿做成演示动画：瑞士风格、图表驱动，先出图表选型分镜表
 ```
 
+```
+从 ui2v-motions 挑 2-3 个适合"三方案对比"的动效包给我看效果，选中的接入我的演示页 cue 时间轴
+```
+
 ### 目录结构
 
 ```text
@@ -720,6 +778,12 @@ ai-animation-skills/
 │       ├── README.md
 │       ├── references/          ← swiss-system 设计正本 / chart-vocabulary 图表词汇 / production-spec 生产纪律
 │       └── assets/              ← 瑞士底盘模板（tokens+组件库预装）+ 68 镜头实例 + 预览图
+│   ├── ui2v-motions/
+│       ├── SKILL.md             ← 选型→接入配方 + 硬约束红线 + Token 纪律
+│       ├── README.md / _先看这里.md
+│       ├── 01_动效库/itelmn/    ← 1,262 个动效包本体（641MB 全量镜像）
+│       ├── 02_官方CLI与文档/ 03_清单与索引/ 04_预览/ 05_抓取日志/
+│       └── assets-preview/      ← 截帧预览图
 ├── web_animation/               ← 原始示例 HTML（历史存档）
 ├── UI/                          ← UI 设计参考图
 ├── prompt.md                    ← Prompt 模板集合

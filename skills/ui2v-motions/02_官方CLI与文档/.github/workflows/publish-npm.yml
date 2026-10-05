@@ -1,0 +1,213 @@
+name: Publish to npm
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (must match both package.json files), e.g. 2.0.2"
+        required: true
+        type: string
+
+# Token publish path (NPM_TOKEN).
+# Create a granular access token on npmjs.com with:
+#   - Permission: Read and write
+#   - Packages: @ui2v/cli (or @ui2v/*)
+#   - Bypass 2FA / Automation allowed for publishing
+# Store it as GitHub Actions secret NPM_TOKEN (repo or environment npm-publish).
+# On the package page, Publishing access must ALLOW tokens
+# (do not select "Require 2FA and disallow tokens").
+
+jobs:
+  publish:
+    name: Publish @ui2v/cli to npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: npm-publish
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          VERSION="${{ inputs.version }}"
+          VERSION="${VERSION#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Resolved version=${VERSION}"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate checkout
+        run: |
+          test -f package.json || {
+            echo "::error::package.json missing after checkout"
+            exit 1
+          }
+          test -f packages/ui2v/package.json || {
+            echo "::error::packages/ui2v/package.json missing"
+            exit 1
+          }
+          if [[ -z "${{ secrets.NPM_TOKEN }}" ]]; then
+            echo "::error::NPM_TOKEN secret is empty. Add it under Settings → Secrets (or environment npm-publish)."
+            exit 1
+          fi
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          scope: "@ui2v"
+
+      - name: Upgrade npm
+        run: npm install -g npm@latest
+
+      - name: Show toolchain
+        run: |
+          node -v
+          npm -v
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Validate release version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+
+          const version = process.env.VERSION;
+          const rootPkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const cliPkg = JSON.parse(fs.readFileSync('packages/ui2v/package.json', 'utf8'));
+          const failures = [];
+
+          if (rootPkg.name !== '@ui2v/workspace') {
+            failures.push(`root package.json: expected @ui2v/workspace, got ${rootPkg.name}`);
+          }
+          if (cliPkg.name !== '@ui2v/cli') {
+            failures.push(`packages/ui2v: expected name @ui2v/cli, got ${cliPkg.name}`);
+          }
+          if (rootPkg.version !== version) {
+            failures.push(`root package.json: expected version ${version}, got ${rootPkg.version}`);
+          }
+          if (cliPkg.version !== version) {
+            failures.push(`packages/ui2v: expected version ${version}, got ${cliPkg.version}`);
+          }
+          if (cliPkg.bin?.ui2v !== 'bin/ui2v.js') {
+            failures.push('packages/ui2v: bin.ui2v must be bin/ui2v.js');
+          }
+
+          for (const legacy of ['cli', 'core', 'engine', 'producer', 'runtime-core']) {
+            if (fs.existsSync(path.join('packages', legacy, 'package.json'))) {
+              failures.push(`packages/${legacy} must not exist`);
+            }
+          }
+
+          if (failures.length) {
+            console.error(failures.join('\n'));
+            process.exit(1);
+          }
+          console.log(`Release version validation passed: @ui2v/cli@${version}`);
+          NODE
+
+      - name: Ensure npm version is free
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          PKG: "@ui2v/cli"
+        shell: bash
+        run: |
+          set -euo pipefail
+          if npm view "${PKG}@${VERSION}" version >/dev/null 2>&1; then
+            echo "::error::${PKG}@${VERSION} already exists on npm — bump version before publishing"
+            exit 1
+          fi
+          LATEST="$(npm view "${PKG}" version 2>/dev/null || true)"
+          export LATEST
+          if [[ -z "${LATEST}" ]]; then
+            echo "No prior ${PKG} on npm — publishing ${VERSION}"
+            exit 0
+          fi
+          echo "npm latest=${LATEST}, candidate=${VERSION}"
+          node -e '
+            const latest = process.env.LATEST;
+            const next = process.env.VERSION;
+            const parse = (v) => v.split(".").map((n) => Number.parseInt(n, 10));
+            const [la, lb, lc] = parse(latest);
+            const [na, nb, nc] = parse(next);
+            const cmp = na - la || nb - lb || nc - lc;
+            if (!(cmp > 0)) {
+              console.error("Refusing publish: " + next + " must be > npm latest " + latest);
+              process.exit(1);
+            }
+            console.log("OK: " + next + " > " + latest);
+          '
+
+      - name: Whoami with publish token
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Confirms the token works against the registry before packing.
+          npm whoami --registry=https://registry.npmjs.org/
+          npm access list packages 2>/dev/null | head -n 50 || true
+
+      - name: Run tests
+        run: bun run test
+
+      - name: Build package
+        run: bun run build
+
+      - name: Publish @ui2v/cli with token
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+          PKG: "@ui2v/cli"
+        shell: bash
+        run: |
+          set -euo pipefail
+          if npm view "${PKG}@${VERSION}" version >/dev/null 2>&1; then
+            echo "::error::${PKG}@${VERSION} appeared on npm before publish step"
+            exit 1
+          fi
+          echo "Publishing ${PKG}@${VERSION} with NPM_TOKEN"
+          cd packages/ui2v
+          # Token path: skip OIDC provenance to avoid mixed-auth failures.
+          # Set NPM_CONFIG_PROVENANCE=true later once token+OIDC is validated.
+          NPM_CONFIG_PROVENANCE=false npm publish --access public
+
+      - name: Verify npm registry
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          PKG: "@ui2v/cli"
+        shell: bash
+        run: |
+          set -euo pipefail
+          published=""
+          for attempt in {1..12}; do
+            if published="$(npm view "${PKG}@${VERSION}" version 2>/dev/null)"; then
+              break
+            fi
+            echo "Waiting for ${PKG}@${VERSION} (${attempt}/12)"
+            sleep 10
+          done
+          echo "${PKG}@${published}"
+          if [[ "${published}" != "${VERSION}" ]]; then
+            echo "::error::Expected ${PKG}@${VERSION}, got ${published}"
+            echo "::error::If whoami passed but publish 404'd: token lacks write on @ui2v/cli, or package Publishing access disallows tokens."
+            exit 1
+          fi
+          latest="$(npm view "${PKG}" version)"
+          echo "latest=${latest}"
