@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1920, height=1080">
+    <title>Plotbeat — Multi-line Rank</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script src="./generated/data.js"></script>
+    <script src="./runtime/plotbeat-styles.js"></script>
+    <script src="./runtime/plotbeat-data.js"></script>
+    <style>
+      :root {
+        --bg: #070c0f;
+        --fg: #f1f4f3;
+        --muted: #8b9299;
+        --grid: #1b2528;
+        --accent: #20bc8a;
+      }
+
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body { width: 1920px; height: 1080px; overflow: hidden; }
+      body {
+        background: var(--bg);
+        color: var(--fg);
+        font-family: Inter, sans-serif;
+      }
+
+      #root, .clip, .scene-fill, #multi-live-frame {
+        position: absolute;
+        inset: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+      }
+
+      .scene-fill { background: var(--bg); }
+
+      #multi-live-frame, #multi-finale { transform-origin: 50% 50%; }
+
+      #transition-overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 40;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+      }
+
+      .transition-panel {
+        position: absolute;
+        left: 0;
+        width: 1920px;
+        height: 542px;
+      }
+
+      #transition-top {
+        top: 0;
+        background: linear-gradient(180deg, #0a1114 0%, #070c0f 100%);
+      }
+      #transition-bottom {
+        bottom: 0;
+        background: linear-gradient(0deg, #0a1114 0%, #070c0f 100%);
+        transform: translateY(0);
+      }
+      #transition-seam {
+        position: absolute;
+        left: 340px;
+        top: 539px;
+        width: 1240px;
+        height: 2px;
+        background: linear-gradient(90deg, rgba(32, 188, 138, 0), #20bc8a 18%, #8fffd8 50%, #20bc8a 82%, rgba(32, 188, 138, 0));
+        box-shadow: 0 0 22px rgba(32, 188, 138, 0.5);
+        opacity: 0;
+        transform: scaleX(0.34);
+      }
+
+      #multi-ambient-glow {
+        position: absolute;
+        left: 390px;
+        top: 130px;
+        width: 970px;
+        height: 850px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(32, 188, 138, 0.17) 0%, rgba(19, 100, 78, 0.08) 40%, rgba(7, 12, 15, 0) 74%);
+        opacity: 0.16;
+      }
+
+      #multi-chart-title {
+        position: absolute;
+        top: 44px;
+        left: 170px;
+        width: 1580px;
+        text-align: center;
+        font-size: 58px;
+        font-weight: 900;
+        font-style: italic;
+        line-height: 1.08;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+      }
+
+      #multi-title-accent { color: var(--accent); }
+
+      #multi-chart-layer {
+        position: absolute;
+        left: 26px;
+        top: 166px;
+        width: 1290px;
+        height: 760px;
+      }
+
+      #multi-chart-svg { display: block; width: 1290px; height: 760px; overflow: visible; }
+      .multi-grid-row line { stroke: var(--grid); stroke-width: 2; }
+      .multi-grid-row text, .x-label {
+        fill: var(--muted);
+        font-size: 21px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .multi-line-glow {
+        fill: none;
+        stroke-width: 13;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        opacity: 0.15;
+        filter: blur(4px);
+      }
+
+      .multi-line-path {
+        fill: none;
+        stroke-width: 3.5;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .multi-line-halo { opacity: 0.16; filter: blur(4px); }
+      .multi-line-endpoint { stroke-width: 3; }
+      .multi-line-endpoint-rank {
+        font-size: 14px;
+        font-weight: 900;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .date-chip { fill: var(--accent); }
+      #multi-x-end { fill: #06110c; font-size: 22px; font-weight: 900; }
+
+      #ranking-panel {
+        position: absolute;
+        left: 1338px;
+        top: 174px;
+        width: 548px;
+        height: 720px;
+        padding: 4px 0 0 12px;
+      }
+
+      .ranking-heading {
+        color: #727b81;
+        font-size: 15px;
+        font-weight: 800;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      #ranking-list {
+        position: relative;
+        width: 100%;
+        height: 690px;
+        margin-top: 10px;
+        --rank-row-height: 44px;
+      }
+
+      .ranking-row {
+        position: absolute;
+        top: 0;
+        left: 0;
+        display: grid;
+        grid-template-columns: 34px 18px minmax(0, 1fr) 78px 106px;
+        align-items: center;
+        column-gap: 10px;
+        width: 100%;
+        min-height: 36px;
+        transform: translateY(0);
+        color: var(--fg);
+        font-size: 20px;
+        font-weight: 800;
+        font-style: italic;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .ranking-position { color: #697279; text-align: right; }
+      .ranking-row i { display: block; width: 14px; height: 14px; border: 2px solid rgba(255, 255, 255, 0.8); border-radius: 50%; }
+      .ranking-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      .ranking-multiplier { color: var(--accent); text-align: right; }
+      .ranking-value { text-align: right; white-space: nowrap; }
+
+      #multi-chart-source {
+        position: absolute;
+        left: 26px;
+        right: 390px;
+        bottom: 22px;
+        color: #747c82;
+        font-size: 18px;
+        font-weight: 500;
+        letter-spacing: 0.025em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .footer-mark {
+        position: absolute;
+        right: 48px;
+        bottom: 20px;
+        color: var(--accent);
+        font-size: 17px;
+        font-weight: 800;
+        letter-spacing: 0.11em;
+        text-transform: uppercase;
+      }
+
+      #multi-finale {
+        position: absolute;
+        inset: 0;
+        z-index: 10;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding-top: 112px;
+        background: rgba(7, 12, 15, 0.74);
+        opacity: 0;
+        transform: translateY(32px);
+      }
+
+      .finale-heading {
+        color: var(--muted);
+        font-size: 34px;
+        font-weight: 800;
+        font-style: italic;
+        letter-spacing: 0.14em;
+      }
+
+      #multi-finale-date { margin-top: 14px; color: var(--accent); font-size: 24px; font-weight: 800; letter-spacing: 0.08em; }
+
+      #finale-ranking-rows {
+        width: 1050px;
+        margin-top: 34px;
+      }
+
+      .finale-ranking-row {
+        display: grid;
+        grid-template-columns: 46px 22px minmax(0, 1fr) 120px 160px;
+        align-items: center;
+        column-gap: 14px;
+        min-height: 44px;
+        color: var(--fg);
+        font-size: 23px;
+        font-weight: 800;
+        font-style: italic;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .finale-rank { color: var(--muted); text-align: right; }
+      .finale-ranking-row i { display: block; width: 16px; height: 16px; border: 2px solid rgba(255, 255, 255, 0.85); border-radius: 50%; }
+      .finale-rank-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      .finale-rank-multiplier { color: var(--accent); text-align: right; }
+      .finale-rank-value { text-align: right; white-space: nowrap; }
+
+      #multi-finale-sweep {
+        position: absolute;
+        left: 470px;
+        top: 206px;
+        width: 980px;
+        height: 2px;
+        background: linear-gradient(90deg, rgba(32, 188, 138, 0), rgba(32, 188, 138, 0.9) 50%, rgba(32, 188, 138, 0));
+        box-shadow: 0 0 22px rgba(32, 188, 138, 0.36);
+        opacity: 0;
+        transform: scaleX(0);
+      }
+    </style>
+  </head>
+  <body>
+    <div data-hf-id="hf-qbnw" id="root" data-composition-id="main" data-start="0" data-duration="18" data-width="1920" data-height="1080">
+      <section data-hf-id="hf-c8s2" id="multi-story" class="clip" data-start="0" data-duration="18" data-track-index="1">
+        <div data-hf-id="hf-apxe" class="scene-fill"></div>
+        <div data-hf-id="hf-h05r" id="multi-live-frame" data-layout-allow-overflow="">
+          <div data-hf-id="hf-81s6" id="multi-ambient-glow" data-layout-ignore=""></div>
+
+          <h1 data-hf-id="hf-e228" id="multi-chart-title">
+            <span data-hf-id="hf-q7dy" id="multi-title-prefix" data-layout-allow-occlusion="">What if </span><span data-hf-id="hf-v5aj" id="multi-title-accent" data-layout-allow-occlusion="">every series</span><span data-hf-id="hf-i81o" id="multi-title-suffix" data-layout-allow-occlusion=""> started together?</span>
+          </h1>
+
+          <main data-hf-id="hf-p6r7" id="multi-chart-layer">
+            <svg data-hf-id="hf-t2ry" id="multi-chart-svg" viewBox="0 0 1290 760" width="1290" height="760" aria-label="Animated multi-series line chart">
+              <g data-hf-id="hf-yhlx" class="multi-grid-row"><line data-hf-id="hf-wzqw" x1="100" x2="1215" y1="80" y2="80" /><text data-hf-id="hf-fdzp" x="78" y="87" text-anchor="end">0.0</text></g>
+              <g data-hf-id="hf-d9tl" class="multi-grid-row"><line data-hf-id="hf-jru6" x1="100" x2="1215" y1="230" y2="230" /><text data-hf-id="hf-d88s" x="78" y="237" text-anchor="end">0.0</text></g>
+              <g data-hf-id="hf-egqo" class="multi-grid-row"><line data-hf-id="hf-ltqe" x1="100" x2="1215" y1="380" y2="380" /><text data-hf-id="hf-pj38" x="78" y="387" text-anchor="end">0.0</text></g>
+              <g data-hf-id="hf-e2fn" class="multi-grid-row"><line data-hf-id="hf-6zy8" x1="100" x2="1215" y1="530" y2="530" /><text data-hf-id="hf-z8ux" x="78" y="537" text-anchor="end">0.0</text></g>
+              <g data-hf-id="hf-c2wi" class="multi-grid-row"><line data-hf-id="hf-fo6g" x1="100" x2="1215" y1="680" y2="680" /><text data-hf-id="hf-u36n" x="78" y="687" text-anchor="end">0.0</text></g>
+              <g data-hf-id="hf-apgo" id="multi-series-layer" />
+              <text data-hf-id="hf-bcoh" id="multi-x-start" class="x-label" x="100" y="730" text-anchor="start">Jan 2022</text>
+              <text data-hf-id="hf-u7tw" id="multi-x-mid" class="x-label" x="657" y="730" text-anchor="middle">Jan 2023</text>
+              <g data-hf-id="hf-tehp" id="multi-x-date-chip">
+                <rect data-hf-id="hf-ryvq" class="date-chip" x="1080" y="698" width="135" height="42" rx="8" />
+                <text data-hf-id="hf-x7mm" id="multi-x-end" x="1147.5" y="727" text-anchor="middle">Jun 2024</text>
+              </g>
+            </svg>
+          </main>
+
+          <aside data-hf-id="hf-eetb" id="ranking-panel">
+            <p data-hf-id="hf-mk1i" class="ranking-heading">Live rank · multiplier · value</p>
+            <div data-hf-id="hf-74fy" id="ranking-list" data-layout-allow-overlap=""></div>
+          </aside>
+
+          <p data-hf-id="hf-ueuc" id="multi-chart-source">Data: User-supplied dataset</p>
+          <span data-hf-id="hf-1oe9" class="footer-mark">Plotbeat · For HyperFrames</span>
+        </div>
+
+        <div data-hf-id="hf-vwzt" id="multi-finale" data-layout-allow-overlap="" data-layout-allow-occlusion="" data-layout-allow-overflow="">
+          <div data-hf-id="hf-g8ly" id="multi-finale-sweep" data-layout-ignore=""></div>
+          <h2 data-hf-id="hf-h6tz" class="finale-heading">Final ranking</h2>
+          <p data-hf-id="hf-8fag" id="multi-finale-date">Jun 2024 · 2 years</p>
+          <div data-hf-id="hf-zwdx" id="finale-ranking-rows"></div>
+        </div>
+
+        <div data-hf-id="hf-xcvl" id="transition-overlay" data-layout-ignore="" aria-hidden="true">
+          <div data-hf-id="hf-3y19" id="transition-top" class="transition-panel"></div>
+          <div data-hf-id="hf-gf8l" id="transition-bottom" class="transition-panel"></div>
+          <div data-hf-id="hf-d78r" id="transition-seam"></div>
+        </div>
+      </section>
+      <audio data-hf-id="hf-bgm1" id="background-music" src="./assets/audio/upbeat-data-loop.mp3" preload="auto" data-start="0" data-duration="18" data-track-index="2" data-volume="0.56" aria-label="Upbeat electronic background music"></audio>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      window.PlotbeatStyles.apply(window.HF_VIDEO_SPEC.style);
+      const compositionRoot = document.getElementById("root");
+      const duration = Number(compositionRoot.dataset.duration);
+      const controller = window.HFDataViz.createMultiLineController({
+        root: document,
+        data: window.HF_DATA,
+        spec: window.HF_VIDEO_SPEC,
+        geometry: { plotLeft: 100, plotRight: 1215, plotTop: 80, plotBottom: 680, gridRows: 5 },
+      });
+      const driver = { progress: 0 };
+      const backgroundMusic = document.getElementById("background-music");
+      const tl = gsap.timeline({ paused: true });
+      tl.to(driver, {
+        progress: 1,
+        duration,
+        ease: "none",
+        onUpdate: () => controller.renderAt(driver.progress),
+      }, 0);
+      tl.fromTo(backgroundMusic, { volume: 0 }, {
+        volume: 0.56,
+        duration: 0.65,
+        ease: "power2.out",
+      }, 0);
+      tl.to(backgroundMusic, {
+        volume: 0,
+        duration: 1.1,
+        ease: "power2.in",
+      }, duration - 1.1);
+      controller.renderAt(0);
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

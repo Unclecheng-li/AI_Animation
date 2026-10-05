@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="es" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@500;700&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: #0E1317; }
+      body { font-family: "IBM Plex Mono", monospace; color: #F2F5F4; }
+      .clip { position: absolute; inset: 0; }
+      .mono { font-family: "IBM Plex Mono", monospace; font-weight: 700; }
+      .black { font-family: "Archivo Black", sans-serif; font-weight: 400; }
+      .board { position: absolute; left: -100px; top: -100px; width: 1280px; height: 2120px; background: #0E1317; }
+      /* scanlines planas: una línea cada 6 px */
+      .boardin { position: absolute; inset: 0; background-image: repeating-linear-gradient(0deg, rgba(133,221,203,.06) 0 2px, transparent 2px 6px); }
+
+      /* cabecera (250–400): prompt de terminal con la cara como avatar cuadrado */
+      #av { position: absolute; left: 72px; top: 250px; width: 150px; height: 150px; overflow: hidden; border: 4px solid #85DDCB; border-radius: 10px; z-index: 31; background: #0E1317; }
+      #av video { width: 100%; height: 100%; object-fit: cover; display: block; }
+      #who { position: absolute; left: 250px; top: 258px; z-index: 30; font-family: "IBM Plex Mono"; font-weight: 700; }
+      #who b { display: block; font-size: 40px; color: #85DDCB; }
+      #who b::before { content: "$ "; color: #8DCF6E; }
+      #who span { display: block; margin-top: 10px; font-size: 20px; color: #7C8A8E; line-height: 1.5; }
+      #cursor { display: inline-block; width: 14px; height: 24px; background: #85DDCB; vertical-align: -3px; margin-left: 6px; }
+
+      /* cartel (420–650): Archivo Black, la segunda línea como comentario en verde */
+      #sign { position: absolute; left: 72px; right: 72px; top: 420px; height: 230px; z-index: 30; }
+      #signin { font-family: "Archivo Black"; font-size: 86px; line-height: 1.02; letter-spacing: -.02em; color: #F2F5F4; text-transform: uppercase; transform-origin: left top; white-space: nowrap; }
+      #signin em { font-style: normal; color: #8DCF6E; }
+
+      /* escenario (660–1170) */
+      #stage { position: absolute; left: 72px; top: 660px; width: 936px; height: 510px; z-index: 20; }
+      #stage svg { width: 936px; height: 510px; overflow: visible; font-family: "IBM Plex Mono"; font-weight: 700; }
+
+      /* karaoke (1190–1390) */
+      .cap { inset: auto; left: 60px; right: 60px; top: 1190px; height: 200px; z-index: 40; display: flex; align-items: center; justify-content: center; text-align: center; }
+      .capin { font-family: "Space Grotesk"; font-size: 72px; line-height: 1.1; font-weight: 700; }
+      .w { display: inline-block; color: #7C8A8E; padding: 0 8px; }
+
+      /* zoom-punch: el módulo de RAM crece hasta tapar; "OOM" sella; del otro lado una cuadrícula que se encoge */
+      #punch { position: absolute; left: 50%; top: 50%; z-index: 70; pointer-events: none; width: 420px; height: 200px; margin-left: -210px; margin-top: -100px; opacity: 0; }
+      #burst { position: absolute; left: 50%; top: 50%; z-index: 71; pointer-events: none; width: 2600px; height: 2600px; margin-left: -1300px; margin-top: -1300px; opacity: 0; }
+      #hero { position: absolute; left: 50%; top: 50%; z-index: 72; pointer-events: none; width: 720px; height: 320px; margin-left: -360px; margin-top: -160px; opacity: 0; }
+
+      #intro, #outro { z-index: 50; background: #0E1317; }
+      .k { position: absolute; left: 72px; }
+      #logo { filter: drop-shadow(0 0 10px rgba(14,19,23,.95)) drop-shadow(0 0 22px rgba(14,19,23,.7)); }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="84.8" data-width="1080" data-height="1920">
+      <div class="board" id="bg"><div class="boardin"></div></div>
+
+      <div id="av"><video class="clip" id="face-video" data-start="4.4" data-duration="73.4" src="assets/face.mp4" muted playsinline preload="auto"></video></div>
+      <div id="who"><b>hectorbliss<span id="cursor"></span></b><span># sistemas agénticos · sesión 05<br /># fixtergeek.com</span></div>
+
+      <div id="sign"><div id="signin">UNA HERRAMIENTA<br /><em>// bien perrona</em></div></div>
+
+      <div id="stage">
+        <svg viewBox="0 0 936 510">
+          <!-- el medidor de RAM vive en todas las escenas -->
+          <g id="ram"><g id="rampanel" ><rect x="776" y="40" width="140" height="300" rx="10" fill="#141B21" stroke="#F2F5F4" stroke-width="4"/><rect x="776" y="40" width="140" height="34" rx="10" fill="#F2F5F4"/><rect x="776" y="60" width="140" height="14" fill="#F2F5F4"/><circle cx="794" cy="57" r="6" fill="#0E1317"/><circle cx="814" cy="57" r="6" fill="#7C8A8E"/><circle cx="834" cy="57" r="6" fill="#85DDCB"/><text class="mono" x="846" y="63" text-anchor="middle" font-size="16" fill="#0E1317">RAM</text></g><rect class="cell" id="rc0" x="816" y="290" width="60" height="18" rx="3" fill="#85DDCB" opacity="0"/><rect class="cell" id="rc1" x="816" y="268" width="60" height="18" rx="3" fill="#85DDCB" opacity="0"/><rect class="cell" id="rc2" x="816" y="246" width="60" height="18" rx="3" fill="#85DDCB" opacity="0"/><rect class="cell" id="rc3" x="816" y="224" width="60" height="18" rx="3" fill="#85DDCB" opacity="0"/><rect class="cell" id="rc4" x="816" y="202" width="60" height="18" rx="3" fill="#85DDCB" opacity="0"/><rect class="cell" id="rc5" x="816" y="180" width="60" height="18" rx="3" fill="#85DDCB" opacity="0"/><rect class="cell" id="rc6" x="816" y="158" width="60" height="18" rx="3" fill="#85DDCB" opacity="0"/><rect class="cell" id="rc7" x="816" y="136" width="60" height="18" rx="3" fill="#85DDCB" opacity="0"/><rect class="cell" id="rc8" x="816" y="114" width="60" height="18" rx="3" fill="#8DCF6E" opacity="0"/><rect class="cell" id="rc9" x="816" y="92" width="60" height="18" rx="3" fill="#8DCF6E" opacity="0"/><text class="mono" id="rampct" x="846" y="330" text-anchor="middle" font-size="22" fill="#85DDCB">20%</text></g>
+          <!-- 1. la caja con el agente y la herramienta gigante -->
+          <g id="s1">
+            <g id="bx"><g transform="translate(200 250)"><rect x="-90" y="-70" width="180" height="140" rx="14" fill="#141B21" stroke="#F2F5F4" stroke-width="6"/><rect x="-90" y="-70" width="180" height="24" rx="10" fill="#F2F5F4"/><text class="mono" x="0" y="-52" text-anchor="middle" font-size="14" fill="#0E1317">SANDBOX · 2 GB</text>
+  <g id="bxeyes"><circle cx="-34" cy="0" r="12" fill="#85DDCB"/><circle cx="34" cy="0" r="12" fill="#85DDCB"/><path d="M-18 30 q18 14 36 0" fill="none" stroke="#85DDCB" stroke-width="5" stroke-linecap="round"/></g>
+  <g id="bxdead" opacity="0"><path d="M-46 -12 l24 24 M-22 -12 l-24 24 M22 -12 l24 24 M46 -12 l-24 24" stroke="#8DCF6E" stroke-width="6" stroke-linecap="round"/><path d="M-18 36 q18 -14 36 0" fill="none" stroke="#8DCF6E" stroke-width="5" stroke-linecap="round"/></g>
+  <circle id="bxled" cx="70" cy="56" r="7" fill="#8DCF6E"/></g></g>
+            <image href="assets/ghosty.png" x="330" y="140" width="130" height="150"/>
+            <g id="tool" opacity="0"><g transform="translate(600 220)"><rect x="-120" y="-90" width="240" height="180" rx="12" fill="#141B21" stroke="#8DCF6E" stroke-width="6"/><rect x="-120" y="-90" width="240" height="30" rx="10" fill="#8DCF6E"/><text class="mono" x="0" y="-68" text-anchor="middle" font-size="16" fill="#0E1317">tool: excel_gigante</text><rect x="-100" y="-45" width="60" height="22" fill="#0E1317" stroke="#7C8A8E" stroke-width="2"/><rect x="-30" y="-45" width="60" height="22" fill="#0E1317" stroke="#7C8A8E" stroke-width="2"/><rect x="40" y="-45" width="60" height="22" fill="#0E1317" stroke="#7C8A8E" stroke-width="2"/><rect x="-100" y="-15" width="60" height="22" fill="#0E1317" stroke="#7C8A8E" stroke-width="2"/><rect x="-30" y="-15" width="60" height="22" fill="#0E1317" stroke="#7C8A8E" stroke-width="2"/><rect x="40" y="-15" width="60" height="22" fill="#0E1317" stroke="#7C8A8E" stroke-width="2"/><rect x="-100" y="15" width="60" height="22" fill="#0E1317" stroke="#7C8A8E" stroke-width="2"/><rect x="-30" y="15" width="60" height="22" fill="#0E1317" stroke="#7C8A8E" stroke-width="2"/><rect x="40" y="15" width="60" height="22" fill="#0E1317" stroke="#7C8A8E" stroke-width="2"/><rect x="-100" y="45" width="60" height="22" fill="#0E1317" stroke="#7C8A8E" stroke-width="2"/><rect x="-30" y="45" width="60" height="22" fill="#0E1317" stroke="#7C8A8E" stroke-width="2"/><rect x="40" y="45" width="60" height="22" fill="#0E1317" stroke="#7C8A8E" stroke-width="2"/></g></g>
+            <text id="filelbl" class="mono" x="600" y="345" text-anchor="middle" font-size="20" fill="#8DCF6E" opacity="0">4 GB · 2,000,000 filas</text>
+            <g id="chat" opacity="0"><rect x="60" y="400" width="620" height="60" rx="10" fill="#141B21" stroke="#F2F5F4" stroke-width="3"/><text class="mono" id="chattxt" x="80" y="438" font-size="20" fill="#F2F5F4">&gt; ¿ya casi? …</text></g>
+          </g>
+          <!-- 2. en serie: el agente se fue a trabajar y no regresa -->
+          <g id="s2" opacity="0">
+            <g id="term" ><rect x="40" y="40" width="700" height="420" rx="10" fill="#141B21" stroke="#F2F5F4" stroke-width="4"/><rect x="40" y="40" width="700" height="34" rx="10" fill="#F2F5F4"/><rect x="40" y="60" width="700" height="14" fill="#F2F5F4"/><circle cx="58" cy="57" r="6" fill="#0E1317"/><circle cx="78" cy="57" r="6" fill="#7C8A8E"/><circle cx="98" cy="57" r="6" fill="#85DDCB"/><text class="mono" x="390" y="63" text-anchor="middle" font-size="16" fill="#0E1317">agente — sesión</text></g>
+            <text class="mono" id="t1" x="70" y="110" font-size="22" fill="#85DDCB" opacity="0">$ genera el excel gigante</text>
+            <text class="mono" id="t2" x="70" y="150" font-size="22" fill="#7C8A8E" opacity="0">⠋ trabajando… (no regresa)</text>
+            <text class="mono" id="t3" x="70" y="200" font-size="22" fill="#F2F5F4" opacity="0">&gt; oye, ¿y lo otro?</text>
+            <text class="mono" id="t4" x="70" y="240" font-size="22" fill="#F2F5F4" opacity="0">&gt; hola?</text>
+            <text class="mono" id="t5" x="70" y="280" font-size="22" fill="#F2F5F4" opacity="0">&gt; …</text>
+            <g id="serial" opacity="0"><rect x="70" y="340" width="600" height="90" rx="8" fill="#0E1317" stroke="#7C8A8E" stroke-width="3"/><rect x="90" y="360" width="120" height="50" rx="6" fill="#85DDCB" stroke="#85DDCB" stroke-width="3"/><text class="mono" x="150" y="392" text-anchor="middle" font-size="16" fill="#0E1317">tarea 1</text><rect x="240" y="360" width="120" height="50" rx="6" fill="#141B21" stroke="#7C8A8E" stroke-width="3"/><text class="mono" x="300" y="392" text-anchor="middle" font-size="16" fill="#7C8A8E">espera</text><rect x="390" y="360" width="120" height="50" rx="6" fill="#141B21" stroke="#7C8A8E" stroke-width="3"/><text class="mono" x="450" y="392" text-anchor="middle" font-size="16" fill="#7C8A8E">espera</text><rect x="540" y="360" width="120" height="50" rx="6" fill="#141B21" stroke="#7C8A8E" stroke-width="3"/><text class="mono" x="600" y="392" text-anchor="middle" font-size="16" fill="#7C8A8E">espera</text><text class="mono" x="70" y="326" font-size="14" fill="#7C8A8E">EN SERIE: una cosa a la vez</text></g>
+          </g>
+          <!-- 3. en paralelo: brotan subagentes y cada uno muerde RAM -->
+          <g id="s3" opacity="0">
+            <g id="bx3"><g transform="translate(160 260)"><rect x="-90" y="-70" width="180" height="140" rx="14" fill="#141B21" stroke="#F2F5F4" stroke-width="6"/><rect x="-90" y="-70" width="180" height="24" rx="10" fill="#F2F5F4"/><text class="mono" x="0" y="-52" text-anchor="middle" font-size="14" fill="#0E1317">SANDBOX · 2 GB</text>
+  <g id="bx3eyes"><circle cx="-34" cy="0" r="12" fill="#85DDCB"/><circle cx="34" cy="0" r="12" fill="#85DDCB"/><path d="M-18 30 q18 14 36 0" fill="none" stroke="#85DDCB" stroke-width="5" stroke-linecap="round"/></g>
+  <g id="bx3dead" opacity="0"><path d="M-46 -12 l24 24 M-22 -12 l-24 24 M22 -12 l24 24 M46 -12 l-24 24" stroke="#8DCF6E" stroke-width="6" stroke-linecap="round"/><path d="M-18 36 q18 -14 36 0" fill="none" stroke="#8DCF6E" stroke-width="5" stroke-linecap="round"/></g>
+  <circle id="bx3led" cx="70" cy="56" r="7" fill="#8DCF6E"/></g></g>
+            <image id="g0" href="assets/ghosty.png" x="280" y="100" width="110" height="127"/>
+            <image id="sa0" href="assets/ghosty.png" x="430" y="120" width="90" height="104" opacity="0"/><path id="sw0" d="M390 165 C420 165 420 170 430 170" fill="none" stroke="#85DDCB" stroke-width="3" stroke-dasharray="6 6" opacity="0"/><text class="mono" id="sl0" x="475" y="245" text-anchor="middle" font-size="14" fill="#8DCF6E" opacity="0">+20% RAM</text><image id="sa1" href="assets/ghosty.png" x="580" y="120" width="90" height="104" opacity="0"/><path id="sw1" d="M390 165 C420 165 570 170 580 170" fill="none" stroke="#85DDCB" stroke-width="3" stroke-dasharray="6 6" opacity="0"/><text class="mono" id="sl1" x="625" y="245" text-anchor="middle" font-size="14" fill="#8DCF6E" opacity="0">+20% RAM</text><image id="sa2" href="assets/ghosty.png" x="430" y="290" width="90" height="104" opacity="0"/><path id="sw2" d="M390 165 C420 165 420 340 430 340" fill="none" stroke="#85DDCB" stroke-width="3" stroke-dasharray="6 6" opacity="0"/><text class="mono" id="sl2" x="475" y="415" text-anchor="middle" font-size="14" fill="#8DCF6E" opacity="0">+20% RAM</text><image id="sa3" href="assets/ghosty.png" x="580" y="290" width="90" height="104" opacity="0"/><path id="sw3" d="M390 165 C420 165 570 340 580 340" fill="none" stroke="#85DDCB" stroke-width="3" stroke-dasharray="6 6" opacity="0"/><text class="mono" id="sl3" x="625" y="415" text-anchor="middle" font-size="14" fill="#8DCF6E" opacity="0">+20% RAM</text>
+            <text class="mono" id="parlbl" x="160" y="420" text-anchor="middle" font-size="16" fill="#85DDCB" opacity="0">EN PARALELO</text>
+          </g>
+          <!-- 4. la lista de herramientas: subagent tachado; la caja se muere -->
+          <g id="s4" opacity="0">
+            <g id="tools" ><rect x="40" y="40" width="460" height="420" rx="10" fill="#141B21" stroke="#F2F5F4" stroke-width="4"/><rect x="40" y="40" width="460" height="34" rx="10" fill="#F2F5F4"/><rect x="40" y="60" width="460" height="14" fill="#F2F5F4"/><circle cx="58" cy="57" r="6" fill="#0E1317"/><circle cx="78" cy="57" r="6" fill="#7C8A8E"/><circle cx="98" cy="57" r="6" fill="#85DDCB"/><text class="mono" x="270" y="63" text-anchor="middle" font-size="16" fill="#0E1317">herramientas de Claude</text></g>
+            <g id="tl0"><rect x="70" y="92" width="26" height="26" rx="4" fill="#0E1317" stroke="#85DDCB" stroke-width="3"/><path d="M76 105 l6 6 l10 -12" fill="none" stroke="#85DDCB" stroke-width="3" opacity="1"/><text class="mono" x="112" y="113" font-size="22" fill="#F2F5F4">Bash</text></g><g id="tl1"><rect x="70" y="148" width="26" height="26" rx="4" fill="#0E1317" stroke="#85DDCB" stroke-width="3"/><path d="M76 161 l6 6 l10 -12" fill="none" stroke="#85DDCB" stroke-width="3" opacity="1"/><text class="mono" x="112" y="169" font-size="22" fill="#F2F5F4">Read</text></g><g id="tl2"><rect x="70" y="204" width="26" height="26" rx="4" fill="#0E1317" stroke="#85DDCB" stroke-width="3"/><path d="M76 217 l6 6 l10 -12" fill="none" stroke="#85DDCB" stroke-width="3" opacity="1"/><text class="mono" x="112" y="225" font-size="22" fill="#F2F5F4">Edit</text></g><g id="tl3"><rect x="70" y="260" width="26" height="26" rx="4" fill="#0E1317" stroke="#85DDCB" stroke-width="3"/><path d="M76 273 l6 6 l10 -12" fill="none" stroke="#85DDCB" stroke-width="3" opacity="1"/><text class="mono" x="112" y="281" font-size="22" fill="#F2F5F4">Write</text></g><g id="tl4"><rect x="70" y="316" width="26" height="26" rx="4" fill="#0E1317" stroke="#85DDCB" stroke-width="3"/><path d="M76 329 l6 6 l10 -12" fill="none" stroke="#85DDCB" stroke-width="3" opacity="1"/><text class="mono" x="112" y="337" font-size="22" fill="#F2F5F4">WebFetch</text></g><g id="tl5"><rect x="70" y="372" width="26" height="26" rx="4" fill="#0E1317" stroke="#8DCF6E" stroke-width="3"/><path d="M76 385 l6 6 l10 -12" fill="none" stroke="#85DDCB" stroke-width="3" opacity="0"/><text class="mono" x="112" y="393" font-size="22" fill="#8DCF6E">Agent (subagent)</text></g>
+            <path id="tachon" d="M60 400 L470 400" stroke="#8DCF6E" stroke-width="10" stroke-linecap="round" opacity="0"/>
+            <text class="mono" id="prohib" x="300" y="440" text-anchor="middle" font-size="18" fill="#8DCF6E" opacity="0">disallowedTools: ["Agent"]</text>
+            <g id="bx4"><g transform="translate(640 250)"><rect x="-90" y="-70" width="180" height="140" rx="14" fill="#141B21" stroke="#F2F5F4" stroke-width="6"/><rect x="-90" y="-70" width="180" height="24" rx="10" fill="#F2F5F4"/><text class="mono" x="0" y="-52" text-anchor="middle" font-size="14" fill="#0E1317">SANDBOX · 2 GB</text>
+  <g id="bx4eyes"><circle cx="-34" cy="0" r="12" fill="#85DDCB"/><circle cx="34" cy="0" r="12" fill="#85DDCB"/><path d="M-18 30 q18 14 36 0" fill="none" stroke="#85DDCB" stroke-width="5" stroke-linecap="round"/></g>
+  <g id="bx4dead" opacity="0"><path d="M-46 -12 l24 24 M-22 -12 l-24 24 M22 -12 l24 24 M46 -12 l-24 24" stroke="#8DCF6E" stroke-width="6" stroke-linecap="round"/><path d="M-18 36 q18 -14 36 0" fill="none" stroke="#8DCF6E" stroke-width="5" stroke-linecap="round"/></g>
+  <circle id="bx4led" cx="70" cy="56" r="7" fill="#8DCF6E"/></g></g>
+            <image id="ma0" href="assets/ghosty.png" x="560" y="80" width="60" height="69" opacity="0"/><image id="ma1" href="assets/ghosty.png" x="610" y="50" width="60" height="69" opacity="0"/><image id="ma2" href="assets/ghosty.png" x="660" y="80" width="60" height="69" opacity="0"/><image id="ma3" href="assets/ghosty.png" x="710" y="50" width="60" height="69" opacity="0"/>
+            <g id="smoke"><circle id="sm1" cx="600" cy="170" r="12" fill="#7C8A8E" opacity="0"/><circle id="sm2" cx="660" cy="160" r="16" fill="#7C8A8E" opacity="0"/><circle id="sm3" cx="700" cy="175" r="10" fill="#7C8A8E" opacity="0"/></g>
+            <g id="oom" opacity="0"><g transform="translate(640 400) rotate(-6)"><rect x="-150" y="-36" width="300" height="72" fill="none" stroke="#8DCF6E" stroke-width="8"/><text class="black" x="0" y="16" text-anchor="middle" font-size="44" fill="#8DCF6E" style="font-family:'Archivo Black'">SIN RAM</text></g></g>
+          </g>
+          <!-- 5. con los pies en la trinchera: las botas -->
+          <g id="s5" opacity="0">
+            <line x1="0" y1="430" x2="760" y2="430" stroke="#F2F5F4" stroke-width="6"/>
+            <g id="boots"><path d="M120 430 v-90 h70 v50 h60 a30 30 0 0 1 30 30 v10 z" fill="#141B21" stroke="#F2F5F4" stroke-width="6" stroke-linejoin="round"/><path d="M330 430 v-90 h70 v50 h60 a30 30 0 0 1 30 30 v10 z" fill="#141B21" stroke="#F2F5F4" stroke-width="6" stroke-linejoin="round"/></g>
+            <text class="black" id="trinch" x="380" y="200" text-anchor="middle" font-size="64" fill="#85DDCB" opacity="0" style="font-family:'Archivo Black'">TRINCHERA</text>
+            <text class="mono" x="380" y="250" text-anchor="middle" font-size="20" fill="#7C8A8E">los detalles se aprenden operando</text>
+          </g>
+        </svg>
+      </div>
+
+      <div class="clip cap" id="l0" data-start="4.400" data-duration="0.530"><div class="capin"><span class="w" id="w0_0">Porque</span> <span class="w" id="w0_1">si</span> <span class="w" id="w0_2">ustedes</span></div></div>
+      <div class="clip cap" id="l1" data-start="4.980" data-duration="0.750"><div class="capin"><span class="w" id="w1_0">piensan</span> <span class="w" id="w1_1">y</span> <span class="w" id="w1_2">dicen</span> <span class="w" id="w1_3">ok,</span></div></div>
+      <div class="clip cap" id="l2" data-start="5.780" data-duration="0.730"><div class="capin"><span class="w" id="w2_0">vamos</span> <span class="w" id="w2_1">a</span> <span class="w" id="w2_2">darle</span> <span class="w" id="w2_3">una</span></div></div>
+      <div class="clip cap" id="l3" data-start="6.560" data-duration="0.790"><div class="capin"><span class="w" id="w3_0">herramienta</span> <span class="w" id="w3_1">bien</span></div></div>
+      <div class="clip cap" id="l4" data-start="7.400" data-duration="1.100"><div class="capin"><span class="w" id="w4_0">perrona</span> <span class="w" id="w4_1">para</span> <span class="w" id="w4_2">que</span> <span class="w" id="w4_3">haga</span></div></div>
+      <div class="clip cap" id="l5" data-start="8.550" data-duration="1.320"><div class="capin"><span class="w" id="w5_0">documentos</span> <span class="w" id="w5_1">gigantes,</span></div></div>
+      <div class="clip cap" id="l6" data-start="9.920" data-duration="1.120"><div class="capin"><span class="w" id="w6_0">Excel</span> <span class="w" id="w6_1">es</span> <span class="w" id="w6_2">gigante,</span></div></div>
+      <div class="clip cap" id="l7" data-start="11.090" data-duration="1.060"><div class="capin"><span class="w" id="w7_0">órale,</span> <span class="w" id="w7_1">se</span> <span class="w" id="w7_2">la</span> <span class="w" id="w7_3">pones</span> <span class="w" id="w7_4">y</span></div></div>
+      <div class="clip cap" id="l8" data-start="12.200" data-duration="1.380"><div class="capin"><span class="w" id="w8_0">sigues</span> <span class="w" id="w8_1">hablando</span> <span class="w" id="w8_2">con</span> <span class="w" id="w8_3">él</span></div></div>
+      <div class="clip cap" id="l9" data-start="13.630" data-duration="1.760"><div class="capin"><span class="w" id="w9_0">mientras</span> <span class="w" id="w9_1">trabaja,</span> <span class="w" id="w9_2">aquí</span></div></div>
+      <div class="clip cap" id="l10" data-start="15.440" data-duration="1.290"><div class="capin"><span class="w" id="w10_0">pasan</span> <span class="w" id="w10_1">dos</span> <span class="w" id="w10_2">cosas,</span> <span class="w" id="w10_3">uno</span></div></div>
+      <div class="clip cap" id="l11" data-start="16.780" data-duration="1.800"><div class="capin"><span class="w" id="w11_0">que</span> <span class="w" id="w11_1">bueno,</span> <span class="w" id="w11_2">el</span> <span class="w" id="w11_3">programa</span></div></div>
+      <div class="clip cap" id="l12" data-start="18.630" data-duration="1.520"><div class="capin"><span class="w" id="w12_0">puede</span> <span class="w" id="w12_1">comerse</span> <span class="w" id="w12_2">la</span> <span class="w" id="w12_3">RAM,</span></div></div>
+      <div class="clip cap" id="l13" data-start="20.200" data-duration="1.460"><div class="capin"><span class="w" id="w13_0">el</span> <span class="w" id="w13_1">programa</span> <span class="w" id="w13_2">puede</span></div></div>
+      <div class="clip cap" id="l14" data-start="21.710" data-duration="1.580"><div class="capin"><span class="w" id="w14_0">pesar</span> <span class="w" id="w14_1">mucho</span> <span class="w" id="w14_2">y</span> <span class="w" id="w14_3">la</span> <span class="w" id="w14_4">otra</span></div></div>
+      <div class="clip cap" id="l15" data-start="23.340" data-duration="1.750"><div class="capin"><span class="w" id="w15_0">es</span> <span class="w" id="w15_1">que</span> <span class="w" id="w15_2">estás</span> <span class="w" id="w15_3">en</span> <span class="w" id="w15_4">serie,</span></div></div>
+      <div class="clip cap" id="l16" data-start="25.140" data-duration="1.750"><div class="capin"><span class="w" id="w16_0">es</span> <span class="w" id="w16_1">decir,</span> <span class="w" id="w16_2">lo</span> <span class="w" id="w16_3">mandas</span> <span class="w" id="w16_4">a</span></div></div>
+      <div class="clip cap" id="l17" data-start="26.940" data-duration="1.450"><div class="capin"><span class="w" id="w17_0">trabajar</span> <span class="w" id="w17_1">y</span> <span class="w" id="w17_2">se</span> <span class="w" id="w17_3">fue</span> <span class="w" id="w17_4">a</span></div></div>
+      <div class="clip cap" id="l18" data-start="28.440" data-duration="1.950"><div class="capin"><span class="w" id="w18_0">trabajar,</span> <span class="w" id="w18_1">no</span> <span class="w" id="w18_2">está</span> <span class="w" id="w18_3">aquí</span></div></div>
+      <div class="clip cap" id="l19" data-start="30.440" data-duration="1.350"><div class="capin"><span class="w" id="w19_0">ya,</span> <span class="w" id="w19_1">no</span> <span class="w" id="w19_2">regresa</span> <span class="w" id="w19_3">a</span></div></div>
+      <div class="clip cap" id="l20" data-start="31.840" data-duration="0.950"><div class="capin"><span class="w" id="w20_0">conversar.</span></div></div>
+      <div class="clip cap" id="l21" data-start="32.840" data-duration="1.760"><div class="capin"><span class="w" id="w21_0">Y</span> <span class="w" id="w21_1">ahí</span> <span class="w" id="w21_2">entra</span> <span class="w" id="w21_3">el</span> <span class="w" id="w21_4">trabajo</span></div></div>
+      <div class="clip cap" id="l22" data-start="34.650" data-duration="1.510"><div class="capin"><span class="w" id="w22_0">en</span> <span class="w" id="w22_1">paralelo,</span> <span class="w" id="w22_2">puedes</span></div></div>
+      <div class="clip cap" id="l23" data-start="36.210" data-duration="1.260"><div class="capin"><span class="w" id="w23_0">hacer</span> <span class="w" id="w23_1">que</span> <span class="w" id="w23_2">mandes</span></div></div>
+      <div class="clip cap" id="l24" data-start="37.520" data-duration="1.720"><div class="capin"><span class="w" id="w24_0">subagentes</span> <span class="w" id="w24_1">y</span> <span class="w" id="w24_2">entonces</span></div></div>
+      <div class="clip cap" id="l25" data-start="39.290" data-duration="1.810"><div class="capin"><span class="w" id="w25_0">si</span> <span class="w" id="w25_1">mandas</span> <span class="w" id="w25_2">subagentes</span></div></div>
+      <div class="clip cap" id="l26" data-start="41.150" data-duration="1.460"><div class="capin"><span class="w" id="w26_0">también</span> <span class="w" id="w26_1">se</span> <span class="w" id="w26_2">van</span> <span class="w" id="w26_3">a</span> <span class="w" id="w26_4">comer</span></div></div>
+      <div class="clip cap" id="l27" data-start="42.660" data-duration="1.540"><div class="capin"><span class="w" id="w27_0">la</span> <span class="w" id="w27_1">RAM,</span> <span class="w" id="w27_2">entonces</span> <span class="w" id="w27_3">si</span></div></div>
+      <div class="clip cap" id="l28" data-start="44.250" data-duration="1.440"><div class="capin"><span class="w" id="w28_0">vas</span> <span class="w" id="w28_1">a</span> <span class="w" id="w28_2">tener</span> <span class="w" id="w28_3">una</span> <span class="w" id="w28_4">caja</span></div></div>
+      <div class="clip cap" id="l29" data-start="45.740" data-duration="1.810"><div class="capin"><span class="w" id="w29_0">que</span> <span class="w" id="w29_1">tenga</span> <span class="w" id="w29_2">subagentes,</span></div></div>
+      <div class="clip cap" id="l30" data-start="47.600" data-duration="1.750"><div class="capin"><span class="w" id="w30_0">lo</span> <span class="w" id="w30_1">más</span> <span class="w" id="w30_2">importante</span> <span class="w" id="w30_3">va</span> <span class="w" id="w30_4">a</span></div></div>
+      <div class="clip cap" id="l31" data-start="49.400" data-duration="1.430"><div class="capin"><span class="w" id="w31_0">ser</span> <span class="w" id="w31_1">que</span> <span class="w" id="w31_2">tengas</span> <span class="w" id="w31_3">mucha</span></div></div>
+      <div class="clip cap" id="l32" data-start="50.880" data-duration="1.530"><div class="capin"><span class="w" id="w32_0">RAM</span> <span class="w" id="w32_1">o</span> <span class="w" id="w32_2">que</span> <span class="w" id="w32_3">limites</span> <span class="w" id="w32_4">los</span></div></div>
+      <div class="clip cap" id="l33" data-start="52.460" data-duration="1.520"><div class="capin"><span class="w" id="w33_0">subagentes,</span> <span class="w" id="w33_1">yo</span> <span class="w" id="w33_2">por</span></div></div>
+      <div class="clip cap" id="l34" data-start="54.030" data-duration="1.090"><div class="capin"><span class="w" id="w34_0">ejemplo</span> <span class="w" id="w34_1">se</span> <span class="w" id="w34_2">los</span></div></div>
+      <div class="clip cap" id="l35" data-start="55.170" data-duration="1.900"><div class="capin"><span class="w" id="w35_0">prohíbo,</span> <span class="w" id="w35_1">si</span> <span class="w" id="w35_2">lo</span> <span class="w" id="w35_3">dejo</span></div></div>
+      <div class="clip cap" id="l36" data-start="57.120" data-duration="1.410"><div class="capin"><span class="w" id="w36_0">correr</span> <span class="w" id="w36_1">Claude</span> <span class="w" id="w36_2">en</span> <span class="w" id="w36_3">la</span></div></div>
+      <div class="clip cap" id="l37" data-start="58.580" data-duration="1.330"><div class="capin"><span class="w" id="w37_0">caja,</span> <span class="w" id="w37_1">lo</span> <span class="w" id="w37_2">primero</span> <span class="w" id="w37_3">que</span></div></div>
+      <div class="clip cap" id="l38" data-start="59.960" data-duration="1.010"><div class="capin"><span class="w" id="w38_0">hago</span> <span class="w" id="w38_1">es</span> <span class="w" id="w38_2">quitarle</span> <span class="w" id="w38_3">la</span></div></div>
+      <div class="clip cap" id="l39" data-start="61.020" data-duration="0.810"><div class="capin"><span class="w" id="w39_0">herramienta</span> <span class="w" id="w39_1">de</span></div></div>
+      <div class="clip cap" id="l40" data-start="61.880" data-duration="0.910"><div class="capin"><span class="w" id="w40_0">subagentes.</span></div></div>
+      <div class="clip cap" id="l41" data-start="62.840" data-duration="0.910"><div class="capin"><span class="w" id="w41_0">Que</span> <span class="w" id="w41_1">es</span> <span class="w" id="w41_2">la</span> <span class="w" id="w41_3">que</span> <span class="w" id="w41_4">usa</span></div></div>
+      <div class="clip cap" id="l42" data-start="63.800" data-duration="1.360"><div class="capin"><span class="w" id="w42_0">Claude,</span> <span class="w" id="w42_1">porque</span> <span class="w" id="w42_2">manda</span></div></div>
+      <div class="clip cap" id="l43" data-start="65.210" data-duration="0.850"><div class="capin"><span class="w" id="w43_0">tres,</span> <span class="w" id="w43_1">cuatro</span></div></div>
+      <div class="clip cap" id="l44" data-start="66.110" data-duration="1.450"><div class="capin"><span class="w" id="w44_0">subagentes,</span> <span class="w" id="w44_1">se</span> <span class="w" id="w44_2">come</span> <span class="w" id="w44_3">la</span></div></div>
+      <div class="clip cap" id="l45" data-start="67.610" data-duration="0.900"><div class="capin"><span class="w" id="w45_0">RAM</span> <span class="w" id="w45_1">y</span> <span class="w" id="w45_2">se</span> <span class="w" id="w45_3">muere</span> <span class="w" id="w45_4">la</span></div></div>
+      <div class="clip cap" id="l46" data-start="68.560" data-duration="0.570"><div class="capin"><span class="w" id="w46_0">caja.</span></div></div>
+      <div class="clip cap" id="l47" data-start="69.180" data-duration="1.720"><div class="capin"><span class="w" id="w47_0">Todos</span> <span class="w" id="w47_1">esos</span> <span class="w" id="w47_2">detalles</span></div></div>
+      <div class="clip cap" id="l48" data-start="70.950" data-duration="1.850"><div class="capin"><span class="w" id="w48_0">técnicos</span> <span class="w" id="w48_1">es</span> <span class="w" id="w48_2">mejor</span> <span class="w" id="w48_3">que</span></div></div>
+      <div class="clip cap" id="l49" data-start="72.850" data-duration="1.850"><div class="capin"><span class="w" id="w49_0">los</span> <span class="w" id="w49_1">aprendan</span> <span class="w" id="w49_2">así,</span> <span class="w" id="w49_3">con</span></div></div>
+      <div class="clip cap" id="l50" data-start="74.750" data-duration="1.070"><div class="capin"><span class="w" id="w50_0">los</span> <span class="w" id="w50_1">pies</span> <span class="w" id="w50_2">en</span> <span class="w" id="w50_3">la</span></div></div>
+      <div class="clip cap" id="l51" data-start="75.870" data-duration="1.960"><div class="capin"><span class="w" id="w51_0">trinchera.</span></div></div>
+
+      <!-- portada -->
+      <div class="clip" id="intro" data-start="0" data-duration="4.60">
+        <div class="board"><div class="boardin"></div></div>
+        <div class="mono k" id="i1" style="top:262px;font-size:20px;color:#8DCF6E"># taller sistemas agénticos · sesión 05 · 14 sep 2026</div>
+        <div class="black k" id="i2" style="top:300px;font-size:128px;line-height:1;letter-spacing:-.02em;color:#F2F5F4;text-transform:uppercase;white-space:nowrap">Quítale los<br /><span style="color:#85DDCB">subagentes</span></div>
+        <div class="mono k" id="i3" style="top:580px;font-size:40px;color:#8DCF6E">// si corre en una caja chica</div>
+        <div class="k" id="i4" style="top:660px;font-size:42px;font-family:'Space Grotesk';font-weight:700;color:#F2F5F4;line-height:1.25;width:900px">Manda tres, cuatro subagentes, se comen la RAM y se muere la caja.</div>
+        <div id="i5" style="position:absolute;left:72px;top:860px;width:560px;height:500px"><svg viewBox="0 0 560 500" style="width:560px;height:500px;overflow:visible">
+          <g id="ibx"><g transform="translate(150 260)"><rect x="-90" y="-70" width="180" height="140" rx="14" fill="#141B21" stroke="#F2F5F4" stroke-width="6"/><rect x="-90" y="-70" width="180" height="24" rx="10" fill="#F2F5F4"/><text class="mono" x="0" y="-52" text-anchor="middle" font-size="14" fill="#0E1317">SANDBOX · 2 GB</text>
+  <g id="ibxeyes"><circle cx="-34" cy="0" r="12" fill="#85DDCB"/><circle cx="34" cy="0" r="12" fill="#85DDCB"/><path d="M-18 30 q18 14 36 0" fill="none" stroke="#85DDCB" stroke-width="5" stroke-linecap="round"/></g>
+  <g id="ibxdead" opacity="0"><path d="M-46 -12 l24 24 M-22 -12 l-24 24 M22 -12 l24 24 M46 -12 l-24 24" stroke="#8DCF6E" stroke-width="6" stroke-linecap="round"/><path d="M-18 36 q18 -14 36 0" fill="none" stroke="#8DCF6E" stroke-width="5" stroke-linecap="round"/></g>
+  <circle id="ibxled" cx="70" cy="56" r="7" fill="#8DCF6E"/></g></g><image href="assets/ghosty.png" x="260" y="140" width="110" height="127"/>
+          <g id="iram" ><rect x="400" y="60" width="140" height="300" rx="10" fill="#141B21" stroke="#F2F5F4" stroke-width="4"/><rect x="400" y="60" width="140" height="34" rx="10" fill="#F2F5F4"/><rect x="400" y="80" width="140" height="14" fill="#F2F5F4"/><circle cx="418" cy="77" r="6" fill="#0E1317"/><circle cx="438" cy="77" r="6" fill="#7C8A8E"/><circle cx="458" cy="77" r="6" fill="#85DDCB"/><text class="mono" x="470" y="83" text-anchor="middle" font-size="16" fill="#0E1317">RAM</text></g><rect class="cell" id="irc0" x="440" y="310" width="60" height="18" rx="3" fill="#85DDCB" opacity="1"/><rect class="cell" id="irc1" x="440" y="288" width="60" height="18" rx="3" fill="#85DDCB" opacity="1"/><rect class="cell" id="irc2" x="440" y="266" width="60" height="18" rx="3" fill="#85DDCB" opacity="1"/><rect class="cell" id="irc3" x="440" y="244" width="60" height="18" rx="3" fill="#85DDCB" opacity="1"/><rect class="cell" id="irc4" x="440" y="222" width="60" height="18" rx="3" fill="#85DDCB" opacity="1"/><rect class="cell" id="irc5" x="440" y="200" width="60" height="18" rx="3" fill="#85DDCB" opacity="1"/><rect class="cell" id="irc6" x="440" y="178" width="60" height="18" rx="3" fill="#85DDCB" opacity="1"/><rect class="cell" id="irc7" x="440" y="156" width="60" height="18" rx="3" fill="#85DDCB" opacity="1"/><rect class="cell" id="irc8" x="440" y="134" width="60" height="18" rx="3" fill="#8DCF6E" opacity="1"/><rect class="cell" id="irc9" x="440" y="112" width="60" height="18" rx="3" fill="#8DCF6E" opacity="1"/><text class="mono" x="470" y="350" text-anchor="middle" font-size="22" fill="#8DCF6E">100%</text>
+          <circle id="ism" cx="150" cy="170" r="14" fill="#7C8A8E"/>
+        </svg></div>
+        <div id="i6" style="position:absolute;right:72px;top:1000px;width:320px;height:320px;border:4px solid #85DDCB;border-radius:10px;overflow:hidden"><img src="assets/face-still.png" style="width:100%;height:100%;object-fit:cover" /></div>
+      </div>
+
+      <!-- cierre -->
+      <div class="clip" id="outro" data-start="78.25000000000001" data-duration="6.55">
+        <div class="board"><div class="boardin"></div></div>
+        <div class="k" id="o1" style="top:262px;font-size:50px;font-family:'Space Grotesk';font-weight:700;color:#F2F5F4;line-height:1.2;width:936px">«Lo primero que hago es quitarle<br />la herramienta de subagent.»</div>
+        <div id="o2" style="position:absolute;left:72px;width:936px;top:420px;height:6px;background:#85DDCB;transform-origin:left center"></div>
+        <div class="k" style="top:480px">
+          <div id="o3" class="mono" style="font-size:22px;color:#8DCF6E"># taller grabado · 5 sesiones · on demand</div>
+          <div id="o4" class="black" style="margin-top:18px;font-size:124px;line-height:1;letter-spacing:-.02em;color:#F2F5F4;text-transform:uppercase">Sistemas<br />agénticos</div>
+          <div id="o5" class="mono" style="margin-top:34px;font-size:21px;line-height:1.7;color:#F2F5F4;font-weight:500">SESIÓN 05 · UN BACKEND, n CANALES (WHATSAPP) · 14 SEP 2026<br />LAS 5 SESIONES YA ESTÁN GRABADAS. ENTRAS HOY.</div>
+          <div id="o6" class="mono" style="margin-top:44px;display:inline-block;padding:18px 28px;background:#85DDCB;color:#0E1317;font-size:30px;border-radius:8px">$ inscríbete en fixtergeek.com/sistemas-agenticos</div>
+        </div>
+        <img id="logo" src="assets/logo.png" style="position:absolute;left:72px;top:1270px;height:96px" />
+      </div>
+
+      <!-- zoom-punch: módulo de RAM -->
+      <svg id="punch" viewBox="-210 -100 420 200"><rect x="-200" y="-70" width="400" height="120" rx="10" fill="#141B21" stroke="#F2F5F4" stroke-width="10"/><rect x="-180" y="-50" width="36" height="60" rx="4" fill="#85DDCB"/><rect x="-134" y="-50" width="36" height="60" rx="4" fill="#85DDCB"/><rect x="-88" y="-50" width="36" height="60" rx="4" fill="#85DDCB"/><rect x="-42" y="-50" width="36" height="60" rx="4" fill="#85DDCB"/><rect x="4" y="-50" width="36" height="60" rx="4" fill="#85DDCB"/><rect x="50" y="-50" width="36" height="60" rx="4" fill="#85DDCB"/><rect x="96" y="-50" width="36" height="60" rx="4" fill="#85DDCB"/><rect x="142" y="-50" width="36" height="60" rx="4" fill="#85DDCB"/><rect x="-200" y="50" width="400" height="30" fill="#8DCF6E"/><rect x="-192" y="54" width="18" height="22" fill="#0E1317"/><rect x="-159" y="54" width="18" height="22" fill="#0E1317"/><rect x="-126" y="54" width="18" height="22" fill="#0E1317"/><rect x="-93" y="54" width="18" height="22" fill="#0E1317"/><rect x="-60" y="54" width="18" height="22" fill="#0E1317"/><rect x="-27" y="54" width="18" height="22" fill="#0E1317"/><rect x="6" y="54" width="18" height="22" fill="#0E1317"/><rect x="39" y="54" width="18" height="22" fill="#0E1317"/><rect x="72" y="54" width="18" height="22" fill="#0E1317"/><rect x="105" y="54" width="18" height="22" fill="#0E1317"/><rect x="138" y="54" width="18" height="22" fill="#0E1317"/><rect x="171" y="54" width="18" height="22" fill="#0E1317"/></svg>
+      <svg id="burst" viewBox="0 0 2600 2600"><rect width="2600" height="2600" fill="#85DDCB"/><defs><pattern id="grid" width="80" height="80" patternUnits="userSpaceOnUse"><rect x="8" y="8" width="64" height="64" rx="8" fill="#0E1317"/></pattern></defs><rect x="200" y="200" width="2200" height="2200" fill="url(#grid)"/></svg>
+      <svg id="hero" viewBox="0 0 720 320"><rect x="0" y="20" width="720" height="280" rx="20" fill="#85DDCB"/><text class="black" x="360" y="230" text-anchor="middle" font-size="150" fill="#0E1317" style="font-family:'Archivo Black'">SIN RAM</text></svg>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      const BO = 4.4, BODY = 73.4, TOTAL = 84.8, OUT_IN = 78.25000000000001;
+      const INK = "#F2F5F4", MINT = "#85DDCB", GREEN = "#8DCF6E", GREY = "#7C8A8E", BG = "#0E1317";
+      const REP = (d) => Math.max(0, Math.floor(TOTAL / d) - 1);
+
+      // ---- fondo vivo: las scanlines bajan un periodo, sin cesar; el cursor parpadea
+      tl.to("#bg", { y: 6, duration: .5, ease: "none", repeat: REP(.5) }, 0);
+      tl.to("#cursor", { opacity: 0, duration: .01, repeat: REP(1), repeatDelay: .5, yoyo: true }, BO);
+
+      // ---- portada: completa en el cuadro 0; lo que pasa es movimiento
+      tl.to("#i2", { x: 8, duration: 2.6, ease: "sine.inOut" }, 0);
+      tl.to("#i6", { y: -8, duration: 2.6, ease: "sine.inOut" }, 0);
+      tl.to("#ibxled", { fill: BG, duration: .01, repeat: 8, repeatDelay: .25, yoyo: true }, 0);
+      tl.fromTo("#ism", { y: 0, opacity: .6 }, { y: -50, opacity: 0, duration: 1.4, ease: "power1.out", repeat: 2 }, 0);
+      tl.to("[id^=irc]", { fill: GREEN, duration: .01, stagger: .05, repeat: 1, repeatDelay: 1.2, yoyo: true }, .6);
+
+      // ---- zoom-punch: el módulo de RAM crece hasta tapar el cuadro, "OOM" sella, la cuadrícula se encoge
+      tl.set("#punch", { scale: .2, rotation: -25 }, 0);
+      tl.set("#hero", { scale: .3, rotation: -6 }, 0);
+      const punchIn = (t) => {
+        tl.set("#punch", { opacity: 1, scale: .2, rotation: -25 }, t);
+        tl.to("#punch", { scale: 18, rotation: 5, duration: .5, ease: "power3.in" }, t);
+        tl.set("#burst", { opacity: 1, scale: 1.2, rotation: 0 }, t + .48);
+        tl.set("#punch", { opacity: 0 }, t + .5);
+        tl.set("#hero", { opacity: 1, scale: .3, rotation: -6 }, t + .5);
+        tl.to("#hero", { scale: 1, rotation: 0, duration: .3, ease: "back.out(2.5)" }, t + .5);
+        tl.to("#hero", { opacity: 0, scale: 1.4, duration: .2, ease: "power2.in" }, t + .82);
+        tl.to("#burst", { scale: 0, rotation: 30, duration: .5, ease: "back.in(1.4)" }, t + 1.02);
+        tl.set("#burst", { opacity: 0 }, t + 1.52);
+      };
+      punchIn(3.85);
+      punchIn(OUT_IN - .55);
+
+      // ---- cabecera
+      tl.to("#av", { scale: 1.03, duration: 3.4, ease: "sine.inOut", yoyo: true, repeat: Math.max(0, Math.floor(BODY / 3.4) - 1) }, BO);
+      const punch = (t) => tl.to("#av", { scale: 1.12, duration: .12, yoyo: true, repeat: 1, ease: "power2.out" }, BO + t);
+      [3.0, 11.3, 14.58, 19.81, 29.46, 35.64, 50.49, 55.96, 64.33, 70.32].forEach(punch);
+
+      // ---- cartel
+      const sign = (t, html) => {
+        tl.to("#signin", { scaleY: .04, duration: .1, ease: "power3.in" }, BO + t - .1);
+        tl.to("#signin", { innerHTML: html, duration: .01 }, BO + t);
+        tl.to("#signin", { scaleY: 1, duration: .2, ease: "power4.out" }, BO + t);
+      };
+      sign(11.04, "PASAN<br /><em>// dos cosas</em>");
+      sign(14.58, "SE COME<br /><em>// la RAM</em>");
+      sign(19.34, "ESTÁS<br /><em>// en serie</em>");
+      sign(29.28, "TRABAJO<br /><em>// en paralelo</em>");
+      sign(35.64, "SUBAGENTES<br /><em>// también comen RAM</em>");
+      sign(50.41, "YO SE LOS<br /><em>// prohíbo</em>");
+      sign(55.96, "QUITARLE<br /><em>// subagent</em>");
+      sign(64.33, "SE MUERE<br /><em>// la caja</em>");
+      sign(69.79, "PIES EN LA<br /><em>// trinchera</em>");
+
+      // ---- escenario: tiempo del clip + 0.3, sumado a BO
+      const at = (t) => BO + t + .3;
+      const show = (id, t) => tl.to(id, { opacity: 1, duration: .01 }, at(t));
+      const hide = (id, t) => tl.to(id, { opacity: 0, duration: .15 }, at(t));
+      const popIn = (id, t, origin, s = 2.5) => { show(id, t); tl.from(id, { scale: 0, svgOrigin: origin, duration: .28, ease: "back.out(" + s + ")", immediateRender: false }, at(t)); };
+      const stampIn = (id, t, origin) => { show(id, t); tl.from(id, { scale: 2.4, svgOrigin: origin, duration: .2, ease: "power3.in", immediateRender: false }, at(t)); };
+      // el medidor: enciende celdas hasta n (0–10) y escribe el porcentaje
+      let ramLevel = 0;
+      const ram = (n, t, step = .06) => {
+        for (let i = ramLevel; i < n; i++) tl.to("#rc" + i, { opacity: 1, duration: .01 }, at(t + (i - ramLevel) * step));
+        for (let i = n; i < ramLevel; i++) tl.to("#rc" + i, { opacity: 0, duration: .01 }, at(t));
+        tl.to("#rampct", { textContent: n * 10 + "%", duration: .01 }, at(t + Math.abs(n - ramLevel) * step));
+        ramLevel = n;
+      };
+      // 0 la caja y Ghosty; 2.16 "una herramienta bien perrona": entra la tool; 4.78 "gigantes" el letrero; 7.8 "sigues hablando": el chat
+      // SFX: block, pop, tick, pop
+      ram(2, 0.2);
+      tl.to("#bxled", { fill: BG, duration: .01, repeat: 60, repeatDelay: .5, yoyo: true }, at(0));
+      popIn("#tool", 2.16, "600 220", 1.8);
+      tl.to("#filelbl", { opacity: 1, duration: .2 }, at(4.78));
+      tl.to("#tool", { scale: 1.12, svgOrigin: "600 220", duration: .3, yoyo: true, repeat: 3, ease: "sine.inOut" }, at(5.52));
+      popIn("#chat", 7.8, "370 430", 2);
+      // 11.04 "pasan dos cosas"; 14.58 "comerse la RAM": el medidor sube a 7; 17.31 "pesar mucho": a 8 y tiembla
+      // SFX: tick ×6, block
+      ram(7, 14.58);
+      ram(8, 17.31);
+      tl.to("#rampanel", { x: 4, duration: .06, yoyo: true, repeat: 9 }, at(17.31));
+      // 19.34 "estás en serie": la terminal con la tarea que no regresa
+      // SFX: whoosh-short, tick ×5
+      hide("#s1", 19.2);
+      show("#s2", 19.34); tl.from("#term", { y: 60, duration: .35, ease: "power3.out", immediateRender: false }, at(19.34));
+      tl.to("#t1", { opacity: 1, duration: .05 }, at(21.84));
+      tl.to("#t2", { opacity: 1, duration: .05 }, at(23.34));
+      tl.to("#t3", { opacity: 1, duration: .05 }, at(25.04));
+      tl.to("#t4", { opacity: 1, duration: .05 }, at(26.04));
+      tl.to("#t5", { opacity: 1, duration: .05 }, at(26.64));
+      tl.to("#serial", { opacity: 1, duration: .2 }, at(21.0));
+      // 29.28 "trabajo en paralelo": Ghosty y brotan subagentes; cada uno +20% RAM; 38.26 "comer la RAM" → 10 y parpadea
+      // SFX: whoosh-short, pop ×4, tick ×4, block
+      hide("#s2", 29.1);
+      show("#s3", 29.28); tl.from("#g0", { x: -100, duration: .35, ease: "power3.out", immediateRender: false }, at(29.28));
+      tl.to("#parlbl", { opacity: 1, duration: .2 }, at(30.25));
+      ram(3, 29.5);
+      [[33.12, 0], [33.5, 1], [35.64, 2], [36.0, 3]].forEach(([t, i]) => {
+        popIn("#sa" + i, t, (475 + (i % 2) * 150) + " " + (170 + Math.floor(i / 2) * 170), 3);
+        tl.to("#sw" + i, { opacity: 1, duration: .1 }, at(t));
+        tl.to("#sl" + i, { opacity: 1, duration: .1 }, at(t + .2));
+        ram(3 + (i + 1) * 2 > 10 ? 10 : 3 + (i + 1) * 2, t + .25);
+      });
+      tl.to(".cell", { fill: GREEN, duration: .01, repeat: 11, repeatDelay: .2, yoyo: true }, at(38.26));
+      tl.to("#rampanel", { x: 5, duration: .05, yoyo: true, repeat: 15 }, at(38.26));
+      // 46.01 "mucha RAM": el panel crece; 47.38 "limites los subagentes": dos subagentes se apagan
+      // SFX: block, tick ×2
+      tl.to("#rampanel", { scale: 1.12, svgOrigin: "846 190", duration: .3, yoyo: true, repeat: 1 }, at(46.01));
+      tl.to("#sa2, #sa3, #sw2, #sw3, #sl2, #sl3", { opacity: 0, duration: .25 }, at(47.38));
+      ram(7, 47.6);
+      // 50.41 "yo se los prohíbo": la lista de herramientas, tachón sobre Agent; 55.96 "quitarle": disallowedTools
+      // SFX: whoosh-short, tick ×6, block (tachón), stamp
+      hide("#s3", 50.2);
+      show("#s4", 50.41); tl.from("#tools", { x: -80, duration: .35, ease: "power3.out", immediateRender: false }, at(50.41));
+      [0, 1, 2, 3, 4, 5].forEach((i) => tl.from("#tl" + i, { x: -40, opacity: 0, duration: .2, ease: "power2.out", immediateRender: false }, at(50.9 + i * .12)));
+      ram(2, 50.6);
+      tl.to("#tachon", { opacity: 1, duration: .01 }, at(55.96)).from("#tachon", { scaleX: 0, svgOrigin: "60 400", duration: .25, ease: "power3.out", immediateRender: false }, at(55.96));
+      tl.to("#prohib", { opacity: 1, duration: .2 }, at(57.35));
+      // 60.69 "manda tres, cuatro subagentes": brotan sobre la caja; 63.31 "se come la RAM" → 10; 64.33 "se muere la caja": ojos ✕, humo, OOM KILLED
+      // SFX: pop ×4, block, hit-low, stamp
+      [[60.69, 0], [61.11, 1], [61.62, 2], [62.13, 3]].forEach(([t, i]) => popIn("#ma" + i, t, (590 + i * 50) + " " + (115 - (i % 2) * 30), 3));
+      ram(10, 63.31, .05);
+      tl.to(".cell", { fill: GREEN, duration: .01, repeat: 7, repeatDelay: .12, yoyo: true }, at(63.31));
+      tl.to("#bx4eyes", { opacity: 0, duration: .1 }, at(64.33));
+      tl.to("#bx4dead", { opacity: 1, duration: .1 }, at(64.33));
+      tl.to("#bx4led", { fill: GREY, duration: .1 }, at(64.33));
+      tl.to("#bx4", { rotation: 4, svgOrigin: "640 250", duration: .07, yoyo: true, repeat: 7 }, at(64.33));
+      tl.to("#ma0, #ma1, #ma2, #ma3", { opacity: .25, duration: .3 }, at(64.5));
+      [["#sm1", 0], ["#sm2", .3], ["#sm3", .6]].forEach(([id, d]) => tl.fromTo(id, { y: 0, opacity: .6 }, { y: -80, opacity: 0, duration: 1.4, ease: "power1.out", repeat: 3 }, at(64.6 + d)));
+      stampIn("#oom", 64.91, "640 400");
+      tl.to("#rampct", { textContent: "100%", duration: .01 }, at(64.33));
+      // 69.79 "con los pies en la trinchera": las botas pisan, el sello
+      // SFX: whoosh-short, land ×2, stamp
+      hide("#s4", 69.5);
+      show("#s5", 69.79);
+      tl.from("#boots path:nth-of-type(1)", { y: -120, duration: .3, ease: "power3.in", immediateRender: false }, at(70.32));
+      tl.from("#boots path:nth-of-type(2)", { y: -120, duration: .3, ease: "power3.in", immediateRender: false }, at(70.6));
+      stampIn("#trinch", 71.0, "380 180");
+      hide("#ram", 69.5);
+
+      // ---- karaoke
+      const LINES = [{"i":0,"start":0,"words":[{"id":"w0_0","s":0,"e":0.21},{"id":"w0_1","s":0.21,"e":0.32},{"id":"w0_2","s":0.32,"e":0.58}]},{"i":1,"start":0.58,"words":[{"id":"w1_0","s":0.58,"e":0.84},{"id":"w1_1","s":0.84,"e":0.88},{"id":"w1_2","s":0.88,"e":1.12},{"id":"w1_3","s":1.12,"e":1.38}]},{"i":2,"start":1.38,"words":[{"id":"w2_0","s":1.38,"e":1.52},{"id":"w2_1","s":1.54,"e":1.67},{"id":"w2_2","s":1.81,"e":1.99},{"id":"w2_3","s":2,"e":2.16}]},{"i":3,"start":2.16,"words":[{"id":"w3_0","s":2.16,"e":2.82},{"id":"w3_1","s":2.82,"e":3}]},{"i":4,"start":3,"words":[{"id":"w4_0","s":3,"e":3.44},{"id":"w4_1","s":3.53,"e":3.69},{"id":"w4_2","s":3.77,"e":3.91},{"id":"w4_3","s":3.91,"e":4.15}]},{"i":5,"start":4.15,"words":[{"id":"w5_0","s":4.15,"e":4.78},{"id":"w5_1","s":4.78,"e":5.42}]},{"i":6,"start":5.52,"words":[{"id":"w6_0","s":5.52,"e":5.8},{"id":"w6_1","s":5.87,"e":5.95},{"id":"w6_2","s":5.95,"e":6.66}]},{"i":7,"start":6.69,"words":[{"id":"w7_0","s":6.69,"e":7.09},{"id":"w7_1","s":7.09,"e":7.23},{"id":"w7_2","s":7.23,"e":7.3},{"id":"w7_3","s":7.41,"e":7.67},{"id":"w7_4","s":7.7,"e":7.71}]},{"i":8,"start":7.8,"words":[{"id":"w8_0","s":7.8,"e":8.18},{"id":"w8_1","s":8.31,"e":8.85},{"id":"w8_2","s":8.85,"e":9.08},{"id":"w8_3","s":9.08,"e":9.23}]},{"i":9,"start":9.23,"words":[{"id":"w9_0","s":9.23,"e":9.84},{"id":"w9_1","s":9.84,"e":10.56},{"id":"w9_2","s":10.56,"e":11.04}]},{"i":10,"start":11.04,"words":[{"id":"w10_0","s":11.04,"e":11.3},{"id":"w10_1","s":11.3,"e":11.54},{"id":"w10_2","s":11.54,"e":12.12},{"id":"w10_3","s":12.12,"e":12.38}]},{"i":11,"start":12.38,"words":[{"id":"w11_0","s":12.38,"e":12.6},{"id":"w11_1","s":12.74,"e":13.2},{"id":"w11_2","s":13.33,"e":13.43},{"id":"w11_3","s":13.43,"e":14.12}]},{"i":12,"start":14.23,"words":[{"id":"w12_0","s":14.23,"e":14.58},{"id":"w12_1","s":14.58,"e":15.19},{"id":"w12_2","s":15.19,"e":15.37},{"id":"w12_3","s":15.37,"e":15.8}]},{"i":13,"start":15.8,"words":[{"id":"w13_0","s":15.8,"e":15.98},{"id":"w13_1","s":15.98,"e":16.69},{"id":"w13_2","s":16.69,"e":16.84}]},{"i":14,"start":17.31,"words":[{"id":"w14_0","s":17.31,"e":17.57},{"id":"w14_1","s":17.57,"e":18.14},{"id":"w14_2","s":18.14,"e":18.15},{"id":"w14_3","s":18.15,"e":18.62},{"id":"w14_4","s":18.62,"e":18.84}]},{"i":15,"start":18.94,"words":[{"id":"w15_0","s":18.94,"e":19.04},{"id":"w15_1","s":19.04,"e":19.34},{"id":"w15_2","s":19.34,"e":19.81},{"id":"w15_3","s":19.81,"e":19.91},{"id":"w15_4","s":20.28,"e":20.74}]},{"i":16,"start":20.74,"words":[{"id":"w16_0","s":20.74,"e":20.94},{"id":"w16_1","s":20.94,"e":21.62},{"id":"w16_2","s":21.69,"e":21.84},{"id":"w16_3","s":21.84,"e":22.36},{"id":"w16_4","s":22.46,"e":22.54}]},{"i":17,"start":22.54,"words":[{"id":"w17_0","s":22.54,"e":23.28},{"id":"w17_1","s":23.28,"e":23.34},{"id":"w17_2","s":23.34,"e":23.76},{"id":"w17_3","s":23.76,"e":23.94},{"id":"w17_4","s":23.94,"e":24.04}]},{"i":18,"start":24.04,"words":[{"id":"w18_0","s":24.04,"e":25.04},{"id":"w18_1","s":25.04,"e":25.13},{"id":"w18_2","s":25.26,"e":25.64},{"id":"w18_3","s":25.64,"e":26.04}]},{"i":19,"start":26.04,"words":[{"id":"w19_0","s":26.04,"e":26.38},{"id":"w19_1","s":26.55,"e":26.64},{"id":"w19_2","s":26.64,"e":27.34},{"id":"w19_3","s":27.34,"e":27.44}]},{"i":20,"start":27.44,"words":[{"id":"w20_0","s":27.44,"e":28.44}]},{"i":21,"start":28.44,"words":[{"id":"w21_0","s":28.44,"e":28.5954},{"id":"w21_1","s":28.5954,"e":28.81},{"id":"w21_2","s":28.81,"e":29.28},{"id":"w21_3","s":29.28,"e":29.46},{"id":"w21_4","s":29.46,"e":29.93}]},{"i":22,"start":30.25,"words":[{"id":"w22_0","s":30.25,"e":30.32},{"id":"w22_1","s":30.32,"e":31.25},{"id":"w22_2","s":31.25,"e":31.81}]},{"i":23,"start":31.81,"words":[{"id":"w23_0","s":31.81,"e":32.28},{"id":"w23_1","s":32.28,"e":32.56},{"id":"w23_2","s":32.56,"e":33.12}]},{"i":24,"start":33.12,"words":[{"id":"w24_0","s":33.12,"e":34.05},{"id":"w24_1","s":34.05,"e":34.14},{"id":"w24_2","s":34.14,"e":34.89}]},{"i":25,"start":34.89,"words":[{"id":"w25_0","s":34.89,"e":35.04},{"id":"w25_1","s":35.1,"e":35.64},{"id":"w25_2","s":35.64,"e":36.43}]},{"i":26,"start":36.75,"words":[{"id":"w26_0","s":36.75,"e":37.23},{"id":"w26_1","s":37.23,"e":37.42},{"id":"w26_2","s":37.42,"e":37.7},{"id":"w26_3","s":37.7,"e":37.76},{"id":"w26_4","s":37.83,"e":38.26}]},{"i":27,"start":38.26,"words":[{"id":"w27_0","s":38.26,"e":38.36},{"id":"w27_1","s":38.45,"e":38.91},{"id":"w27_2","s":38.91,"e":39.66},{"id":"w27_3","s":39.72,"e":39.84}]},{"i":28,"start":39.85,"words":[{"id":"w28_0","s":39.85,"e":40.13},{"id":"w28_1","s":40.13,"e":40.19},{"id":"w28_2","s":40.3,"e":40.61},{"id":"w28_3","s":40.71,"e":40.97},{"id":"w28_4","s":40.97,"e":41.33}]},{"i":29,"start":41.34,"words":[{"id":"w29_0","s":41.34,"e":41.57},{"id":"w29_1","s":41.78,"e":42.09},{"id":"w29_2","s":42.09,"e":43.2}]},{"i":30,"start":43.2,"words":[{"id":"w30_0","s":43.2,"e":43.36},{"id":"w30_1","s":43.38,"e":43.67},{"id":"w30_2","s":43.67,"e":44.61},{"id":"w30_3","s":44.61,"e":44.8},{"id":"w30_4","s":44.8,"e":44.87}]},{"i":31,"start":45,"words":[{"id":"w31_0","s":45,"e":45.17},{"id":"w31_1","s":45.17,"e":45.28},{"id":"w31_2","s":45.74,"e":46.01},{"id":"w31_3","s":46.01,"e":46.48}]},{"i":32,"start":46.48,"words":[{"id":"w32_0","s":46.48,"e":46.59},{"id":"w32_1","s":46.59,"e":47.05},{"id":"w32_2","s":47.05,"e":47.13},{"id":"w32_3","s":47.38,"e":47.78},{"id":"w32_4","s":47.78,"e":48.06}]},{"i":33,"start":48.06,"words":[{"id":"w33_0","s":48.06,"e":49.17},{"id":"w33_1","s":49.17,"e":49.36},{"id":"w33_2","s":49.36,"e":49.63}]},{"i":34,"start":49.63,"words":[{"id":"w34_0","s":49.63,"e":50.3},{"id":"w34_1","s":50.41,"e":50.49},{"id":"w34_2","s":50.49,"e":50.77}]},{"i":35,"start":50.77,"words":[{"id":"w35_0","s":50.77,"e":51.74},{"id":"w35_1","s":51.74,"e":52.2},{"id":"w35_2","s":52.2,"e":52.36},{"id":"w35_3","s":52.36,"e":52.72}]},{"i":36,"start":52.72,"words":[{"id":"w36_0","s":52.72,"e":53.26},{"id":"w36_1","s":53.27,"e":53.81},{"id":"w36_2","s":53.81,"e":53.98},{"id":"w36_3","s":53.98,"e":54.16}]},{"i":37,"start":54.18,"words":[{"id":"w37_0","s":54.18,"e":54.76},{"id":"w37_1","s":54.76,"e":54.81},{"id":"w37_2","s":54.99,"e":55.29},{"id":"w37_3","s":55.41,"e":55.56}]},{"i":38,"start":55.56,"words":[{"id":"w38_0","s":55.56,"e":55.83},{"id":"w38_1","s":55.83,"e":55.96},{"id":"w38_2","s":55.96,"e":56.49},{"id":"w38_3","s":56.49,"e":56.59}]},{"i":39,"start":56.62,"words":[{"id":"w39_0","s":56.62,"e":57.35},{"id":"w39_1","s":57.35,"e":57.48}]},{"i":40,"start":57.48,"words":[{"id":"w40_0","s":57.48,"e":58.42}]},{"i":41,"start":58.44,"words":[{"id":"w41_0","s":58.44,"e":58.65},{"id":"w41_1","s":58.76,"e":58.81},{"id":"w41_2","s":58.81,"e":58.88},{"id":"w41_3","s":59.01,"e":59.13},{"id":"w41_4","s":59.18,"e":59.4}]},{"i":42,"start":59.4,"words":[{"id":"w42_0","s":59.4,"e":59.93},{"id":"w42_1","s":60.25,"e":60.44},{"id":"w42_2","s":60.44,"e":60.81}]},{"i":43,"start":60.81,"words":[{"id":"w43_0","s":60.81,"e":61.26},{"id":"w43_1","s":61.26,"e":61.71}]},{"i":44,"start":61.71,"words":[{"id":"w44_0","s":61.71,"e":62.59},{"id":"w44_1","s":62.59,"e":62.73},{"id":"w44_2","s":62.79,"e":63.05},{"id":"w44_3","s":63.05,"e":63.17}]},{"i":45,"start":63.21,"words":[{"id":"w45_0","s":63.21,"e":63.42},{"id":"w45_1","s":63.42,"e":63.49},{"id":"w45_2","s":63.49,"e":63.64},{"id":"w45_3","s":63.64,"e":64.01},{"id":"w45_4","s":64.01,"e":64.16}]},{"i":46,"start":64.16,"words":[{"id":"w46_0","s":64.16,"e":64.78}]},{"i":47,"start":64.78,"words":[{"id":"w47_0","s":64.78,"e":65.3},{"id":"w47_1","s":65.3,"e":65.71},{"id":"w47_2","s":65.71,"e":66.15}]},{"i":48,"start":66.55,"words":[{"id":"w48_0","s":66.55,"e":67.37},{"id":"w48_1","s":67.39,"e":67.57},{"id":"w48_2","s":67.57,"e":68.09},{"id":"w48_3","s":68.09,"e":68.35}]},{"i":49,"start":68.45,"words":[{"id":"w49_0","s":68.45,"e":68.71},{"id":"w49_1","s":68.71,"e":69.53},{"id":"w49_2","s":69.53,"e":70.04},{"id":"w49_3","s":70.04,"e":70.35}]},{"i":50,"start":70.35,"words":[{"id":"w50_0","s":70.35,"e":70.61},{"id":"w50_1","s":70.7,"e":71.04},{"id":"w50_2","s":71.18,"e":71.27},{"id":"w50_3","s":71.27,"e":71.47}]},{"i":51,"start":71.47,"words":[{"id":"w51_0","s":71.47,"e":72.83}]}];
+      LINES.forEach((l) => {
+        const t = BO + l.start;
+        tl.from("#l" + l.i + " .capin", { y: 22, opacity: 0, duration: .18, ease: "power3.out" }, t);
+        l.words.forEach((w) => {
+          tl.set("#" + w.id, { color: GREY, scale: 1 }, t - .01)
+            .set("#" + w.id, { color: MINT }, BO + w.s)
+            .to("#" + w.id, { scale: 1.22, duration: .12, yoyo: true, repeat: 1, ease: "power2.out" }, BO + w.s)
+            .set("#" + w.id, { color: INK }, BO + w.e);
+        });
+      });
+
+      // ---- cierre
+      tl.from("#o1", { y: 24, opacity: 0, duration: .5, ease: "power3.out" }, OUT_IN + .1)
+        .from("#o2", { scaleX: 0, duration: .4, ease: "power3.out" }, OUT_IN + .45)
+        .from("#o3", { opacity: 0, duration: .3 }, OUT_IN + .6)
+        .from("#o4", { y: 22, opacity: 0, duration: .45, ease: "power3.out" }, OUT_IN + .7)
+        .from("#o5", { opacity: 0, duration: .4 }, OUT_IN + .95)
+        .from("#o6", { scaleY: 0, transformOrigin: "left top", duration: .3, ease: "power3.out" }, OUT_IN + 1.15)
+        .from("#logo", { opacity: 0, y: 12, duration: .4 }, OUT_IN + 1.35);
+
+      tl.set({}, {}, TOTAL);
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

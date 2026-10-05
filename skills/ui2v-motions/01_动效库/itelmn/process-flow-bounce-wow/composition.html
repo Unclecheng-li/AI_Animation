@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en" data-composition-variables='[
+  {"id":"title","type":"string","label":"Title","default":"Negotiation Guidelines"},
+  {"id":"subtitle","type":"string","label":"Subtitle","default":"Like any negotiation, it is a process - back and forth, ironing out and amending. Below are a few simple guidelines that can assist you throughout the whole process."},
+  {"id":"steps","type":"string","label":"Steps (JSON array)","default":"[{\"label\":\"1\",\"name\":\"Prepare Thoroughly\",\"body\":\"Research the other party, understand their needs and constraints. Define your objectives, your best alternative to a negotiated agreement, and your walk-away point before entering discussions.\"},{\"label\":\"2\",\"name\":\"Build Rapport\",\"body\":\"Establish a respectful, professional relationship. Listen actively and acknowledge the other party perspective. Trust and mutual respect create the foundation for productive negotiation.\"},{\"label\":\"3\",\"name\":\"Explore Options\",\"body\":\"Generate multiple possibilities before committing. Use open-ended questions to uncover interests behind positions. The best solutions often emerge from creative problem-solving, not positional bargaining.\"},{\"label\":\"4\",\"name\":\"Negotiate Terms\",\"body\":\"Trade concessions strategically - give on low-priority items to gain on high-priority ones. Keep the discussion focused on objective criteria and mutual benefit rather than personal wins and losses.\"},{\"label\":\"5\",\"name\":\"Close & Document\",\"body\":\"Summarise agreements clearly and confirm mutual understanding. Document all terms in writing promptly. A handshake is good; a signed agreement is better. Follow up to ensure commitments are honoured.\"}]"},
+  {"id":"activeStep","type":"number","label":"Active Step (0-based)","default":0,"min":0,"max":4},
+  {"id":"primaryColor","type":"color","label":"Primary / Plate Color","default":"#285f9f"},
+  {"id":"basePlateImage","type":"string","label":"Base Plate Image","default":"v2-base-blue.png"},
+  {"id":"bgColor","type":"color","label":"Background Color","default":"#f5f2ea"},
+  {"id":"cardColor","type":"color","label":"Card Background","default":"#fffdfa"},
+  {"id":"durationPerStep","type":"number","label":"Seconds per Step","default":4,"min":2,"max":10,"step":0.5}
+]'>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=block">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --primary: #285f9f;
+      --primary-soft: rgba(40, 95, 159, 0.18);
+      --primary-glow: rgba(40, 95, 159, 0.42);
+      --bg: #f5f2ea;
+      --card: #fffdfa;
+      --ink: #17212b;
+      --muted: #667681;
+      --rail: rgba(122, 133, 138, 0.24);
+      --accent: #ecb84f;
+      --coral: #d96a4f;
+      --mint: #4aa980;
+    }
+
+    body {
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      background: var(--bg);
+      font-family: "Inter", Arial, Helvetica, sans-serif;
+    }
+
+    #process-flow {
+      position: absolute;
+      inset: 0;
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      background-color: var(--bg);
+      background-image: url("v2-base-blue.png");
+      background-size: 1920px 1080px;
+      background-position: center;
+      background-repeat: no-repeat;
+      perspective: 1600px;
+    }
+
+    #process-flow::before {
+      content: "";
+      position: absolute;
+      inset: 34px 54px 54px;
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      box-shadow: inset 0 0 80px rgba(255,255,255,0.55), 0 30px 90px rgba(35, 45, 52, 0.08);
+      pointer-events: none;
+      opacity: 0.65;
+    }
+
+    .pulse-grid {
+      position: absolute;
+      left: 250px;
+      top: 218px;
+      width: 1420px;
+      height: 640px;
+      background:
+        linear-gradient(90deg, rgba(40,95,159,0.06) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(40,95,159,0.05) 1px, transparent 1px);
+      background-size: 80px 80px;
+      mask-image: radial-gradient(circle at 50% 50%, #000 0, transparent 72%);
+      opacity: 0.9;
+      transform: rotateX(58deg) translateY(178px);
+      transform-origin: center bottom;
+    }
+
+    .orbit {
+      position: absolute;
+      border-radius: 999px;
+      border: 1px solid rgba(40,95,159,0.18);
+      opacity: 0.75;
+      pointer-events: none;
+    }
+
+    .orbit.one { width: 620px; height: 180px; left: -120px; top: 705px; transform: rotate(-12deg); }
+    .orbit.two { width: 430px; height: 120px; right: 120px; top: 114px; transform: rotate(16deg); }
+
+    .spark {
+      position: absolute;
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 18px rgba(236,184,79,0.6);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .wrap {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-top: 70px;
+      transform-style: preserve-3d;
+    }
+
+    .kicker {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: var(--coral);
+      opacity: 0;
+    }
+
+    .pf-title {
+      margin-top: 12px;
+      font-size: 54px;
+      line-height: 1.05;
+      font-weight: 900;
+      color: var(--primary);
+      text-align: center;
+      opacity: 0;
+      text-shadow: 0 16px 34px rgba(40,95,159,0.12);
+    }
+
+    .pf-subtitle {
+      width: 940px;
+      margin-top: 20px;
+      color: var(--muted);
+      font-size: 20px;
+      line-height: 1.5;
+      text-align: center;
+      opacity: 0;
+    }
+
+    .stage {
+      position: relative;
+      width: 1280px;
+      height: 650px;
+      margin-top: 30px;
+      transform-style: preserve-3d;
+    }
+
+    .rail-shell {
+      position: absolute;
+      left: 70px;
+      right: 70px;
+      top: 88px;
+      height: 116px;
+      opacity: 0;
+    }
+
+    .rail-line {
+      position: absolute;
+      left: 70px;
+      right: -70px;
+      top: 38px;
+      height: 8px;
+      border-radius: 99px;
+      background: var(--rail);
+      overflow: hidden;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
+    }
+
+    .rail-fill {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--primary), var(--mint), var(--accent));
+      box-shadow: 0 0 26px var(--primary-glow);
+    }
+
+    .comet {
+      position: absolute;
+      left: 58px;
+      top: 22px;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: #fff;
+      border: 9px solid var(--primary);
+      box-shadow: 0 0 0 9px var(--primary-soft), 0 0 36px var(--primary-glow);
+      opacity: 0;
+    }
+
+    .step-node {
+      position: absolute;
+      top: 0;
+      width: 150px;
+      transform: translateX(-75px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .step-circle {
+      width: 68px;
+      height: 68px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #8493a0;
+      background: #ded9cf;
+      border: 7px solid rgba(255,255,255,0.82);
+      font-size: 24px;
+      font-weight: 900;
+      box-shadow: 0 12px 28px rgba(35, 45, 52, 0.12);
+      transform-origin: center;
+    }
+
+    .step-lbl {
+      width: 160px;
+      color: #7c8993;
+      font-size: 14px;
+      font-weight: 800;
+      line-height: 1.22;
+      text-align: center;
+    }
+
+    .content-card {
+      position: absolute;
+      left: 55px;
+      right: 55px;
+      top: 238px;
+      height: 360px;
+      border-radius: 28px;
+      background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(255,253,250,0.92));
+      box-shadow: 0 30px 80px rgba(34, 42, 48, 0.18), inset 0 1px 0 rgba(255,255,255,0.95);
+      overflow: hidden;
+      opacity: 0;
+      transform-origin: center;
+    }
+
+    .content-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at 92% 8%, var(--primary-soft), transparent 28%),
+        linear-gradient(90deg, rgba(40,95,159,0.07), transparent 22%, transparent 76%, rgba(236,184,79,0.12));
+      pointer-events: none;
+    }
+
+    .card-ribbon {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 16px;
+      background: linear-gradient(180deg, var(--primary), var(--mint), var(--accent));
+      box-shadow: 0 0 30px var(--primary-glow);
+    }
+
+    .step-panel {
+      position: absolute;
+      inset: 0;
+      padding: 54px 82px 50px 92px;
+      opacity: 0;
+      transform: translateX(120px) rotateY(-8deg) scale(0.96);
+      transform-origin: center;
+    }
+
+    .num-bg {
+      position: absolute;
+      right: 50px;
+      top: 12px;
+      color: var(--accent);
+      font-size: 138px;
+      font-weight: 900;
+      line-height: 1;
+      opacity: 0.18;
+      text-shadow: 0 18px 42px rgba(236,184,79,0.18);
+    }
+
+    .panel-heading {
+      max-width: 780px;
+      color: var(--primary);
+      font-size: 42px;
+      line-height: 1.08;
+      font-weight: 900;
+    }
+
+    .panel-body {
+      max-width: 925px;
+      margin-top: 24px;
+      color: var(--ink);
+      font-size: 23px;
+      line-height: 1.62;
+      font-weight: 500;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      color: var(--coral);
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    .badge-dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 18px rgba(236,184,79,0.75);
+    }
+
+    #el-fade {
+      position: absolute;
+      inset: 0;
+      background: #000;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 99;
+    }
+  </style>
+</head>
+<body>
+  <div id="process-flow"
+       data-composition-id="process-flow"
+       data-width="1920"
+       data-height="1080"
+       data-duration="21"
+       data-start="0"
+       data-track-index="0">
+    <div class="pulse-grid"></div>
+    <div class="orbit one"></div>
+    <div class="orbit two"></div>
+    <div class="spark" style="left: 382px; top: 354px;"></div>
+    <div class="spark" style="left: 1458px; top: 304px;"></div>
+    <div class="spark" style="left: 1514px; top: 736px;"></div>
+    <div class="spark" style="left: 276px; top: 734px;"></div>
+
+    <div class="wrap">
+      <div class="kicker" id="pfKicker">Process Flow</div>
+      <div class="pf-title" id="pfTitle"></div>
+      <div class="pf-subtitle" id="pfSubtitle"></div>
+
+      <div class="stage" id="stage">
+        <div class="rail-shell" id="railShell">
+          <div class="rail-line"><div class="rail-fill" id="railFill"></div></div>
+          <div class="comet" id="comet"></div>
+          <div id="stepTrack"></div>
+        </div>
+
+        <div class="content-card" id="contentCard">
+          <div class="card-ribbon"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="el-fade"></div>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      const vars = __hyperframes.getVariables();
+      const title = vars.title || "Negotiation Guidelines";
+      const subtitle = vars.subtitle || "";
+      const steps = JSON.parse(vars.steps || "[]");
+      const primary = vars.primaryColor || "#285f9f";
+      const basePlate = vars.basePlateImage || "v2-base-blue.png";
+      const bgColor = vars.bgColor || "#f5f2ea";
+      const cardColor = vars.cardColor || "#fffdfa";
+      const durPerStep = Number(vars.durationPerStep) || 4;
+      const TOTAL = steps.length * durPerStep + 1;
+
+      function hexToRgb(hex) {
+        const clean = String(hex).replace("#", "");
+        const value = parseInt(clean.length === 3 ? clean.split("").map(c => c + c).join("") : clean, 16);
+        return { r: (value >> 16) & 255, g: (value >> 8) & 255, b: value & 255 };
+      }
+
+      const rgb = hexToRgb(primary);
+      const root = document.documentElement;
+      root.style.setProperty("--primary", primary);
+      root.style.setProperty("--primary-soft", "rgba(" + rgb.r + "," + rgb.g + "," + rgb.b + ",0.18)");
+      root.style.setProperty("--primary-glow", "rgba(" + rgb.r + "," + rgb.g + "," + rgb.b + ",0.42)");
+      root.style.setProperty("--bg", bgColor);
+      root.style.setProperty("--card", cardColor);
+
+      const comp = document.getElementById("process-flow");
+      comp.style.backgroundImage = 'url("' + basePlate + '")';
+      comp.style.backgroundColor = bgColor;
+      comp.setAttribute("data-duration", TOTAL);
+
+      document.getElementById("pfTitle").textContent = title;
+      document.getElementById("pfSubtitle").textContent = subtitle;
+
+      const track = document.getElementById("stepTrack");
+      const card = document.getElementById("contentCard");
+      const railFill = document.getElementById("railFill");
+      const comet = document.getElementById("comet");
+      const circles = [];
+      const labels = [];
+      const panels = [];
+      const count = Math.max(steps.length, 1);
+      const startX = 70;
+      const endX = 1210;
+
+      steps.forEach((step, i) => {
+        const x = count === 1 ? 640 : startX + ((endX - startX) * i) / (count - 1);
+        const node = document.createElement("div");
+        node.className = "step-node";
+        node.style.left = x + "px";
+        node.innerHTML =
+          '<div class="step-circle" id="c' + i + '">' + step.label + '</div>' +
+          '<div class="step-lbl" id="l' + i + '">' + step.name + '</div>';
+        track.appendChild(node);
+        circles.push(document.getElementById("c" + i));
+        labels.push(document.getElementById("l" + i));
+
+        const panel = document.createElement("div");
+        panel.className = "step-panel";
+        panel.id = "p" + i;
+        panel.innerHTML =
+          '<div class="num-bg">' + step.label + '</div>' +
+          '<div class="badge"><span class="badge-dot"></span> Step ' + step.label + '</div>' +
+          '<div class="panel-heading">' + step.name + '</div>' +
+          '<div class="panel-body">' + step.body + '</div>';
+        card.appendChild(panel);
+        panels.push(panel);
+      });
+
+      const tl = gsap.timeline({ paused: true });
+
+      gsap.set(circles, { transformOrigin: "50% 50%" });
+      gsap.set(circles[0], {
+        backgroundColor: primary,
+        color: "#fff",
+        scale: 1.28,
+        boxShadow: "0 0 0 10px rgba(" + rgb.r + "," + rgb.g + "," + rgb.b + ",0.14), 0 16px 36px rgba(" + rgb.r + "," + rgb.g + "," + rgb.b + ",0.4)"
+      });
+      gsap.set(labels[0], { color: primary });
+      gsap.set(panels[0], { opacity: 1, x: 0, rotateY: 0, scale: 1 });
+      gsap.set(comet, { x: 0 });
+
+      tl.fromTo(".pulse-grid", { opacity: 0, y: 42 }, { opacity: 0.9, y: 0, duration: 0.9, ease: "power2.out" }, 0);
+      tl.to("#pfKicker", { opacity: 1, y: -8, duration: 0.45, ease: "power2.out" }, 0.1);
+      tl.fromTo("#pfTitle", { opacity: 0, y: 30, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.7, ease: "back.out(1.45)" }, 0.2);
+      tl.fromTo("#pfSubtitle", { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.55, ease: "power2.out" }, 0.5);
+      tl.fromTo("#railShell", { opacity: 0, y: -14, scale: 0.98 }, { opacity: 1, y: 0, scale: 1, duration: 0.55, ease: "back.out(1.4)" }, 0.72);
+      tl.fromTo("#contentCard", { opacity: 0, y: 70, rotateX: -10, scale: 0.94 }, { opacity: 1, y: 0, rotateX: 0, scale: 1, duration: 0.72, ease: "back.out(1.25)" }, 0.88);
+      tl.to("#comet", { opacity: 1, duration: 0.25 }, 1.0);
+      tl.fromTo(".spark", { opacity: 0, scale: 0 }, { opacity: 0.9, scale: 1, stagger: 0.08, duration: 0.3, ease: "back.out(2)" }, 1.05);
+      tl.to(".spark", { opacity: 0.18, scale: 0.7, yoyo: true, repeat: 28, duration: 0.45, stagger: 0.05, ease: "sine.inOut" }, 1.5);
+      tl.to(".orbit", { rotation: "+=18", duration: TOTAL, ease: "none" }, 0);
+      tl.to(".pulse-grid", { backgroundPosition: "160px 160px", duration: TOTAL, ease: "none" }, 0);
+
+      for (var i = 1; i < steps.length; i++) {
+        (function(idx) {
+          var t = idx * durPerStep;
+          var prev = idx - 1;
+          var progress = idx / (steps.length - 1);
+          var cometX = (endX - startX) * progress;
+
+          tl.to(railFill, { width: (progress * 100) + "%", duration: 0.62, ease: "power3.inOut" }, t - 0.08);
+          tl.to(comet, { x: cometX, scale: 1.22, duration: 0.44, ease: "power3.inOut" }, t - 0.06);
+          tl.to(comet, { scale: 1, duration: 0.35, ease: "elastic.out(1, 0.45)" }, t + 0.38);
+
+          tl.to(circles[prev], {
+            backgroundColor: "#ded9cf",
+            color: "#8493a0",
+            scale: 1,
+            boxShadow: "0 12px 28px rgba(35,45,52,0.12)",
+            duration: 0.28,
+            ease: "power2.out"
+          }, t);
+          tl.to(labels[prev], { color: "#7c8993", duration: 0.25 }, t);
+
+          tl.to(circles[idx], {
+            backgroundColor: primary,
+            color: "#fff",
+            scale: 1.34,
+            boxShadow: "0 0 0 12px rgba(" + rgb.r + "," + rgb.g + "," + rgb.b + ",0.16), 0 18px 42px rgba(" + rgb.r + "," + rgb.g + "," + rgb.b + ",0.44)",
+            duration: 0.28,
+            ease: "back.out(2.8)"
+          }, t + 0.14);
+          tl.to(circles[idx], { scale: 1.24, duration: 0.45, ease: "elastic.out(1,0.42)" }, t + 0.42);
+          tl.to(labels[idx], { color: primary, duration: 0.25 }, t + 0.14);
+
+          tl.to(panels[prev], { opacity: 0, x: -160, rotateY: 9, scale: 0.96, duration: 0.32, ease: "power3.in" }, t);
+          tl.fromTo(panels[idx],
+            { opacity: 0, x: 180, rotateY: -10, scale: 0.94 },
+            { opacity: 1, x: 0, rotateY: 0, scale: 1, duration: 0.58, ease: "back.out(1.4)" },
+            t + 0.18
+          );
+
+          tl.to("#contentCard", { y: -16, scale: 1.018, rotateZ: idx % 2 ? 0.35 : -0.35, duration: 0.18, ease: "power2.out" }, t + 0.08);
+          tl.to("#contentCard", { y: 0, scale: 1, rotateZ: 0, duration: 0.48, ease: "elastic.out(1,0.45)" }, t + 0.25);
+          tl.fromTo(".card-ribbon", { scaleY: 0.4 }, { scaleY: 1, duration: 0.45, ease: "back.out(1.8)", transformOrigin: "center center" }, t + 0.15);
+
+          tl.fromTo(".spark",
+            { opacity: 0, scale: 0.4, y: 0 },
+            { opacity: 0.92, scale: 1.1, y: -28, stagger: 0.04, duration: 0.22, ease: "power2.out" },
+            t + 0.2
+          );
+          tl.to(".spark", { opacity: 0.2, scale: 0.65, y: 0, stagger: 0.04, duration: 0.3, ease: "sine.out" }, t + 0.45);
+        })(i);
+      }
+
+      tl.to("#contentCard", { scale: 1.025, duration: 0.32, ease: "power2.out" }, TOTAL - 1.15);
+      tl.to(circles, { scale: 1.05, stagger: 0.055, duration: 0.18, yoyo: true, repeat: 1, ease: "power2.inOut" }, TOTAL - 1.05);
+      tl.fromTo("#el-fade", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "power2.in" }, TOTAL - 0.5);
+      tl.set("#el-fade", { opacity: 1 }, TOTAL);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["process-flow"] = tl;
+    </script>
+  </div>
+</body>
+</html>

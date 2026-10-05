@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en" data-composition-variables='[
+  {"id":"title","type":"string","label":"Course Title","default":"Clinical Decision Framework"},
+  {"id":"tabs","type":"string","label":"Tabs (JSON)","default":"[{\"label\":\"Assessment\",\"heading\":\"Clinical Assessment\",\"body\":\"Begin with symptoms, vital signs, history, and immediate risks. Make the first read structured, calm, and complete before decisions start to narrow.\"},{\"label\":\"Diagnosis\",\"heading\":\"Differential Diagnosis\",\"body\":\"Use the assessment data to rank likely causes. Rule out red flags first, then test the simplest explanation that fits the findings.\"},{\"label\":\"Treatment\",\"heading\":\"Treatment Planning\",\"body\":\"Choose evidence-based interventions that match the confirmed diagnosis. Check contraindications, explain options, and document the decision pathway.\"},{\"label\":\"Follow-up\",\"heading\":\"Follow-up Protocol\",\"body\":\"Close the loop with review timing, escalation triggers, patient education, and ownership of outstanding investigations.\"}]"},
+  {"id":"activeTab","type":"number","label":"Active Tab (0-based)","default":0,"min":0,"max":3},
+  {"id":"primaryColor","type":"color","label":"Primary Color","default":"#ffc300"},
+  {"id":"bgColor","type":"color","label":"Background","default":"#003049"},
+  {"id":"basePlateImage","type":"string","label":"Base Plate Image","default":"v2-base-blue.png"},
+  {"id":"durationPerTab","type":"number","label":"Seconds per Tab","default":5,"min":3,"max":8,"step":0.5}
+]'>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=block">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root { --accent: #ffc300; --bg: #003049; --ink: #e9f7fb; --muted: #7a9ab0; --base-plate: url("v2-base-blue.png"); }
+    html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); font-family: "Inter", Arial, Helvetica, sans-serif; }
+    body {
+      position: relative;
+      background-color: var(--bg);
+      background-image:
+        linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px),
+        radial-gradient(circle at 36% 51%, rgba(255,195,0,0.14), transparent 34%),
+        linear-gradient(135deg, #003049 0%, #092f42 48%, #071820 100%);
+      background-size: 40px 40px, 40px 40px, 1920px 1080px, 1920px 1080px;
+      background-position: 0 0, 0 0, 0 0, 0 0;
+      background-repeat: repeat, repeat, no-repeat, no-repeat;
+    }
+    [data-composition-id] { position: absolute; inset: 0; width: 1920px; height: 1080px; overflow: hidden; }
+    .vignette { position: absolute; inset: 0; background: radial-gradient(circle at 37% 51%, transparent 0, transparent 31%, rgba(0,0,0,0.12) 62%, rgba(0,0,0,0.38) 100%), linear-gradient(90deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.12) 58%, rgba(0,0,0,0.28) 100%); pointer-events: none; }
+    .topline { position: absolute; left: 60px; right: 60px; top: 42px; display: flex; align-items: center; justify-content: space-between; color: rgba(233,247,251,0.78); font-family: "JetBrains Mono", monospace; font-size: 14px; letter-spacing: 0.18em; text-transform: uppercase; }
+    .title { position: absolute; left: 68px; top: 105px; width: 860px; color: var(--ink); font-size: 58px; line-height: 0.95; font-family: "Bebas Neue", sans-serif; letter-spacing: 0.04em; }
+    .left-stage { position: absolute; left: 72px; top: 190px; width: 1088px; height: 805px; }
+    .iris { position: absolute; left: 104px; top: 74px; width: 700px; height: 700px; border-radius: 50%; background: radial-gradient(circle, rgba(255,195,0,0.32) 0 2px, transparent 3px 100%), radial-gradient(circle, rgba(255,195,0,0.08) 0 16%, rgba(255,195,0,0.025) 38%, transparent 66%), repeating-radial-gradient(circle, rgba(255,195,0,0.16) 0 1px, transparent 1px 76px); border: 1px solid rgba(255,195,0,0.24); box-shadow: 0 0 80px rgba(255,195,0,0.1), inset 0 0 80px rgba(0,0,0,0.42); opacity: 0; transform: scale(0.92); }
+    .iris::before, .iris::after { content: ""; position: absolute; inset: 74px; border-radius: 50%; border: 1px solid rgba(255,195,0,0.28); }
+    .iris::after { inset: 154px; border-color: rgba(233,247,251,0.18); box-shadow: 0 0 0 48px rgba(255,195,0,0.035); }
+    .scan-line { position: absolute; left: 454px; top: 105px; width: 2px; height: 640px; background: linear-gradient(transparent, rgba(255,195,0,0.55), transparent); transform-origin: 50% 320px; opacity: 0.58; }
+    .stage-core { position: absolute; left: 278px; top: 248px; width: 352px; height: 238px; border: 1px solid rgba(255,195,0,0.28); background: rgba(0,48,73,0.82); box-shadow: 0 20px 60px rgba(0,0,0,0.34); padding: 38px 42px; opacity: 0; }
+    .stage-num { color: var(--accent); font-family: "JetBrains Mono", monospace; font-size: 15px; font-weight: 700; letter-spacing: 0.22em; margin-bottom: 18px; }
+    .stage-label { color: var(--ink); font-family: "Bebas Neue", sans-serif; font-size: 64px; line-height: 0.92; letter-spacing: 0.035em; }
+    .stage-note { position: absolute; left: 100px; bottom: 30px; width: 680px; color: rgba(233,247,251,0.72); font-size: 22px; line-height: 1.45; }
+    .tab-stack { position: absolute; left: 875px; top: 88px; width: 184px; display: grid; gap: 16px; }
+    .tab-btn { position: relative; min-height: 84px; padding: 16px 18px; background: rgba(255,255,255,0.055); border: 1px solid rgba(233,247,251,0.14); color: rgba(233,247,251,0.62); font-family: "JetBrains Mono", monospace; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; overflow: hidden; }
+    .tab-btn .idx { display: block; color: rgba(255,195,0,0.55); font-size: 12px; margin-bottom: 8px; }
+    .tab-btn.active { color: var(--bg); background: var(--accent); border-color: var(--accent); box-shadow: 0 0 34px rgba(255,195,0,0.18); }
+    .tab-btn.active .idx { color: rgba(0,48,73,0.72); }
+    .right-panel { position: absolute; right: 64px; top: 145px; width: 650px; height: 780px; border-left: 1px solid rgba(255,195,0,0.22); padding: 36px 0 36px 52px; opacity: 0; }
+    .panel-shell { position: absolute; inset: 36px 0 36px 52px; border: 1px solid rgba(255,195,0,0.18); background: rgba(0,48,73,0.58); box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 24px 80px rgba(0,0,0,0.22); }
+    .panel-shell::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 7px; background: var(--accent); }
+    .panel-content { position: absolute; left: 92px; top: 88px; right: 42px; bottom: 74px; }
+    .tab-block { position: absolute; inset: 0; opacity: 0; }
+    .tab-block:first-child { opacity: 1; }
+    .eyebrow { color: var(--accent); font-family: "JetBrains Mono", monospace; font-size: 14px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 34px; }
+    .c-heading { color: var(--ink); font-family: "Bebas Neue", sans-serif; font-size: 76px; line-height: 0.95; letter-spacing: 0.035em; margin-bottom: 32px; }
+    .c-body { color: rgba(233,247,251,0.78); font-size: 28px; line-height: 1.48; max-width: 460px; }
+    .footnote { position: absolute; right: 110px; bottom: 60px; width: 470px; padding: 16px 20px; background: rgba(255,195,0,0.08); border: 1px solid rgba(255,195,0,0.2); color: rgba(255,229,135,0.86); font-family: "JetBrains Mono", monospace; font-size: 14px; line-height: 1.42; opacity: 0; }
+    #el-fade { position: absolute; inset: 0; background: #000; opacity: 0; z-index: 99; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <div data-composition-id="medical-tabs" data-width="1920" data-height="1080" data-duration="21" data-start="0">
+    <div class="vignette"></div>
+    <div class="topline"><span>04 / 14</span><span>Clinical pathway tabs</span></div>
+    <div class="title" id="title"></div>
+    <div class="left-stage">
+      <div class="iris" id="iris"><div class="scan-line" id="scanLine"></div></div>
+      <div class="stage-core" id="stageCore"><div class="stage-num" id="stageNum"></div><div class="stage-label" id="stageLabel"></div></div>
+      <div class="stage-note" id="stageNote"></div>
+      <div class="tab-stack" id="tabStack"></div>
+    </div>
+    <div class="right-panel" id="rightPanel"><div class="panel-shell"></div><div class="panel-content" id="panelContent"></div></div>
+    <div class="footnote" id="footnote">Move through the pathway one decision at a time. The tab is the current focus; the panel carries the clinical reasoning.</div>
+    <div id="el-fade"></div>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      var vars = __hyperframes.getVariables();
+      var tabs = JSON.parse(vars.tabs || "[]");
+      var activeTab = Number(vars.activeTab) || 0;
+      var accent = vars.primaryColor || "#ffc300";
+      var bgColor = vars.bgColor || "#003049";
+      var basePlateImage = vars.basePlateImage || "v2-base-blue.png";
+      var dur = Number(vars.durationPerTab) || 5;
+      document.documentElement.style.setProperty("--accent", accent);
+      document.documentElement.style.setProperty("--bg", bgColor);
+      document.documentElement.style.setProperty("--base-plate", 'url("' + basePlateImage + '")');
+
+      var title = document.getElementById("title");
+      var tabStack = document.getElementById("tabStack");
+      var panelContent = document.getElementById("panelContent");
+      var stageNum = document.getElementById("stageNum");
+      var stageLabel = document.getElementById("stageLabel");
+      var stageNote = document.getElementById("stageNote");
+      var btnEls = [], tabPanels = [];
+      title.textContent = vars.title || "Clinical Decision Framework";
+
+      function setStage(idx) {
+        var tab = tabs[idx] || tabs[0] || {};
+        stageNum.textContent = String(idx + 1).padStart(2, "0") + " / " + String(tabs.length).padStart(2, "0");
+        stageLabel.textContent = tab.label || "";
+        stageNote.textContent = tab.heading || "";
+      }
+
+      tabs.forEach(function(t, i) {
+        var b = document.createElement("div");
+        b.className = "tab-btn" + (i === activeTab ? " active" : "");
+        var idx = document.createElement("span");
+        idx.className = "idx";
+        idx.textContent = String(i + 1).padStart(2, "0");
+        var label = document.createElement("span");
+        label.textContent = t.label || "";
+        b.appendChild(idx);
+        b.appendChild(label);
+        tabStack.appendChild(b);
+        btnEls.push(b);
+
+        var panel = document.createElement("div");
+        panel.className = "tab-block";
+        var eyebrow = document.createElement("div");
+        eyebrow.className = "eyebrow";
+        eyebrow.textContent = "Stage " + String(i + 1).padStart(2, "0");
+        var heading = document.createElement("div");
+        heading.className = "c-heading";
+        heading.textContent = t.heading || "";
+        var body = document.createElement("div");
+        body.className = "c-body";
+        body.textContent = t.body || "";
+        panel.appendChild(eyebrow);
+        panel.appendChild(heading);
+        panel.appendChild(body);
+        panelContent.appendChild(panel);
+        tabPanels.push(panel);
+        gsap.set(panel, { opacity: i === activeTab ? 1 : 0, y: i === activeTab ? 0 : 20 });
+      });
+
+      setStage(activeTab);
+      var TOTAL = tabs.length * dur + 1;
+      var tl = gsap.timeline({ paused: true });
+      tl.fromTo("#title", { opacity: 0, y: -18 }, { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" }, 0);
+      tl.to("#iris", { opacity: 1, scale: 1, duration: 0.8, ease: "power2.out", overwrite: "auto" }, 0.15);
+      tl.to("#stageCore", { opacity: 1, y: -10, duration: 0.6, ease: "power2.out" }, 0.45);
+      tl.fromTo("#tabStack .tab-btn", { opacity: 0, x: 26 }, { opacity: 1, x: 0, duration: 0.45, stagger: 0.08, ease: "power2.out" }, 0.6);
+      tl.to("#rightPanel", { opacity: 1, x: -12, duration: 0.7, ease: "power2.out" }, 0.8);
+      tl.to("#footnote", { opacity: 1, y: -8, duration: 0.5 }, 1.05);
+      tl.to("#scanLine", { rotation: 360, duration: TOTAL - 1, ease: "none" }, 0.8);
+
+      for (var i = 1; i < tabs.length; i++) {
+        (function(idx) {
+          var t = idx * dur;
+          var prev = idx - 1;
+          tl.to("#iris", { scale: 1.08, duration: 0.28, ease: "power2.out", overwrite: "auto" }, t);
+          tl.to("#iris", { scale: 1, duration: 0.52, ease: "power2.out", overwrite: "auto" }, t + 0.28);
+          tl.to(tabPanels[prev], { opacity: 0, y: -18, duration: 0.22 }, t);
+          tl.to(tabPanels[idx], { opacity: 1, y: 0, duration: 0.45, ease: "power2.out" }, t + 0.25);
+          tl.to(btnEls[prev], { color: "rgba(233,247,251,0.62)", backgroundColor: "rgba(255,255,255,0.055)", borderColor: "rgba(233,247,251,0.14)", duration: 0.2 }, t);
+          tl.to(btnEls[idx], { color: bgColor, backgroundColor: accent, borderColor: accent, duration: 0.2 }, t + 0.1);
+          tl.call(function() { setStage(idx); }, null, t + 0.16);
+          tl.fromTo("#stageCore", { clipPath: "circle(0% at 50% 50%)" }, { clipPath: "circle(75% at 50% 50%)", duration: 0.58, ease: "power2.out" }, t + 0.13);
+        })(i);
+      }
+
+      tl.fromTo("#el-fade", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "power2.in" }, TOTAL - 0.5);
+      tl.set("#el-fade", { opacity: 1 }, TOTAL);
+      document.querySelector('[data-composition-id="medical-tabs"]').setAttribute("data-duration", TOTAL);
+      window.__timelines = window.__timelines || {};
+      window.__timelines["medical-tabs"] = tl;
+    </script>
+  </div>
+</body>
+</html>

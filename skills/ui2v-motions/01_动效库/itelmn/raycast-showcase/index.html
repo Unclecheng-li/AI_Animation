@@ -1,0 +1,909 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Raycast Dark — Showcase</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=block"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #07080a;
+      }
+      :root {
+        --canvas: #07080a;
+        --surface: #101111;
+        --card: #1b1c1e;
+        --ink: #f9f9f9;
+        --ink-soft: #cdcdce;
+        --ink-dim: #9c9c9d;
+        --ink-mute: #6a6b6c;
+        --accent: #ff6363;
+        --border: #252829;
+        --hairline: rgba(255, 255, 255, 0.08);
+        --highlight: rgba(255, 255, 255, 0.1);
+        --sans: "Inter", "Helvetica Neue", Arial, sans-serif;
+        --mono: "JetBrains Mono", ui-monospace, monospace;
+        --elev: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 24px 60px rgba(0, 0, 0, 0.55),
+          0 4px 14px rgba(0, 0, 0, 0.45);
+      }
+      #root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: var(--canvas);
+      }
+      .scene {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        will-change: opacity, filter, transform;
+      }
+      #s2,
+      #s3,
+      #s4,
+      #s5,
+      #s6 {
+        opacity: 0;
+      }
+      .bg {
+        position: absolute;
+        inset: 0;
+        background-color: var(--canvas);
+        background-image:
+          url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='0.5'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+          radial-gradient(120% 80% at 78% 8%, rgba(255, 99, 99, 0.07), rgba(255, 99, 99, 0) 55%);
+        background-size: 200px 200px, cover;
+        background-blend-mode: overlay, normal;
+      }
+      /* oversized ghost type — background depth layer */
+      .ghost {
+        position: absolute;
+        font-family: var(--sans);
+        font-weight: 700;
+        color: rgba(249, 249, 249, 0.055);
+        letter-spacing: -0.045em;
+        line-height: 0.8;
+        white-space: nowrap;
+        pointer-events: none;
+        user-select: none;
+      }
+      .s-cover .ghost {
+        font-size: 500px;
+        right: -30px;
+        bottom: -140px;
+      }
+      .s-palette .ghost {
+        font-size: 600px;
+        left: -50px;
+        bottom: -190px;
+      }
+      .s-type .ghost {
+        font-size: 820px;
+        right: 40px;
+        top: -150px;
+        font-weight: 800;
+      }
+      .s-metrics .ghost {
+        font-size: 660px;
+        left: -20px;
+        top: -110px;
+      }
+      .s-window .ghost {
+        font-size: 460px;
+        left: -30px;
+        bottom: -110px;
+      }
+      .s-close .ghost {
+        font-size: 720px;
+        right: 40px;
+        bottom: -170px;
+      }
+      .chrome {
+        position: absolute;
+        left: 96px;
+        right: 96px;
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        font-family: var(--mono);
+        font-size: 19px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--ink-dim);
+        z-index: 6;
+      }
+      .chrome .no {
+        color: var(--ink-soft);
+      }
+      .chrome.top {
+        top: 70px;
+      }
+      .chrome.bot {
+        bottom: 66px;
+      }
+      .hair {
+        position: absolute;
+        left: 96px;
+        right: 96px;
+        height: 1px;
+        background: var(--hairline);
+        transform-origin: left center;
+      }
+      .kicker {
+        font-family: var(--sans);
+        font-weight: 600;
+        font-size: 24px;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: var(--accent);
+      }
+      .hl {
+        display: block;
+        line-height: 1.06;
+      }
+      .word {
+        display: inline-block;
+      }
+      .display {
+        font-family: var(--sans);
+        font-weight: 600;
+        color: var(--ink);
+        letter-spacing: -0.01em;
+      }
+      .lede {
+        font-family: var(--sans);
+        font-weight: 400;
+        font-size: 29px;
+        line-height: 1.6;
+        letter-spacing: 0.012em;
+        color: var(--ink-soft);
+        max-width: 830px;
+      }
+      .red {
+        color: var(--accent);
+      }
+      .keycap {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 40px;
+        height: 40px;
+        padding: 0 12px;
+        background: linear-gradient(#1a1a1c, #0d0d0e);
+        border: 1px solid var(--highlight);
+        border-radius: 8px;
+        box-shadow: 0 2px 0 rgba(0, 0, 0, 0.6);
+        font-family: var(--mono);
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--ink-soft);
+      }
+      /* soft glow that breathes behind hero content */
+      .glow {
+        position: absolute;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(255, 99, 99, 0.16), rgba(255, 99, 99, 0) 68%);
+        pointer-events: none;
+        filter: blur(8px);
+      }
+      /* diagonal red stripe motif */
+      .stripes {
+        position: absolute;
+        background-image: repeating-linear-gradient(
+          -45deg,
+          var(--accent) 0 7px,
+          transparent 7px 18px
+        );
+        -webkit-mask-image: radial-gradient(120% 120% at 100% 0%, #000 30%, transparent 72%);
+        mask-image: radial-gradient(120% 120% at 100% 0%, #000 30%, transparent 72%);
+        opacity: 0.85;
+      }
+
+      /* ── S1 Cover ── */
+      .s-cover .head {
+        position: absolute;
+        left: 96px;
+        top: 340px;
+      }
+      .s-cover .kicker {
+        margin-bottom: 30px;
+      }
+      .s-cover h1 {
+        font-size: 132px;
+        line-height: 1.02;
+      }
+      .s-cover .lede {
+        margin-top: 40px;
+      }
+      .s-cover .stripes {
+        top: -120px;
+        right: -120px;
+        width: 720px;
+        height: 720px;
+      }
+      .s-cover .glow {
+        left: 40px;
+        top: 380px;
+        width: 760px;
+        height: 460px;
+      }
+      .s-cover .keys {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
+      /* opener elements build in from hidden (no first-frame flash) */
+      .s-cover .cv-glow,
+      .s-cover .cv-stripes,
+      .s-cover .cv-k,
+      .s-cover .word,
+      .s-cover .cv-lede,
+      .s-cover .c-top span,
+      .s-cover .c-bot span {
+        opacity: 0;
+      }
+      .s-close .cw {
+        opacity: 0;
+      }
+
+      /* ── S2 Command palette ── */
+      .s-palette .head {
+        position: absolute;
+        left: 96px;
+        top: 150px;
+      }
+      .s-palette h2 {
+        font-size: 76px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        color: var(--ink);
+      }
+      .palette {
+        position: absolute;
+        left: 96px;
+        top: 330px;
+        width: 900px;
+        background: var(--surface);
+        border: 1px solid var(--hairline);
+        border-radius: 18px;
+        box-shadow: var(--elev);
+        overflow: hidden;
+      }
+      .palette .search {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 28px 30px;
+        border-bottom: 1px solid var(--hairline);
+        position: relative;
+        z-index: 3;
+      }
+      .palette .search .q {
+        flex: 1;
+        font-family: var(--sans);
+        font-size: 27px;
+        color: var(--ink);
+        white-space: pre;
+      }
+      .palette .search .caret {
+        display: inline-block;
+        width: 2px;
+        height: 30px;
+        background: var(--accent);
+        margin-left: -10px;
+      }
+      .palette .search .dot {
+        width: 22px;
+        height: 22px;
+        border-radius: 6px;
+        background: linear-gradient(135deg, var(--accent), #c94b4b);
+      }
+      .palette .rows {
+        position: relative;
+      }
+      .palette .row {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        padding: 20px 30px;
+        position: relative;
+        z-index: 2;
+        height: 84px;
+      }
+      .palette .row .ic {
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        background: var(--card);
+        border: 1px solid var(--hairline);
+      }
+      .palette .row .nm {
+        flex: 1;
+        font-family: var(--sans);
+        font-size: 25px;
+        font-weight: 500;
+        color: var(--ink-soft);
+      }
+      .palette .row .sc {
+        font-family: var(--mono);
+        font-size: 17px;
+        color: var(--ink-dim);
+      }
+      /* the moving selection cursor */
+      .cursor-hl {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        height: 84px;
+        background: rgba(255, 99, 99, 0.1);
+        z-index: 1;
+        opacity: 0;
+      }
+      .cursor-hl::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 8px;
+        bottom: 8px;
+        width: 3px;
+        background: var(--accent);
+      }
+      .s-palette .side {
+        position: absolute;
+        right: 130px;
+        top: 380px;
+        width: 560px;
+      }
+      .s-palette .side .stripes {
+        position: relative;
+        width: 100%;
+        height: 300px;
+        border-radius: 16px;
+      }
+      .s-palette .side p {
+        font-family: var(--sans);
+        font-size: 27px;
+        line-height: 1.6;
+        color: var(--ink-soft);
+        margin-top: 34px;
+      }
+
+      /* ── S3 Typography ── */
+      .s-type .rows {
+        position: absolute;
+        left: 96px;
+        right: 96px;
+        top: 220px;
+      }
+      .s-type .trow {
+        display: grid;
+        grid-template-columns: 320px 1fr;
+        gap: 56px;
+        align-items: baseline;
+        padding: 36px 0;
+        border-top: 1px solid var(--hairline);
+      }
+      .s-type .spec {
+        font-family: var(--mono);
+        font-size: 19px;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        color: var(--ink-dim);
+        line-height: 1.6;
+      }
+      .s-type .spec b {
+        color: var(--ink-soft);
+        font-weight: 500;
+      }
+      .ty-d {
+        font-family: var(--sans);
+        font-weight: 600;
+        font-size: 108px;
+        letter-spacing: -0.012em;
+        color: var(--ink);
+      }
+      .ty-h {
+        font-family: var(--sans);
+        font-weight: 600;
+        font-size: 62px;
+        letter-spacing: -0.005em;
+        color: var(--ink);
+      }
+      .ty-b {
+        font-family: var(--sans);
+        font-weight: 400;
+        font-size: 29px;
+        line-height: 1.6;
+        letter-spacing: 0.012em;
+        color: var(--ink-soft);
+        max-width: 900px;
+      }
+      /* full-scene diagonal sheen */
+      .sheen-full {
+        position: absolute;
+        top: -20%;
+        left: -40%;
+        width: 30%;
+        height: 140%;
+        transform: rotate(12deg);
+        background: linear-gradient(
+          90deg,
+          rgba(255, 255, 255, 0) 0%,
+          rgba(255, 255, 255, 0.05) 50%,
+          rgba(255, 255, 255, 0) 100%
+        );
+        pointer-events: none;
+        z-index: 5;
+      }
+
+      /* ── S4 Metrics ── */
+      .s-metrics .head {
+        position: absolute;
+        left: 96px;
+        top: 190px;
+        font-family: var(--sans);
+        font-weight: 600;
+        font-size: 76px;
+        letter-spacing: -0.01em;
+        color: var(--ink);
+      }
+      .cards {
+        position: absolute;
+        left: 96px;
+        right: 96px;
+        bottom: 170px;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 40px;
+      }
+      .stat-card {
+        background: var(--surface);
+        border: 1px solid var(--hairline);
+        border-radius: 18px;
+        box-shadow: var(--elev);
+        padding: 44px 44px 40px;
+        position: relative;
+        overflow: hidden;
+      }
+      .stat-card.feat {
+        background: linear-gradient(158deg, rgba(255, 99, 99, 0.09), var(--surface) 62%);
+        border-color: rgba(255, 99, 99, 0.28);
+      }
+      .stat-card .sheen {
+        position: absolute;
+        top: -30%;
+        left: -60%;
+        width: 40%;
+        height: 160%;
+        transform: rotate(14deg);
+        background: linear-gradient(
+          90deg,
+          rgba(255, 255, 255, 0) 0%,
+          rgba(255, 255, 255, 0.14) 50%,
+          rgba(255, 255, 255, 0) 100%
+        );
+        pointer-events: none;
+      }
+      .stat-card .fig {
+        font-family: var(--sans);
+        font-weight: 600;
+        font-size: 128px;
+        letter-spacing: -0.02em;
+        line-height: 1;
+        color: var(--ink);
+        position: relative;
+      }
+      .stat-card .fig .u {
+        color: var(--accent);
+      }
+      .stat-card .lab {
+        font-family: var(--mono);
+        font-size: 20px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--ink-dim);
+        margin-top: 24px;
+        padding-top: 20px;
+        border-top: 1px solid var(--hairline);
+        position: relative;
+      }
+
+      /* ── S5 Product window ── */
+      .s-window .txt {
+        position: absolute;
+        left: 96px;
+        top: 300px;
+        width: 620px;
+      }
+      .s-window .kicker {
+        margin-bottom: 26px;
+      }
+      .s-window .txt h2 {
+        font-family: var(--sans);
+        font-weight: 600;
+        font-size: 84px;
+        line-height: 1.05;
+        letter-spacing: -0.01em;
+        color: var(--ink);
+      }
+      .s-window .txt p {
+        font-family: var(--sans);
+        font-size: 28px;
+        line-height: 1.6;
+        color: var(--ink-soft);
+        margin-top: 30px;
+      }
+      .window {
+        position: absolute;
+        right: 96px;
+        top: 210px;
+        width: 900px;
+        height: 640px;
+        background: var(--surface);
+        border: 1px solid var(--hairline);
+        border-radius: 18px;
+        box-shadow: var(--elev);
+        overflow: hidden;
+      }
+      .window .wsheen {
+        position: absolute;
+        top: -30%;
+        left: -50%;
+        width: 36%;
+        height: 160%;
+        transform: rotate(14deg);
+        background: linear-gradient(
+          90deg,
+          rgba(255, 255, 255, 0) 0%,
+          rgba(255, 255, 255, 0.09) 50%,
+          rgba(255, 255, 255, 0) 100%
+        );
+        pointer-events: none;
+        z-index: 4;
+      }
+      .window .bar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 22px 26px;
+        border-bottom: 1px solid var(--hairline);
+      }
+      .window .bar i {
+        width: 15px;
+        height: 15px;
+        border-radius: 50%;
+        display: block;
+      }
+      .window .body {
+        position: absolute;
+        inset: 70px 0 0 0;
+        padding: 40px;
+      }
+      .window .glyph {
+        width: 120px;
+        height: 120px;
+        border-radius: 26px;
+        background: linear-gradient(140deg, var(--accent), #b23f3f);
+        box-shadow: 0 18px 40px rgba(255, 99, 99, 0.25);
+      }
+      .window .line {
+        height: 20px;
+        border-radius: 6px;
+        background: var(--card);
+        margin-top: 24px;
+        transform-origin: left center;
+      }
+
+      /* ── S6 Closing ── */
+      .s-close .stripes {
+        top: -120px;
+        left: -120px;
+        width: 640px;
+        height: 640px;
+        -webkit-mask-image: radial-gradient(120% 120% at 0% 0%, #000 30%, transparent 72%);
+        mask-image: radial-gradient(120% 120% at 0% 0%, #000 30%, transparent 72%);
+      }
+      .s-close .glow {
+        left: 20px;
+        top: 360px;
+        width: 820px;
+        height: 460px;
+      }
+      .s-close .head {
+        position: absolute;
+        left: 96px;
+        top: 400px;
+      }
+      .s-close h2 {
+        font-family: var(--sans);
+        font-weight: 600;
+        font-size: 128px;
+        line-height: 1.03;
+        letter-spacing: -0.015em;
+        color: var(--ink);
+      }
+      .s-close .meta {
+        position: absolute;
+        left: 96px;
+        bottom: 150px;
+        display: flex;
+        gap: 14px;
+        align-items: center;
+        font-family: var(--mono);
+        font-size: 22px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--ink-dim);
+      }
+      /* studio watermark */
+      .watermark {
+        position: absolute;
+        right: 96px;
+        bottom: 42px;
+        z-index: 60;
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        font-family: var(--mono);
+        font-size: 16px;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--ink-dim);
+        opacity: 0.7;
+      }
+      .wm-dot {
+        width: 8px;
+        height: 8px;
+        background: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="30"
+      data-width="1920"
+      data-height="1080"
+    >
+      <!-- ═══ S1 · COVER ═══ -->
+      <div id="s1" class="scene s-cover">
+        <div class="bg"></div>
+        <div class="ghost cv-ghost" aria-hidden="true" data-layout-allow-overlap data-layout-allow-overflow>RAYCAST</div>
+        <div class="glow cv-glow" aria-hidden="true"></div>
+        <div class="stripes cv-stripes" aria-hidden="true" data-layout-allow-overflow></div>
+        <div class="chrome top c-top" data-layout-allow-occlusion><span><b class="no">Nº 01</b> / VI</span><span>Obsidian</span></div>
+        <div class="hair r-top" style="top: 120px"></div>
+        <div class="head">
+          <div class="kicker cv-k">Design Preset · No. 15</div>
+          <h1 class="display">
+            <span class="hl l1"><span class="word">Dark,</span> <span class="word">precise,</span></span>
+            <span class="hl l2"><span class="word">and</span> <span class="word">one</span> <span class="word red">red</span>.</span>
+          </h1>
+          <p class="lede cv-lede">The Raycast design system, rebuilt for the 1920×1080 frame. Near-black chrome, macOS depth, and one red used only as punctuation.</p>
+        </div>
+        <div class="chrome bot c-bot">
+          <span>Precision instrument, carved from obsidian</span>
+          <span class="keys"><span class="keycap kc">⌘</span><span class="keycap kc">K</span></span>
+          <span>Vol. 01</span>
+        </div>
+      </div>
+
+      <!-- ═══ S2 · COMMAND PALETTE ═══ -->
+      <div id="s2" class="scene s-palette">
+        <div class="bg"></div>
+        <div class="ghost pl-ghost" aria-hidden="true" data-layout-allow-overlap data-layout-allow-overflow>COMMAND</div>
+        <div class="chrome top" data-layout-allow-occlusion><span><b class="no">Nº 02</b> / VI</span><span>The Signature</span></div>
+        <div class="hair" style="top: 120px"></div>
+        <div class="head"><h2>One keystroke away.</h2></div>
+        <div class="palette pal">
+          <div class="search">
+            <span class="dot"></span>
+            <span class="q" id="pq"></span>
+            <span class="caret pcaret"></span>
+            <span class="keycap">⌘K</span>
+          </div>
+          <div class="rows">
+            <div class="cursor-hl chl"></div>
+            <div class="row pr"><span class="ic"></span><span class="nm">Search Files</span><span class="sc">↵</span></div>
+            <div class="row pr r-target"><span class="ic"></span><span class="nm nm2">Open Frame Preset</span><span class="sc">⌘ ↵</span></div>
+            <div class="row pr"><span class="ic"></span><span class="nm">Clipboard History</span><span class="sc">⌘ V</span></div>
+            <div class="row pr"><span class="ic"></span><span class="nm">Window Management</span><span class="sc">⌥ ⌘</span></div>
+          </div>
+        </div>
+        <div class="side sd">
+          <div class="stripes" aria-hidden="true" style="mask-image: none; -webkit-mask-image: none"></div>
+          <p>Depth, not decoration. Every surface is elevated with a macOS shadow and an inset highlight — light from above.</p>
+        </div>
+      </div>
+
+      <!-- ═══ S3 · TYPOGRAPHY ═══ -->
+      <div id="s3" class="scene s-type">
+        <div class="bg"></div>
+        <div class="ghost ty-ghost" aria-hidden="true" data-layout-allow-overlap data-layout-allow-overflow>Aa</div>
+        <div class="sheen-full ty-sheen" aria-hidden="true"></div>
+        <div class="chrome top" data-layout-allow-occlusion><span><b class="no">Nº 03</b> / VI</span><span>The Voice</span></div>
+        <div class="hair" style="top: 120px"></div>
+        <div class="rows">
+          <div class="trow ty1"><div class="spec"><b>Display</b><br />Inter 600</div><div class="ty-d">Command palette</div></div>
+          <div class="trow ty2"><div class="spec"><b>Headline</b><br />Inter 600</div><div class="ty-h">Depth is real here</div></div>
+          <div class="trow ty3"><div class="spec"><b>Body</b><br />Inter 400 · +tracking</div><div class="ty-b">Hierarchy comes from weight, size, and elevation — restrained, precise, never shouty. The red only punctuates.</div></div>
+        </div>
+      </div>
+
+      <!-- ═══ S4 · METRICS ═══ -->
+      <div id="s4" class="scene s-metrics">
+        <div class="bg"></div>
+        <div class="ghost me-ghost" aria-hidden="true" data-layout-allow-overlap data-layout-allow-overflow>40M</div>
+        <div class="chrome top" data-layout-allow-occlusion><span><b class="no">Nº 04</b> / VI</span><span>The Measure</span></div>
+        <div class="hair" style="top: 120px"></div>
+        <div class="head">Numbers, elevated.</div>
+        <div class="cards">
+          <div class="stat-card sc1 feat"><div class="sheen sh1" aria-hidden="true"></div><div class="fig"><span id="m1">0</span><span class="u">M</span></div><div class="lab">Downloads</div></div>
+          <div class="stat-card sc2"><div class="sheen sh2" aria-hidden="true"></div><div class="fig"><span id="m2">0</span><span class="u">×</span></div><div class="lab">Faster Workflows</div></div>
+          <div class="stat-card sc3"><div class="sheen sh3" aria-hidden="true"></div><div class="fig"><span id="m3">0</span><span class="u">%</span></div><div class="lab">Uptime</div></div>
+        </div>
+      </div>
+
+      <!-- ═══ S5 · PRODUCT WINDOW ═══ -->
+      <div id="s5" class="scene s-window">
+        <div class="bg"></div>
+        <div class="ghost wi-ghost" aria-hidden="true" data-layout-allow-overlap data-layout-allow-overflow>macOS</div>
+        <div class="chrome top" data-layout-allow-occlusion><span><b class="no">Nº 05</b> / VI</span><span>The Surface</span></div>
+        <div class="hair" style="top: 120px"></div>
+        <div class="txt">
+          <div class="kicker">Product as content</div>
+          <h2>The UI is the hero.</h2>
+          <p>A near-black window with real chrome — traffic-lights, an inset highlight, a soft shadow. The interface carries the emotional weight.</p>
+        </div>
+        <div class="window win">
+          <div class="wsheen wsh" aria-hidden="true"></div>
+          <div class="bar"><i style="background: #ff5f57"></i><i style="background: #febc2e"></i><i style="background: #28c840"></i></div>
+          <div class="body">
+            <div class="glyph wglyph"></div>
+            <div class="line" style="width: 62%"></div>
+            <div class="line" style="width: 84%"></div>
+            <div class="line" style="width: 48%"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ S6 · CLOSING ═══ -->
+      <div id="s6" class="scene s-close">
+        <div class="bg"></div>
+        <div class="ghost cl-ghost" aria-hidden="true" data-layout-allow-overlap data-layout-allow-overflow>END</div>
+        <div class="glow cl-glow" aria-hidden="true"></div>
+        <div class="stripes cl-stripes" aria-hidden="true" data-layout-allow-overflow></div>
+        <div class="chrome top" data-layout-allow-occlusion><span><b class="no">Nº 06</b> / VI</span><span>Colophon</span></div>
+        <div class="head">
+          <h2 class="display">
+            <span class="hl cl1"><span class="word cw">Serve</span> <span class="word cw">the</span></span>
+            <span class="hl cl2"><span class="word cw red">tool</span><span class="word cw">.</span></span>
+          </h2>
+        </div>
+        <div class="meta cl-meta"><span>raycast-dark · HyperFrames</span><span class="keycap">⌘</span><span class="keycap">K</span></div>
+      </div>
+      <div class="watermark" aria-hidden="true"><span class="wm-dot"></span>Boring Video Studio</div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      const OUT = "power3.out";
+      tl.set(".r-top", { scaleX: 0 }, 0); // hairline hidden at t=0 (no CSS transform → no conflict)
+
+      /* ghost-type ambient drift — each a single seek-safe tween */
+      tl.fromTo(".cv-ghost", { x: 0, y: 0 }, { x: -34, y: 18, duration: 4.4, ease: "sine.inOut" }, 0.2);
+      tl.fromTo(".pl-ghost", { x: 0 }, { x: 30, duration: 4.2, ease: "sine.inOut" }, 5.2);
+      tl.fromTo(".ty-ghost", { y: 0 }, { y: 22, duration: 3.8, ease: "sine.inOut" }, 10.3);
+      tl.fromTo(".me-ghost", { x: 0 }, { x: -26, duration: 4.2, ease: "sine.inOut" }, 15.0);
+      tl.fromTo(".wi-ghost", { y: 0 }, { y: -20, duration: 3.6, ease: "sine.inOut" }, 20.2);
+      tl.fromTo(".cl-ghost", { x: 0 }, { x: -26, duration: 3.8, ease: "sine.inOut" }, 25.0);
+
+      /* ═══ TRANSITIONS (outgoing + incoming animate together at T) ═══ */
+      function blurCross(outSel, inSel, T) {
+        tl.to(outSel, { opacity: 0, filter: "blur(16px)", duration: 0.6, ease: "power2.inOut" }, T);
+        tl.fromTo(inSel, { opacity: 0, filter: "blur(16px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.6, ease: "power2.inOut" }, T);
+        tl.set(outSel, { filter: "blur(0px)" }, T + 0.6);
+      }
+      function pushBlur(outSel, inSel, T) {
+        // tl.set (not fromTo) so the incoming scene stays CSS-hidden until T — no build-time immediateRender reveal
+        tl.set(inSel, { opacity: 1, xPercent: 100, filter: "blur(6px)" }, T);
+        tl.to(outSel, { xPercent: -100, filter: "blur(6px)", duration: 0.64, ease: "power3.inOut" }, T);
+        tl.to(inSel, { xPercent: 0, filter: "blur(0px)", duration: 0.64, ease: "power3.inOut" }, T);
+        tl.set(outSel, { opacity: 0, xPercent: 0, filter: "blur(0px)" }, T + 0.64);
+      }
+
+      /* ═══ S1 · COVER (0) ═══ */
+      tl.fromTo(".cv-glow", { opacity: 0, scale: 0.8 }, { opacity: 1, scale: 1, duration: 1.0, ease: "power2.out" }, 0.2);
+      tl.to(".cv-glow", { scale: 1.08, opacity: 0.8, duration: 2.0, ease: "sine.inOut", yoyo: true, repeat: 1 }, 1.2);
+      tl.fromTo(".r-top", { scaleX: 0 }, { scaleX: 1, duration: 0.8, ease: OUT }, 0.1);
+      tl.fromTo(".c-top span", { y: -20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: OUT, stagger: 0.06 }, 0.2);
+      tl.fromTo(".cv-stripes", { x: 120, opacity: 0 }, { x: 0, opacity: 0.85, duration: 1.1, ease: OUT }, 0.3);
+      tl.to(".cv-stripes", { x: 26, y: 18, duration: 3.0, ease: "sine.inOut" }, 1.45); // slow drift
+      tl.fromTo(".cv-k", { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: OUT }, 0.55);
+      tl.fromTo(".s-cover .word", { y: 46, opacity: 0, filter: "blur(6px)" }, { y: 0, opacity: 1, filter: "blur(0px)", duration: 0.62, ease: OUT, stagger: 0.08 }, 0.68);
+      tl.fromTo(".cv-lede", { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6, ease: OUT }, 1.5);
+      tl.fromTo(".c-bot span", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "power2.out", stagger: 0.08 }, 1.65);
+      tl.fromTo(".c-bot .kc", { y: -6 }, { y: 2, duration: 0.14, ease: "power2.in", yoyo: true, repeat: 1, stagger: 0.1 }, 1.95); // keycap press
+
+      blurCross("#s1", "#s2", 4.6);
+
+      /* ═══ S2 · COMMAND PALETTE (5.2) — cursor slides to a command, query types ═══ */
+      // query types in (seek-safe: proxy + onUpdate substring)
+      (function () {
+        var full = "frame preset";
+        var el = document.getElementById("pq");
+        var p = { n: 0 };
+        tl.fromTo(p, { n: 0 }, { n: full.length, duration: 0.9, ease: "steps(" + full.length + ")", onUpdate: function () { el.textContent = full.substring(0, Math.round(p.n)); } }, 5.3);
+      })();
+      tl.to(".pcaret", { opacity: 0, duration: 0.45, ease: "steps(1)", yoyo: true, repeat: 7 }, 5.3); // blink
+      // selection cursor fades in on row 1, then slides down to the target row
+      tl.fromTo(".chl", { opacity: 0, y: 0 }, { opacity: 1, duration: 0.3, ease: "power2.out" }, 6.2);
+      tl.to(".chl", { y: 252, duration: 0.5, ease: "power2.inOut" }, 6.55); // browse down to row 4
+      tl.to(".chl", { y: 84, duration: 0.55, ease: "power2.inOut" }, 7.2); // land on row 2 (Open Frame Preset)
+      tl.fromTo(".nm2", { color: "#cdcdce" }, { color: "#f9f9f9", duration: 0.3 }, 7.75); // target brightens
+      tl.fromTo(".sd p", { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6, ease: OUT }, 6.0);
+
+      pushBlur("#s2", "#s3", 9.6);
+
+      /* ═══ S3 · TYPOGRAPHY (10.3) — diagonal sheen sweeps across ═══ */
+      tl.fromTo(".ty-sheen", { xPercent: 0, opacity: 0 }, { opacity: 1, duration: 0.3 }, 10.4);
+      tl.fromTo(".ty-sheen", { x: 0 }, { x: 2100, duration: 1.4, ease: "power2.inOut" }, 10.4);
+      tl.to(".ty-sheen", { opacity: 0, duration: 0.3 }, 11.6);
+
+      blurCross("#s3", "#s4", 14.6);
+
+      /* ═══ S4 · METRICS (15.2) — count up + sheen sweep per card ═══ */
+      [["#m1", 40, ""], ["#m2", 2, ""], ["#m3", 99.9, "d"]].forEach(function (p, i) {
+        var proxy = { v: 0 };
+        var el = document.querySelector(p[0]);
+        tl.fromTo(proxy, { v: 0 }, { v: p[1], duration: 1.0, ease: "power2.out", onUpdate: function () { el.textContent = p[2] === "d" ? proxy.v.toFixed(1) : Math.round(proxy.v); } }, 15.2 + i * 0.14);
+      });
+      [".sh1", ".sh2", ".sh3"].forEach(function (s, i) {
+        tl.fromTo(s, { x: 0 }, { x: 720, duration: 1.0, ease: "power2.inOut" }, 15.25 + i * 0.18);
+      });
+
+      pushBlur("#s4", "#s5", 19.6);
+
+      /* ═══ S5 · PRODUCT WINDOW (20.3) — window floats, lines draw, glyph pulses, sheen ═══ */
+      tl.fromTo(".win .line", { scaleX: 0, opacity: 0.2 }, { scaleX: 1, opacity: 1, duration: 0.5, ease: OUT, stagger: 0.12 }, 20.4);
+      tl.fromTo(".wglyph", { scale: 0.85 }, { scale: 1, duration: 0.5, ease: "power2.out" }, 20.35);
+      tl.to(".wglyph", { scale: 1.05, duration: 1.3, ease: "sine.inOut", yoyo: true, repeat: 1 }, 21.0); // breathe
+      tl.to(".win", { y: -14, duration: 1.8, ease: "sine.inOut", yoyo: true, repeat: 1 }, 20.6); // float
+      tl.fromTo(".wsh", { x: 0, opacity: 0 }, { x: 1200, opacity: 1, duration: 1.2, ease: "power2.inOut" }, 20.6);
+      tl.to(".wsh", { opacity: 0, duration: 0.3 }, 21.95);
+
+      blurCross("#s5", "#s6", 24.6);
+
+      /* ═══ S6 · CLOSING (25.2) — headline builds per word, stripes sweep, glow ═══ */
+      tl.fromTo(".cl-glow", { opacity: 0, scale: 0.85 }, { opacity: 1, scale: 1, duration: 1.0, ease: "power2.out" }, 25.2);
+      tl.to(".cl-glow", { scale: 1.08, duration: 2.2, ease: "sine.inOut", yoyo: true, repeat: 1 }, 26.2);
+      tl.fromTo(".cl-stripes", { x: -90, opacity: 0 }, { x: 0, opacity: 0.85, duration: 0.9, ease: OUT }, 25.2);
+      tl.to(".cl-stripes", { x: 20, y: 16, duration: 3.0, ease: "sine.inOut" }, 26.15);
+      tl.fromTo(".cw", { y: 44, opacity: 0, filter: "blur(6px)" }, { y: 0, opacity: 1, filter: "blur(0px)", duration: 0.6, ease: OUT, stagger: 0.09 }, 25.35);
+      tl.fromTo(".cl-meta", { opacity: 0 }, { opacity: 1, duration: 0.6, ease: "power2.out" }, 26.1);
+
+      tl.to({}, { duration: 30 }, 0);
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

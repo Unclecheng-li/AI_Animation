@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template>
+      <style>
+        #root {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+          font-family: "JetBrains Mono", monospace;
+        }
+        .fill {
+          position: absolute;
+          inset: 0;
+          background: #0d1117;
+        }
+        .glow {
+          position: absolute;
+          inset: 0;
+          background: radial-gradient(
+            82% 64% at 50% 36%,
+            rgba(150, 168, 194, 0.1) 0%,
+            rgba(150, 168, 194, 0.035) 46%,
+            rgba(150, 168, 194, 0) 74%
+          );
+        }
+        .stage {
+          position: absolute;
+          left: 480px;
+          top: 150px;
+          width: 1000px;
+          height: 500px;
+        }
+        .cline .ctext {
+          overflow: hidden;
+          text-overflow: clip;
+        }
+        .cline {
+          position: absolute;
+          left: 0;
+          width: 1000px;
+          height: 42px;
+          display: flex;
+          align-items: center;
+          gap: 24px;
+          padding: 0 20px;
+          font-size: 28px;
+          line-height: 42px;
+          white-space: pre;
+          font-variant-ligatures: none;
+        }
+        .cnum {
+          width: 70px;
+          flex: 0 0 70px;
+          text-align: right;
+          color: #697583;
+          font-variant-numeric: tabular-nums;
+        }
+        .ctext {
+          color: #dce3ea;
+        }
+        /* The resolved span: a box that lands on the lines a symbol occupies. */
+        .span-box {
+          position: absolute;
+          left: 4px;
+          width: 992px;
+          border: 2px solid #49b9ad;
+          border-radius: 10px;
+          background: rgba(73, 185, 173, 0.1);
+        }
+        .span-tag {
+          position: absolute;
+          left: -300px;
+          top: 8px;
+          display: block;
+          padding: 4px 14px;
+          border-radius: 999px;
+          background: #0d1117;
+          border: 1px solid #2b6c67;
+          color: #49b9ad;
+          font-size: 24px;
+          line-height: 1.2;
+          white-space: nowrap;
+        }
+        /* Right margin: the span tags live in the left one. */
+        .chips {
+          position: absolute;
+          left: 1560px;
+          top: 120px;
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+          align-items: flex-start;
+        }
+        .chip {
+          display: block;
+          padding: 14px 26px;
+          border-radius: 999px;
+          background: #151b23;
+          border: 1px solid #2b3440;
+          color: #aab3bd;
+          font-size: 32px;
+          line-height: 1.1;
+        }
+        .toolstrip {
+          position: absolute;
+          left: 0;
+          bottom: 84px;
+          width: 1920px;
+          display: flex;
+          justify-content: center;
+          gap: 22px;
+          align-items: baseline;
+        }
+        .tool {
+          display: block;
+          font-size: 30px;
+          line-height: 1.2;
+          color: #dce3ea;
+        }
+        .tool-dot {
+          display: block;
+          font-size: 30px;
+          line-height: 1.2;
+          color: #697583;
+        }
+        .headline {
+          position: absolute;
+          left: 120px;
+          top: 636px;
+          width: 1500px;
+        }
+        .hl {
+          display: block;
+          font-family: "Archivo Black", sans-serif;
+          font-weight: 400;
+          font-size: 96px;
+          line-height: 1.04;
+          letter-spacing: -0.03em;
+          color: #edf1f5;
+        }
+        .sub {
+          display: block;
+          margin-top: 26px;
+          font-size: 54px;
+          line-height: 1.2;
+          color: #aab3bd;
+        }
+      </style>
+
+      <div id="root" data-composition-id="s3-graph" data-width="1920" data-height="1080">
+        <div class="fill"></div>
+        <div class="glow"></div>
+
+        <div id="s3-stage" class="stage"></div>
+
+        <div id="s3-chips" class="chips">
+          <span class="chip">tree-sitter AST</span>
+          <span class="chip">pgvector</span>
+          <span class="chip">Postgres</span>
+        </div>
+
+        <div id="s3-tools" class="toolstrip">
+          <span class="tool">read_chunks</span><span class="tool-dot">·</span>
+          <span class="tool">vector_search</span><span class="tool-dot">·</span>
+          <span class="tool">graph_traverse</span><span class="tool-dot">·</span>
+          <span class="tool">graph_query</span><span class="tool-dot">·</span>
+          <span class="tool">graph_metrics</span><span class="tool-dot">·</span>
+          <span class="tool">github_issues</span>
+        </div>
+
+        <div id="s3-headline" class="headline" data-layout-allow-caption-zone>
+          <span class="hl">Every span comes from</span>
+          <span class="hl">parsing the source.</span>
+          <span class="sub">Not from a model.</span>
+        </div>
+      </div>
+
+      <script>
+        (function () {
+          // Real lines from the product's own parser, so the spans land on
+          // something a reader could actually go and open.
+          const LINES = [
+            "def parse_file(path, *, module=\"\") -> ParsedFile:",
+            "    source = path.read_text(encoding=\"utf-8\")",
+            "    source_bytes = source.encode(\"utf-8\")",
+            "    tree = _get_parser().parse(source_bytes)",
+            "",
+            "class ParsedSymbol:",
+            "    name: str",
+            "    qualified_name: str",
+            "    start_line: int",
+            "    end_line: int",
+          ];
+          // [firstLineIndex, lastLineIndex, label]
+          const SPANS = [
+            [0, 3, "parse_file : L77–L92"],
+            [5, 9, "ParsedSymbol : L48–L64"],
+          ];
+
+          const stage = document.getElementById("s3-stage");
+          const ROW = 42;
+          LINES.forEach((text, i) => {
+            const row = document.createElement("div");
+            row.className = "cline";
+            row.style.top = i * ROW + "px";
+            const num = document.createElement("span");
+            num.className = "cnum";
+            num.textContent = String(77 + i);
+            const body = document.createElement("span");
+            body.className = "ctext";
+            body.textContent = text;
+            row.appendChild(num);
+            row.appendChild(body);
+            stage.appendChild(row);
+          });
+
+          SPANS.forEach((s, i) => {
+            const box = document.createElement("div");
+            box.className = "span-box";
+            box.id = "s3-span-" + i;
+            box.style.top = s[0] * ROW - 6 + "px";
+            box.style.height = (s[1] - s[0] + 1) * ROW + 12 + "px";
+            const tag = document.createElement("span");
+            tag.className = "span-tag";
+            tag.textContent = s[2];
+            box.appendChild(tag);
+            stage.appendChild(box);
+          });
+
+          window.__timelines = window.__timelines || {};
+          const tl = gsap.timeline({ paused: true });
+
+          tl.fromTo(
+            ".cline",
+            { opacity: 0, x: -18 },
+            { opacity: 1, x: 0, duration: 0.3, ease: "power2.out", stagger: { each: 0.05 } },
+            0.1,
+          );
+
+          // Boxes snap on rather than fade: a span is measured, not inferred.
+          tl.fromTo(
+            ".span-box",
+            { opacity: 0, scaleX: 0.97 },
+            {
+              opacity: 1,
+              scaleX: 1,
+              duration: 0.22,
+              ease: "power4.out",
+              stagger: { each: 0.55 },
+            },
+            1.15,
+          );
+
+          tl.fromTo(
+            ".chip",
+            { opacity: 0, x: -22 },
+            { opacity: 1, x: 0, duration: 0.34, ease: "power2.out", stagger: { each: 0.18 } },
+            2.0,
+          );
+          tl.fromTo(
+            ".tool",
+            { opacity: 0, y: 12 },
+            { opacity: 1, y: 0, duration: 0.26, ease: "power2.out", stagger: { each: 0.075 } },
+            2.9,
+          );
+          tl.fromTo(
+            ".tool-dot",
+            { opacity: 0 },
+            { opacity: 1, duration: 0.26, ease: "none", stagger: { each: 0.075 } },
+            3.0,
+          );
+
+          tl.to("#s3-stage", { y: -152, scale: 0.82, opacity: 0.26, duration: 0.6, ease: "power2.inOut" }, 4.35);
+          tl.to("#s3-chips", { opacity: 0.4, duration: 0.5, ease: "power2.out" }, 4.35);
+
+          tl.fromTo(
+            ".hl",
+            { opacity: 0, y: 40 },
+            { opacity: 1, y: 0, duration: 0.42, ease: "power3.out", stagger: { each: 0.11 } },
+            4.75,
+          );
+          tl.fromTo(
+            ".sub",
+            { opacity: 0, y: 22 },
+            { opacity: 1, y: 0, duration: 0.4, ease: "power2.out" },
+            5.55,
+          );
+
+          window.__timelines["s3-graph"] = tl;
+        })();
+      </script>
+    </template>
+  </body>
+</html>

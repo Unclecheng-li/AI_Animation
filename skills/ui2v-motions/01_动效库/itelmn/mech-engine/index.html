@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Otto Cycle Mechanical Engine</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@300;500&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --bg: #0a0a0c;
+        --panel: #16161e;
+        --accent: #00f2ff;
+        --stroke: #333344;
+        --text: #e0e0e6;
+        --intake: #0088ff;
+        --compression: #8800ff;
+        --power: #ff4400;
+        --exhaust: #666666;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html, body {
+        width: 1920px;
+        height: 1080px;
+        background: var(--bg);
+        color: var(--text);
+        font-family: 'Inter', sans-serif;
+        overflow: hidden;
+      }
+
+      .clip {
+        position: absolute;
+        overflow: hidden;
+      }
+
+      #main-container {
+        width: 1920px;
+        height: 1080px;
+        display: flex;
+        padding: 60px;
+        gap: 60px;
+        background: radial-gradient(circle at 50% 50%, #1a1a24 0%, #0a0a0c 100%);
+      }
+
+      /* Panels */
+      .panel {
+        background: rgba(22, 22, 30, 0.6);
+        backdrop-filter: blur(10px);
+        border: 1px solid var(--stroke);
+        border-radius: 24px;
+        position: relative;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+      }
+
+      #engine-panel {
+        flex: 1.2;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+
+      #graph-panel {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        padding: 40px;
+      }
+
+      /* Header */
+      .header {
+        position: absolute;
+        top: 40px;
+        left: 40px;
+        z-index: 10;
+      }
+
+      .header h1 {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 42px;
+        letter-spacing: 2px;
+        color: var(--accent);
+        text-transform: uppercase;
+        margin-bottom: 8px;
+        text-shadow: 0 0 20px rgba(0, 242, 255, 0.4);
+      }
+
+      .header p {
+        font-size: 18px;
+        color: rgba(255,255,255,0.5);
+        text-transform: uppercase;
+        letter-spacing: 4px;
+      }
+
+      /* Engine SVG Styles */
+      #engine-svg {
+        width: 80%;
+        height: 80%;
+      }
+
+      .engine-part {
+        fill: none;
+        stroke: var(--text);
+        stroke-width: 4;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .cylinder-wall {
+        stroke: #444;
+        stroke-width: 8;
+      }
+
+      .piston {
+        fill: #2a2a35;
+        stroke: #666;
+        stroke-width: 4;
+      }
+
+      .rod {
+        fill: #3a3a45;
+        stroke: #888;
+        stroke-width: 4;
+      }
+
+      .crank {
+        fill: #1a1a24;
+        stroke: var(--accent);
+        stroke-width: 6;
+      }
+
+      .valve {
+        stroke: #aaa;
+        stroke-width: 6;
+      }
+
+      .spark-plug {
+        stroke: #ffaa00;
+        stroke-width: 4;
+      }
+
+      #spark-flash {
+        fill: #fff;
+        filter: blur(8px);
+        opacity: 0;
+      }
+
+      /* Graph Styles */
+      .graph-container {
+        flex: 0 1 600px; /* Don't force to fill everything */
+        position: relative;
+        margin-top: 10px;
+      }
+
+      .axis {
+        stroke: #444;
+        stroke-width: 2;
+        fill: none;
+      }
+
+      .axis-label {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 14px;
+        fill: rgba(255,255,255,0.4);
+      }
+
+      .pv-curve {
+        fill: none;
+        stroke: var(--accent);
+        stroke-width: 3;
+        opacity: 0.8;
+      }
+
+      .graph-point {
+        fill: var(--accent);
+        filter: drop-shadow(0 0 5px var(--accent));
+      }
+
+      /* Phase Indicators */
+      .phase-indicators {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        margin-top: 40px; /* Space from graph */
+        margin-bottom: 60px; /* Pushed up from edge */
+      }
+
+      .phase-card {
+        padding: 16px;
+        border-radius: 12px;
+        border: 1px solid var(--stroke);
+        background: rgba(255,255,255,0.03);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        opacity: 0.3;
+        transition: all 0.3s;
+      }
+
+      .phase-card.active {
+        opacity: 1;
+        border-color: var(--accent);
+        background: rgba(0, 242, 255, 0.05);
+      }
+
+      .phase-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+      }
+
+      .phase-label {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 14px;
+        text-transform: uppercase;
+      }
+
+      /* Status Overlays */
+      .status-overlay {
+        position: absolute;
+        bottom: 40px;
+        left: 40px;
+        display: flex;
+        gap: 24px;
+      }
+
+      .stat {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .stat-val {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 24px;
+        color: var(--accent);
+      }
+
+      .stat-label {
+        font-size: 12px;
+        color: rgba(255,255,255,0.4);
+        text-transform: uppercase;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      class="clip"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="12"
+      data-width="1920"
+      data-height="1080"
+    >
+      <div id="main-container">
+        <!-- Header -->
+        <div class="header">
+          <h1>Otto Cycle Engine</h1>
+          <p>4-Stroke Internal Combustion Simulation</p>
+        </div>
+
+        <!-- Engine Visualization -->
+        <div id="engine-panel" class="panel">
+          <svg id="engine-svg" viewBox="0 0 800 800">
+            <!-- Chamber Gas Color -->
+            <path id="chamber-gas" d="M 300 200 L 500 200 L 500 400 L 300 400 Z" fill="transparent" />
+            
+            <!-- Cylinder Block -->
+            <path class="cylinder-wall" d="M 280 150 L 280 500 M 520 150 L 520 500" />
+            <path class="cylinder-wall" d="M 280 150 L 520 150" />
+            
+            <!-- Valves -->
+            <g id="intake-valve-group" transform="translate(350, 150)">
+              <line class="valve" x1="0" y1="0" x2="0" y2="20" />
+              <line class="valve" x1="-30" y1="20" x2="30" y2="20" />
+            </g>
+            <g id="exhaust-valve-group" transform="translate(450, 150)">
+              <line class="valve" x1="0" y1="0" x2="0" y2="20" />
+              <line class="valve" x1="-30" y1="20" x2="30" y2="20" />
+            </g>
+
+            <!-- Spark Plug -->
+            <g transform="translate(400, 140)">
+              <rect x="-5" y="-30" width="10" height="40" fill="#222" stroke="#555" />
+              <circle id="spark-flash" cx="0" cy="20" r="15" />
+            </g>
+
+            <!-- Crankshaft -->
+            <circle class="crank" cx="400" cy="650" r="80" />
+            <circle cx="400" cy="650" r="10" fill="#666" />
+            
+            <!-- Connecting Rod & Piston Group -->
+            <g id="piston-assembly">
+              <path id="connecting-rod" class="rod" d="M 0 0 L 0 300" />
+              <rect id="piston-head" class="piston" x="-115" y="-150" width="230" height="150" rx="10" />
+              <!-- Wrist pin -->
+              <circle cx="0" cy="0" r="15" fill="#444" />
+            </g>
+
+            <!-- Crank Pin (Visual only, actual movement handled in JS) -->
+            <circle id="crank-pin" cx="400" cy="570" r="20" fill="#888" stroke="#333" stroke-width="4" />
+          </svg>
+
+          <div class="status-overlay">
+            <div class="stat">
+              <span class="stat-label">Crank Angle</span>
+              <span id="stat-angle" class="stat-val">0°</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Pressure</span>
+              <span id="stat-pressure" class="stat-val">1.0 bar</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Temp</span>
+              <span id="stat-temp" class="stat-val">293 K</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Graph Panel -->
+        <div id="graph-panel" class="panel">
+          <h2 style="font-family: 'Orbitron'; font-size: 24px; color: rgba(255,255,255,0.7);">P-V DIAGRAM</h2>
+          <div class="graph-container">
+            <svg viewBox="0 0 500 500" style="width: 100%; height: 100%;">
+              <!-- Grid -->
+              <path d="M 50 50 L 50 450 L 450 450" class="axis" />
+              <text x="460" y="460" class="axis-label">V</text>
+              <text x="30" y="40" class="axis-label">P</text>
+              
+              <!-- Otto Cycle Curve -->
+              <path id="pv-curve" class="pv-curve" d="M 400 400 Q 150 380 100 200 L 100 50 Q 200 80 400 350 L 400 400" />
+              
+              <circle id="graph-point" class="graph-point" cx="400" cy="400" r="8" />
+            </svg>
+          </div>
+
+          <div class="phase-indicators">
+            <div id="phase-intake" class="phase-card">
+              <div class="phase-dot" style="background: var(--intake)"></div>
+              <span class="phase-label">1. Intake</span>
+            </div>
+            <div id="phase-compression" class="phase-card">
+              <div class="phase-dot" style="background: var(--compression)"></div>
+              <span class="phase-label">2. Compression</span>
+            </div>
+            <div id="phase-power" class="phase-card">
+              <div class="phase-dot" style="background: var(--power)"></div>
+              <span class="phase-label">3. Power</span>
+            </div>
+            <div id="phase-exhaust" class="phase-card">
+              <div class="phase-dot" style="background: var(--exhaust)"></div>
+              <span class="phase-label">4. Exhaust</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      const R = 80;    // Crank radius
+      const L = 300;   // Rod length
+      const CX = 400;  // Center X
+      const CY = 650;  // Center Y (Crank center)
+
+      const pistonAssembly = document.querySelector('#piston-assembly');
+      const crankPin = document.querySelector('#crank-pin');
+      const chamberGas = document.querySelector('#chamber-gas');
+      const sparkFlash = document.querySelector('#spark-flash');
+      const intakeValve = document.querySelector('#intake-valve-group');
+      const exhaustValve = document.querySelector('#exhaust-valve-group');
+      const graphPoint = document.querySelector('#graph-point');
+      const statAngle = document.querySelector('#stat-angle');
+      const statPressure = document.querySelector('#stat-pressure');
+      const statTemp = document.querySelector('#stat-temp');
+      const pvCurve = document.querySelector('#pv-curve');
+
+      const engineState = { rotation: 0 };
+
+      tl.to(engineState, {
+        rotation: 720 * 3, 
+        duration: 12,
+        ease: "none",
+        onUpdate: () => {
+          const deg = engineState.rotation;
+          const theta = (deg) * (Math.PI / 180);
+
+          const pinX = CX + R * Math.sin(theta);
+          const pinY = CY - R * Math.cos(theta);
+
+          const wristY = pinY - Math.sqrt(L * L - Math.pow(pinX - CX, 2));
+          
+          crankPin.setAttribute('cx', pinX);
+          crankPin.setAttribute('cy', pinY);
+
+          pistonAssembly.setAttribute('transform', `translate(${CX}, ${wristY})`);
+          
+          const angleRad = Math.atan2(pinY - wristY, pinX - CX);
+          const angleDeg = (angleRad * 180 / Math.PI) - 90;
+          document.querySelector('#connecting-rod').setAttribute('transform', `rotate(${angleDeg})`);
+
+          chamberGas.setAttribute('d', `M 284 150 L 516 150 L 516 ${wristY - 75} L 284 ${wristY - 75} Z`);
+
+          const cycleDeg = deg % 720;
+          let phase = "";
+          let gasColor = "transparent";
+          let gasOpacity = 0;
+          let pressure = 1.0;
+          let temp = 293;
+
+          if (cycleDeg < 180) {
+            phase = "intake";
+            const p = cycleDeg / 180;
+            gasColor = "#0088ff";
+            gasOpacity = p * 0.4;
+            pressure = 1.0;
+            temp = 293;
+            // Intake is usually a flat line at the bottom in idealized cycles, 
+            // but let's just keep the dot at the start of compression.
+            setGraphXY(400, 400); 
+          } else if (cycleDeg < 360) {
+            phase = "compression";
+            const p = (cycleDeg - 180) / 180;
+            gasColor = gsap.utils.interpolate("#0088ff", "#8800ff", p);
+            gasOpacity = 0.4 + (p * 0.4);
+            pressure = 1.0 + (p * 10);
+            temp = 293 + (p * 300);
+            // Follow Q 150 380 100 200
+            // Quadratic Bezier: (1-p)^2*P0 + 2(1-p)*p*P1 + p^2*P2
+            const x = Math.pow(1-p, 2)*400 + 2*(1-p)*p*150 + Math.pow(p, 2)*100;
+            const y = Math.pow(1-p, 2)*400 + 2*(1-p)*p*380 + Math.pow(p, 2)*200;
+            setGraphXY(x, y);
+          } else if (cycleDeg < 540) {
+            phase = "power";
+            const p = (cycleDeg - 360) / 180;
+            
+            if (p < 0.1) { // Combustion (2->3) - Constant Volume
+              const cp = p / 0.1;
+              gasColor = "#ff4400";
+              gasOpacity = 0.8;
+              pressure = 11 + (cp * 29);
+              temp = 600 + (cp * 1200);
+              setGraphXY(100, 200 - (cp * 150));
+            } else { // Expansion (3->4) - Follow Q 200 80 400 350
+              const ep = (p - 0.1) / 0.9;
+              gasColor = gsap.utils.interpolate("#ff4400", "#ffaa00", ep);
+              gasOpacity = 0.8 - (ep * 0.4);
+              pressure = 40 - (ep * 30);
+              temp = 1800 - (ep * 1000);
+              const x = Math.pow(1-ep, 2)*100 + 2*(1-ep)*ep*200 + Math.pow(ep, 2)*400;
+              const y = Math.pow(1-ep, 2)*50 + 2*(1-ep)*ep*80 + Math.pow(ep, 2)*350;
+              setGraphXY(x, y);
+            }
+            
+            if (cycleDeg < 380) sparkFlash.style.opacity = 1 - ((cycleDeg-360)/20);
+            else sparkFlash.style.opacity = 0;
+          } else {
+            phase = "exhaust";
+            const p = (cycleDeg - 540) / 180;
+            gasColor = "#666666";
+            gasOpacity = (1 - p) * 0.4;
+            pressure = 1.2;
+            temp = 500 - (p * 200);
+            // Blowdown (4->1) - Constant Volume then return
+            if (p < 0.2) {
+              const bp = p / 0.2;
+              setGraphXY(400, 350 + (bp * 50));
+            } else {
+              setGraphXY(400, 400);
+            }
+          }
+
+          chamberGas.setAttribute('fill', gasColor);
+          chamberGas.setAttribute('fill-opacity', gasOpacity);
+          
+          statAngle.textContent = `${Math.floor(cycleDeg)}°`;
+          statPressure.textContent = `${pressure.toFixed(1)} bar`;
+          statTemp.textContent = `${Math.floor(temp)} K`;
+
+          if (phase === "intake") intakeValve.setAttribute('transform', `translate(350, ${150 + Math.sin(theta)*15})`);
+          else intakeValve.setAttribute('transform', `translate(350, 150)`);
+
+          if (phase === "exhaust") exhaustValve.setAttribute('transform', `translate(450, ${150 + Math.sin(theta)*15})`);
+          else exhaustValve.setAttribute('transform', `translate(450, 150)`);
+
+          document.querySelectorAll('.phase-card').forEach(card => card.classList.remove('active'));
+          document.getElementById(`phase-${phase}`).classList.add('active');
+        }
+      });
+
+      function setGraphXY(x, y) {
+        graphPoint.setAttribute('cx', x);
+        graphPoint.setAttribute('cy', y);
+      }
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

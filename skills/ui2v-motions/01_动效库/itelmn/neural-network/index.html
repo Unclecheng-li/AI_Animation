@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html data-composition-id="neural-network" data-width="720" data-height="1280">
+<head>
+  <meta charset="utf-8">
+  <title>HyperFrames — Neural Network</title>
+  <link rel="stylesheet" href="shared/styles.css">
+  <style>
+    .nn-w { width: min(700px, 72vw); display: flex; flex-direction: column; align-items: center; gap: 16px;
+      will-change: transform, opacity; }
+    .nn-svg { width: 100%; height: 300px; }
+    .nn-edge { stroke-width: 1; opacity: 0.25; }
+    .nn-node { will-change: transform, opacity; }
+    .nn-pulse { r: 3; will-change: cx, cy, opacity; }
+    .nn-label { font-size: 20px; font-weight: 700; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="hf-center nn-w" id="nnW" data-composition-id="neural-network" data-start="0" data-duration="3.5" data-track-index="0">
+    <svg class="nn-svg" id="nnSvg" viewBox="0 0 700 300">
+      <defs>
+        <filter id="nn-glow">
+          <feGaussianBlur stdDeviation="3" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+    </svg>
+    <div class="nn-label hf-text-heading" id="nnLabel"></div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script>
+    const v = window.__hyperframes?.getVariables?.() ?? {};
+    const accentColor = v.accentColor ?? '#9f75ff';
+    const yPos = v.yPos ?? 50;
+    const layerSizes = v.layers ?? [3, 5, 5, 3];
+    const label = v.label ?? 'Neural Network';
+
+    document.getElementById('nnW').style.top = yPos + '%';
+    document.getElementById('nnLabel').textContent = label;
+
+    const svg = document.getElementById('nnSvg');
+    const w = 700, h = 300;
+    const layerGap = w / (layerSizes.length + 1);
+
+    // Build node positions
+    const allNodes = [];
+    layerSizes.forEach((count, li) => {
+      const x = layerGap * (li + 1);
+      const gap = h / (count + 1);
+      const layer = [];
+      for (let ni = 0; ni < count; ni++) {
+        layer.push({ x, y: gap * (ni + 1) });
+      }
+      allNodes.push(layer);
+    });
+
+    // Draw edges
+    for (let li = 0; li < allNodes.length - 1; li++) {
+      for (const from of allNodes[li]) {
+        for (const to of allNodes[li + 1]) {
+          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('x1', from.x); line.setAttribute('y1', from.y);
+          line.setAttribute('x2', to.x); line.setAttribute('y2', to.y);
+          line.setAttribute('stroke', accentColor); line.classList.add('nn-edge');
+          svg.appendChild(line);
+        }
+      }
+    }
+
+    // Draw nodes
+    allNodes.forEach((layer, li) => {
+      layer.forEach((pos) => {
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.classList.add('nn-node');
+        g.setAttribute('transform', `translate(${pos.x},${pos.y})`);
+        const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        c.setAttribute('r', '6');
+        c.setAttribute('fill', li === 0 || li === allNodes.length - 1 ? accentColor : accentColor + '55');
+        c.setAttribute('stroke', accentColor);
+        c.setAttribute('stroke-width', '1');
+        c.setAttribute('filter', 'url(#nn-glow)');
+        g.appendChild(c);
+        svg.appendChild(g);
+      });
+    });
+
+    // Traveling pulse dots along random edges
+    const edges = svg.querySelectorAll('.nn-edge');
+    for (let i = 0; i < 5; i++) {
+      const edge = edges[Math.floor(Math.random() * edges.length)];
+      const pulse = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      pulse.setAttribute('fill', accentColor);
+      pulse.setAttribute('filter', 'url(#nn-glow)');
+      pulse.classList.add('nn-pulse');
+      svg.appendChild(pulse);
+
+      const x1 = +edge.getAttribute('x1'), y1 = +edge.getAttribute('y1');
+      const x2 = +edge.getAttribute('x2'), y2 = +edge.getAttribute('y2');
+      gsap.set(pulse, { attr: { cx: x1, cy: y1 }, opacity: 0 });
+      gsap.to(pulse, {
+        attr: { cx: x2, cy: y2 }, opacity: 0.8, duration: 0.8 + Math.random() * 0.5,
+        repeat: -1, delay: i * 0.4, ease: 'power1.inOut',
+        onRepeat: function() {
+          gsap.set(pulse, { attr: { cx: x1, cy: y1 }, opacity: 0 });
+        }
+      });
+    }
+
+    const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+    tl.fromTo('#nnW', { opacity: 0, scale: 0.9 }, { opacity: 1, scale: 1, duration: 0.4, ease: 'back.out(1.2)' }, 0);
+    tl.fromTo('.nn-edge', { opacity: 0 }, { opacity: 0.25, duration: 0.3, stagger: 0.01 }, 0.1);
+    tl.fromTo('.nn-node', { opacity: 0, scale: 0 }, { opacity: 1, scale: 1, duration: 0.2, stagger: 0.02, ease: 'back.out(1.5)' }, 0.15);
+    tl.fromTo('#nnLabel', { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.25 }, 0.4);
+
+    const dur = parseFloat(v.timingDuration ?? 3.5);
+    tl.to('#nnW', { opacity: 0, scale: 0.9, duration: 0.3, ease: 'power2.in' }, Math.max(dur - 0.5, 0.6));
+  </script>
+</body>
+</html>
+
