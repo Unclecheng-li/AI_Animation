@@ -1,0 +1,323 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-composition-variables='[
+    {"id":"c1Url","type":"string","label":"第 1 段视频","default":"./assets/clip-1.mp4"},
+    {"id":"c2Url","type":"string","label":"第 2 段视频","default":"./assets/clip-2.mp4"},
+    {"id":"c3Url","type":"string","label":"第 3 段视频","default":"./assets/clip-3.mp4"},
+    {"id":"c1Caption","type":"string","label":"第 1 段字幕","default":"开头 3 秒钩住眼球"},
+    {"id":"c2Caption","type":"string","label":"第 2 段字幕","default":"中段 3-7 秒讲清楚为什么"},
+    {"id":"c3Caption","type":"string","label":"第 3 段字幕","default":"最后召唤行动"},
+    {"id":"outroTitle","type":"string","label":"片尾标题","default":"影刀 · 自动混剪完成"},
+    {"id":"outroCta","type":"string","label":"片尾 CTA","default":"等你审核 → 发布"},
+    {"id":"accent","type":"color","label":"主色","default":"#7c3aed"}
+  ]'
+>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 1080px;
+        height: 1920px;
+        overflow: hidden;
+        background: #000;
+        font-family: "Inter", "Noto Sans SC", system-ui, sans-serif;
+      }
+
+      #root {
+        width: 1080px;
+        height: 1920px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      /* 视频铺满整个 clip — 由 hyperframes 控制可见性 */
+      .bg-video {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      /* Caption 浮层 */
+      .caption {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        padding: 0 80px 280px 80px;
+        gap: 24px;
+        box-sizing: border-box;
+      }
+      .caption .badge {
+        display: inline-flex;
+        align-self: flex-start;
+        align-items: center;
+        gap: 14px;
+        background: rgba(0, 0, 0, 0.45);
+        backdrop-filter: blur(12px);
+        padding: 14px 28px;
+        border-radius: 60px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+      }
+      .caption .badge .dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: white;
+      }
+      .caption .badge .text {
+        font-size: 26px;
+        color: white;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+      }
+      .caption .caption-text {
+        font-size: 92px;
+        color: white;
+        font-weight: 800;
+        line-height: 1.1;
+        letter-spacing: -0.01em;
+        max-width: 920px;
+        text-shadow: 0 4px 30px rgba(0, 0, 0, 0.45);
+      }
+
+      /* Outro */
+      .outro {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: flex-start;
+        padding: 200px 100px;
+        gap: 40px;
+        background: linear-gradient(180deg, #f5f3ff 0%, #ede9fe 45%, #ddd6fe 100%);
+        box-sizing: border-box;
+      }
+      .outro .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 14px;
+        background: rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(10px);
+        padding: 16px 32px;
+        border-radius: 60px;
+        border: 1px solid rgba(124, 58, 237, 0.15);
+      }
+      .outro .badge .dot {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--accent, #7c3aed);
+      }
+      .outro .badge .text {
+        font-size: 30px;
+        color: #6d28d9;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+      }
+      .outro h1 {
+        font-size: 132px;
+        font-weight: 800;
+        color: #4c1d95;
+        line-height: 1.05;
+        letter-spacing: -0.02em;
+      }
+      .outro .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 16px;
+        background: var(--accent, #7c3aed);
+        color: white;
+        padding: 28px 56px;
+        border-radius: 100px;
+        font-size: 44px;
+        font-weight: 600;
+        box-shadow: 0 20px 50px -15px rgba(124, 58, 237, 0.5);
+      }
+      .outro .pill .arrow {
+        font-size: 36px;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="local-remix"
+      data-start="0"
+      data-width="1080"
+      data-height="1920"
+    >
+      <!-- 三段本地素材视频:track 0,串行无重叠 -->
+      <video
+        id="v1"
+        class="bg-video clip"
+        src="./assets/clip-1.mp4"
+        data-start="0"
+        data-duration="2"
+        data-track-index="0"
+        muted
+        playsinline
+      ></video>
+      <video
+        id="v2"
+        class="bg-video clip"
+        src="./assets/clip-2.mp4"
+        data-start="2"
+        data-duration="2"
+        data-track-index="0"
+        muted
+        playsinline
+      ></video>
+      <video
+        id="v3"
+        class="bg-video clip"
+        src="./assets/clip-3.mp4"
+        data-start="4"
+        data-duration="2"
+        data-track-index="0"
+        muted
+        playsinline
+      ></video>
+
+      <!-- 三段字幕浮层:track 1,与视频同步 -->
+      <div
+        id="caption-1"
+        class="caption clip"
+        data-start="0"
+        data-duration="2"
+        data-track-index="1"
+      >
+        <div class="badge">
+          <span class="dot"></span>
+          <span class="text">本地素材 · 01</span>
+        </div>
+        <h2 class="caption-text" id="v-c1">开头 3 秒钩住眼球</h2>
+      </div>
+
+      <div
+        id="caption-2"
+        class="caption clip"
+        data-start="2"
+        data-duration="2"
+        data-track-index="1"
+      >
+        <div class="badge">
+          <span class="dot"></span>
+          <span class="text">本地素材 · 02</span>
+        </div>
+        <h2 class="caption-text" id="v-c2">中段 3-7 秒讲清楚为什么</h2>
+      </div>
+
+      <div
+        id="caption-3"
+        class="caption clip"
+        data-start="4"
+        data-duration="2"
+        data-track-index="1"
+      >
+        <div class="badge">
+          <span class="dot"></span>
+          <span class="text">本地素材 · 03</span>
+        </div>
+        <h2 class="caption-text" id="v-c3">最后召唤行动</h2>
+      </div>
+
+      <!-- Outro:track 0,t=6..8 -->
+      <div
+        id="outro"
+        class="outro clip"
+        data-start="6"
+        data-duration="2"
+        data-track-index="0"
+      >
+        <div class="badge">
+          <span class="dot"></span>
+          <span class="text">影刀混剪</span>
+        </div>
+        <h1 id="v-outroTitle">影刀 · 自动混剪完成</h1>
+        <div class="pill">
+          <span id="v-outroCta">等你审核 → 发布</span>
+          <span class="arrow">→</span>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      try {
+        const vars = window.__hyperframes && window.__hyperframes.getVariables();
+        if (vars) {
+          const setText = (id, v) => {
+            if (v != null) document.getElementById(id).textContent = v;
+          };
+          const setSrc = (id, v) => {
+            if (v != null && v !== "") {
+              const el = document.getElementById(id);
+              if (el) el.src = v;
+            }
+          };
+          setSrc("v1", vars.c1Url);
+          setSrc("v2", vars.c2Url);
+          setSrc("v3", vars.c3Url);
+          setText("v-c1", vars.c1Caption);
+          setText("v-c2", vars.c2Caption);
+          setText("v-c3", vars.c3Caption);
+          setText("v-outroTitle", vars.outroTitle);
+          setText("v-outroCta", vars.outroCta);
+          if (vars.accent) {
+            document.documentElement.style.setProperty("--accent", vars.accent);
+          }
+        }
+      } catch (e) {
+        console.warn("hyperframes variables unavailable:", e);
+      }
+
+      // GSAP 时间线 — caption 用 set+to 双步避免 clip 切换时的初始 frame glitch
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      // Caption 1: t=0..2
+      tl.set("#caption-1 .badge", { y: -30, opacity: 0 }, 0);
+      tl.set("#caption-1 .caption-text", { y: 50, opacity: 0 }, 0);
+      tl.to("#caption-1 .badge", { y: 0, opacity: 1, duration: 0.5, ease: "power2.out" }, 0.2);
+      tl.to("#caption-1 .caption-text", { y: 0, opacity: 1, duration: 0.6, ease: "power3.out" }, 0.4);
+
+      // Caption 2: t=2..4
+      tl.set("#caption-2 .badge", { y: -30, opacity: 0 }, 2);
+      tl.set("#caption-2 .caption-text", { y: 50, opacity: 0 }, 2);
+      tl.to("#caption-2 .badge", { y: 0, opacity: 1, duration: 0.5, ease: "power2.out" }, 2.2);
+      tl.to("#caption-2 .caption-text", { y: 0, opacity: 1, duration: 0.6, ease: "expo.out" }, 2.4);
+
+      // Caption 3: t=4..6
+      tl.set("#caption-3 .badge", { y: -30, opacity: 0 }, 4);
+      tl.set("#caption-3 .caption-text", { y: 50, opacity: 0 }, 4);
+      tl.to("#caption-3 .badge", { y: 0, opacity: 1, duration: 0.5, ease: "power2.out" }, 4.2);
+      tl.to("#caption-3 .caption-text", { y: 0, opacity: 1, duration: 0.6, ease: "back.out(1.4)" }, 4.4);
+
+      // Outro: t=6..8
+      tl.set("#outro .badge", { y: -30, opacity: 0 }, 6);
+      tl.set("#outro h1", { y: 80, opacity: 0 }, 6);
+      tl.set("#outro .pill", { scale: 0.7, opacity: 0 }, 6);
+      tl.to("#outro .badge", { y: 0, opacity: 1, duration: 0.5, ease: "power2.out" }, 6.2);
+      tl.to("#outro h1", { y: 0, opacity: 1, duration: 0.7, ease: "expo.out" }, 6.4);
+      tl.to("#outro .pill", { scale: 1, opacity: 1, duration: 0.6, ease: "back.out(1.6)" }, 6.7);
+
+      // Final fade
+      tl.to("#outro", { opacity: 0, duration: 0.45, ease: "power2.in" }, 7.45);
+
+      window.__timelines["local-remix"] = tl;
+    </script>
+  </body>
+</html>

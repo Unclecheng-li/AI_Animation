@@ -1,0 +1,394 @@
+<!doctype html>
+<!--
+  KALLAWAY · tier2 · lower-third · NOWPLAYING
+  A "now playing" media bar lower-left. A pulsing music-note glyph marks the left;
+  title and artist stack above a thin progress-line that grows from 0 to ~70%.
+  Frosted glass pill with an animated progress track — the feel of a Spotify mini-
+  player overlaid on a dark canvas. Slots: title (~36 chars), subtitle (~36 chars).
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+/* ============================================================================
+   KALLAWAY — style tokens
+   Single source of palette / type / motion / texture for every card in this
+   style. Cards reference these vars and never hardcode colors, fonts, easings,
+   glows, or textures. Tweak here, all cards update.
+   See DESIGN.md for the why.
+   Aesthetic: premium dark motion-graphics — near-black cool canvas, a blue
+   "aurora" glow blooming from below, glassmorphism cards, edge-lit neon
+   elements, gradient glow text, focus-stack blur, smooth After-Effects easing.
+   Palette is the AIS brand (blue is the hero glow). The opposite of Vox in
+   every axis: smooth not choppy, dark not paper, glow not ink.
+   ============================================================================ */
+
+/* Type. The HyperFrames compiler embeds supported fonts by name at render time;
+   this @import is what makes standalone / browser preview show the right faces. */
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500;1,600&family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Space+Mono:wght@400;700&display=swap");
+
+:root {
+  /* --- palette (mirror style.json + DESIGN.md). AIS brand, dark. ----------- */
+  --canvas:       #0A0E14;   /* main near-black cool background */
+  --canvas-deep:  #07121C;   /* deeper navy — vignette / depth wells */
+  --ink:          #2A251F;   /* dark text for the rare light/cream surface */
+  --paper:        #F0EEE9;   /* warm white surface (light glass / chips) */
+  --white:        #FFFFFF;
+
+  --text:         #F0EEE9;   /* primary text on dark */
+  --text-dim:     rgba(240, 238, 233, 0.62);  /* secondary copy */
+  --text-faint:   rgba(240, 238, 233, 0.34);  /* metadata, fine print */
+
+  --accent:       #37BDF8;   /* AIS blue — THE hero glow (where refs used purple) */
+  --accent-2:     #F5D82A;   /* yellow — secondary pop / highlight numerals */
+  --alert:        #FF3B30;   /* red — alarm, negative delta, "lie" */
+  --warm:         #FF8A5C;   /* orange — warm secondary accent */
+
+  /* rgb triplets for building rgba() glows in cards without re-typing hex */
+  --accent-rgb:   55, 189, 248;
+  --accent2-rgb:  245, 216, 42;
+  --alert-rgb:    255, 59, 48;
+  --warm-rgb:     255, 138, 92;
+
+  /* semantic aliases the blueprint contract expects */
+  --bg:     var(--canvas);
+  --fg:     var(--text);
+  --muted:  var(--text-dim);
+
+  /* --- typography ---------------------------------------------------------- */
+  /* Plus Jakarta Sans = the voice (headlines, big numbers, glow text): geometric,
+     premium, rounds to match the glass radii, heavy at 800. Inter = body / labels /
+     captions, recedes. Space Mono = data chips, timestamps, %s — the "interface"
+     voice. No serif anywhere (that's Vox). */
+  --font-display: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  --font-body:    "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono:    "Space Mono", ui-monospace, "SF Mono", monospace;
+  /* contract aliases */
+  --font-label:   var(--font-body);
+  --font-hand:    var(--font-body);
+
+  --wt-reg:    400;
+  --wt-med:    500;
+  --wt-semi:   600;
+  --wt-bold:   700;
+  --wt-black:  800;
+
+  /* video sizes for 1920x1080 (big — readable in 2s) */
+  --size-mega:     300px;   /* hero stat number */
+  --size-display:  140px;   /* takeover headline */
+  --size-title:    84px;    /* section title */
+  --size-headline: 54px;    /* card headline */
+  --size-body:     32px;    /* supporting copy */
+  --size-label:    24px;    /* kicker / metadata */
+  --size-tiny:     19px;    /* credits, fine print, timestamps */
+
+  --track-tight: -0.02em;   /* display tracking */
+  --track-snug:  -0.01em;
+  --track-wide:  0.18em;    /* uppercase label tracking */
+
+  /* --- glow — the signature. Soft, layered, never a hard ring. ------------- */
+  --glow-accent-sm: 0 0 10px rgba(var(--accent-rgb), 0.55);
+  --glow-accent:    0 0 22px rgba(var(--accent-rgb), 0.55), 0 0 56px rgba(var(--accent-rgb), 0.30);
+  --glow-accent-lg: 0 0 40px rgba(var(--accent-rgb), 0.60), 0 0 120px rgba(var(--accent-rgb), 0.32);
+  --glow-white:     0 0 16px rgba(255, 255, 255, 0.50), 0 0 46px rgba(255, 255, 255, 0.26);
+  --glow-white-lg:  0 0 30px rgba(255, 255, 255, 0.55), 0 0 90px rgba(255, 255, 255, 0.30);
+  /* text glow (set as text-shadow): white core that lifts off the dark canvas */
+  --textglow:       0 0 18px rgba(255, 255, 255, 0.45), 0 0 40px rgba(var(--accent-rgb), 0.30);
+  --textglow-accent:0 0 18px rgba(var(--accent-rgb), 0.65), 0 0 48px rgba(var(--accent-rgb), 0.35);
+
+  /* --- glass — frosted surfaces. Two tints: light (bright) + dark (recede). - */
+  --glass-bg:      rgba(255, 255, 255, 0.055);
+  --glass-bg-dark: rgba(16, 22, 34, 0.55);
+  --glass-border:  rgba(255, 255, 255, 0.14);
+  --glass-hi:      rgba(255, 255, 255, 0.22);  /* top inner-highlight edge */
+  --glass-blur:    blur(22px) saturate(135%);
+  --glass-shadow:  0 24px 70px rgba(0, 0, 0, 0.50);
+
+  /* --- shape --------------------------------------------------------------- */
+  --radius:     28px;       /* glass cards, pills — generously rounded */
+  --radius-sm:  16px;       /* chips, small tiles */
+  --radius-lg:  40px;       /* phone frames, large surfaces */
+  --pad:        80px;       /* canvas safe-area inset */
+  --stroke:     1.5px;      /* hairline neon edge weight */
+
+  /* --- motion — smooth, premium, breathing. The anti-Vox. ------------------ */
+  /* Long expo/quint glides; spring overshoot for cards; blur-in for focus pull.
+     NEVER steps()/choppy — that is Vox's signature, not ours. */
+  --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);   /* expo-out — the default glide */
+  --ease-inout:  cubic-bezier(0.65, 0, 0.35, 1);   /* symmetric, for drifts */
+  --ease-soft:   cubic-bezier(0.33, 1, 0.68, 1);   /* gentle settle */
+  /* GSAP string eases (used in card timelines) */
+  --gsap-glide:  power4.out;
+  --gsap-expo:   expo.out;
+  --gsap-spring: back.out(1.4);
+  --dur-in:   0.8s;    /* entrances breathe */
+  --dur-out:  0.5s;
+
+  /* --- textures (deterministic) ------------------------------------------- */
+  /* Aurora bloom — blue light rising from the bottom-center. The hero ambience.
+     Compose these as background layers under content; animate opacity/scale. */
+  --bloom-bottom: radial-gradient(120% 85% at 50% 118%,
+                    rgba(var(--accent-rgb), 0.45) 0%,
+                    rgba(var(--accent-rgb), 0.16) 32%,
+                    transparent 62%);
+  --bloom-corner: radial-gradient(90% 90% at 88% 12%,
+                    rgba(var(--accent-rgb), 0.30) 0%,
+                    transparent 55%);
+
+  /* Vignette — pulls the eye to center, deepens the canvas edges. */
+  --vignette: radial-gradient(125% 125% at 50% 45%, transparent 52%, rgba(0,0,0,0.55) 100%);
+
+  /* Faint dot grid (the refs' subtle technical texture). Low contrast. */
+  --dot:      radial-gradient(circle at center, rgba(255,255,255,0.06) 1px, transparent 1.4px);
+  --dot-size: 46px 46px;
+
+  /* Fine film grain over everything — keeps the dark from banding. */
+  --tex-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+</style>
+    <style>
+      html, body { margin: 0; background: transparent; }
+
+      #t2-lt-nplay {
+        position: absolute; inset: 0; width: 1920px; height: 1080px;
+        background: transparent; overflow: hidden;
+        font-family: var(--font-display);
+      }
+
+      /* Soft bloom under the card */
+      #t2-lt-nplay .local-bloom {
+        position: absolute;
+        left: 50px; bottom: 96px;
+        width: 600px; height: 180px;
+        border-radius: 50%;
+        background: radial-gradient(ellipse at 30% 80%,
+          rgba(var(--accent-rgb), 0.25) 0%,
+          rgba(var(--accent-rgb), 0.07) 55%,
+          transparent 78%);
+        filter: blur(34px);
+        pointer-events: none;
+        z-index: 1;
+      }
+
+      /* Glass card */
+      #t2-lt-nplay .card {
+        position: absolute;
+        left: 80px; bottom: 120px;
+        width: 480px;
+        padding: 24px 32px 20px;
+        background: var(--glass-bg-dark);
+        backdrop-filter: var(--glass-blur);
+        -webkit-backdrop-filter: var(--glass-blur);
+        border-radius: var(--radius);
+        border: var(--stroke) solid var(--glass-border);
+        box-shadow:
+          var(--glass-shadow),
+          0 0 0 1px rgba(var(--accent-rgb), 0.35),
+          0 0 28px rgba(var(--accent-rgb), 0.16),
+          inset 0 1px 0 var(--glass-hi);
+        z-index: 2;
+        overflow: hidden;
+      }
+
+      #t2-lt-nplay .card::before {
+        content: "";
+        position: absolute; top: 0; left: 12px; right: 12px; height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.48) 40%, rgba(255,255,255,0.48) 60%, transparent);
+      }
+
+      /* Top row: icon + label + title */
+      #t2-lt-nplay .top-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 6px;
+      }
+
+      /* Music note icon */
+      #t2-lt-nplay .icon-wrap {
+        flex-shrink: 0;
+        width: 40px; height: 40px;
+        border-radius: var(--radius-sm);
+        background: rgba(var(--accent-rgb), 0.16);
+        border: 1px solid rgba(var(--accent-rgb), 0.40);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 0 14px rgba(var(--accent-rgb), 0.30);
+      }
+
+      #t2-lt-nplay .icon-wrap svg {
+        width: 22px; height: 22px;
+        fill: var(--accent);
+        filter: drop-shadow(0 0 5px rgba(var(--accent-rgb), 0.75));
+      }
+
+      #t2-lt-nplay .text-col {
+        flex: 1;
+        overflow: hidden;
+      }
+
+      /* "NOW PLAYING" kicker */
+      #t2-lt-nplay .kicker {
+        font-family: var(--font-body);
+        font-weight: var(--wt-bold);
+        font-size: 14px;
+        letter-spacing: var(--track-wide);
+        text-transform: uppercase;
+        color: var(--accent);
+        text-shadow: var(--textglow-accent);
+        margin-bottom: 3px;
+        line-height: 1;
+      }
+
+      #t2-lt-nplay .title {
+        font-family: var(--font-display);
+        font-weight: var(--wt-bold);
+        font-size: 28px;
+        letter-spacing: var(--track-snug);
+        color: var(--white);
+        text-shadow: var(--textglow);
+        line-height: 1.1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      #t2-lt-nplay .subtitle {
+        font-family: var(--font-body);
+        font-weight: var(--wt-med);
+        font-size: 20px;
+        color: var(--text-dim);
+        margin-top: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      /* Progress track */
+      #t2-lt-nplay .progress-track {
+        margin-top: 16px;
+        height: 3px;
+        border-radius: 3px;
+        background: rgba(255,255,255,0.10);
+        overflow: hidden;
+        position: relative;
+      }
+
+      #t2-lt-nplay .progress-fill {
+        position: absolute;
+        left: 0; top: 0; bottom: 0;
+        width: 0%;
+        border-radius: 3px;
+        background: linear-gradient(90deg, var(--accent), rgba(255,255,255,0.90));
+        box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.80);
+      }
+
+      /* Timestamp row */
+      #t2-lt-nplay .time-row {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 6px;
+      }
+
+      #t2-lt-nplay .time-val {
+        font-family: var(--font-mono);
+        font-size: 16px;
+        color: var(--text-faint);
+        letter-spacing: 0.03em;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="t2-lt-nplay"
+         data-composition-id="t2-lt-nplay"
+         data-start="0"
+         data-width="1920"
+         data-height="1080" class="clip" data-duration="5">
+
+      <div class="local-bloom"></div>
+
+      <div class="card">
+        <div class="top-row">
+          <div class="icon-wrap">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M9 18V5l12-2v13M9 18c0 1.1-.9 2-2 2H6a2 2 0 1 1 0-4h1a2 2 0 0 1 2 2zm12-2c0 1.1-.9 2-2 2h-1a2 2 0 1 1 0-4h1a2 2 0 0 1 2 2z"/>
+            </svg>
+          </div>
+          <div class="text-col">
+            <div class="kicker">Now Playing</div>
+            <div class="title" data-slot="title">The AI Monetization Playbook</div>
+            <div class="subtitle" data-slot="subtitle">Kallaway · Episode 14</div>
+          </div>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill"></div>
+        </div>
+        <div class="time-row">
+          <span class="time-val">2:47</span>
+          <span class="time-val">6:12</span>
+        </div>
+      </div>
+
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      const COMP = "#t2-lt-nplay";
+
+      /* bloom rises in */
+      tl.from(`${COMP} .local-bloom`,
+        { autoAlpha: 0, scale: 0.65, duration: 1.1, ease: "power2.out" }, 0);
+
+      /* card springs up from below */
+      tl.from(`${COMP} .card`,
+        { autoAlpha: 0, y: 36, scale: 0.93, filter: "blur(12px)",
+          transformOrigin: "left bottom",
+          duration: 0.80, ease: "back.out(1.4)" }, 0.10);
+
+      /* kicker fades in */
+      tl.from(`${COMP} .kicker`,
+        { autoAlpha: 0, x: -12, duration: 0.45, ease: "power3.out" }, 0.52);
+
+      /* icon pops */
+      tl.from(`${COMP} .icon-wrap`,
+        { autoAlpha: 0, scale: 0, duration: 0.42, ease: "back.out(2.0)" }, 0.48);
+
+      /* title glides in */
+      tl.from(`${COMP} .title`,
+        { autoAlpha: 0, x: -18, filter: "blur(7px)",
+          duration: 0.62, ease: "power4.out" }, 0.62);
+
+      /* subtitle follows */
+      tl.from(`${COMP} .subtitle`,
+        { autoAlpha: 0, x: -12, filter: "blur(5px)",
+          duration: 0.55, ease: "power3.out" }, 0.78);
+
+      /* progress track appears */
+      tl.from(`${COMP} .progress-track`,
+        { autoAlpha: 0, scaleX: 0, transformOrigin: "left center",
+          duration: 0.40, ease: "power2.out" }, 0.90);
+
+      /* progress fill grows to ~70% — finite */
+      tl.to(`${COMP} .progress-fill`,
+        { width: "70%", duration: 2.8, ease: "power1.inOut" }, 1.0);
+
+      /* time row fades in */
+      tl.from(`${COMP} .time-row`,
+        { autoAlpha: 0, duration: 0.40, ease: "power2.out" }, 1.05);
+
+      /* icon glow pulse — finite */
+      tl.to(`${COMP} .icon-wrap`,
+        { boxShadow: "0 0 24px rgba(55,189,248,0.55), 0 0 0 1px rgba(55,189,248,0.50)",
+          duration: 1.1, ease: "sine.inOut", repeat: 3, yoyo: true }, 1.8);
+
+      tl.set({}, {}, 7);
+
+      window.__timelines["t2-lt-nplay"] = tl;
+    </script>
+  </body>
+</html>

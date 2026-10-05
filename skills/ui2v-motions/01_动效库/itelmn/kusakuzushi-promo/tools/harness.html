@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>kusakuzushi recording harness</title>
+    <style>
+      html, body { margin: 0; padding: 0; background: #0C110D; }
+      canvas { display: block; }
+    </style>
+  </head>
+  <body>
+    <canvas id="stage"></canvas>
+
+    <script type="module">
+      import { Game, DEFAULT_CONFIG, DARK_THEME, render, toGrid } from "./core-bundle.js";
+
+      // --- determinism -------------------------------------------------
+      // The renderer's particle layer reads Date.now() and Math.random()
+      // directly (packages/core/src/renderer.ts). Frames are advanced by the
+      // recorder, not by rAF, so wall-clock time would drift between frames
+      // and screenshots would show particles at arbitrary ages. A virtual
+      // clock plus a seeded LCG makes every run byte-identical.
+      let virtualMs = 1700000000000;
+      Date.now = () => virtualMs;
+      if (window.performance) window.performance.now = () => virtualMs;
+
+      let seed = 20260727;
+      function rng() {
+        seed = (seed * 1664525 + 1013904223) >>> 0;
+        return seed / 4294967296;
+      }
+      Math.random = rng;
+
+      // --- grid --------------------------------------------------------
+      const raw = await (await fetch("./contributions.json")).json();
+      const grid = toGrid("toshi0607", raw.contributions);
+
+      // --- stage -------------------------------------------------------
+      // The engine's own geometry (960x360, 14px cells, 4px gaps) encodes the
+      // real GitHub cell/gap ratio, so it stays untouched; only the backing
+      // store is doubled so the capture has pixels to spare when the video
+      // zooms into the grid.
+      const SCALE = 2;
+      const canvas = document.getElementById("stage");
+      canvas.width = DEFAULT_CONFIG.canvasWidth * SCALE;
+      canvas.height = DEFAULT_CONFIG.canvasHeight * SCALE;
+      const ctx = canvas.getContext("2d");
+      ctx.scale(SCALE, SCALE);
+
+      // Green stays content-only (DESIGN-VISUAL.md): the ball and paddle are
+      // chrome, so they take marquee amber and ink, never a grass green.
+      //
+      // colors[0] is both the level-0 cell and the canvas ground (renderer.ts
+      // fills the whole canvas with it). Left at GitHub's #161b22 the footage
+      // reads as a lighter rectangle pasted onto the video's #0C110D field —
+      // a visible seam on every frame that carries the board. Repainting it to
+      // the video's own ground welds the two together; the only thing lost is
+      // the box around a zero-contribution day, and this year has almost none
+      // (3,089 contributions across 365 days).
+      const theme = {
+        ...DARK_THEME,
+        colors: ["#0C110D", ...DARK_THEME.colors.slice(1)],
+        ballColor: "#FFB224",
+        paddleColor: "#E4EDE2",
+      };
+
+      // Tuned for the video, not for play: lives are effectively infinite so a
+      // dropped ball never resets the board mid-take, and the item rate is
+      // raised so multiball compounds — that compounding IS Frame 3's
+      // acceleration, produced by the real engine rather than faked in post.
+      const game = new Game(grid, {
+        lives: 9999,
+        ballSpeed: 620,
+        itemDropChance: 0.22,
+        earlyItemDropBonus: 0.2,
+        random: rng,
+      });
+
+      const TOTAL_CONTRIBUTIONS = game.liveBricks.reduce((sum, b) => sum + b.count, 0);
+      const TOTAL_BRICKS = game.liveBricks.length;
+
+      // --- autopilot (ported from apps/web/src/attract.ts) ---------------
+      const LAUNCH_DELAY_MS = 500;
+      const RELAUNCH_DELAY_MS = 900;
+      const WOBBLE_AMPLITUDE_PX = 18;
+      const WOBBLE_PERIOD_MS = 800;
+      const AUTOPILOT_SPEED_PX_PER_SEC = 900;
+
+      let paddleX = DEFAULT_CONFIG.canvasWidth / 2;
+      let launchAtMs = virtualMs + LAUNCH_DELAY_MS;
+
+      function trackedBallX() {
+        let lowest = game.ballStates[0];
+        for (const ball of game.ballStates) if (ball.y > lowest.y) lowest = ball;
+        return lowest.x;
+      }
+
+      function autopilot(dt) {
+        const wobble = Math.sin(virtualMs / WOBBLE_PERIOD_MS) * WOBBLE_AMPLITUDE_PX;
+        const target = trackedBallX() + wobble;
+        const maxStep = AUTOPILOT_SPEED_PX_PER_SEC * dt;
+        paddleX += Math.min(Math.max(target - paddleX, -maxStep), maxStep);
+        game.movePaddle(paddleX);
+      }
+
+      function draw() {
+        ctx.fillStyle = "#0C110D";
+        ctx.fillRect(0, 0, DEFAULT_CONFIG.canvasWidth, DEFAULT_CONFIG.canvasHeight);
+        render(ctx, game, theme, { hud: false });
+      }
+
+      // --- recorder API -------------------------------------------------
+      window.__advance = function advance(dtSec) {
+        virtualMs += dtSec * 1000;
+
+        if (game.state === "gameOver" || game.state === "clear") {
+          // The board is cleared, so the promo's closing shot wants an empty
+          // field — but core stops stepping physics once the state leaves
+          // "playing", so the ~186 balls in flight freeze mid-grid and the
+          // frame reads as confetti instead of "nothing left". Drop them (and
+          // any falling items) for the hold. ballStates/itemStates hand back
+          // the live arrays, and no physics runs past this point, so emptying
+          // them affects nothing but what gets drawn.
+          game.ballStates.length = 0;
+          game.itemStates.length = 0;
+          draw();
+          return;
+        }
+        if (game.state === "ready" || game.state === "ballLost") {
+          if (launchAtMs === null) launchAtMs = virtualMs + RELAUNCH_DELAY_MS;
+          else if (virtualMs >= launchAtMs) {
+            game.launch();
+            launchAtMs = null;
+          }
+        }
+        if (game.state === "playing") autopilot(dtSec);
+
+        game.update(dtSec);
+        draw();
+      };
+
+      window.__stats = function stats() {
+        let remaining = 0;
+        let aliveBricks = 0;
+        for (const brick of game.liveBricks) {
+          if (brick.alive) {
+            remaining += brick.count;
+            aliveBricks += 1;
+          }
+        }
+        return {
+          state: game.state,
+          remaining,
+          aliveBricks,
+          totalContributions: TOTAL_CONTRIBUTIONS,
+          totalBricks: TOTAL_BRICKS,
+          balls: game.ballStates.length,
+        };
+      };
+
+      draw();
+      window.__ready = true;
+    </script>
+  </body>
+</html>
