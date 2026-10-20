@@ -1,7 +1,7 @@
 ---
 name: code-mv-render
-description: 代码渲染 MV 工程库——两支"确定性音乐视频"（帧 = f(歌曲时间)，浏览器预览与离线导出逐帧一致）开源参考工程的选型、复现与改编指南：歌词 MV（world.execute(me);：Canvas2D+WebGL2，聊天界面 / 三墨版画 / 代码三种画面，颜色=状态）+ 生成式 3D MV（pdoom：three.js 逐字卡拉 OK 排版 + 子帧运动模糊 + 节拍吸附时间线）。只要用户提到：代码渲染 MV、歌词 MV、音乐视频生成、MV 渲染工程、world.execute(me)、pdoom、"帧由歌曲时间决定"的视频、逐字卡拉 OK 排版、把口播 / 歌词做成同步动画 MV——就用本 Skill。与 video-shot-demos / swiss-shot-demos 互补：那些产出分镜演示页，本 Skill 面向整片可导出的 MV 工程。
-version: "0.1.0"
+description: 代码渲染 MV / 数据纪录片的确定性工程库——帧 = f(时间)，浏览器预览与离线导出逐帧一致。收录两支开源音乐视频参考工程（world.execute(me); 的 Canvas2D 三画面 + pdoom 的 three.js 逐字卡拉 OK），以及本库自建并已导出的《CVE 编号破十万》90 秒数据纪录片实现：镜头模型、15 种入场转场、字体/遮罩动效、纸底三墨风格、口播字幕时间轴、无头浏览器录制与质检。只要用户提到：代码渲染 MV、歌词 MV、音乐视频生成、MV 渲染工程、world.execute(me)、pdoom、卡拉 OK 排版、数据纪录片、口播视频、新闻数据动画、把文案做成同步动画视频、确定性 Canvas 视频——就用本 Skill。与 video-shot-demos / swiss-shot-demos 互补：那些产出分镜演示页，本 Skill 面向整片可导出的视频工程。
+version: "0.2.0"
 triggers:
   - "代码渲染 MV"
   - "歌词 MV"
@@ -11,104 +11,182 @@ triggers:
   - "pdoom"
   - "卡拉OK排版"
   - "code-mv-render"
+  - "数据纪录片"
+  - "口播视频"
+  - "新闻数据动画"
+  - "确定性动画"
 ---
 
-# 代码渲染 MV 工程库（两支持续确定性音乐视频参考工程）
+# 代码渲染 MV 工程库（两支上游 + 一套自建实现）
 
-本 Skill 不生成单页演示，而是一座**"整片 MV 渲染工程"参考库**：收录两支开源音乐视频工程，它们共用同一条底层原理——**每一帧只是歌曲时间的函数**（`frame = renderFrame(t)`），因此浏览器里的实时预览与离线导出的成片逐帧一致，可反复复现、可精确质检。要做一个同步音乐视频时，从这里选一支最贴近的工程去 fork / 改编，而不是从零搭渲染管线。
+本 Skill 不生成单页演示，而是一座**"整片视频渲染工程"参考库**：收录两支开源音乐视频工程，外加本库自建、已经导出成片的《CVE 编号破十万》数据纪录片实现。它们共用同一条底层原理——**每一帧只是时间的函数**（`frame = renderFrame(t)`），因此浏览器里的实时预览与离线导出的成片逐帧一致，可反复复现、可精确质检。要做同步视频时，从这里选最贴近的工程去 fork / 改编，而不是从零搭渲染管线。
 
 ## 你是什么
 
-- 面向"**整片、带音轨、逐帧确定**"的音乐视频（MV / 歌词视频 / 生成式视觉），不是分镜演示页。
-- 提供的不是模板代码，而是**两支已验证的参考工程 + 它们的渲染方法论**：画面法则、节拍对齐、光效与运动模糊、闪光安全、导出质检。
-- 与 `video-shot-demos` / `swiss-shot-demos` 的边界：那两者是"一镜一 HTML"的演示片段；本 Skill 管的是**从音轨到成片的整条工程链**（分析 → 时间线 → 场景 → 预览 → 导出）。
+- 面向"**整片、带音轨或口播、逐帧确定**"的视频（MV / 歌词视频 / 数据纪录片 / 生成式视觉），不是分镜演示页。
+- 提供的不只是参考工程，而是**可执行的方法论 + 模板**：镜头模型、转场库、运动语法、时间系统、导出与质检。
+- 与 `video-shot-demos` / `swiss-shot-demos` 的边界：那两者是"一镜一 HTML"的演示片段；本 Skill 管的是**从时间轴到成片的整条工程链**（分析 → 时间线 → 镜头 → 预览 → 导出 → 质检）。
 
-## 两支参考工程
+## 三支参考工程
 
-| | `world-execute-me-lyric-mv` | `pdoom-video` |
-|---|---|---|
-| 类型 | 歌词 MV（对话叙事） | 生成式 MV（逐字卡拉 OK 排版） |
-| 画面技术 | Canvas 2D + WebGL2（浏览器绘制） | three.js + TypeScript（GPU 场景） |
-| 画面语言 | 三种：聊天**界面** / 暗暖纸底三墨**版画** / **代码**（EXECUTION 段） | 每片一个场景模块：线性线画、纸表单、霓虹屏、燃烧引线… |
-| 状态系统 | **颜色 = 状态**（off/on/warm/error/errWarm/ash/dead） | 节拍吸附的场景窗口 + 逐字/逐音节卡点 |
-| 反复现性 | `renderFrame(t)`，PRNG 种子化，不读墙上时钟 | 每帧确定性函数；预览 = 导出 |
-| 音画同步 | `data/lyric_timing.json` 行级时间 + `cues.js` 拍点；LRC 自动填词 | Demucs 分轨 + CTC 强制对齐 × Whisper 交叉校验；词级时间 |
-| 导出 | 无头 Chrome 逐帧 → ffmpeg（1080p60 / 4K60） | 无头 Chrome → WebSocket 原始帧 → ffmpeg（1080p60 / 4K60，子帧运动模糊） |
-| 亮点机制 | 成品级**闪光安全**（WCAG 2.3.1 自检）、误差比对缩图表 | **按块自适应子帧采样**的运动模糊、双 Chrome + 单 ffmpeg 管线 |
-| 运行环境 | Node.js 20+，Windows 11（Chrome/Edge） | bun + Vite，Chrome + ffmpeg(libx264)；分析需 uv/Python |
-| 许可 | 代码/文档 MIT；角色剪影 CC BY-NC-SA 4.0；**歌曲歌词不在仓库** | 代码 MIT；字体 OFL；**歌曲歌词不属 MIT** |
+| | `world-execute-me-lyric-mv` | `pdoom-video` | **本库自建：CVE 编号破十万** |
+|---|---|---|---|
+| 类型 | 歌词 MV（对话叙事） | 生成式 MV（逐字卡拉 OK） | 数据纪录片（口播字幕驱动） |
+| 画面技术 | Canvas 2D + WebGL2 | three.js + TypeScript | Canvas 2D，单文件 HTML |
+| 画面语言 | 聊天**界面** / 三墨**版画** / **代码** | 每片一个 GPU 场景 | **数据** / **界面** / **版画** 三型交替 |
+| 状态系统 | 颜色 = 状态（off/on/warm/error/ash/dead） | 节拍吸附场景窗口 | 语义色：中性 / 里程碑 / 风险 |
+| 同步依据 | 行级歌词时间 + cues 拍点 | Demucs + CTC × Whisper 词级时间 | 口播字幕段 + 句内事件时间 |
+| 导出 | 无头 Chrome 逐帧 → ffmpeg | 无头 Chrome → WebSocket 帧 → ffmpeg | 无头 Edge + `captureStream` → WebM → ffmpeg |
+| 亮点 | 成品级闪光安全、缩图表回归 | 块级自适应子帧运动模糊 | 单文件、零依赖、可直接改文案复用 |
+| 许可 | 代码 MIT；剪影 CC BY-NC-SA；歌曲不在仓库 | 代码 MIT；歌曲不属 MIT | 本库自建，可自由改写 |
 
-## 共同原理（做 MV 的六条铁律）
+## 动效框架（从原片抽取，已落到本库模板）
 
-1. **确定性优先**：`renderFrame(t)` 只依赖时间，不读系统时钟、不留跨帧状态，随机数走种子化 PRNG。这样预览可拖动、导出可复现、出错可逐帧定位。
-2. **时间基准唯一**：全片用"歌曲时间"（音轨起点 = 0）。片头警告页等前置内容放在负时间或整体 `preroll` 偏移，绝不移动任何拍点。
-3. **一切卡在拍上**：歌词行、鼓点、单字/音节时间集中一张表；不在拍上的零散时间集中在单个 `cues` 文件里凭耳朵修。
-4. **视觉状态由事件驱动**：颜色 / 材质只在"发生了什么"时改变（如颜色=状态），不做装饰性渐变。
-5. **字体与图形按角色分工**：等宽体=系统、衬线体=叙事声、无衬线体=界面；图形先"具象成一个世界观"（版画 / 表单 / 线画），再谈排版。
-6. **安全与质检内建**：任意一秒大面积亮度往返 ≤3 次（WCAG 2.3.1）、红色闪烁独立统计、导出后跑音画同步与单帧突跳自检。
+完整参数见 `references/motion-system.md`。核心是五层：
+
+### 1. 镜头模型
+
+```js
+{ id, at, lines, moment, layout, palette, enter, camera, render(ctx,t,f,u) }
+```
+
+- `moment` 一句话说清"这是哪一刻"，写不出来就是废镜头。
+- 切点必须落在拍 / 半拍 / 小节线；口播视频落在句子边界或关键词上。
+- `render` 是纯函数；`camera` 返回 `{x,y,zoom,rot}`。
+- 镜头内部三拍：入场（0.25–0.8s）→ 展开 → 由事件结束。
+
+### 2. 十五种入场转场
+
+`cut / fade / glitch / scan / circle / diag / grid / zoom / shatter / dissolve / winclose / winpop / push / slices / flashcut`
+
+按语义选：`scan` = 打印/写入，`grid` = 参数/数据，`winpop` = 记录页/弹窗，`glitch` = 异常，`zoom` = 深入，`circle` = 聚焦，`shatter` = 推翻，`flashcut` = 大段落切换。支持 `align: start|end|center` 与 `flash`。一个视频最多用 4–6 种。
+
+Canvas 2D 版已实现：`templates/transitions2d.js`（15 种，零依赖）+ `templates/transitions-demo.html`（逐段预览）。
+
+### 3. 镜头内运动六条
+
+1. 缓动优先（机械计数/扫描线除外）。
+2. 错峰：主体 0ms，附属 +60–120ms，第三层 +180–300ms。
+3. 二次运动：落定后 1–2% 过冲或轻微回弹。
+4. 快速运动必须带模糊；静止背景不参与重绘。
+5. 禁止只做透明度；淡入必须伴随位移/遮罩/印刷揭示。
+6. 闪入要整块（1–2 帧），前面不加白场。
+
+### 4. 字体与遮罩
+
+`slam`（砸下）、`typed`（逐字）、`onPath`（沿路径）、`wall`（字墙）、`sliced`（切条）、`scramble`（乱码收敛）、`limp`（竖带压扁下坠）、`masked`（用字/形状当窗口）。中文按"字"计时，标点不单独占拍。
+
+### 5. 时间与后期
+
+- 音乐：130 BPM 网格（beat 0 = 0.344s，1 beat = 0.4615s）。
+- 口播：字幕段为主网格，句内关键词为次网格；非网格时间集中在一个 `CUES` 表。
+- 时间特效：掉帧 `floor(t*12)/12`、重放、插入镜头、撕裂保持 6 帧、余像 `t-0.05`、白场 11–16 帧。
+- 后期默认全关；只在事件上开 `glow / bloomAll / rays / streak / zoomBlur`，镜头结束回 0。
 
 ## 核心工作流
 
 ### 第 0 步 · 选型
 
-按内容气质二选一（也可混用两套方法论）：
+- **对话 / 叙事 / 强概念** → `world-execute-me-lyric-mv` 路线（三画面 + 颜色状态 + 版画）。
+- **抽象文本 / 逐字排版 / 需要 3D 光** → `pdoom-video` 路线。
+- **数据 / 新闻 / 口播 / 工具链** → 本库自建路线（数据 / 界面 / 版画 + 字幕时间轴）。模板：`templates/mv-engine.html`。
 
-- **对话 / 叙事 / 强概念**、想"用程式画出一个世界观" → `world-execute-me-lyric-mv` 路线（三画面 + 颜色状态 + 版画质感）。
-- **抽象文本 / 反直觉句 / 需要 3D 空间与光**、以歌词排版为主角 → `pdoom-video` 路线（逐字卡拉 OK + GPU 场景 + 运动模糊）。
+### 第 1 步 · 素材与许可清障
 
-### 第 1 步 · 素材与许可清障（关键，先做）
+两支上游都**不含歌曲与歌词**，必须自备；发布前确认许可（剪影 CC BY-NC-SA、歌曲遵循原作者指引）。自建路线无此限制，但字体与数据来源仍需注明。
 
-**两支工程都不含歌曲与歌词**，必须自备：
+### 第 2 步 · 时间轴
 
-- `world-execute-me-lyric-mv`：把原曲 WAV 与任意时间轴的 LRC/纯文本放进 `音頻&歌詞/`；`tools/fill_lyrics.mjs` 只要求"同样的词、同样的顺序"，会按片内时间表自动重排/重分行。
-- `pdoom-video`：自带示例音轨与词级时间数据，换歌则需重跑 `analysis/`（Demucs + 对齐）。
+先写 `SHOTS`（分镜）与 `SUBS`（字幕/歌词），再写画面。**不要先做画面再对时间。**
+所有切点、关键词落定、印章、差额出现，都要在表里能查到。
 
-**发布前先确认许可**：用上游源码渲染的成片含角色剪影 → 须署明 CC BY-NC-SA 4.0 且不得商用；只用提示词、画面自绘 → 无法定要求但请照格式注明出处；歌曲一律遵循原作者版权指引（个人、非商业、标注含 AI 生成内容）。
+### 第 3 步 · 镜头
 
-### 第 2 步 · 复现与对齐
+从这些配方里选：计数器 / 对账双柱 / 纸底版画 / 记录页 / 时间线 / 收束三行。
+每种配方在 `references/style-cve-100k.md` 里有完整字号、坐标、时长。
 
-`git clone` 目标工程 → 按其 README 装依赖（npm / bun）→ `npm run preview` 或 `bunx vite` 起实时预览。改歌词/节拍时只动**时间表与 cues 文件**，画面代码交给 `renderFrame(t)`。
+### 第 4 步 · 预览与逐帧质检
 
-### 第 3 步 · 预览 → 导出 → 质检
+```bash
+# 关键帧静帧（改完必看）
+node templates/qa-stills.mjs --page examples/cve-100k/demo.html --times 13.6,24.6,46,59.5,79,86.5 --out ./qa
 
-1. 浏览器预览逐段确认（两工程都支持按秒 seek、逐帧步进、场景跳转）。
-2. 导出：`npm run export:preview` / `export:4k`（world-execute）或 `bun scripts/render.ts video --samples auto --shutter 0.2`（pdoom）。
-3. 质检：跑闪光安全自检（`npm run check` / `tools/check_flash.py`）、音画同步偏移、单帧突跳；`world-execute` 另有改共用文件前后的缩图表逐格回归比对。
+# 每 5 秒扫一遍
+node templates/qa-stills.mjs --page examples/cve-100k/demo.html --range 0..90 --step 5 --out ./qa_all
+```
 
-## 可复用要点（抽取给自建工程）
+看：切后第一帧、关键词落定帧、事件帧、首尾帧；数字与字幕是否同步。
 
-- **以"块级自适应采样"做运动模糊**：把画面切 32×32 块，静止块 12 采样、常规运镜 36、快速甩镜/爆闪 108–324，且某块收敛后跳过后续子帧——快物体压静止背景几乎不额外花销（pdoom 的 `--samples auto`）。
-- **预览与导出同源**：预览器直接复用导出帧函数，杜绝"预览好看导出差"。
-- **颜色 = 状态**的调色板设计：角色色（bg/panel/raised/line/text/sub/mute/me/meHot/meDim/err/errDim）随剧情事件切换，观众靠颜色跨页追踪同一实体。
-- **成品级闪光预算**：写进 config 的 `maxFlash` / `flashRange` / `preroll`，导出脚本自动把警告页与警示文案生成到 README 与片头。
-- **缩图表回归**：改动共用引擎前先出基准缩图表，改后逐格比对——没打算改的地方应当一格不差。
+### 第 5 步 · 导出
+
+```bash
+# 无头 Edge 录制 + 直接转 MP4
+node templates/export-video.mjs --page examples/cve-100k/demo.html --out ./out --name cve-demo --mp4
+```
+
+页面内也可直接点「导出 WebM」。导出后 `ffprobe` 校验 1920×1080 / 60fps / 时长。
+
+## 从零做一支（命令级流程）
+
+```
+1. 复制 templates/mv-engine.html → my-film.html
+2. 改 DUR / SHOTS / SUBS，先让字对齐时间
+3. 复制镜头配方，替换数字与文案（一屏一个英雄数字）
+4. 加颜色事件：只在里程碑/风险发生的那一帧切换
+5. 逐帧截图，修排版（差额标注、字幕遮挡、标签重叠）
+6. node templates/export-video.mjs ... --mp4
+```
+
+## 可复用要点
+
+- **预览与导出同源**：同一个 `renderFrame(t)`，杜绝"预览好看导出差"。
+- **颜色 = 状态**：调色板是语义不是风格；观众靠颜色跨镜追踪同一实体。
+- **纸底是呼吸**：每 3–4 个暗底镜头插一个纸底定义页。
+- **数据同步**：字幕说最终值时，数字必须已到位。
+- **闪光预算**：任意 1 秒大面积亮度往返 ≤3 次；红色闪烁独立统计。
+- **缩图表/静帧回归**：改共用文件前后各出一组静帧，逐格比对。
+- **单文件优先**：无构建、无网络、双击即播，方便交付与归档。
 
 ## 红线
 
-- **歌曲与歌词不在仓库**、也不在代码许可内：不得把原曲/原词一并打包分发。
-- 角色剪影及其所在画面为 **CC BY-NC-SA 4.0**：署名 + 禁商用 + 同许可再分享。
-- 两支工程的成片均标注"**含 AI 生成内容**"：发布时须显式声明。
-- 上游均为**非官方同人作品**，与权利人无关，不得暗示背书。
-- 别把平台特定的实现（Windows 路径、`ffmpeg-static`）当作可移植承诺——跨平台需自行适配。
+- **歌曲与歌词不在上游仓库**、也不在代码许可内：不得把原曲/原词一并打包分发。
+- 角色剪影及含剪影画面为 **CC BY-NC-SA 4.0**：署名 + 禁商用 + 同许可再分享。
+- 上游成片均标注"**含 AI 生成内容**"；发布时须显式声明。
+- 上游均为**非官方同人作品**，不得暗示背书。
+- 数据类内容：编号 ≠ 发布数；估算必须标注；CNA 评分 ≠ NVD 评分。
+- 不要把平台特定实现（Windows 路径、ffmpeg-static）当作可移植承诺。
 
 ## Token 纪律
 
-- **禁止通读**参考工程源码（`world-execute` 的 `src/engine/`、`src/scenes/` 与 pdoom 的 `app/src/` 都是大块源码）。
-- 渲染方法论优先取本 Skill 的 `references/` 两份浓缩规范，不要现场读源码反推。
-- 需要看某段实现时，先 `grep` 定位函数/文件名，再按行号窗口读 ≤80 行。
+- **禁止通读**上游源码（`src/engine/`、`src/scenes/`、`app/src/` 都是大块）。
+- 方法论优先取本 Skill 的 `references/`，不要现场读源码反推。
+- 需要看实现时，先 `grep` 定位，再按行号窗口读 ≤80 行。
+- 本库自建实现只有 `examples/cve-100k/demo.html` 一个文件，可以整读（约 1000 行）。
 
 ## 目录结构
 
 ```
 code-mv-render/
-├── SKILL.md / README.md              ← 本文件与人类文档
+├── SKILL.md / README.md
 ├── references/
-│   ├── world-execute-spec.md         ← 歌词 MV 工程规范摘录（画面三型/颜色状态/版画/剪影/确定性/闪光安全/命令）
-│   └── pdoom-spec.md                 ← 生成式 MV 工程规范摘录（引擎/场景 API/运动模糊采样/时间线/渲染管线/命令）
-└── assets/preview/                   ← 预览截帧（cover + pdoom plates）
+│   ├── world-execute-spec.md       上游歌词 MV 规范摘录
+│   ├── pdoom-spec.md               上游生成式 MV 规范摘录
+│   ├── motion-system.md            ★ 动效框架：镜头模型 / 15 转场 / 运动语法 / 时间特效 / 质检
+│   ├── deterministic-engine.md     ★ 确定性 Canvas 实现规范：renderFrame / 时间表 / 录制 / 导出 / 坑
+│   ├── style-cve-100k.md           ★ 风格系统：调色板 / 字体 / 版式 / 组件配方 / 数据红线
+│   └── case-cve-100k.md            ★ 案例：90 秒镜头表、参数、扩展成 23 分钟的路径
+├── templates/
+│   ├── mv-engine.html              最小可运行引擎（3 镜头 + 播放器 + 录制）
+│   ├── transitions2d.js            15 种入场转场的 Canvas 2D 移植
+│   ├── transitions-demo.html       逐段预览 15 种转场
+│   ├── export-video.mjs            无头 Edge 录制 → WebM → MP4
+│   └── qa-stills.mjs               关键帧静帧质检
+├── examples/cve-100k/demo.html     完整 90 秒实现（单文件）
+└── assets/preview/                 上游与自建案例截帧
 ```
 
-## 上游来源
+## 上游与本地案例
 
 - `world-execute-me-lyric-mv` — github.com/Nyankomintsu/world-execute-me-lyric-mv （Mili《world.execute(me);》歌词 MV，v4）
 - `pdoom-video` — github.com/mexicat/pdoom-video （"I'm Upping My P(doom)" 生成式 MV）
+- 自建案例《CVE 编号破十万》— 内容源为本机 `【AI城】/CVE编号破十万` 的 v3 方案与调查笔记；90 秒演示成片 1920×1080 / 60fps。

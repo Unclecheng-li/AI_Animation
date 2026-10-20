@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>MV Engine Template · 确定性 Canvas 播放器</title>
+<!--
+  code-mv-render / templates/mv-engine.html
+  最小可运行的确定性 Canvas 模板：frame = renderFrame(t)
+  - 3 个镜头：计数器 / 纸底版画 / 记录页
+  - 口播字幕时间轴、逐帧步进、?t= & ?still=1、?record=1 自动录制
+  - 替换文案与数据即可；规范见 references/deterministic-engine.md
+-->
+<style>
+  :root{--bg:#080807;--fg:#E9E1D0;--mut:#8A8172;--acc:#E2542C;--line:#262320;
+        --mono:Consolas,"JetBrains Mono",monospace;--sans:"Microsoft YaHei",sans-serif}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans)}
+  .app{max-width:1520px;margin:0 auto;padding:18px 24px 26px}
+  .hd{display:flex;justify-content:space-between;align-items:baseline;padding:4px 2px 13px}
+  .ttl{font-size:15px;letter-spacing:.05em}
+  .ttl .dim{color:var(--mut);font-size:12px;letter-spacing:.12em;margin-left:8px}
+  .tc{font:12px/1 var(--mono);color:var(--mut);letter-spacing:.08em}
+  .stage{border:1px solid var(--line);background:#000;box-shadow:0 30px 90px rgba(0,0,0,.65)}
+  canvas{display:block;width:100%;height:auto}
+  .ctrl{display:flex;align-items:center;gap:12px;margin-top:14px}
+  button{background:transparent;border:1px solid var(--line);color:var(--fg);font:11px/1 var(--mono);
+    padding:9px 13px;letter-spacing:.1em;cursor:pointer;border-radius:2px}
+  button:hover{border-color:var(--acc);color:var(--acc)}
+  .track{position:relative;flex:1;height:30px;display:flex;align-items:center;cursor:pointer}
+  .rail{position:absolute;left:0;right:0;height:2px;background:#211f1c}
+  .fill{position:absolute;left:0;height:2px;background:var(--acc);width:0}
+  .head{position:absolute;width:9px;height:9px;background:var(--acc);border-radius:50%;
+    transform:translateX(-50%);left:0;box-shadow:0 0 0 4px rgba(226,84,44,.14)}
+  .tick{position:absolute;top:50%;width:1px;height:9px;background:#4a433a;transform:translateY(-50%)}
+  .shot{font:11px/1 var(--mono);color:var(--mut);letter-spacing:.08em;min-width:110px;text-align:right}
+  .hint{font:11px/1.7 var(--mono);color:#615b51;letter-spacing:.04em;margin-top:10px}
+  body.export .hd,body.export .ctrl,body.export .hint{display:none}
+  body.export{background:#000} body.export .app{max-width:none;padding:0;margin:0}
+  body.export .stage{border:0;box-shadow:none} body.export canvas{width:1920px;height:1080px}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="hd">
+    <div class="ttl">MV ENGINE TEMPLATE<span class="dim">0:24 · 确定性 Canvas</span></div>
+    <div class="tc" id="tc">00:00.0 / 00:24.0</div>
+  </div>
+  <div class="stage" id="stage"><canvas id="c" width="1920" height="1080"></canvas></div>
+  <div class="ctrl">
+    <button id="play">暂停</button>
+    <div class="track" id="track"><div class="rail"></div><div class="fill" id="fill"></div><div class="head" id="head"></div></div>
+    <div class="shot" id="shotName">00 计数器</div>
+    <button id="replay">重播</button>
+    <button id="rec">导出 WebM</button>
+    <button id="full">全屏</button>
+  </div>
+  <div class="hint">frame = f(t) · 空格播放/暂停 · ←/→ 1 秒 · , / . 逐帧 · ?t=8&still=1 静帧</div>
+</div>
+
+<script>
+/* ============================================================
+   1. 常量与工具
+   ============================================================ */
+const W = 1920, H = 1080, DUR = 24;
+const INK='#0B0A09', CREAM='#E9E1D0', ACCENT='#E2542C', RED='#D23A2C', MUTED='#7E7667', LINE='#2A2621';
+const MONO='"JetBrains Mono", Consolas, monospace';
+const SANS='"Microsoft YaHei", "PingFang SC", sans-serif';
+const SERIF='SimSun, "Songti SC", serif';
+
+const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
+const clamp = (v,a,b) => v < a ? a : v > b ? b : v;
+const lerp = (a,b,t) => a + (b-a)*t;
+const smooth = (a,b,x) => { const t = clamp01((x-a)/(b-a)); return t*t*(3-2*t); };
+const easeOut = t => 1 - Math.pow(1-t,3);
+const easeInOut = t => t < .5 ? 2*t*t : 1 - Math.pow(-2*t+2,2)/2;
+const fmt = n => n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+const fmtTime = s => {
+  s = clamp(s,0,DUR);
+  return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(Math.floor(s%60)).padStart(2,'0')}.${Math.floor((s%1)*10)}`;
+};
+function mulberry32(a){
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+/* ============================================================
+   2. 画布与离屏底图（只生成一次）
+   ============================================================ */
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d', { alpha:false });
+const mk = (w,h) => { const c = document.createElement('canvas'); c.width=w; c.height=h; return c; };
+
+const darkCanvas = (() => {
+  const c = mk(W,H), x = c.getContext('2d');
+  const g = x.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#0E0D0B'); g.addColorStop(.55,'#0B0A09'); g.addColorStop(1,'#070706');
+  x.fillStyle = g; x.fillRect(0,0,W,H);
+  x.strokeStyle = 'rgba(233,225,208,0.022)'; x.lineWidth = 1;
+  for(let i=0;i<=W;i+=80){ x.beginPath(); x.moveTo(i+.5,0); x.lineTo(i+.5,H); x.stroke(); }
+  for(let j=0;j<=H;j+=80){ x.beginPath(); x.moveTo(0,j+.5); x.lineTo(W,j+.5); x.stroke(); }
+  const r = mulberry32(20261015);
+  for(let i=0;i<2200;i++){ x.fillStyle = `rgba(233,225,208,${.015+r()*.04})`; x.fillRect(r()*W, r()*H, .5+r()*1, .5+r()*1); }
+  const v = x.createRadialGradient(W*.5,H*.46,180,W*.5,H*.5,W*.78);
+  v.addColorStop(0,'rgba(0,0,0,0)'); v.addColorStop(1,'rgba(0,0,0,.62)');
+  x.fillStyle = v; x.fillRect(0,0,W,H);
+  return c;
+})();
+
+const paperCanvas = (() => {
+  const c = mk(W,H), x = c.getContext('2d');
+  const g = x.createLinearGradient(W*.1,0,W*.9,H);
+  g.addColorStop(0,'#EDE6D7'); g.addColorStop(.5,'#E9E1D1'); g.addColorStop(1,'#E2D8C4');
+  x.fillStyle = g; x.fillRect(0,0,W,H);
+  const r = mulberry32(1999);
+  for(let i=0;i<800;i++){
+    x.strokeStyle = `rgba(90,76,52,${.012+r()*.03})`; x.lineWidth = .7;
+    x.beginPath(); const px=r()*W, py=r()*H; x.moveTo(px,py); x.lineTo(px+12+r()*100, py+(r()-.5)*3); x.stroke();
+  }
+  for(let i=0;i<3200;i++){ x.fillStyle = `rgba(28,24,18,${.015+r()*.05})`; x.beginPath(); x.arc(r()*W,r()*H,.4+r()*1.2,0,6.283); x.fill(); }
+  const p = mk(6,6), pc = p.getContext('2d');
+  pc.fillStyle='rgba(32,27,20,0.05)'; pc.beginPath(); pc.arc(3,3,.85,0,6.283); pc.fill();
+  x.fillStyle = x.createPattern(p,'repeat'); x.fillRect(0,0,W,H);
+  const v = x.createRadialGradient(W*.5,H*.5,320,W*.5,H*.5,W*.72);
+  v.addColorStop(0,'rgba(120,100,64,0)'); v.addColorStop(1,'rgba(120,100,64,.16)');
+  x.fillStyle = v; x.fillRect(0,0,W,H);
+  return c;
+})();
+
+const grains = [0,1,2].map(k => {
+  const c = mk(640,360), x = c.getContext('2d');
+  const img = x.createImageData(640,360), d = img.data, r = mulberry32(777+k*31);
+  for(let i=0;i<d.length;i+=4){ const v = 90+r()*120|0; d[i]=d[i+1]=d[i+2]=v; d[i+3]=255; }
+  x.putImageData(img,0,0); return c;
+});
+
+/* ============================================================
+   3. 绘制工具
+   ============================================================ */
+function font(size, family = SANS, weight = 400){ ctx.font = `${weight} ${size}px ${family}`; }
+
+function tracked(text, x, y, size, color, spacing = 3, align = 'left', family = MONO, weight = 400){
+  ctx.save(); font(size, family, weight); ctx.fillStyle = color;
+  const chars = [...text], widths = chars.map(ch => ctx.measureText(ch).width);
+  const total = widths.reduce((s,w)=>s+w,0) + spacing*Math.max(0,chars.length-1);
+  let cx = align==='center' ? x-total/2 : align==='right' ? x-total : x;
+  for(let i=0;i<chars.length;i++){ ctx.fillText(chars[i], cx, y); cx += widths[i]+spacing; }
+  ctx.restore(); return total;
+}
+
+/* 注意：alpha 必须叠乘，不能重置 globalAlpha */
+function rule(x1, y, x2, color = LINE, alpha = 1, h = 1){
+  ctx.save(); ctx.globalAlpha *= alpha; ctx.fillStyle = color;
+  ctx.fillRect(x1, y, x2-x1, h); ctx.restore();
+}
+
+function crosshair(x, y, s = 12, color = 'rgba(233,225,208,.3)'){
+  ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x-s,y+.5); ctx.lineTo(x+s,y+.5);
+  ctx.moveTo(x+.5,y-s); ctx.lineTo(x+.5,y+s); ctx.stroke(); ctx.restore();
+}
+
+function grain(t){
+  const idx = Math.abs(Math.floor(Math.max(0,t)*12) % 3);
+  ctx.save(); ctx.globalAlpha = .045; ctx.globalCompositeOperation = 'overlay';
+  ctx.imageSmoothingEnabled = false; ctx.drawImage(grains[idx],0,0,W,H); ctx.restore();
+}
+
+/* ============================================================
+   4. 时间表：镜头 / 字幕
+   ============================================================ */
+const SHOTS = [
+  { start:0,  end:7,  name:'00 计数器' },
+  { start:7,  end:15, name:'01 版画' },
+  { start:15, end:24, name:'02 记录页' },
+];
+
+const SUBS = [
+  [0.8, 6.4, ['这是一个最小的确定性镜头：','画面只由时间决定。']],
+  [7.6,14.4, ['同一个信息，换一种画面语言，','阅读节奏就变了。']],
+  [15.6,21.2,['数字、字段、印章依次入场，','不依赖任何交互动画库。']],
+  [21.6,23.8,['这一帧，只由时间决定。']],
+];
+
+function drawSubtitles(t){
+  const s = SUBS.find(s => t >= s[0] && t < s[1]); if(!s) return;
+  const a = Math.min(smooth(s[0],s[0]+.35,t), 1-smooth(s[1]-.35,s[1],t));
+  const onPaper = t >= 7 && t < 15;
+  const y0 = s[2].length === 1 ? 984 : 962;
+  ctx.save(); ctx.globalAlpha = a; ctx.textAlign = 'center';
+  font(33, SANS, 300);
+  ctx.fillStyle = onPaper ? '#2C2720' : '#EDE6D6';
+  ctx.shadowColor = onPaper ? 'rgba(233,225,209,.95)' : 'rgba(0,0,0,.8)';
+  ctx.shadowBlur = onPaper ? 16 : 12;
+  s[2].forEach((ln,i) => ctx.fillText(ln, W/2, y0+i*49));
+  ctx.restore();
+}
+
+/* ============================================================
+   5. 镜头 00 · 计数器
+   ============================================================ */
+function sceneCounter(t){
+  ctx.drawImage(darkCanvas,0,0);
+  const arrive = 5.4;
+  const p = t < 1.2 ? 0 : easeInOut(clamp01((t-1.2)/(arrive-1.2)));
+  const val = Math.round(10000 * p);
+
+  tracked('SAMPLE COUNTER / 2026', 120, 104, 17, MUTED, 4);
+  tracked('2026-01-01 · UTC', 1800, 104, 17, MUTED, 3, 'right');
+  crosshair(120,140,10,'rgba(233,225,208,.2)'); crosshair(1800,140,10,'rgba(233,225,208,.2)');
+
+  const scale = t < 7 ? lerp(.93,1,smooth(0,7,t)) : 1;
+  const pop = t >= arrive ? 1 + .018*Math.exp(-(t-arrive)*5) : 1;
+  ctx.save(); ctx.translate(960,538); ctx.scale(scale*pop, scale*pop);
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  font(296, MONO, 400); ctx.fillStyle = t >= arrive ? ACCENT : 'rgba(233,225,208,.92)';
+  ctx.fillText(fmt(val).padStart(6,' '), 0, 0);
+  ctx.restore();
+
+  if(t >= arrive){
+    const w = 1040*easeOut(clamp01((t-arrive)/1.2));
+    rule(960-w/2, 712, 960+w/2, 'rgba(226,84,44,.85)', 1, 2);
+    ctx.save(); ctx.globalAlpha = smooth(arrive,arrive+.5,t);
+    tracked('记录数 · 已入库', 960, 776, 22, CREAM, 3, 'center', SANS, 300);
+    ctx.restore();
+  } else {
+    tracked('RECORDS', 960, 776, 15, MUTED, 7, 'center');
+  }
+}
+
+/* ============================================================
+   6. 镜头 01 · 纸底版画
+   ============================================================ */
+function scenePlate(t){
+  ctx.drawImage(paperCanvas,0,0);
+  const lt = t - 7, ink = '#171512';
+
+  [[70,70],[1850,70],[70,1010],[1850,1010]].forEach(([x,y]) => {
+    ctx.save(); ctx.strokeStyle='rgba(23,21,18,.35)'; ctx.lineWidth=1;
+    ctx.strokeRect(x-9,y-9,18,18);
+    ctx.beginPath(); ctx.moveTo(x-18,y+.5); ctx.lineTo(x+18,y+.5);
+    ctx.moveTo(x+.5,y-18); ctx.lineTo(x+.5,y+18); ctx.stroke(); ctx.restore();
+  });
+
+  tracked('PLATE 01 / ONE FACT', 140, 112, 16, 'rgba(23,21,18,.55)', 4);
+  tracked('纸底三墨 · 印刷揭示', 1780, 112, 16, 'rgba(23,21,18,.45)', 3, 'right');
+
+  const r1 = easeOut(clamp01((lt-.3)/1.0)), r2 = easeOut(clamp01((lt-.8)/1.0));
+  ctx.save(); ctx.beginPath(); ctx.rect(120,190,820*r1,230); ctx.clip();
+  font(132, SERIF, 700); ctx.fillStyle=ink; ctx.textAlign='left'; ctx.fillText('一个数字，',140,368); ctx.restore();
+  ctx.save(); ctx.beginPath(); ctx.rect(120,335,700*r2,230); ctx.clip();
+  font(132, SERIF, 700); ctx.fillStyle=ink; ctx.textAlign='left'; ctx.fillText('一条证据。',140,513); ctx.restore();
+  ctx.fillStyle = ACCENT; ctx.fillRect(142,564,560*easeOut(clamp01((lt-1.5)/1.0)),3);
+
+  const sources = [['记录',258],['来源',352],['时间',446]];
+  sources.forEach(([zh,y],i) => {
+    const a = smooth(1.6+i*.22,2.2+i*.22,lt);
+    ctx.save(); ctx.globalAlpha=a;
+    ctx.strokeStyle='rgba(23,21,18,.35)'; ctx.lineWidth=1;
+    ctx.fillStyle='rgba(23,21,18,.04)'; ctx.fillRect(1040,y-30,300,62);
+    ctx.strokeRect(1040,y-30,300,62);
+    font(22,SANS,400); ctx.fillStyle=ink; ctx.textAlign='left'; ctx.fillText(zh,1058,y-2);
+    tracked(i===0?'RECORD':i===1?'SOURCE':'TIMESTAMP',1058,y+19,10,'rgba(23,21,18,.45)',2);
+    ctx.restore();
+  });
+
+  const lp = easeOut(clamp01((lt-1.9)/1.5));
+  if(lp>0){
+    ctx.save(); ctx.strokeStyle='rgba(23,21,18,.55)'; ctx.lineWidth=1;
+    const jx=1400, jy=352;
+    sources.forEach(([,y]) => { ctx.beginPath(); ctx.moveTo(1340,y); ctx.lineTo(1340+(jx-1340)*lp, y+(jy-y)*lp); ctx.stroke(); });
+    ctx.beginPath(); ctx.moveTo(jx,jy); ctx.lineTo(jx+(1440-jx)*lp,jy); ctx.stroke();
+    if(lp>.9){ ctx.fillStyle=ACCENT; ctx.beginPath(); ctx.arc(jx,jy,5,0,6.283); ctx.fill(); }
+    ctx.restore();
+  }
+
+  const boxA = smooth(3.0,3.7,lt);
+  if(boxA>0){
+    ctx.save(); ctx.globalAlpha=boxA;
+    ctx.fillStyle='rgba(233,225,209,.55)'; ctx.fillRect(1440,310,320,84);
+    ctx.strokeStyle=ink; ctx.lineWidth=2; ctx.strokeRect(1441,311,318,82);
+    font(21,MONO,400); ctx.fillStyle=ink; ctx.textAlign='center'; ctx.fillText('FACT-0001',1600,360);
+    tracked('唯一标识 · 全网对齐',1600,424,12,'rgba(23,21,18,.55)',3,'center');
+    ctx.restore();
+  }
+
+  const fA = smooth(4.3,5.0,lt);
+  if(fA>0){
+    ctx.save(); ctx.globalAlpha=fA;
+    rule(140,742,1780,'rgba(23,21,18,.22)',1,1);
+    font(19,MONO,400); ctx.fillStyle='rgba(23,21,18,.7)'; ctx.textAlign='left';
+    ctx.fillText('2026 · SAMPLE · 4 DIGITS',140,790);
+    tracked('画面语言：纸底 / 三墨 / 裁切标记',140,830,13,'rgba(23,21,18,.45)',2);
+    ctx.restore();
+  }
+}
+
+/* ============================================================
+   7. 镜头 02 · 记录页
+   ============================================================ */
+function sceneRecord(t){
+  ctx.drawImage(darkCanvas,0,0);
+  const lt = t - 15;
+  tracked('02 / RECORD',120,90,16,MUTED,4);
+  tracked('template.local',1800,90,16,MUTED,3,'right');
+
+  const px=120, py=118, pw=1680, ph=812;
+  const a = smooth(.15,.9,lt);
+  ctx.save(); ctx.globalAlpha=a;
+  ctx.fillStyle='#121110'; ctx.fillRect(px,py,pw,ph);
+  ctx.strokeStyle='#2E2924'; ctx.lineWidth=1; ctx.strokeRect(px+.5,py+.5,pw-1,ph-1);
+  ctx.fillStyle='#171512'; ctx.fillRect(px,py,pw,54); rule(px,py+54,px+pw,'#2E2924',1,1);
+  ctx.restore();
+
+  ctx.save(); ctx.globalAlpha=a;
+  ['#3A352C','#3A352C','#3A352C'].forEach((c,i)=>{ ctx.fillStyle=c; ctx.beginPath(); ctx.arc(px+28+i*20,py+27,5,0,6.283); ctx.fill(); });
+  font(15,MONO,400); ctx.fillStyle='rgba(233,225,208,.42)'; ctx.textAlign='left';
+  ctx.fillText('records / REC-2026-0001',px+110,py+32);
+  ctx.fillStyle='rgba(233,225,208,.28)'; ctx.textAlign='right'; ctx.fillText('TEMPLATE',px+pw-24,py+32);
+  ctx.restore();
+
+  const hA = smooth(.5,1.1,lt);
+  ctx.save(); ctx.globalAlpha=hA;
+  tracked('RECORD ID',180,228,13,MUTED,4);
+  font(50,MONO,400); ctx.fillStyle=CREAM; ctx.textAlign='left'; ctx.fillText('REC-2026-0001',180,288);
+  font(28,SANS,400); ctx.fillStyle='rgba(233,225,208,.82)'; ctx.fillText('示例记录 — 用来演示字段与印章',180,340);
+  ctx.restore();
+
+  rule(180,428,1210,'rgba(233,225,208,.12)',1,1);
+
+  const rows = [
+    ['评分', null],
+    ['字段 A', 'VALUE / 2026-01-01 00:00 UTC'],
+    ['字段 B', 'SAMPLE · 单行说明文本'],
+    ['字段 C', '这是一行较长的说明，展示字段排版'],
+    ['字段 D', '替换成你的数据即可'],
+  ];
+  rows.forEach(([label,value],i) => {
+    const ra = smooth(1.0+i*.32,1.6+i*.32,lt); if(ra<=0) return;
+    const y = 478+i*92;
+    ctx.save(); ctx.globalAlpha=ra;
+    tracked(label,180,y+6,14,MUTED,3);
+    if(i===0){
+      font(78,MONO,400); ctx.fillStyle=RED; ctx.textAlign='left'; ctx.fillText('9.3',400,y+26);
+      ctx.strokeStyle=RED; ctx.lineWidth=1; ctx.strokeRect(560.5,y-40.5,126,34);
+      font(16,MONO,400); ctx.fillStyle=RED; ctx.fillText('CRITICAL',578,y-17);
+      font(17,SANS,400); ctx.fillStyle='rgba(233,225,208,.45)'; ctx.fillText('示例分数，替换成你的指标',720,y-2);
+    } else {
+      font(21,MONO,400); ctx.fillStyle='rgba(233,225,208,.9)'; ctx.textAlign='left'; ctx.fillText(value,400,y+6);
+    }
+    ctx.restore();
+    if(i<rows.length-1) rule(180,y+48,1210,'rgba(233,225,208,.08)',1,1);
+  });
+
+  rule(1290,200,1290,'rgba(233,225,208,.12)',1,640);
+  const stampA = smooth(5.7,6.3,lt);
+  if(stampA>0){
+    const s = lerp(1.55,1,easeOut(clamp01((lt-5.7)/.45)));
+    ctx.save(); ctx.globalAlpha=stampA; ctx.translate(1496,470); ctx.rotate(-7*Math.PI/180); ctx.scale(s,s);
+    ctx.strokeStyle=ACCENT; ctx.lineWidth=3; ctx.strokeRect(-152,-118,304,236);
+    ctx.strokeStyle='rgba(226,84,44,.45)'; ctx.lineWidth=1; ctx.strokeRect(-141,-107,282,214);
+    ctx.textAlign='center'; ctx.fillStyle=ACCENT;
+    font(21,SANS,400); ctx.fillText('示例印章',0,-52);
+    font(54,SANS,700); ctx.fillText('一条记录',0,14);
+    font(18,MONO,400); ctx.fillText('REC-2026-0001',0,66);
+    font(14,MONO,400); ctx.fillText('2026.01.01',0,94);
+    ctx.restore();
+  }
+
+  const pA = smooth(7.2,7.9,lt);
+  if(pA>0){
+    ctx.save(); ctx.globalAlpha=pA;
+    ctx.fillStyle=`rgba(8,7,6,${.94*pA})`; ctx.fillRect(0,0,W,H);
+    ctx.textAlign='center'; font(74,SERIF,700); ctx.fillStyle=CREAM;
+    ctx.fillText('这一帧，只由时间决定。',960,500);
+    ctx.fillStyle=ACCENT; ctx.fillRect(840,542,240,2);
+    font(26,MONO,400); ctx.fillStyle=ACCENT;
+    ctx.fillText('renderFrame(t) · 无跨帧状态 · 种子随机',960,604);
+    ctx.restore();
+  }
+}
+
+/* ============================================================
+   8. 渲染入口
+   ============================================================ */
+function renderFrame(t){
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = '#080807'; ctx.fillRect(0,0,W,H);
+  if(t < 7)       sceneCounter(t);
+  else if(t < 15) scenePlate(t);
+  else            sceneRecord(t);
+  grain(t);
+  drawSubtitles(t);
+}
+
+/* ============================================================
+   9. 播放器 / 录制
+   ============================================================ */
+const params = new URLSearchParams(location.search);
+const stage = document.getElementById('stage');
+const track = document.getElementById('track');
+const fillEl = document.getElementById('fill');
+const headEl = document.getElementById('head');
+const shotName = document.getElementById('shotName');
+const tcEl = document.getElementById('tc');
+const playBtn = document.getElementById('play');
+const recBtn = document.getElementById('rec');
+
+let t = params.has('t') ? clamp(parseFloat(params.get('t'))||0,0,DUR) : 0;
+let playing = !params.has('still');
+let lastNow = performance.now();
+
+SHOTS.forEach(s => {
+  if(!s.start) return;
+  const el = document.createElement('div');
+  el.className='tick'; el.style.left=(s.start/DUR*100)+'%'; el.title=s.name; track.appendChild(el);
+});
+
+function updateUI(){
+  const pct = t/DUR*100;
+  fillEl.style.width = pct+'%'; headEl.style.left = pct+'%';
+  tcEl.textContent = fmtTime(t)+' / '+fmtTime(DUR);
+  const sh = SHOTS.find(s => t>=s.start && t<s.end) || SHOTS[SHOTS.length-1];
+  if(shotName.textContent !== sh.name) shotName.textContent = sh.name;
+  playBtn.textContent = playing ? '暂停' : '播放';
+}
+
+function loop(now){
+  const dt = Math.min(.1, Math.max(0, (now-lastNow)/1000));
+  lastNow = now;
+  if(playing){
+    t = Math.min(DUR, Math.max(0, t+dt));
+    if(t >= DUR){ t = DUR; playing = false; if(recorder) stopRecord(); }
+  }
+  renderFrame(t); updateUI(); requestAnimationFrame(loop);
+}
+
+playBtn.onclick = () => { if(t>=DUR) t=0; playing=!playing; lastNow=performance.now(); };
+document.getElementById('replay').onclick = () => { t=0; playing=true; lastNow=performance.now(); };
+document.getElementById('full').onclick = () => stage.requestFullscreen?.();
+
+function seekFromEvent(e){
+  const r = track.getBoundingClientRect();
+  t = clamp((e.clientX-r.left)/r.width,0,1)*DUR;
+  lastNow = performance.now(); renderFrame(t); updateUI();
+}
+track.addEventListener('pointerdown', e => {
+  track.setPointerCapture(e.pointerId); seekFromEvent(e);
+  const move = ev => seekFromEvent(ev);
+  const up = () => { track.removeEventListener('pointermove',move); track.removeEventListener('pointerup',up); };
+  track.addEventListener('pointermove',move); track.addEventListener('pointerup',up);
+});
+window.addEventListener('keydown', e => {
+  if(e.code==='Space'){ e.preventDefault(); playBtn.click(); }
+  else if(e.code==='ArrowLeft'){ t=clamp(t-1,0,DUR); lastNow=performance.now(); }
+  else if(e.code==='ArrowRight'){ t=clamp(t+1,0,DUR); lastNow=performance.now(); }
+  else if(e.key===','){ e.preventDefault(); t=clamp(t-1/30,0,DUR); playing=false; lastNow=performance.now(); }
+  else if(e.key==='.'){ e.preventDefault(); t=clamp(t+1/30,0,DUR); playing=false; lastNow=performance.now(); }
+});
+
+let recorder = null, chunks = [];
+function startRecord(){
+  if(recorder) return;
+  t=0; playing=true; lastNow=performance.now();
+  const stream = canvas.captureStream(60);
+  let mime = 'video/webm;codecs=vp9';
+  if(!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm;codecs=vp8';
+  if(!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm';
+  recorder = new MediaRecorder(stream,{ mimeType:mime, videoBitsPerSecond:16000000 });
+  chunks = [];
+  recorder.ondataavailable = e => { if(e.data.size) chunks.push(e.data); };
+  recorder.onstop = () => {
+    const blob = new Blob(chunks,{type:'video/webm'});
+    const a = document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download='mv-template.webm'; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),10000);
+    recorder=null; recBtn.textContent='导出 WebM';
+  };
+  recorder.start(400); recBtn.textContent='录制中…';
+}
+function stopRecord(){ if(recorder && recorder.state!=='inactive') recorder.stop(); }
+recBtn.onclick = startRecord;
+
+if(params.get('record')==='1' || params.get('clean')==='1') document.body.classList.add('export');
+if(params.get('record')==='1') setTimeout(startRecord,800);
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

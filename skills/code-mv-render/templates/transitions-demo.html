@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Transitions 2D · 15 种入场转场</title>
+<style>
+  html,body{margin:0;background:#080807;color:#E9E1D0;font-family:"Microsoft YaHei",sans-serif}
+  .wrap{max-width:1500px;margin:0 auto;padding:18px 22px 24px}
+  .hd{display:flex;justify-content:space-between;align-items:baseline;padding-bottom:10px;
+      font:12px/1.4 Consolas,monospace;letter-spacing:.08em;color:#8A8172}
+  .stage{border:1px solid #262320;box-shadow:0 24px 70px rgba(0,0,0,.6);background:#000}
+  canvas{display:block;width:100%;height:auto;cursor:pointer}
+  .hint{margin-top:10px;font:11px/1.7 Consolas,monospace;color:#615b51;letter-spacing:.04em}
+  body.clean .hd,body.clean .hint{display:none}
+  body.clean .wrap{max-width:none;padding:0;margin:0}
+  body.clean .stage{border:0;box-shadow:none}
+  body.clean canvas{width:1920px;height:1080px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hd"><span>TRANSITIONS 2D · Canvas 回放</span><span>15 TYPES · 36s</span></div>
+  <div class="stage"><canvas id="c" width="1920" height="1080"></canvas></div>
+  <div class="hint">点击画面播放/暂停 · 空格 · ←/→ 1 秒 · ?t=6&still=1 静帧 · ?clean=1 纯画面</div>
+</div>
+
+<script src="transitions2d.js"></script>
+<script>
+const W=1920,H=1080;
+const SEG=2.4;
+const LIST=[
+  ['cut','硬切','关键词砸下、数字落定'],
+  ['fade','溶解','消失、离线、结尾'],
+  ['glitch','故障','错误、异常、数据不一致'],
+  ['scan','扫描线','打印、开机、写入'],
+  ['circle','光圈','聚焦一个对象'],
+  ['diag','斜板条','话题快速切换'],
+  ['grid','网格级联','参数、表格、批量数据'],
+  ['zoom','穿画','深入内核 / 拉远'],
+  ['shatter','碎片','破碎、结论被推翻'],
+  ['dissolve','像素溶解','数据衰减、遗忘'],
+  ['winclose','窗口关闭','离开、断电'],
+  ['winpop','窗口弹出','记录页、弹窗、新进程'],
+  ['push','推移','两个状态之间'],
+  ['slices','切片撕裂','撕裂、冲击'],
+  ['flashcut','闪切','大段落切换'],
+];
+const DUR=LIST.length*SEG;
+const c=document.getElementById('c'), ctx=c.getContext('2d',{alpha:false});
+const ACCENT='#E2542C', CREAM='#E9E1D0', INK='#0B0A09';
+const clamp01=v=>v<0?0:v>1?1:v;
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const easeOut=t=>1-Math.pow(1-t,3);
+
+const params=new URLSearchParams(location.search);
+let t=params.has('t')?clamp(parseFloat(params.get('t'))||0,0,DUR):0;
+let playing=!params.has('still');
+if(params.get('clean')==='1') document.body.classList.add('clean');
+
+/* A：暗底 + 朱橙 A（预渲染一次） */
+function paintA(x){
+  const g=x.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#0E0D0B'); g.addColorStop(1,'#070706');
+  x.fillStyle=g; x.fillRect(0,0,W,H);
+  x.strokeStyle='rgba(233,225,208,.05)'; x.lineWidth=1;
+  for(let i=0;i<=W;i+=80){ x.beginPath(); x.moveTo(i+.5,0); x.lineTo(i+.5,H); x.stroke(); }
+  for(let j=0;j<=H;j+=80){ x.beginPath(); x.moveTo(0,j+.5); x.lineTo(W,j+.5); x.stroke(); }
+  x.textAlign='center'; x.textBaseline='middle';
+  x.font='700 520px Consolas, monospace'; x.fillStyle=ACCENT;
+  x.fillText('A',W/2,H/2+10);
+  x.font='400 18px Consolas, monospace'; x.fillStyle='rgba(233,225,208,.45)';
+  x.fillText('OUTGOING / A',W/2,150);
+  x.strokeStyle='rgba(233,225,208,.25)'; x.strokeRect(70.5,70.5,W-141,H-141);
+}
+/* B：纸底 + 墨色 B（预渲染一次） */
+function paintB(x){
+  x.fillStyle='#E9E1D1'; x.fillRect(0,0,W,H);
+  const r=(()=>{let a=99;return()=>{a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}})();
+  for(let i=0;i<2600;i++){ x.fillStyle=`rgba(28,24,18,${.01+r()*.04})`; x.beginPath(); x.arc(r()*W,r()*H,.4+r()*1.2,0,6.283); x.fill(); }
+  x.textAlign='center'; x.textBaseline='middle';
+  x.font='700 520px SimSun, serif'; x.fillStyle='#171512';
+  x.fillText('B',W/2,H/2+10);
+  x.font='400 18px Consolas, monospace'; x.fillStyle='rgba(23,21,18,.55)';
+  x.fillText('INCOMING / B',W/2,150);
+  x.strokeStyle='rgba(23,21,18,.25)'; x.strokeRect(70.5,70.5,W-141,H-141);
+}
+const sceneA=(()=>{const cv=document.createElement('canvas');cv.width=W;cv.height=H;paintA(cv.getContext('2d'));return cv})();
+const sceneB=(()=>{const cv=document.createElement('canvas');cv.width=W;cv.height=H;paintB(cv.getContext('2d'));return cv})();
+function drawA(x){ x.drawImage(sceneA,0,0); }
+function drawB(x){ x.drawImage(sceneB,0,0); }
+
+function renderFrame(time){
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over';
+  const idx=clamp(Math.floor(time/SEG),0,LIST.length-1);
+  const lt=time-idx*SEG;
+  const [type,zh,note]=LIST[idx];
+  const k=clamp01((lt-.55)/1.0);
+
+  MVTransitions.paintTransition(ctx,{
+    type,k,w:W,h:H,dir:idx%4,x:.5,y:.5,bands:12,size:1.6,edge:ACCENT
+  },drawA,drawB);
+
+  /* 标签底片：保证在任何底色上可读 */
+  ctx.save();
+  ctx.fillStyle='rgba(8,7,6,.58)'; ctx.fillRect(96,58,500,120);
+  ctx.strokeStyle='rgba(233,225,208,.12)'; ctx.lineWidth=1; ctx.strokeRect(96.5,58.5,499,119);
+  ctx.fillStyle='rgba(8,7,6,.46)'; ctx.fillRect(W-650,104,530,64);
+  ctx.restore();
+
+  /* 顶部标签 */
+  ctx.save();
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  ctx.font='400 20px Consolas, monospace';
+  ctx.fillStyle='rgba(233,225,208,.55)';
+  ctx.fillText(`${String(idx+1).padStart(2,'0')} / ${type.toUpperCase()}`,120,100);
+  ctx.font='400 40px "Microsoft YaHei", sans-serif';
+  ctx.fillStyle=CREAM;
+  ctx.fillText(zh,120,152);
+  ctx.font='400 18px "Microsoft YaHei", sans-serif';
+  ctx.fillStyle='rgba(233,225,208,.55)';
+  ctx.textAlign='right'; ctx.fillText(note,W-140,145);
+  ctx.restore();
+
+  /* 底部进度 */
+  ctx.save();
+  for(let i=0;i<LIST.length;i++){
+    const x=120+i*(W-240)/(LIST.length-1);
+    const on=i<=idx;
+    ctx.fillStyle=on?ACCENT:'rgba(233,225,208,.22)';
+    ctx.fillRect(x-1,H-92,2,10);
+  }
+  ctx.restore();
+}
+
+function updateUI(){}
+function loop(now){
+  if(!loop.last) loop.last=now;
+  const dt=Math.min(.1,Math.max(0,(now-loop.last)/1000)); loop.last=now;
+  if(playing){ t=Math.min(DUR-0.001,t+dt); if(t>=DUR-0.001){ t=0; } }
+  renderFrame(t); requestAnimationFrame(loop);
+}
+c.addEventListener('click',()=>{ playing=!playing; loop.last=performance.now(); });
+window.addEventListener('keydown',e=>{
+  if(e.code==='Space'){ e.preventDefault(); playing=!playing; loop.last=performance.now(); }
+  if(e.code==='ArrowLeft'){ t=clamp(t-1,0,DUR); }
+  if(e.code==='ArrowRight'){ t=clamp(t+1,0,DUR); }
+});
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
