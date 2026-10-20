@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](./LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](#贡献与许可)
-[![Skills count](https://img.shields.io/badge/Skills-12-orange?style=flat-square)](#skills-gallery)
+[![Skills count](https://img.shields.io/badge/Skills-13-orange?style=flat-square)](#skills-gallery)
 [![Spec](https://img.shields.io/badge/Spec-SKILL.md-black?style=flat-square)](https://agentskills.io)
 
 🌐 **English version**: [`README_EN.md`](README_EN.md)
@@ -32,6 +32,7 @@
 - 🖥️ **仿 Win11 系统仿真** — 1:1 还原真电脑：资源管理器、开始菜单、系统弹窗、蓝屏修复逐镜头呈现，光标演出引导操作 + 教学标记层，全屏录屏即成片
 - 📐 **瑞士风格图表演示** — 纸底墨字发丝线的编辑部级排版：每页一张匹配内容的可视化图表（时间线/循环环/流程链/热力矩阵…20 种词汇），唯一强调橙，一镜一 HTML
 - 🎞️ **UI2V 动效库** — 1,262 个 GSAP 动效包全量离线镜像（ui2v.com/motions，641MB）：按镜头用途查件的索引 + paused 时间轴挂 cue 的接入配方，演示页画面层即插即用
+- 🎥 **代码渲染 MV 工程库** — 两支持续确定性音乐视频参考工程（歌词 MV + 生成式 3D MV）：帧 = f(歌曲时间)，浏览器预览与离线导出逐帧一致
 
 <div align="center">
 
@@ -110,6 +111,13 @@
 <a href="#ui2v-motions"><img width="2560" height="1440" alt="ui2v-motions" src="./skills/ui2v-motions/assets-preview/main.png" /></a>
 <br/><a href="#ui2v-motions"><strong>ui2v-motions</strong></a>
 <br/><sub>UI 动效素材库 / 1,262 个 GSAP 动效包</sub>
+</td>
+</tr>
+<tr>
+<td colspan="4" valign="top" align="center">
+<a href="#code-mv-render"><img width="2560" height="1440" alt="code-mv-render" src="./skills/code-mv-render/assets/preview/worldexecute-cover.jpg" /></a>
+<br/><a href="#code-mv-render"><strong>code-mv-render</strong></a>
+<br/><sub>代码渲染 MV 工程库 / 歌词 MV + 生成式 MV</sub>
 </td>
 </tr>
 </table>
@@ -606,6 +614,39 @@ Links: [README](./skills/ui2v-motions/README.md) · [SKILL.md](./skills/ui2v-mot
 
 <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
 
+#### `code-mv-render`
+
+<a href="./skills/code-mv-render">
+<img width="2560" height="1440" alt="code-mv-render preview" src="./skills/code-mv-render/assets/preview/worldexecute-cover.jpg" />
+</a>
+
+**分类:** 代码渲染 MV 工程库 / 音乐视频渲染工程
+**适用于:** 做整片、带音轨、逐帧确定的音乐视频（歌词 MV / 生成式 MV）——想要"帧 = f(歌曲时间)、预览与导出逐帧一致"的工程方法论，而不是单页演示片段。
+
+`code-mv-render` 收录两支持续确定性的开源音乐视频参考工程：**world-execute-me-lyric-mv**（Mili《world.execute(me);》歌词 MV：Canvas2D+WebGL2，聊天界面 / 三墨版画 / 代码三种画面，颜色=状态）与 **pdoom-video**（"I'm Upping My P(doom)" 生成式 MV：three.js 逐字卡拉OK排版 + 子帧运动模糊）。要做一个整片 MV 时，从这里选最贴近的一支 fork / 改编，而不是从零搭渲染管线。
+
+亮点:
+- 同一原理两套实现：**每帧只是歌曲时间的函数**（`renderFrame(t)`），浏览器预览与无头 Chrome 离线导出逐帧一致
+- 可复用方法论：颜色=状态调色板、拍点集中管理、**块级自适应子帧运动模糊**（静止 12 / 运镜 36 / 甩镜 108–324）、预览=导出同源
+- 成品级**闪光安全**（WCAG 2.3.1 自检）+ 音画同步 / 单帧突跳自检 + 缩图表逐格回归
+- 两支工程均可导出 1080p60 / 4K60；配 `references/` 两份工程规范摘录
+- 许可边界清晰：代码 MIT、剪影 CC BY-NC-SA、**歌曲歌词不在仓库**（须自备并遵守原作者版权指引）
+
+<table>
+<tr>
+<td align="center" width="60%"><img width="2560" height="1440" alt="world.execute(me); cover" src="./skills/code-mv-render/assets/preview/worldexecute-cover.jpg" /><br /><sub><code>world-execute-me-lyric-mv</code><br />三墨版画 / 聊天界面与角色剪影</sub></td>
+<td align="center" width="40%"><img width="2560" height="1440" alt="pdoom" src="./skills/code-mv-render/assets/preview/pdoom-fig04.jpg" /><br /><sub><code>pdoom-video</code><br />线画场景 + 逐字排版</sub></td>
+</tr>
+</table>
+
+<sub>↑ 两支工程截帧预览 — <a href="./skills/code-mv-render/README.md"><b>打开工程详情与许可说明</b></a>。</sub>
+
+Links: [README](./skills/code-mv-render/README.md) · [SKILL.md](./skills/code-mv-render/SKILL.md)
+
+---
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
 ### 安装
 
 | # | 方式 | 适用于 | 指定版本? |
@@ -633,6 +674,7 @@ npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/wi
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/swiss-shot-demos
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/ui2v-motions
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/stacked-data-cards
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/code-mv-render
 ```
 
 > **默认安装 `main` 分支最新版本。** CLI 会从源码树直接读取每个 Skill 的最新 `SKILL.md`。
@@ -784,6 +826,11 @@ ai-animation-skills/
 │       ├── 01_动效库/itelmn/    ← 1,262 个动效包本体（641MB 全量镜像）
 │       ├── 02_官方CLI与文档/ 03_清单与索引/ 04_预览/ 05_抓取日志/
 │       └── assets-preview/      ← 截帧预览图
+│   ├── code-mv-render/
+│       ├── SKILL.md             ← 选型工作流 + 共同原理 + 可复用要点 + 红线
+│       ├── README.md
+│       ├── references/          ← world-execute-spec / pdoom-spec 工程规范摘录
+│       └── assets/preview/      ← 预览截帧（cover + pdoom plates）
 ├── web_animation/               ← 原始示例 HTML（历史存档）
 ├── UI/                          ← UI 设计参考图
 ├── prompt.md                    ← Prompt 模板集合

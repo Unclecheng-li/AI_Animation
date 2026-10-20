@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](./LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](#contributing)
-[![Skills count](https://img.shields.io/badge/Skills-12-orange?style=flat-square)](#skills-gallery)
+[![Skills count](https://img.shields.io/badge/Skills-13-orange?style=flat-square)](#skills-gallery)
 [![Spec](https://img.shields.io/badge/Spec-SKILL.md-black?style=flat-square)](https://agentskills.io)
 
 🌐 **中文版**: [`README.md`](README.md)
@@ -32,6 +32,7 @@ One sentence is all it takes:
 - 🖥️ **Windows 11 simulation** — a "real PC" rebuilt 1:1: Explorer, Start menu, system dialogs and the blue repair screen shot by shot, with a performing cursor leading the viewer and teaching markers layered on top
 - 📐 **Swiss-style chart demos** — editorial-grade typography on paper-and-ink: every shot gets one content-matched visualization (timelines, loops, flow chains, heat matrices… 20 vocab types) with a single accent orange
 - 🎞️ **UI2V motions library** — a full offline mirror of 1,262 GSAP motion packages (ui2v.com/motions, 641MB): lookup-by-shot-purpose indexes + a recipe for hanging paused timelines onto cue axes — plug-and-play visuals for demo pages
+- 🎥 **Code-rendered MV library** — two deterministic music-video reference projects (lyric MV + generative MV): every frame = f(song time), browser preview identical to the offline export
 
 <div align="center">
 
@@ -110,6 +111,13 @@ One sentence is all it takes:
 <a href="#ui2v-motions"><img width="2560" height="1440" alt="ui2v-motions" src="./skills/ui2v-motions/assets-preview/main.png" /></a>
 <br/><a href="#ui2v-motions"><strong>ui2v-motions</strong></a>
 <br/><sub>UI motion library / 1,262 GSAP motion packages</sub>
+</td>
+</tr>
+<tr>
+<td colspan="4" valign="top" align="center">
+<a href="#code-mv-render"><img width="2560" height="1440" alt="code-mv-render" src="./skills/code-mv-render/assets/preview/worldexecute-cover.jpg" /></a>
+<br/><a href="#code-mv-render"><strong>code-mv-render</strong></a>
+<br/><sub>Code-rendered MV library / lyric MV + generative MV</sub>
 </td>
 </tr>
 </table>
@@ -606,6 +614,39 @@ Links: [README](./skills/ui2v-motions/README.md) · [SKILL.md](./skills/ui2v-mot
 
 <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
 
+#### `code-mv-render`
+
+<a href="./skills/code-mv-render">
+<img width="2560" height="1440" alt="code-mv-render preview" src="./skills/code-mv-render/assets/preview/worldexecute-cover.jpg" />
+</a>
+
+**Category:** Code-rendered MV library / music-video render engineering
+**Best for:** making a full-length, audio-backed, frame-deterministic music video (lyric MV / generative MV) — when you want the "frame = f(song time), preview identical to export" engineering methodology rather than single-page demo clips.
+
+`code-mv-render` collects two deterministic, open-source music-video reference projects: **world-execute-me-lyric-mv** (a lyric MV for Mili's "world.execute(me);": Canvas2D+WebGL2, three picture kinds — chat interface / three-ink plates / code — with color-as-state) and **pdoom-video** (a generative MV for "I'm Upping My P(doom)": three.js word-synced karaoke typography + sub-frame motion blur). To make a full-length MV, fork/adapt the closest one instead of building a render pipeline from scratch.
+
+Highlights:
+- One principle, two implementations: **every frame is a function of song time** (`renderFrame(t)`), so browser preview and headless-Chrome export are identical frame by frame
+- Reusable methodology: color-as-state palettes, centralized cue tables, **block-adaptive sub-frame motion blur** (12 static / 36 camera / 108–324 whip), preview = export
+- Production-grade **flash safety** (WCAG 2.3.1 self-check) + audio-sync / single-frame-jump checks + contact-sheet regression
+- Both projects export 1080p60 / 4K60; two engineering spec digests in `references/`
+- Clear license boundary: code MIT, silhouettes CC BY-NC-SA, **song & lyrics not in the repos** (bring your own, follow the original authors' guidelines)
+
+<table>
+<tr>
+<td align="center" width="60%"><img width="2560" height="1440" alt="world.execute(me); cover" src="./skills/code-mv-render/assets/preview/worldexecute-cover.jpg" /><br /><sub><code>world-execute-me-lyric-mv</code><br />three-ink plates / chat UI & character silhouettes</sub></td>
+<td align="center" width="40%"><img width="2560" height="1440" alt="pdoom" src="./skills/code-mv-render/assets/preview/pdoom-fig04.jpg" /><br /><sub><code>pdoom-video</code><br />line-art scene + word-synced typography</sub></td>
+</tr>
+</table>
+
+<sub>↑ Frame captures of both projects — <a href="./skills/code-mv-render/README.md"><b>open the details & licensing notes</b></a>.</sub>
+
+Links: [README](./skills/code-mv-render/README.md) · [SKILL.md](./skills/code-mv-render/SKILL.md)
+
+---
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
 ### Installation
 
 | # | Method | Best for | Pin a version? |
@@ -632,6 +673,7 @@ npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/st
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/win11-ui-demos
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/swiss-shot-demos
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/ui2v-motions
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/code-mv-render
 ```
 
 > **Installs the latest `main` by default.** The CLI reads each skill's latest `SKILL.md` straight from the source tree.
@@ -783,6 +825,11 @@ ai-animation-skills/
 │       ├── 01_动效库/itelmn/    ← 1,262 motion packages (641MB full mirror)
 │       ├── 02 CLI & docs / 03 indexes / 04 preview / 05 crawl logs
 │       └── assets-preview/      ← frame captures
+│   ├── code-mv-render/
+│       ├── SKILL.md             ← pick workflow + shared principles + reusable parts + red lines
+│       ├── README.md
+│       ├── references/          ← world-execute-spec / pdoom-spec engineering digests
+│       └── assets/preview/      ← frame captures (cover + pdoom plates)
 ├── web_animation/               ← Original example HTML (historical archive)
 ├── UI/                          ← UI design reference images
 ├── prompt.md                    ← Prompt template collection
