@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](./LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](#contributing)
-[![Skills count](https://img.shields.io/badge/Skills-13-orange?style=flat-square)](#skills-gallery)
+[![Skills count](https://img.shields.io/badge/Skills-17-orange?style=flat-square)](#skills-gallery)
 [![Spec](https://img.shields.io/badge/Spec-SKILL.md-black?style=flat-square)](https://agentskills.io)
 
 🌐 **中文版**: [`README.md`](README.md)
@@ -32,7 +32,11 @@ One sentence is all it takes:
 - 🖥️ **Windows 11 simulation** — a "real PC" rebuilt 1:1: Explorer, Start menu, system dialogs and the blue repair screen shot by shot, with a performing cursor leading the viewer and teaching markers layered on top
 - 📐 **Swiss-style chart demos** — editorial-grade typography on paper-and-ink: every shot gets one content-matched visualization (timelines, loops, flow chains, heat matrices… 20 vocab types) with a single accent orange
 - 🎞️ **UI2V motions library** — a full offline mirror of 1,262 GSAP motion packages (ui2v.com/motions, 641MB): lookup-by-shot-purpose indexes + a recipe for hanging paused timelines onto cue axes — plug-and-play visuals for demo pages
-- 🎥 **Code-rendered MV library** — two deterministic music-video reference projects (lyric MV + generative MV): every frame = f(song time), browser preview identical to the offline export
+- 🎥 **Code-rendered MV library** — deterministic music-video references, a 90-second data-documentary implementation, and three Opus directing / motion-design / review workflows: every frame = f(time), preview identical to export
+- 🎨 **Lemo-Opuscar style library** — 59 code-directed video styles spanning documentary, data, painting, East Asian traditions, print, type, cartoons, games and 3D, plus custom personal styles
+- 🖌️ **Opus Video Skills** — watercolour/ink character animation and word-synced lyric MVs, plus kinetic typography + WebGL portfolio and product reels
+- 🎞️ **HyperFrames render infrastructure** — deterministic MP4 from HTML, CSS, media and seekable animation, with compositions, Studio, variable batches and local/cloud rendering
+- ✅ **FrameProof video QA** — blank frames, freezes, captions, audio, metadata and source mapping, with Fix Packets and baseline revision gates
 
 <div align="center">
 
@@ -118,6 +122,30 @@ One sentence is all it takes:
 <a href="#code-mv-render"><img width="2560" height="1440" alt="code-mv-render" src="./skills/code-mv-render/assets/preview/worldexecute-cover.jpg" /></a>
 <br/><a href="#code-mv-render"><strong>code-mv-render</strong></a>
 <br/><sub>Code-rendered MV library / lyric MV + generative MV</sub>
+</td>
+</tr>
+<tr>
+<td colspan="2" valign="top" align="center">
+<a href="#lemo-opuscar"><img alt="lemo-opuscar" src="./skills/lemo-opuscar/assets/preview/cover.jpg" /></a>
+<br/><a href="#lemo-opuscar"><strong>lemo-opuscar</strong></a>
+<br/><sub>59 code-directed styles / custom personal styles</sub>
+</td>
+<td colspan="2" valign="top" align="center">
+<a href="#opus-video-skills"><img alt="opus-video-skills" src="./skills/opus-video-skills/assets/preview/painted-animation.jpg" /></a>
+<br/><a href="#opus-video-skills"><strong>opus-video-skills</strong></a>
+<br/><sub>Painted character MVs / kinetic-type reels</sub>
+</td>
+</tr>
+<tr>
+<td colspan="2" valign="top" align="center">
+<a href="#hyperframes"><img alt="hyperframes" src="./skills/hyperframes/assets/preview/studio.jpg" /></a>
+<br/><a href="#hyperframes"><strong>hyperframes</strong></a>
+<br/><sub>HTML → MP4 / deterministic render infrastructure</sub>
+</td>
+<td colspan="2" valign="top" align="center">
+<a href="#video-qa-frameproof"><img alt="video-qa-frameproof" src="./skills/video-qa-frameproof/assets/preview/dashboard.png" /></a>
+<br/><a href="#video-qa-frameproof"><strong>video-qa-frameproof</strong></a>
+<br/><sub>Post-render video QA / repair and revision gates</sub>
 </td>
 </tr>
 </table>
@@ -623,13 +651,13 @@ Links: [README](./skills/ui2v-motions/README.md) · [SKILL.md](./skills/ui2v-mot
 **Category:** Code-rendered MV library / music-video render engineering
 **Best for:** making a full-length, audio-backed, frame-deterministic music video (lyric MV / generative MV) — when you want the "frame = f(song time), preview identical to export" engineering methodology rather than single-page demo clips.
 
-`code-mv-render` collects two deterministic, open-source music-video reference projects: **world-execute-me-lyric-mv** (a lyric MV for Mili's "world.execute(me);": Canvas2D+WebGL2, three picture kinds — chat interface / three-ink plates / code — with color-as-state) and **pdoom-video** (a generative MV for "I'm Upping My P(doom)": three.js word-synced karaoke typography + sub-frame motion blur). To make a full-length MV, fork/adapt the closest one instead of building a render pipeline from scratch.
+`code-mv-render` collects two deterministic open-source music-video references and the self-built 90-second “CVE 100K” data documentary. It now also distils **opus-js-animations / claude-motion-design / claude-motion** into directing, motion-design and visual-review workflows, covering the full chain from brief, sound and timeline to final MP4 inspection.
 
 Highlights:
 - One principle, two implementations: **every frame is a function of song time** (`renderFrame(t)`), so browser preview and headless-Chrome export are identical frame by frame
 - Reusable methodology: color-as-state palettes, centralized cue tables, **block-adaptive sub-frame motion blur** (12 static / 36 camera / 108–324 whip), preview = export
 - Production-grade **flash safety** (WCAG 2.3.1 self-check) + audio-sync / single-frame-jump checks + contact-sheet regression
-- Both projects export 1080p60 / 4K60; two engineering spec digests in `references/`
+- Both projects export 1080p60 / 4K60; plus a 90-second data film, three Opus workflows and nine reference guides
 - Clear license boundary: code MIT, silhouettes CC BY-NC-SA, **song & lyrics not in the repos** (bring your own, follow the original authors' guidelines)
 
 <table>
@@ -642,6 +670,98 @@ Highlights:
 <sub>↑ Frame captures of both projects — <a href="./skills/code-mv-render/README.md"><b>open the details & licensing notes</b></a>.</sub>
 
 Links: [README](./skills/code-mv-render/README.md) · [SKILL.md](./skills/code-mv-render/SKILL.md)
+
+---
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
+#### `lemo-opuscar`
+
+<a href="./skills/lemo-opuscar">
+<img alt="lemo-opuscar preview" src="./skills/lemo-opuscar/assets/preview/cover.jpg" />
+</a>
+
+**Category:** Code-directed video style library / custom personal styles
+**Best for:** short films, MVs, documentary/data videos in an established look, or adapting a style into a brand/IP-specific visual language.
+
+A documentation-layer collection of Lemo-Opuscar's 59 styles, selection guidance and production contract. The upstream uses Claude Opus 5.5 as director, drawing frames with Canvas/WebGL and handling narration, score and mix; install the full upstream plugin for actual production.
+
+Highlights:
+- 59 styles in 11 families: documentary, evidence, painting, East Asian traditions, print, type, information, cartoons, games, cinema and 3D
+- Select by evidence and storytelling needs before reading the upstream `STYLE.md`; do not infer a look from its name alone
+- Adapt an existing style or start from scratch: proposal → style frame → 15–30 s demo → approve before saving
+- Preview stills credited to LemoLab / CC BY 4.0; code/docs MIT, third-party assets checked separately
+
+Links: [README](./skills/lemo-opuscar/README.md) · [SKILL.md](./skills/lemo-opuscar/SKILL.md)
+
+---
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
+#### `opus-video-skills`
+
+<a href="./skills/opus-video-skills">
+<img alt="opus-video-skills preview" src="./skills/opus-video-skills/assets/preview/painted-animation.jpg" />
+</a>
+
+**Category:** Painted character videos / kinetic-typography reels
+**Best for:** watercolour/ink character shorts, MVs and word-synced lyric videos, plus portfolio, project and product reels.
+
+Two Opus 5.5 code-video workflows: `painted-animation` (p5.js + p5.brush) and `kinetic-reel` (Canvas 2D + three.js/WebGL). Both share pure functions of time, contact-sheet review, parallel frame rendering and FFmpeg export.
+
+Highlights:
+- The painted route focuses on acting, key poses, emotional arcs and word-by-word karaoke
+- The reel route focuses on type/HUD, visual mechanisms, shape-continuity transitions and a score driven by shared timeline data
+- Review every shot, scrub key actions, inspect 1:1 details, then check the final MP4
+- Upstream templates/renderers are not vendored; MIT with John Heibel's derived-work notices preserved
+
+Links: [README](./skills/opus-video-skills/README.md) · [SKILL.md](./skills/opus-video-skills/SKILL.md)
+
+---
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
+#### `hyperframes`
+
+<a href="./skills/hyperframes">
+<img alt="hyperframes preview" src="./skills/hyperframes/assets/preview/studio.jpg" />
+</a>
+
+**Category:** HTML → MP4 render infrastructure
+**Best for:** multiple compositions, media/captions, variable batches, Studio editing and consistent local/cloud rendering.
+
+HyperFrames integration and composition contracts. It is a general render foundation rather than a fixed look or an Opus-specific tool, suitable for data videos, product films and code-rendered MVs.
+
+Highlights:
+- Root `index.html` + `compositions/` + `assets/`; paused GSAP timelines are seeked by the renderer
+- `lint → check → snapshot → preview → render`; automated checks never replace looking at frames
+- Local, Docker, variable-batch and Lambda/Cloud Run paths, with online boundaries made explicit
+- Apache-2.0; documentation and previews only, without vendoring the CLI, Studio or official skills
+
+Links: [README](./skills/hyperframes/README.md) · [SKILL.md](./skills/hyperframes/SKILL.md)
+
+---
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
+#### `video-qa-frameproof`
+
+<a href="./skills/video-qa-frameproof">
+<img alt="video-qa-frameproof preview" src="./skills/video-qa-frameproof/assets/preview/dashboard.png" />
+</a>
+
+**Category:** Post-render video QA / source mapping / revision gates
+**Best for:** accepting code- or agent-generated MP4s, locating the smallest repair, and blocking new or regressed defects in PRs/CI.
+
+FrameProof scanning, repair and baseline workflows. The core scanner is renderer-agnostic; optional Render Manifests map frame intervals back to source and produce findings, Fix Packets, SARIF, JUnit and other outputs.
+
+Highlights:
+- Blank frames, freezes, captions, audio/silence/loudness, codec/aspect/FPS/duration checks
+- Manifest assertions for motion, text, visibility, audio and safe areas, with source locations
+- Reports do not replace human frame review; rerender with the same inputs and verify the final MP4 after repairs
+- MIT; no vendored CLI, Studio or agent skill, and no claim that this general tool is Opus-specific
+
+Links: [README](./skills/video-qa-frameproof/README.md) · [SKILL.md](./skills/video-qa-frameproof/SKILL.md)
 
 ---
 
@@ -674,6 +794,10 @@ npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/wi
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/swiss-shot-demos
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/ui2v-motions
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/code-mv-render
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/lemo-opuscar
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/opus-video-skills
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/hyperframes
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/video-qa-frameproof
 ```
 
 > **Installs the latest `main` by default.** The CLI reads each skill's latest `SKILL.md` straight from the source tree.
@@ -828,8 +952,26 @@ ai-animation-skills/
 │   ├── code-mv-render/
 │       ├── SKILL.md             ← pick workflow + shared principles + reusable parts + red lines
 │       ├── README.md
-│       ├── references/          ← world-execute-spec / pdoom-spec engineering digests
-│       └── assets/preview/      ← frame captures (cover + pdoom plates)
+│       ├── references/          ← upstream MV / motion / engine / Opus workflows / CVE case
+│       ├── templates/           ← MV engine / transitions / export / still QA
+│       ├── examples/            ← 90-second CVE data documentary
+│       └── assets/preview/      ← upstream and self-built frame captures
+│   ├── lemo-opuscar/
+│       ├── SKILL.md / README.md ← 59-style selection + upstream install + customization
+│       ├── references/          ← style index / custom-style guide
+│       └── assets/preview/      ← upstream art and stills (LemoLab / CC BY 4.0)
+│   ├── opus-video-skills/
+│       ├── SKILL.md / README.md ← painted videos + kinetic reels
+│       ├── references/          ← deterministic production and QA contract
+│       └── assets/preview/      ← two upstream contact sheets
+│   ├── hyperframes/
+│       ├── SKILL.md / README.md ← HTML → MP4 infrastructure
+│       ├── references/          ← composition / CLI / rendering contract
+│       └── assets/preview/      ← Studio and data-video previews
+│   ├── video-qa-frameproof/
+│       ├── SKILL.md / README.md ← final-video scan / repair / baseline workflow
+│       ├── references/          ← file & source-aware scans / revision gates
+│       └── assets/preview/      ← Studio and source-mapping previews
 ├── web_animation/               ← Original example HTML (historical archive)
 ├── UI/                          ← UI design reference images
 ├── prompt.md                    ← Prompt template collection

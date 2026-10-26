@@ -1,7 +1,7 @@
 ---
 name: code-mv-render
 description: 代码渲染 MV / 数据纪录片的确定性工程库——帧 = f(时间)，浏览器预览与离线导出逐帧一致。收录两支开源音乐视频参考工程（world.execute(me); 的 Canvas2D 三画面 + pdoom 的 three.js 逐字卡拉 OK），以及本库自建并已导出的《CVE 编号破十万》90 秒数据纪录片实现：镜头模型、15 种入场转场、字体/遮罩动效、纸底三墨风格、口播字幕时间轴、无头浏览器录制与质检。只要用户提到：代码渲染 MV、歌词 MV、音乐视频生成、MV 渲染工程、world.execute(me)、pdoom、卡拉 OK 排版、数据纪录片、口播视频、新闻数据动画、把文案做成同步动画视频、确定性 Canvas 视频——就用本 Skill。与 video-shot-demos / swiss-shot-demos 互补：那些产出分镜演示页，本 Skill 面向整片可导出的视频工程。
-version: "0.2.0"
+version: "0.3.0"
 triggers:
   - "代码渲染 MV"
   - "歌词 MV"
@@ -82,6 +82,18 @@ Canvas 2D 版已实现：`templates/transitions2d.js`（15 种，零依赖）+ `
 - 口播：字幕段为主网格，句内关键词为次网格；非网格时间集中在一个 `CUES` 表。
 - 时间特效：掉帧 `floor(t*12)/12`、重放、插入镜头、撕裂保持 6 帧、余像 `t-0.05`、白场 11–16 帧。
 - 后期默认全关；只在事件上开 `glow / bloomAll / rays / streak / zoomBlur`，镜头结束回 0。
+
+## Opus 导演与审查工作流
+
+在既有引擎之外，补入三套 Opus 项目的方法论，不重复建设渲染器：
+
+| 规范 | 用在什么时候 | 核心增量 |
+|---|---|---|
+| `references/opus-directing.md` | 从想法/参考片开始制作 | brief → 声音来源与分析 → 视觉方向 → director’s treatment → 多比例逐帧交付 |
+| `references/motion-design-production.md` | 产品发布、品牌 Reel、UI morph | 真实事实/品牌输入、beat map、共享形态、声音能量与真实峰值、设计审查 |
+| `references/visual-review-loop.md` | 每次改动视觉/时间与交付前 | contact sheet → 时间带 → 1:1 裁切 → 修复重渲 → MP4 解码帧与音频复核 |
+
+执行顺序：先确认 brief 与声音，再提交 treatment/镜头表；用户明确授权直接制作时可不停下等审批，但仍要留存方案。先做最难镜头与关键静帧，通过后再铺满全片。画面与声音读取同一时间数据，音效对齐实际波形瞬态。
 
 ## 核心工作流
 
@@ -173,6 +185,9 @@ code-mv-render/
 │   ├── pdoom-spec.md               上游生成式 MV 规范摘录
 │   ├── motion-system.md            ★ 动效框架：镜头模型 / 15 转场 / 运动语法 / 时间特效 / 质检
 │   ├── deterministic-engine.md     ★ 确定性 Canvas 实现规范：renderFrame / 时间表 / 录制 / 导出 / 坑
+│   ├── opus-directing.md           ★ Opus 导演流程：brief / 声音 / treatment / 多比例交付
+│   ├── motion-design-production.md ★ 品牌动态设计：事实约束 / beat map / 共享形态 / 声音
+│   ├── visual-review-loop.md       ★ 静帧审查：sheet / 时间带 / 裁切 / MP4 与音频复核
 │   ├── style-cve-100k.md           ★ 风格系统：调色板 / 字体 / 版式 / 组件配方 / 数据红线
 │   └── case-cve-100k.md            ★ 案例：90 秒镜头表、参数、扩展成 23 分钟的路径
 ├── templates/
@@ -190,3 +205,6 @@ code-mv-render/
 - `world-execute-me-lyric-mv` — github.com/Nyankomintsu/world-execute-me-lyric-mv （Mili《world.execute(me);》歌词 MV，v4）
 - `pdoom-video` — github.com/mexicat/pdoom-video （"I'm Upping My P(doom)" 生成式 MV）
 - 自建案例《CVE 编号破十万》— 内容源为本机 `【AI城】/CVE编号破十万` 的 v3 方案与调查笔记；90 秒演示成片 1920×1080 / 60fps。
+- `opus-js-animations` — github.com/klsoen/opus-js-animations （MIT）：导演前置、纯 `seek(t)`、静帧与多比例交付工作流。
+- `claude-motion-design` — github.com/howseen-ai/claude-motion-design （MIT）：品牌动态设计、真实数据、beat map、声音与 critic 工作流。
+- `claude-motion` — github.com/whaleyxbt/claude-motion （MIT）：contact sheet / 时间带 / 1:1 裁切的 review loop 与音频验收参考。

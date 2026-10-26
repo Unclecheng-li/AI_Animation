@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](./LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](#贡献与许可)
-[![Skills count](https://img.shields.io/badge/Skills-13-orange?style=flat-square)](#skills-gallery)
+[![Skills count](https://img.shields.io/badge/Skills-17-orange?style=flat-square)](#skills-gallery)
 [![Spec](https://img.shields.io/badge/Spec-SKILL.md-black?style=flat-square)](https://agentskills.io)
 
 🌐 **English version**: [`README_EN.md`](README_EN.md)
@@ -32,7 +32,11 @@
 - 🖥️ **仿 Win11 系统仿真** — 1:1 还原真电脑：资源管理器、开始菜单、系统弹窗、蓝屏修复逐镜头呈现，光标演出引导操作 + 教学标记层，全屏录屏即成片
 - 📐 **瑞士风格图表演示** — 纸底墨字发丝线的编辑部级排版：每页一张匹配内容的可视化图表（时间线/循环环/流程链/热力矩阵…20 种词汇），唯一强调橙，一镜一 HTML
 - 🎞️ **UI2V 动效库** — 1,262 个 GSAP 动效包全量离线镜像（ui2v.com/motions，641MB）：按镜头用途查件的索引 + paused 时间轴挂 cue 的接入配方，演示页画面层即插即用
-- 🎥 **代码渲染 MV 工程库** — 两支持续确定性音乐视频参考工程（歌词 MV + 生成式 3D MV）：帧 = f(歌曲时间)，浏览器预览与离线导出逐帧一致
+- 🎥 **代码渲染 MV 工程库** — 确定性音乐视频参考工程、90 秒数据纪录片实现与三套 Opus 导演/动态设计/审查工作流：帧 = f(时间)，预览与离线导出逐帧一致
+- 🎨 **Lemo-Opuscar 风格库** — 59 种代码导演视频风格：纪实、数据、手绘、东方、印刷、排版、卡通、游戏与 3D，也可定制个人风格
+- 🖌️ **Opus Video Skills** — 水彩/水墨角色动画与逐字歌词 MV，以及动态排版 + WebGL 作品集/产品 Reel
+- 🎞️ **HyperFrames 渲染底座** — HTML / CSS / 媒体 / 可 seek 动画到确定性 MP4，支持 composition、Studio、变量批量与本地/云端渲染
+- ✅ **FrameProof 视频 QA** — 空帧、冻结、字幕、音频、编码元数据与源码映射检查，Fix Packets 修复闭环 + baseline 回归门禁
 
 <div align="center">
 
@@ -118,6 +122,30 @@
 <a href="#code-mv-render"><img width="2560" height="1440" alt="code-mv-render" src="./skills/code-mv-render/assets/preview/worldexecute-cover.jpg" /></a>
 <br/><a href="#code-mv-render"><strong>code-mv-render</strong></a>
 <br/><sub>代码渲染 MV 工程库 / 歌词 MV + 生成式 MV</sub>
+</td>
+</tr>
+<tr>
+<td colspan="2" valign="top" align="center">
+<a href="#lemo-opuscar"><img alt="lemo-opuscar" src="./skills/lemo-opuscar/assets/preview/cover.jpg" /></a>
+<br/><a href="#lemo-opuscar"><strong>lemo-opuscar</strong></a>
+<br/><sub>59 种代码导演风格 / 个人风格定制</sub>
+</td>
+<td colspan="2" valign="top" align="center">
+<a href="#opus-video-skills"><img alt="opus-video-skills" src="./skills/opus-video-skills/assets/preview/painted-animation.jpg" /></a>
+<br/><a href="#opus-video-skills"><strong>opus-video-skills</strong></a>
+<br/><sub>手绘角色 MV / 动态排版 Reel</sub>
+</td>
+</tr>
+<tr>
+<td colspan="2" valign="top" align="center">
+<a href="#hyperframes"><img alt="hyperframes" src="./skills/hyperframes/assets/preview/studio.jpg" /></a>
+<br/><a href="#hyperframes"><strong>hyperframes</strong></a>
+<br/><sub>HTML → MP4 / 确定性渲染底座</sub>
+</td>
+<td colspan="2" valign="top" align="center">
+<a href="#video-qa-frameproof"><img alt="video-qa-frameproof" src="./skills/video-qa-frameproof/assets/preview/dashboard.png" /></a>
+<br/><a href="#video-qa-frameproof"><strong>video-qa-frameproof</strong></a>
+<br/><sub>生成后视频 QA / 修复与回归门禁</sub>
 </td>
 </tr>
 </table>
@@ -623,13 +651,13 @@ Links: [README](./skills/ui2v-motions/README.md) · [SKILL.md](./skills/ui2v-mot
 **分类:** 代码渲染 MV 工程库 / 音乐视频渲染工程
 **适用于:** 做整片、带音轨、逐帧确定的音乐视频（歌词 MV / 生成式 MV）——想要"帧 = f(歌曲时间)、预览与导出逐帧一致"的工程方法论，而不是单页演示片段。
 
-`code-mv-render` 收录两支持续确定性的开源音乐视频参考工程：**world-execute-me-lyric-mv**（Mili《world.execute(me);》歌词 MV：Canvas2D+WebGL2，聊天界面 / 三墨版画 / 代码三种画面，颜色=状态）与 **pdoom-video**（"I'm Upping My P(doom)" 生成式 MV：three.js 逐字卡拉OK排版 + 子帧运动模糊）。要做一个整片 MV 时，从这里选最贴近的一支 fork / 改编，而不是从零搭渲染管线。
+`code-mv-render` 收录两支确定性开源音乐视频参考工程，以及自建《CVE 编号破十万》90 秒数据纪录片。最新补入 **opus-js-animations / claude-motion-design / claude-motion** 的导演、动态设计与静帧审查工作流，形成从 brief、声音与时间轴到 MP4 复核的完整工程链。
 
 亮点:
 - 同一原理两套实现：**每帧只是歌曲时间的函数**（`renderFrame(t)`），浏览器预览与无头 Chrome 离线导出逐帧一致
 - 可复用方法论：颜色=状态调色板、拍点集中管理、**块级自适应子帧运动模糊**（静止 12 / 运镜 36 / 甩镜 108–324）、预览=导出同源
 - 成品级**闪光安全**（WCAG 2.3.1 自检）+ 音画同步 / 单帧突跳自检 + 缩图表逐格回归
-- 两支工程均可导出 1080p60 / 4K60；配 `references/` 两份工程规范摘录
+- 两支工程均可导出 1080p60 / 4K60；另有自建 90 秒数据片、三套 Opus 工作流与九份参考规范
 - 许可边界清晰：代码 MIT、剪影 CC BY-NC-SA、**歌曲歌词不在仓库**（须自备并遵守原作者版权指引）
 
 <table>
@@ -642,6 +670,98 @@ Links: [README](./skills/ui2v-motions/README.md) · [SKILL.md](./skills/ui2v-mot
 <sub>↑ 两支工程截帧预览 — <a href="./skills/code-mv-render/README.md"><b>打开工程详情与许可说明</b></a>。</sub>
 
 Links: [README](./skills/code-mv-render/README.md) · [SKILL.md](./skills/code-mv-render/SKILL.md)
+
+---
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
+#### `lemo-opuscar`
+
+<a href="./skills/lemo-opuscar">
+<img alt="lemo-opuscar preview" src="./skills/lemo-opuscar/assets/preview/cover.jpg" />
+</a>
+
+**分类:** 代码导演视频风格库 / 个人风格定制
+**适用于:** 用现成风格制作短片、MV、纪实/数据视频，或把某种风格改成品牌/IP 自己的视觉语言。
+
+收录 Lemo-Opuscar 的 59 种风格索引、选型与制作合同。上游以 Claude Opus 5.5 为导演，用 Canvas/WebGL 逐帧生成画面并处理配音、配乐和混音；本库仅做文档层收录，实际制作时安装上游完整插件。
+
+亮点:
+- 11 类 59 风格：纪实、实证、手绘、东方、印刷、排版、信息、卡通、游戏、电影与 3D
+- 先按内容证据与叙事方式选风格，再读上游 `STYLE.md`，不靠名称猜画法
+- 支持改造已有风格或从空白创建：方案 → 风格图 → 15–30 秒 demo → 同意后固化
+- 预览静帧署名 LemoLab / CC BY 4.0；代码/文档 MIT，第三方素材另行核验
+
+Links: [README](./skills/lemo-opuscar/README.md) · [SKILL.md](./skills/lemo-opuscar/SKILL.md)
+
+---
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
+#### `opus-video-skills`
+
+<a href="./skills/opus-video-skills">
+<img alt="opus-video-skills preview" src="./skills/opus-video-skills/assets/preview/painted-animation.jpg" />
+</a>
+
+**分类:** 手绘角色视频 / 动态排版 Reel
+**适用于:** 水彩/水墨角色短片、MV、逐字歌词视频，以及作品集、项目集和产品宣传 Reel。
+
+收录两套 Opus 5.5 代码视频工作流：`painted-animation`（p5.js + p5.brush）与 `kinetic-reel`（Canvas 2D + three.js/WebGL）。两者共用纯时间函数、contact sheet 审查、并行逐帧与 FFmpeg 导出合同。
+
+亮点:
+- 手绘路线强调角色表演、关键姿势、情绪弧线与逐字卡拉 OK
+- Reel 路线强调字体/HUD、视觉机制、形状连续转场与共享时间数据配乐
+- 每镜头看图、关键动作看时间带、密集细节看 1:1 裁切，再检查最终 MP4
+- 本库不 vendor 上游模板和渲染器；MIT，保留 John Heibel 派生版权说明
+
+Links: [README](./skills/opus-video-skills/README.md) · [SKILL.md](./skills/opus-video-skills/SKILL.md)
+
+---
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
+#### `hyperframes`
+
+<a href="./skills/hyperframes">
+<img alt="hyperframes preview" src="./skills/hyperframes/assets/preview/studio.jpg" />
+</a>
+
+**分类:** HTML → MP4 渲染基础设施
+**适用于:** 多 composition、媒体/字幕、变量批量、Studio 编辑与本地/云端统一渲染。
+
+收录 HyperFrames 接入与 composition 合同。它不是固定风格，也不是 Opus 专属工具，可作为数据视频、产品视频或代码 MV 的通用渲染底座。
+
+亮点:
+- 根 `index.html` + `compositions/` + `assets/`，paused GSAP timeline 由渲染器 seek
+- `lint → check → snapshot → preview → render`，通过检查后仍要实际看图
+- 支持本地、Docker、变量批量、Lambda/Cloud Run；在线能力明确标注网络边界
+- Apache-2.0；本库仅收录文档与预览，不 vendor CLI、Studio 或官方 Skills
+
+Links: [README](./skills/hyperframes/README.md) · [SKILL.md](./skills/hyperframes/SKILL.md)
+
+---
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
+#### `video-qa-frameproof`
+
+<a href="./skills/video-qa-frameproof">
+<img alt="video-qa-frameproof preview" src="./skills/video-qa-frameproof/assets/preview/dashboard.png" />
+</a>
+
+**分类:** 生成后视频 QA / 源码定位 / 回归门禁
+**适用于:** 验收代码或 Agent 生成的 MP4，定位最小修复，并在 PR/CI 中阻止新增和恶化问题。
+
+收录 FrameProof 的扫描、修复与 baseline 工作流。核心扫描 renderer-agnostic；可选 Render Manifest 将帧区间映射回源码，输出 Finding、Fix Packets、SARIF、JUnit 等结果。
+
+亮点:
+- 检查空帧、冻结、字幕、音轨/静音/响度、编码/画幅/fps/时长
+- manifest 支持 motion/text/visible/audio/safe-area 断言和源码定位
+- 报告不是人工看图的替代品；修复后同输入重渲并复检最终 MP4
+- MIT；本库不 vendor CLI、Studio 或 Agent Skill，不将其写成 Opus 专属工具
+
+Links: [README](./skills/video-qa-frameproof/README.md) · [SKILL.md](./skills/video-qa-frameproof/SKILL.md)
 
 ---
 
@@ -675,6 +795,10 @@ npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/sw
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/ui2v-motions
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/stacked-data-cards
 npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/code-mv-render
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/lemo-opuscar
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/opus-video-skills
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/hyperframes
+npx skills add https://github.com/Unclecheng-li/AI_Animation/tree/main/skills/video-qa-frameproof
 ```
 
 > **默认安装 `main` 分支最新版本。** CLI 会从源码树直接读取每个 Skill 的最新 `SKILL.md`。
@@ -829,8 +953,26 @@ ai-animation-skills/
 │   ├── code-mv-render/
 │       ├── SKILL.md             ← 选型工作流 + 共同原理 + 可复用要点 + 红线
 │       ├── README.md
-│       ├── references/          ← world-execute-spec / pdoom-spec 工程规范摘录
-│       └── assets/preview/      ← 预览截帧（cover + pdoom plates）
+│       ├── references/          ← 上游 MV / 动效 / 引擎 / Opus 工作流 / CVE 案例规范
+│       ├── templates/           ← MV 引擎 / 转场 / 导出 / 静帧质检
+│       ├── examples/            ← 90 秒 CVE 数据纪录片
+│       └── assets/preview/      ← 上游与自建案例预览截帧
+│   ├── lemo-opuscar/
+│       ├── SKILL.md / README.md ← 59 风格选型 + 上游安装 + 定制流程
+│       ├── references/          ← 风格索引 / 个人风格规范
+│       └── assets/preview/      ← 上游风格图与静帧（LemoLab / CC BY 4.0）
+│   ├── opus-video-skills/
+│       ├── SKILL.md / README.md ← 手绘角色视频 + 动态排版 Reel 接入
+│       ├── references/          ← 确定性制作与 QA 合同
+│       └── assets/preview/      ← 两套上游 contact sheet
+│   ├── hyperframes/
+│       ├── SKILL.md / README.md ← HTML → MP4 基础设施接入
+│       ├── references/          ← composition / CLI / 渲染合同
+│       └── assets/preview/      ← Studio 与数据视频预览
+│   ├── video-qa-frameproof/
+│       ├── SKILL.md / README.md ← 最终视频扫描 / 修复 / baseline 工作流
+│       ├── references/          ← 文件与源码感知扫描 / 回归门禁
+│       └── assets/preview/      ← Studio 与源码定位预览
 ├── web_animation/               ← 原始示例 HTML（历史存档）
 ├── UI/                          ← UI 设计参考图
 ├── prompt.md                    ← Prompt 模板集合

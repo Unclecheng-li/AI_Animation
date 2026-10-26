@@ -6,7 +6,7 @@
 
 本 Skill 收录两支持续开源的**代码渲染音乐视频工程**，外加本库自建、已经导出成片的《CVE 编号破十万》90 秒数据纪录片实现。它们共用同一条底层原理——**每一帧只是时间的函数**（`renderFrame(t)`）：不读系统时钟、不留跨帧状态，所以浏览器里的实时预览与无头浏览器的离线导出逐帧一致，可反复复现、可逐帧质检、可按时间精确跳转。
 
-要做一个带音轨或口播、逐帧确定的整片视频时，从这里选最贴近的路线 fork / 改编，而不是从零搭渲染管线。配套 `references/` 六份文档（画面法则、动效框架、引擎实现、风格系统、案例、上游规范）与 `templates/` 五个可直接运行的文件。
+要做一个带音轨或口播、逐帧确定的整片视频时，从这里选最贴近的路线 fork / 改编，而不是从零搭渲染管线。配套 `references/` 九份文档（画面法则、动效框架、引擎实现、Opus 导演/动态设计/审查、风格系统、案例、上游规范）与 `templates/` 五个可直接运行的文件。
 
 与 `video-shot-demos` / `swiss-shot-demos` 的边界：那两者是"一镜一 HTML"的演示片段；本 Skill 管的是**从时间轴到成片的整条工程链**（时间基准 → 镜头 → 预览 → 导出 → 质检）。
 
@@ -41,6 +41,16 @@
 | **验收** | 切后第一帧、关键词落定帧、事件帧、首尾帧；数字与字幕同步；闪光预算 ≤3 次/秒 |
 
 详细参数：`references/motion-system.md`。
+
+## Opus 导演、动态设计与审查
+
+新增三套上游工作流的浓缩规范，只补方法论，不引入另一套渲染引擎：
+
+- `references/opus-directing.md` — 从 brief、声音来源与音频分析开始，形成 director’s treatment；以 `seek(t)` 构建，支持静帧验证和多比例交付。
+- `references/motion-design-production.md` — 真实事实/品牌输入、beat map、共享形态、声音能量与真实瞬态，以及面向产品/品牌短片的审查清单。
+- `references/visual-review-loop.md` — contact sheet、动作时间带、1:1 裁切、修复重渲和最终 MP4 解码帧/音频复核。
+
+本库继续使用自己的模板和导出脚本；文档中的上游命令只用于已安装对应上游 Skill 的工程。三套上游代码均为 MIT，第三方素材、字体、音乐与 Remotion 等工具的许可独立判断。
 
 ## 本次自建实现：CVE 编号破十万 · 90 秒
 
@@ -157,7 +167,11 @@ node templates/export-video.mjs --page examples/cve-100k/demo.html \
 - `references/world-execute-spec.md` · `references/pdoom-spec.md` — 上游规范摘录
 - `references/motion-system.md` — 动效框架（镜头模型 / 15 转场 / 运动语法 / 时间特效 / 质检）
 - `references/deterministic-engine.md` — 确定性 Canvas 实现规范
+- `references/opus-directing.md` — Opus 导演前置、纯时间函数与多比例交付
+- `references/motion-design-production.md` — 品牌动态设计、事实约束、beat map 与声音
+- `references/visual-review-loop.md` — 静帧审查与最终成片复核
 - `references/style-cve-100k.md` — 风格系统
 - `references/case-cve-100k.md` — 90 秒案例与扩展路径
 - `templates/` — 引擎模板 / 导出脚本 / 静帧质检脚本
 - 上游：github.com/Nyankomintsu/world-execute-me-lyric-mv · github.com/mexicat/pdoom-video
+- Opus 工作流：github.com/klsoen/opus-js-animations · github.com/howseen-ai/claude-motion-design · github.com/whaleyxbt/claude-motion
